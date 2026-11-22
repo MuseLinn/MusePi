@@ -155,6 +155,7 @@ The guard fails on: a rule that declares one axis alone, a horizontal scroller t
 
 - Every dialog goes through `DialogFrame`; rules in `docs/gui-dialog-spec.md` (size tiers, scroll container, focus, modifier specificity).
 - Board and inline card geometry, registration parity and source text rules are in `docs/gui-widget-spec.md`.
+- **Location rows (`.gui-loc-row`)**: the one row anatomy for both connection axes — used by the instance list in `InstanceManagerDialog` and the host list in `ConnectDialog`, so the same fact sits at the same x wherever it appears. A row is `dot · name · where-it-runs · status`; the name keeps its width and the location yields first, the status is `margin-left: auto` at the trailing edge, and **the row box itself is a `<button>`** (`.gui-loc-row-main`) with a destructive sibling outside it. `where-it-runs` states a machine, never a tunnel's loopback address. Lists are `<ul class="gui-loc-list">`; `.gui-loc-list--scroll` exists only for the wizard's standalone dialog, where the list is the surface's own body — inside the manager the dialog body is the one scroller (see *Overflow contract*). Contract: `apps/desktop/test/instance-manager-axes.test.tsx` and the real-Chromium `apps/desktop/test/connection-locations-geometry.test.ts`.
 
 ## Known gaps (recorded, not resolved)
 

@@ -100,6 +100,7 @@ scope:
 
 - 对话框统一走 `DialogFrame`，规则见 `docs/gui-dialog-spec.md`（尺寸档位、滚动容器、焦点、修饰类特异度）。
 - 看板与内联卡片的几何、注册对等、源文本规则见 `docs/gui-widget-spec.md`。
+- **位置行（`.gui-loc-row`）**：连接两条轴共用的唯一行结构——`InstanceManagerDialog` 的实例列表与 `ConnectDialog` 的主机列表都用它，同一个事实无论出现在哪里都落在同一横坐标。一行是 `状态点 · 名称 · 在哪里运行 · 状态`；名称保留自己的宽度、位置先让位，状态以 `margin-left: auto` 固定到行尾，**行本身就是一个 `<button>`**（`.gui-loc-row-main`），删除动作是它的兄弟节点。`where-it-runs` 说明的是机器，绝不是隧道的回环地址。列表是 `<ul class="gui-loc-list">`；`.gui-loc-list--scroll` 只用于向导的独立对话框——那里列表就是该界面自己的正文——在管理器里正文才是唯一的滚动容器（见「溢出契约」）。契约：`apps/desktop/test/instance-manager-axes.test.tsx` 与真实 Chromium 的 `apps/desktop/test/connection-locations-geometry.test.ts`。
 
 ## 已知缺口（记录在案，不是已完成）
 

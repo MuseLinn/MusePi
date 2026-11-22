@@ -1,16 +1,89 @@
-import { Segmented, t } from "@musepi/client-core";
+/**
+ * InstanceManagerDialog — the two connection axes, in one place.
+ *
+ * The model this surface has to make legible, because the two halves are
+ * routinely mistaken for each other:
+ *
+ *  - an **instance** chooses where the daemon runs — this machine, or a
+ *    daemon reached over an ssh tunnel / WSL / a container / a typed
+ *    endpoint;
+ *  - a **workspace** chooses where the files live — a local path, or a remote
+ *    path reached by mounting a host's filesystem.
+ *
+ * They are independent, so the three combinations a user actually meets are
+ * all valid: local daemon + local files, daemon on a host + files on that
+ * same host, and local daemon + files mounted from a host. Neither axis is
+ * the other's mode, and this dialog must not present them as one.
+ *
+ * Hence two visible sections, not two tabs. A tab hides one axis behind a
+ * click, which is exactly the shape that made the axes unreadable: the user
+ * could only ever see half the model at a time. Each section states its axis
+ * in one sentence and owns one primary action, so "which axis am I setting"
+ * is answered before any row is read.
+ *
+ * The host catalog is read ONCE here and handed to the embedded wizard. The
+ * manager used to render the wizard without a catalog, so the wizard silently
+ * performed its own second read while the instance list beside it knew
+ * nothing about the catalog at all — one dialog, two answers about which
+ * hosts exist.
+ */
+
+import { t } from "@musepi/client-core";
 import { LoaderCircle as LoaderCircleIconData, Plus as PlusIconData } from "lucide";
-import { Layers, Server } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CatalogHost } from "../lib/connection/remote-lifecycle";
+import { stripToken } from "../lib/connection/targets";
+import { useHostCatalog } from "../lib/connection/use-host-catalog";
 import { buildWsUrl, normalizeRemoteHostUrl, type RemoteHost } from "../lib/remote-hosts";
 import { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { ConnectDialog } from "./ConnectDialog";
 import { DialogFrame } from "./DialogFrame";
 
-/** One management surface for daemon connections and SSH-backed workspaces. */
+/** Loopback endpoints are forwards, not locations: the daemon answers there,
+ *  but it does not run there. */
+function isLoopbackUrl(url: string): boolean {
+	try {
+		const host = new URL(url).hostname;
+		return host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]";
+	} catch {
+		return false;
+	}
+}
+
+/** `host:port` for an endpoint that is itself the location. */
+function endpointLocation(url: string): string {
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
+}
+
+/**
+ * Where an instance's daemon runs, in one phrase.
+ *
+ * Never guessed: a catalog entry names the real machine, an endpoint that is
+ * not loopback is its own location, and a loopback endpoint with no catalog
+ * entry is honestly described as a forward rather than labelled with the
+ * tunnel's local address (which is not where the daemon runs).
+ */
+function whereItRuns(host: RemoteHost | null, catalog: readonly CatalogHost[], daemonUrl: string): string {
+	// The local row's name already says 本机, so repeating it as the location
+	// would be a restatement. For the local daemon the loopback endpoint IS the
+	// location, so it is the honest second fact on that row.
+	if (!host) return endpointLocation(stripToken(daemonUrl));
+	const entry = catalog.find(row => row.name === host.label);
+	if (entry) {
+		const destination = entry.username ? `${entry.username}@${entry.host}` : entry.host;
+		return t("settings.connectionWhereSsh", { host: destination });
+	}
+	if (isLoopbackUrl(host.url)) return t("settings.connectionWhereForwarded");
+	return endpointLocation(stripToken(host.url));
+}
+
 export function InstanceManagerDialog({
 	open,
 	onClose,
@@ -38,15 +111,24 @@ export function InstanceManagerDialog({
 	onOpenWorkspace(cwd: string): void;
 	onOpenDisclaimer(): void;
 }): ReactNode {
-	const [tab, setTab] = useState<"instances" | "remote">("instances");
+	const { catalog, refresh } = useHostCatalog();
 	const [draft, setDraft] = useState({ label: "", url: "", token: "" });
 	const [adding, setAdding] = useState(false);
+	const [formOpen, setFormOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	/** `refresh` is rebuilt on every render by the hook, so it cannot be an
+	 *  effect dependency: doing so re-fires the effect forever. Held in a ref
+	 *  and read at open instead. */
+	const refreshRef = useRef(refresh);
+	refreshRef.current = refresh;
 
 	useEffect(() => {
 		if (!open) return;
-		setTab("instances");
 		setError(null);
+		setFormOpen(false);
+		// The files can change under a long-lived window; opening is the moment
+		// the user expects the list to be current.
+		refreshRef.current();
 	}, [open]);
 
 	const addInstance = async (): Promise<void> => {
@@ -76,6 +158,7 @@ export function InstanceManagerDialog({
 			]);
 			onAddHost({ label, url, token });
 			setDraft({ label: "", url: "", token: "" });
+			setFormOpen(false);
 		} catch {
 			setError(t("settings.instanceConnectionFailed"));
 		} finally {
@@ -85,18 +168,28 @@ export function InstanceManagerDialog({
 		}
 	};
 
+	const activeHostId = useMemo(
+		() => hosts.find(host => buildWsUrl(host) === daemonUrl)?.id ?? null,
+		[hosts, daemonUrl],
+	);
+
 	const renderHost = (host: RemoteHost | null): ReactNode => {
-		const active = host ? buildWsUrl(host) === daemonUrl : !hosts.some(h => buildWsUrl(h) === daemonUrl);
+		const active = host ? host.id === activeHostId : activeHostId === null;
 		const label = host?.label ?? t("general.local");
-		const url = host?.url ?? daemonUrl;
+		const where = whereItRuns(host, catalog, daemonUrl);
 		return (
-			<div
+			<li
 				key={host?.id ?? "local"}
-				className={`gui-instance-manager-row${active ? " gui-instance-manager-row--current" : ""}`}
+				className="gui-loc-row"
+				data-current={active ? "true" : undefined}
+				data-status={active ? (connected ? "connected" : "disconnected") : "idle"}
 			>
+				{/* The row is its own target (M86): one button fills the row box,
+				 * so the wash and the hit area are the same rectangle. Removal is
+				 * a sibling, never nested. */}
 				<button
 					type="button"
-					className="gui-instance-manager-select"
+					className="gui-loc-row-main"
 					onClick={() => {
 						if (!active) {
 							onSwitchHost(host);
@@ -104,23 +197,19 @@ export function InstanceManagerDialog({
 						}
 					}}
 					disabled={active}
+					aria-current={active ? "true" : undefined}
 				>
-					<span
-						className={`gui-instance-manager-dot${active && connected ? " gui-instance-manager-dot--live" : ""}`}
-						aria-hidden
-					/>
-					<span className="gui-instance-manager-copy">
-						<span className="gui-instance-manager-name">
-							{label}
-							{active && <span className="gui-instance-manager-chip">{t("settings.currentInstanceBadge")}</span>}
-						</span>
-						<span className="gui-instance-manager-url">{url}</span>
+					<span className="gui-loc-dot" aria-hidden />
+					<span className="gui-loc-name">{label}</span>
+					<span className="gui-loc-where" title={host ? stripToken(host.url) : daemonUrl}>
+						{where}
 					</span>
+					{active && <span className="gui-loc-chip">{t("settings.currentInstanceBadge")}</span>}
 				</button>
 				{host && (
 					<button
 						type="button"
-						className="gui-tool-btn gui-instance-manager-remove"
+						className="gui-tool-btn gui-loc-remove"
 						title={t("general.remove")}
 						aria-label={t("general.remove")}
 						onClick={() => onRemoveHost(host.id)}
@@ -128,7 +217,7 @@ export function InstanceManagerDialog({
 						<Icon name="delete-bin" className="h-3.5 w-3.5" />
 					</button>
 				)}
-			</div>
+			</li>
 		);
 	};
 
@@ -136,121 +225,158 @@ export function InstanceManagerDialog({
 		<DialogFrame
 			open={open}
 			onClose={onClose}
-			label={t("settings.instanceManager")}
+			label={t("settings.connectionLocations")}
 			className="gui-dialog--instance-manager"
 		>
 			<div className="gui-dialog-head">
-				<span className="text-[14px] font-semibold">{t("settings.instanceManager")}</span>
+				<span className="text-[14px] font-semibold">{t("settings.connectionLocations")}</span>
 				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
-			<div className="gui-instance-manager-tabs">
-				<Segmented<"instances" | "remote">
-					value={tab}
-					onChange={setTab}
-					ariaLabel={t("settings.instanceManager")}
-					options={[
-						{ value: "instances", label: t("settings.instances"), icon: Layers },
-						{ value: "remote", label: t("settings.remoteWorkspaces"), icon: Server },
-					]}
-				/>
-			</div>
-			{tab === "instances" ? (
-				<div className="gui-instance-manager-body">
-					<section className="gui-instance-manager-panel">
-						<header className="gui-instance-manager-section">
-							<h3 className="gui-instance-manager-section-title">{t("settings.instances")}</h3>
-							<p className="gui-instance-manager-section-desc">{t("settings.instanceListDescription")}</p>
-						</header>
-						<div className="gui-instance-manager-list">
-							{renderHost(null)}
-							{hosts.map(renderHost)}
-						</div>
-						<div className="gui-instance-manager-panel-actions">
-							<button
-								type="button"
-								className="gui-btn gui-btn-stop"
-								onClick={() => {
-									onDisconnect();
-									onClose();
-								}}
-							>
-								{t("settings.disconnectCurrent")}
-							</button>
-						</div>
-					</section>
-					<section className="gui-instance-manager-panel gui-instance-manager-add">
-						<header className="gui-instance-manager-section">
-							<h3 className="gui-instance-manager-section-title">{t("settings.addInstance")}</h3>
-						</header>
-						<div className="gui-instance-manager-fields">
-							<label className="gui-field">
-								<span className="gui-field-label">{t("settings.instanceLabel")}</span>
-								<input
-									className="gui-input"
-									value={draft.label}
-									placeholder={t("settings.instanceLabel")}
-									onChange={e => setDraft(current => ({ ...current, label: e.target.value }))}
-								/>
-							</label>
-							<label className="gui-field">
-								<span className="gui-field-label">{t("settings.instanceUrlLabel")}</span>
-								<input
-									className="gui-input font-mono"
-									value={draft.url}
-									placeholder={t("settings.hostUrlPlaceholder")}
-									spellCheck={false}
-									onChange={e => setDraft(current => ({ ...current, url: e.target.value }))}
-								/>
-							</label>
-							<label className="gui-field">
-								<span className="gui-field-label">{t("settings.remoteToken")}</span>
-								<input
-									className="gui-input font-mono"
-									value={draft.token}
-									placeholder={t("settings.remoteToken")}
-									type="password"
-									onChange={e => setDraft(current => ({ ...current, token: e.target.value }))}
-								/>
-							</label>
-						</div>
-						{error && (
-							<div className="gui-instance-manager-error" role="alert">
-								{error}
+
+			{/* The model in one sentence, before either axis. It answers "are these
+			 * the same thing at different places?" without a paragraph. */}
+			<p className="gui-loc-purpose">{t("settings.connectionPurpose")}</p>
+
+			<div className="gui-instance-manager-body">
+				<section className="gui-loc-section" aria-labelledby="gui-loc-instances">
+					<header className="gui-loc-section-head">
+						<h2 className="gui-loc-section-title" id="gui-loc-instances">
+							{t("settings.instanceAxisTitle")}
+						</h2>
+						<p className="gui-loc-section-hint">{t("settings.instanceAxisHint")}</p>
+					</header>
+
+					<ul className="gui-loc-list">
+						{renderHost(null)}
+						{hosts.map(renderHost)}
+					</ul>
+
+					{hosts.length === 0 && <p className="gui-loc-empty">{t("settings.instanceListEmpty")}</p>}
+
+					{/* One primary action per section: the form is what that action
+					 * opens, not a third block competing with the list. Permanently
+					 * open it made the section tall enough to push the other axis
+					 * below the fold at the narrowest supported width. */}
+					{!formOpen ? (
+						<button
+							type="button"
+							className="gui-btn gui-btn-primary gui-loc-add"
+							onClick={() => setFormOpen(true)}
+						>
+							<Icon name="add" className="h-3.5 w-3.5" />
+							{t("settings.addInstance")}
+						</button>
+					) : (
+						<>
+							<div className="gui-loc-fields">
+								<label className="gui-field">
+									<span className="gui-field-label">{t("settings.instanceLabel")}</span>
+									<input
+										className="gui-input"
+										value={draft.label}
+										onChange={e => setDraft(current => ({ ...current, label: e.target.value }))}
+									/>
+								</label>
+								<label className="gui-field">
+									<span className="gui-field-label">{t("settings.instanceUrlLabel")}</span>
+									<input
+										className="gui-input font-mono"
+										value={draft.url}
+										placeholder={t("settings.hostUrlPlaceholder")}
+										spellCheck={false}
+										onChange={e => setDraft(current => ({ ...current, url: e.target.value }))}
+									/>
+								</label>
+								<label className="gui-field">
+									<span className="gui-field-label">{t("settings.remoteToken")}</span>
+									<input
+										className="gui-input font-mono"
+										value={draft.token}
+										type="password"
+										onChange={e => setDraft(current => ({ ...current, token: e.target.value }))}
+									/>
+								</label>
 							</div>
-						)}
-						<div className="gui-instance-manager-actions">
-							<button
-								type="button"
-								className="gui-btn gui-btn-primary"
-								disabled={adding || !draft.label.trim() || !draft.url.trim()}
-								onClick={() => void addInstance()}
-							>
-								<MorphIcon
-									icon={adding ? LoaderCircleIconData : PlusIconData}
-									size={14}
-									spring="snappy"
-									reducedMotion="user"
-									className={adding ? "gui-spin" : undefined}
-								/>
-								{adding ? t("settings.connecting2") : t("settings.testAndAddInstance")}
-							</button>
-						</div>
-					</section>
-				</div>
-			) : (
-				<ConnectDialog
-					open={open && tab === "remote"}
-					framed={false}
-					onClose={onClose}
-					rpc={rpc}
-					onOpenWorkspace={onOpenWorkspace}
-				/>
-			)}
-			<button type="button" className="gui-remote-disclaimer-link" onClick={onOpenDisclaimer}>
-				{t("settings.viewRemoteDisclaimer")}
-			</button>
+
+							{error && (
+								<p className="gui-loc-error" role="alert">
+									{error}
+								</p>
+							)}
+
+							<div className="gui-loc-actions">
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary"
+									disabled={adding || !draft.label.trim() || !draft.url.trim()}
+									onClick={() => void addInstance()}
+								>
+									<MorphIcon
+										icon={adding ? LoaderCircleIconData : PlusIconData}
+										size={14}
+										spring="snappy"
+										reducedMotion="user"
+										className={adding ? "gui-spin" : undefined}
+									/>
+									{adding ? t("settings.connecting2") : t("settings.testAndAddInstance")}
+								</button>
+								<button
+									type="button"
+									className="gui-btn"
+									disabled={adding}
+									onClick={() => {
+										setFormOpen(false);
+										setDraft({ label: "", url: "", token: "" });
+										setError(null);
+									}}
+								>
+									{t("settings.cancel2")}
+								</button>
+							</div>
+						</>
+					)}
+				</section>
+
+				<section className="gui-loc-section" aria-labelledby="gui-loc-workspaces">
+					<header className="gui-loc-section-head">
+						<h2 className="gui-loc-section-title" id="gui-loc-workspaces">
+							{t("settings.workspaceAxisTitle")}
+						</h2>
+						<p className="gui-loc-section-hint">{t("settings.workspaceAxisHint")}</p>
+					</header>
+					{/* The catalog read above is the wizard's only source, so the two
+					 * sections cannot disagree about which hosts exist. */}
+					<ConnectDialog
+						open={open}
+						framed={false}
+						catalog={catalog}
+						onClose={onClose}
+						rpc={rpc}
+						onOpenWorkspace={onOpenWorkspace}
+					/>
+				</section>
+			</div>
+
+			{/* Dialog-level actions: they are about the connection itself, not
+			 * about either axis, so they sit in the footer rather than competing
+			 * with a section's one primary action. */}
+			<footer className="gui-loc-foot">
+				<button
+					type="button"
+					className="gui-btn gui-btn-stop"
+					onClick={() => {
+						onDisconnect();
+						onClose();
+					}}
+				>
+					{t("settings.disconnectCurrent")}
+				</button>
+				<button type="button" className="gui-remote-disclaimer-link" onClick={onOpenDisclaimer}>
+					{t("settings.viewRemoteDisclaimer")}
+				</button>
+			</footer>
 		</DialogFrame>
 	);
 }

@@ -604,11 +604,15 @@ export function ConnectionManager({
 									? t("settings.connectionConnectedHint")
 									: t("settings.connectionDisconnected")}
 				</p>
+				{/* The same sentence the locations dialog leads with. This surface
+				 * sets the instance axis only, and saying so is what stops the row
+				 * list from reading as "all the places MusePi can be". */}
+				<p className="gui-conn-axis">{t("settings.instanceAxisHint")}</p>
 			</header>
 
 			<section className="gui-conn-section" aria-labelledby="gui-conn-targets">
 				<h2 className="gui-conn-title" id="gui-conn-targets">
-					{t("settings.connectionTargets")}
+					{t("settings.instanceAxisTitle")}
 				</h2>
 				<ul className="gui-conn-list">{targets.map(renderRow)}</ul>
 			</section>
