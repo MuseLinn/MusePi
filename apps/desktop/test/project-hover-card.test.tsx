@@ -127,6 +127,10 @@ describe("project hover card", () => {
 
 		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
 		expect(card).not.toBeNull();
+		// The recipe class is the whole surface (position, padding, glass,
+		// shadow). Dropping it from the component would leave this card with no
+		// style at all while every child-class query above still passed.
+		expect(card!.classList.contains("gui-hover-card")).toBe(true);
 		const rows = [...card!.querySelectorAll<HTMLElement>(".gui-hover-card-row")];
 		expect(rows).toHaveLength(3);
 		// Basenames, not full paths — the full path stays on the row title.
@@ -163,8 +167,14 @@ describe("project hover card", () => {
 			[node("s1", "alpha", "/work/alpha")],
 		);
 		await hoverBlock(container);
-		const openButtons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-open")];
+		const openButtons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-row")];
 		expect(openButtons).toHaveLength(2);
+		// The row IS the button, so it spans the whole row box — not an 18px
+		// glyph at the trailing edge.
+		for (const button of openButtons) {
+			expect(button.tagName).toBe("BUTTON");
+			expect(button.getAttribute("aria-label")).toContain(t("settings.openInExplorer"));
+		}
 		await act(async () => openButtons[1]!.click());
 		await flush();
 		expect(opened).toEqual(["/refs/shared"]);
@@ -262,7 +272,7 @@ describe("project hover card", () => {
 		);
 		await hoverBlock(container);
 		const block = container.querySelector<HTMLElement>(".gui-project-block");
-		const open = document.querySelector<HTMLButtonElement>(".gui-project-hover-card-open");
+		const open = document.querySelector<HTMLButtonElement>(".gui-project-hover-card-row");
 		expect(open).not.toBeNull();
 		// (c) Tab into the card: focusout's relatedTarget is a card button, which
 		// the block contains, so the 120ms grace must not start.
@@ -324,7 +334,7 @@ describe("project hover card", () => {
 		);
 		await hoverBlock(container);
 		expect(document.querySelectorAll(".gui-project-hover-card")).toHaveLength(1);
-		const buttons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-open")];
+		const buttons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-row")];
 		expect(buttons).toHaveLength(12);
 		const last = buttons[11]!;
 		await act(async () => {
@@ -418,7 +428,7 @@ describe("ProjectHoverCard component", () => {
 			),
 		);
 		// The card portals to document.body, so it is not inside `container`.
-		const buttons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-open")];
+		const buttons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-row")];
 		expect(buttons).toHaveLength(2);
 		for (const button of buttons) {
 			expect(button.getAttribute("aria-label")).toContain(t("settings.openInExplorer"));
@@ -444,7 +454,7 @@ describe("ProjectHoverCard component", () => {
 		// dead buttons.
 		expect(document.querySelectorAll(".gui-project-hover-card")).toHaveLength(2);
 		expect(noAction.contains(document.querySelector(".gui-project-hover-card"))).toBe(false);
-		expect(container.querySelector(".gui-project-hover-card-open")).toBeNull();
+		expect(container.querySelector(".gui-project-hover-card-row")).toBeNull();
 	});
 });
 
@@ -514,14 +524,14 @@ describe("fitProjectCard — the flip and list-height decision", () => {
 	});
 
 	it("derives its first-frame estimate from the shipped font ladder", () => {
-		// The shipped ladder (tokens.css) is 15px / -2px = 13px, NOT the test
-		// fixture's 11px; on it Chromium measures 91.25px of chrome at the
-		// narrowest English width and a 27.8px row step. These constants are
+		// Re-measured 2026-11-22 after the hover-card recipe (padding 12px 14px
+		// 10px) and the row-as-button box: chrome is 92.25px at 152/164px wide
+		// and 73.25px at 224/240px, and a row steps 30–31px. These constants are
 		// only the first-frame estimate — `measureCard` replaces them with the
-		// real geometry before paint — but they must not be derived from the
-		// fixture ladder, or the first frame is wrong on a real screen.
-		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(91.25);
-		expect(ROW_HEIGHT).toBeGreaterThanOrEqual(27.8);
+		// real geometry before paint — but they must not be derived from the test
+		// fixture's 11px ladder, or the first frame is wrong on a real screen.
+		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(92.25);
+		expect(ROW_HEIGHT).toBeGreaterThanOrEqual(30);
 	});
 
 	it("uses caller-supplied metrics instead of the estimate", () => {

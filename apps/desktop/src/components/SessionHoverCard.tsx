@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -108,6 +109,11 @@ export function SessionHoverCard({
 	modeCatalog?: readonly ModeLabelEntry[] | null;
 }): ReactNode {
 	const [hover, setHover] = useState<SessionHoverPayload | null>(null);
+	// 两阶段入场（`useTwoPhaseEnter`，全仓浮层的同一形状）：卡片先以
+	// opacity 0 挂载、合成毛玻璃背景，下一帧才翻 `--entered` 并只动
+	// transform。见 gui-chrome.css 配方注释——在 backdrop-filter 上连续
+	// 动画 opacity 会让真实屏幕合成器跳过 backdrop 采样。
+	const enteredCls = useTwoPhaseEnter(hover !== null);
 	const visibleRef = useRef(false);
 	const showTimer = useRef<number | null>(null);
 	const hideTimer = useRef<number | null>(null);
@@ -189,7 +195,11 @@ export function SessionHoverCard({
 	return createPortal(
 		// 只读卡：内容与卡片本身都不接受指针（行没有 hover 底色，也没有可点的
 		// 动作），悬停行才是交互面。
-		<div className="gui-hover-card gui-session-hover-card" style={{ left, top }} role="tooltip">
+		<div
+			className={`gui-hover-card gui-session-hover-card${enteredCls ? " gui-hover-card--entered" : ""}`}
+			style={{ left, top }}
+			role="tooltip"
+		>
 			<div className="gui-hover-card-title gui-session-hover-card-title" title={hover.label}>
 				{hover.label}
 			</div>

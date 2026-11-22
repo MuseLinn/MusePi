@@ -84,6 +84,8 @@ const SESSION_CARD = `
 		</div>
 	</div>`;
 
+/** The row IS the button: the whole row box is the target, with the icon, the
+ *  name, the primary chip and a decorative trailing arrow inside it. */
 const PROJECT_CARD = `
 	<div class="gui-hover-card gui-project-hover-card" role="group" aria-label="alpha" style="left: 300px; top: 40px;">
 		<div class="gui-hover-card-title gui-project-hover-card-title">${LONG_TITLE}</div>
@@ -94,16 +96,20 @@ const PROJECT_CARD = `
 			<span>4 sessions</span>
 		</div>
 		<ul class="gui-hover-card-rows gui-project-hover-card-list">
-			<li class="gui-hover-card-row gui-hover-card-row--action">
-				<span class="gui-hover-card-icon"></span>
-				<span class="gui-hover-card-text">alpha</span>
-				<span class="gui-hover-card-chip">Primary</span>
-				<button type="button" class="gui-project-hover-card-open">o</button>
+			<li>
+				<button type="button" class="gui-hover-card-row gui-hover-card-row--action gui-project-hover-card-row" aria-label="Open: /work/alpha">
+					<span class="gui-hover-card-icon"></span>
+					<span class="gui-hover-card-text">alpha</span>
+					<span class="gui-hover-card-chip">Primary</span>
+					<span class="gui-project-hover-card-go"></span>
+				</button>
 			</li>
-			<li class="gui-hover-card-row gui-hover-card-row--action">
-				<span class="gui-hover-card-icon"></span>
-				<span class="gui-hover-card-text">shared</span>
-				<button type="button" class="gui-project-hover-card-open">o</button>
+			<li>
+				<button type="button" class="gui-hover-card-row gui-hover-card-row--action gui-project-hover-card-row" aria-label="Open: /refs/shared">
+					<span class="gui-hover-card-icon"></span>
+					<span class="gui-hover-card-text">shared</span>
+					<span class="gui-project-hover-card-go"></span>
+				</button>
 			</li>
 		</ul>
 	</div>`;
@@ -146,7 +152,13 @@ const ROOT_TOKENS = `
 
 async function mount(
 	markup: string,
-	options: { reducedMotion?: boolean; motionOff?: boolean; platform?: string; reducedTransparency?: boolean } = {},
+	options: {
+		reducedMotion?: boolean;
+		motionOff?: boolean;
+		platform?: string;
+		reducedTransparency?: boolean;
+		settled?: boolean;
+	} = {},
 ): Promise<void> {
 	// `prefers-reduced-transparency` is not in puppeteer's allowlist, so it goes
 	// through CDP directly; `emulateMediaFeatures` would throw on it. The session
@@ -166,6 +178,27 @@ async function mount(
 		await page.evaluate(platform => {
 			document.documentElement.dataset.platform = platform;
 		}, options.platform);
+	}
+	// Reproduce the component's two-phase enter (`useTwoPhaseEnter`): the card
+	// mounts at the base `opacity: 0` with no animation, then the next frame
+	// gets `--entered`. `settled: false` leaves it in the pending frame.
+	// The animation is deliberately NOT awaited to completion: `readEntrance`
+	// needs the live animation object to sample it.
+	if (options.settled !== false) {
+		await page.evaluate(
+			() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))),
+		);
+		await page.evaluate(() => {
+			for (const card of document.querySelectorAll<HTMLElement>(".gui-hover-card")) {
+				card.classList.add("gui-hover-card--entered");
+			}
+		});
+		// Let the style change paint. Under reduced motion the `--entered` rule
+		// wins over the base `opacity: 0` only after the recalc, so reading the
+		// computed style in the same task still reports 0.
+		await page.evaluate(
+			() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))),
+		);
 	}
 }
 
@@ -271,10 +304,13 @@ async function readCard(selector: string): Promise<CardGeometry> {
 	}, selector);
 }
 
-/** Sample opacity + transform at two instants inside the entrance. */
-async function readEntrance(
-	selector: string,
-): Promise<{ start: { opacity: number; transform: string }; end: { opacity: number; transform: string } }> {
+/** Sample the entrance at two instants. The card must be in its `--entered`
+ *  state (the `mount` helper adds it). */
+async function readEntrance(selector: string): Promise<{
+	start: { opacity: number; transform: string };
+	end: { opacity: number; transform: string };
+	animatedProperties: string[];
+}> {
 	return page.evaluate(async (cardSelector: string) => {
 		const card = document.querySelector<HTMLElement>(cardSelector)!;
 		const animation = card.getAnimations()[0];
@@ -290,9 +326,12 @@ async function readEntrance(
 		animation.currentTime = 70;
 		await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
 		const end = sample();
+		// The keyframe's own property list — the authoritative answer to "does
+		// this animation touch opacity?", which sampling alone cannot give.
+		const animatedProperties = animation.effect?.getKeyframes().flatMap(frame => Object.keys(frame)) ?? [];
 		animation.play();
 		await animation.finished.catch(() => {});
-		return { start, end };
+		return { start, end, animatedProperties };
 	}, selector);
 }
 
@@ -342,18 +381,24 @@ describe("session hover card geometry", () => {
 		expect(geometry.rowGap).toBe(1);
 	});
 
-	test("entrance animates opacity AND transform as one gesture", async () => {
+	test("entrance is a transform-only slide, with opacity flipped by --entered", async () => {
 		await mount(SESSION_CARD);
 		const geometry = await readCard(".gui-session-hover-card");
 		expect(geometry.animationName).toBe("gui-hover-card-in");
 		expect(geometry.animationDuration).toBe("0.14s");
 		const entrance = await readEntrance(".gui-session-hover-card");
-		// Both properties move: a transform-only animation would leave opacity 1.
-		expect(entrance.start.opacity).toBeLessThan(0.5);
-		expect(entrance.end.opacity).toBeGreaterThan(entrance.start.opacity);
+		// Transform-only. Animating opacity on a backdrop-filter surface makes
+		// Chromium skip backdrop sampling on the real compositor
+		// (docs/gui-implementation.md §6.5), so the keyframe must not name it.
+		expect(entrance.animatedProperties).not.toContain("opacity");
+		expect(entrance.animatedProperties).toContain("transform");
 		expect(entrance.start.transform).not.toBe("none");
 		// The session card slides in from the row's right.
 		expect(entrance.start.transform).toContain("-6");
+		// Opacity is already 1 across the whole slide: `--entered` flipped it in
+		// one step, which is what keeps the frost sampled.
+		expect(entrance.start.opacity).toBe(1);
+		expect(entrance.end.opacity).toBe(1);
 	});
 
 	test("lands immediately and visible under prefers-reduced-motion", async () => {
@@ -363,8 +408,8 @@ describe("session hover card geometry", () => {
 		const opacity = await page.evaluate(() =>
 			Number(getComputedStyle(document.querySelector<HTMLElement>(".gui-session-hover-card")!).opacity),
 		);
-		// The hidden state lives in the keyframe; with the animation off the card
-		// is simply visible (a base opacity:0 would leave it invisible forever).
+		// The slide is gone; the `--entered` flip already set opacity 1, so the
+		// card lands visible instead of stuck at the base rule's 0.
 		expect(opacity).toBe(1);
 	});
 
@@ -378,19 +423,53 @@ describe("session hover card geometry", () => {
 		expect(opacity).toBe(1);
 	});
 
-	test("read-only rows carry no hover wash", async () => {
+	test("is invisible in the pending frame before --entered", async () => {
+		// The other half of two-phase: the mount frame really is transparent, so
+		// the frosted backdrop composites before the slide starts.
+		await mount(SESSION_CARD, { settled: false });
+		const opacity = await page.evaluate(() =>
+			Number(getComputedStyle(document.querySelector<HTMLElement>(".gui-session-hover-card")!).opacity),
+		);
+		expect(opacity).toBe(0);
+	});
+
+	test("read-only rows carry no hover wash, with the pointer actually moved onto them", async () => {
 		await mount(SESSION_CARD);
-		const washes = await page.evaluate(() => {
-			const card = document.querySelector<HTMLElement>(".gui-session-hover-card")!;
-			return [...card.querySelectorAll<HTMLElement>(".gui-hover-card-row")].map(row => ({
-				action: row.classList.contains("gui-hover-card-row--action"),
-				background: getComputedStyle(row).backgroundColor,
-			}));
-		});
-		expect(washes).toHaveLength(3);
-		for (const row of washes) {
+		const rows = await page.evaluate(() =>
+			[...document.querySelectorAll<HTMLElement>(".gui-session-hover-card .gui-hover-card-row")].map(row => {
+				const box = row.getBoundingClientRect();
+				return {
+					action: row.classList.contains("gui-hover-card-row--action"),
+					background: getComputedStyle(row).backgroundColor,
+					x: box.left + box.width / 2,
+					y: box.top + box.height / 2,
+				};
+			}),
+		);
+		expect(rows.length).toBe(3);
+		const cardPointerEvents = await page.evaluate(
+			() => getComputedStyle(document.querySelector<HTMLElement>(".gui-session-hover-card")!).pointerEvents,
+		);
+		// The whole session card is pointer-transparent: it never takes the
+		// pointer from the row it describes. That is why no wash could appear
+		// even if one were declared — and it is asserted rather than assumed.
+		expect(cardPointerEvents).toBe("none");
+		for (const row of rows) {
+			// A real pointer move onto the row's own coordinates.
+			await page.mouse.move(row.x, row.y);
+			const state = await page.evaluate(() => {
+				const card = document.querySelector<HTMLElement>(".gui-session-hover-card")!;
+				return {
+					cardHovered: card.matches(":hover"),
+					anyRowHovered: [...card.querySelectorAll(".gui-hover-card-row")].some(r => r.matches(":hover")),
+				};
+			});
+			// The pointer is over the row's box, and nothing inside the card
+			// reacts: no `:hover` anywhere, so no wash.
+			expect(state.cardHovered).toBe(false);
+			expect(state.anyRowHovered).toBe(false);
+			// And the declared state agrees: no action modifier, transparent fill.
 			expect(row.action).toBe(false);
-			// Transparent: a wash here would promise an action that does not exist.
 			expect(row.background === "rgba(0, 0, 0, 0)" || row.background === "transparent").toBe(true);
 		}
 	});
@@ -429,14 +508,62 @@ describe("project hover card geometry", () => {
 		expect(rows).toEqual([true, true]);
 	});
 
-	test("entrance animates opacity and transform together, from above", async () => {
+	test("the row itself is the target: empty-area click navigates, cursor is a pointer", async () => {
+		// The old shape painted a 212px hover wash while only an 18px button at
+		// the trailing edge acted. Clicking the row's left padding or the blank
+		// space beside the name did nothing. This probes the real geometry: the
+		// row element must be a button, the pointer must be a pointer cursor, and
+		// a click on the padding must fire the row's own handler.
+		await mount(PROJECT_CARD);
+		const probe = await page.evaluate(() => {
+			const row = document.querySelector<HTMLElement>(".gui-project-hover-card .gui-hover-card-row")!;
+			const text = row.querySelector<HTMLElement>(".gui-hover-card-text")!;
+			const rowBox = row.getBoundingClientRect();
+			const textBox = text.getBoundingClientRect();
+			// A point inside the row's left padding — the area that used to be dead.
+			const emptyX = rowBox.left + 2;
+			const hit = document.elementFromPoint(emptyX, rowBox.top + rowBox.height / 2);
+			return {
+				tag: row.tagName,
+				cursor: getComputedStyle(row).cursor,
+				rowWidth: Math.round(rowBox.width),
+				textLeft: Math.round(textBox.left - rowBox.left),
+				hitIsRow: hit === row || row.contains(hit),
+				emptyX,
+				midY: rowBox.top + rowBox.height / 2,
+			};
+		});
+		expect(probe.tag).toBe("BUTTON");
+		expect(probe.cursor).toBe("pointer");
+		// The padding is real space inside the row, and the hit test lands on the
+		// row itself rather than on a sibling or the card background.
+		expect(probe.textLeft).toBeGreaterThan(0);
+		expect(probe.hitIsRow).toBe(true);
+
+		// Click the empty padding and assert the row's handler ran.
+		const clicked = await page.evaluate(() => {
+			const row = document.querySelector<HTMLElement>(".gui-project-hover-card .gui-hover-card-row")!;
+			let fired = 0;
+			row.addEventListener("click", () => fired++, { once: true });
+			row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+			return fired;
+		});
+		expect(clicked).toBe(1);
+	});
+
+	test("entrance is a transform-only slide from above", async () => {
 		await mount(PROJECT_CARD);
 		const geometry = await readCard(".gui-project-hover-card");
 		expect(geometry.animationName).toBe("gui-hover-card-in");
 		expect(geometry.animationDuration).toBe("0.14s");
 		const entrance = await readEntrance(".gui-project-hover-card");
-		expect(entrance.start.opacity).toBeLessThan(0.5);
-		expect(entrance.end.opacity).toBeGreaterThan(entrance.start.opacity);
+		// Same rule as the session card: no opacity in the keyframe, because
+		// animating it on a backdrop-filter surface kills the frost on a real
+		// screen. `--entered` already flipped it.
+		expect(entrance.animatedProperties).not.toContain("opacity");
+		expect(entrance.animatedProperties).toContain("transform");
+		expect(entrance.start.opacity).toBe(1);
+		expect(entrance.end.opacity).toBe(1);
 		expect(entrance.start.transform).not.toBe("none");
 		// Slides down from above the row (the `--above` variant flips the sign).
 		expect(entrance.start.transform).toContain("-4");
@@ -473,8 +600,10 @@ describe("project hover card geometry", () => {
  *  1. `[data-platform="win32"]` — the real attribute `initTooltips()` writes
  *     from `shellPlatform()`; the fixture sets `documentElement.dataset.platform`
  *     the same way the app does.
- *  2. `@media (prefers-reduced-transparency: reduce)` — driven by
- *     `page.emulateMediaFeatures`.
+ *  2. `@media (prefers-reduced-transparency: reduce)` — driven through a raw CDP
+ *     `Emulation.setEmulatedMedia` session, because puppeteer's
+ *     `page.emulateMediaFeatures` rejects that feature name outright. The
+ *     session stays attached: detaching it discards the override.
  *  3. `@supports not (backdrop-filter: …)` — a browser either supports it or
  *     not, and Chromium always does, so this branch cannot be forced from a
  *     test. It is the same selector list as the other two, so a class missing

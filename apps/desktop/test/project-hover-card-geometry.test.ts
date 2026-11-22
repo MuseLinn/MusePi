@@ -85,12 +85,15 @@ function cardMarkup(): string {
 		};
 		const label = directory.path.split("/").filter(Boolean).pop() ?? directory.path;
 		const chip = directory.primary ? '<span class="gui-hover-card-chip">Primary</span>' : "";
+		// The row IS the button, so the fixture wraps the whole row box.
 		return `
-			<li class="gui-hover-card-row gui-hover-card-row--action">
-				<span class="gui-hover-card-icon"></span>
-				<span class="gui-hover-card-text" title="${directory.path}">${label}</span>
-				${chip}
-				<button type="button" class="gui-project-hover-card-open" title="Open: ${directory.path}">o</button>
+			<li>
+				<button type="button" class="gui-hover-card-row gui-hover-card-row--action gui-project-hover-card-row" title="Open: ${directory.path}">
+					<span class="gui-hover-card-icon"></span>
+					<span class="gui-hover-card-text" title="${directory.path}">${label}</span>
+					${chip}
+					<span class="gui-project-hover-card-go"></span>
+				</button>
 			</li>`;
 	}).join("");
 	return `

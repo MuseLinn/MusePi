@@ -566,18 +566,27 @@
  *     （项目卡：目录数 · 会话数；会话卡：模式 chip · 更新于 …）。
  *   · 行盒 — xs 字号、6px 间距、`3px 4px` 内边距（4px 既是命中区，也是与
  *     标题文字对齐的栅格），12px 图标 0.75 不透明度，值单行省略。
- *   · 入场 — 一个 fade + slide 手势：opacity 与 transform 落在同一对关键帧，
- *     140ms `--spring`。位移方向由 `--gui-hover-card-shift-*` 给出（会话卡
- *     从行右侧滑入，项目卡从行上方/下方滑入），时长与曲线不各写一份。
- *     隐藏态写在关键帧里，不写在基础规则里：基础 `opacity: 0` 在
- *     `prefers-reduced-motion` / `.gui-motion-off` 丢掉动画之后就永远不可见。
+ *   · 入场 — 两阶段 + 只动 transform 的滑动。基础规则 `opacity: 0`，下一帧
+ *     `--entered` 把 opacity 一步翻到 1 并启动关键帧；关键帧只动 transform
+ *     （`--gui-hover-card-shift-*` 给出的 6px / 4px 位移，140ms `--spring`）。
+ *     **opacity 不能进关键帧**：在 `backdrop-filter` 表面上连续动画 opacity
+ *     会让 Chromium 在真实屏幕合成器上跳过 backdrop 采样，卡片整段淡入期间
+ *     退化成普通半透明（背后的内容直接透出，没有磨砂），动画结束才"突然
+ *     变毛玻璃"；CDP 截图走离屏合成，仍然显示模糊，是这件事最大的误导。
+ *     实测记录见 `docs/gui-design.md`（两阶段入场一节）与
+ *     `docs/gui-implementation.md` §6.5；`.gui-menu-popup` 与
+ *     `.gui-board-focus` 是同一形状的在用样例。
+ *     opacity 留在基础规则 + `--entered` 里的另一个原因：`prefers-reduced-motion`
+ *     与 `.gui-motion-off` 只关掉 animation，`--entered` 已经把 opacity 翻到 1，
+ *     所以卡片照常落位可见，不会停在透明状态。
  *
  * 两张卡各自保留的差异（是内容形状，不是漂移）：
  *   · 宽度 — 会话卡 288px（标题两行截断），项目卡 240px（目录列表）。
  *   · 列表 — 项目卡的目录列表有自己的高度上限并自己滚动（`fitProjectCard`
  *     按实测可用空间夹取），会话卡只有一小叠事实行，不需要滚动。
- *   · 命中区 — 只有真的能点的行才带 `--action`：项目卡的目录行打开目录，
- *     会话卡的行是只读的，给只读行铺 hover 底色等于承诺一个不存在的动作。
+ *   · 命中区 — 只有真的能点的行才带 `--action`：项目卡的目录行本身就是打开
+ *     目录的按钮（整行是目标），会话卡的行是只读的，给只读行铺 hover 底色
+ *     等于承诺一个不存在的动作。
  */
 .gui-hover-card {
 	position: fixed;
@@ -590,6 +599,10 @@
 	max-width: calc(100vw - 16px);
 	padding: 12px 14px 10px;
 	border-radius: var(--radius-lg);
+	/* 两阶段入场的隐藏态：先以 opacity 0 合成毛玻璃背景，下一帧
+	 * `--entered` 才翻到 1 并启动动画。见上方配方注释里为什么不把 opacity
+	 * 放进关键帧。 */
+	opacity: 0;
 	/* Fallback surface: if the layered wash below is dropped wholesale (an
 	 * unresolvable var invalidates the whole shorthand), the card degrades to
 	 * a solid surface instead of fully transparent text over content.
@@ -610,16 +623,22 @@
 	/* 入场位移：会话卡从行右侧滑入（默认）；项目卡在自己的规则里改方向。 */
 	--gui-hover-card-shift-x: -6px;
 	--gui-hover-card-shift-y: 0px;
+}
+
+/* 第二帧：opacity 一步到 1，transform 的滑动由关键帧提供。 */
+.gui-hover-card--entered {
+	opacity: 1;
 	animation: gui-hover-card-in 140ms var(--spring);
 }
 
+/* 只动 transform。opacity 留在 `.gui-hover-card--entered` 的一次翻转里——
+ * 在 backdrop-filter 元素上动画 opacity 会让真实屏幕合成器跳过 backdrop
+ * 采样（见配方注释与 docs/gui-implementation.md §6.5）。 */
 @keyframes gui-hover-card-in {
 	from {
-		opacity: 0;
 		transform: translate(var(--gui-hover-card-shift-x, 0px), var(--gui-hover-card-shift-y, 0px));
 	}
 	to {
-		opacity: 1;
 		transform: translate(0, 0);
 	}
 }
@@ -718,13 +737,16 @@
 	white-space: nowrap;
 }
 
+/* 两阶段入场的收尾。`animation: none` 只去掉滑动，opacity 已由
+ * `.gui-hover-card--entered` 翻到 1，所以卡片照常落位可见——隐藏态在基础
+ * 规则里，但只在 `--entered` 到来之前有效。 */
 @media (prefers-reduced-motion: reduce) {
-	.gui-hover-card {
+	.gui-hover-card--entered {
 		animation: none;
 	}
 }
 
-.gui-motion-off .gui-hover-card {
+.gui-motion-off .gui-hover-card--entered {
 	animation: none;
 }
 
@@ -821,41 +843,51 @@
 }
 
 /* 行在侧栏下方没有空间时整卡翻到行的上方（组件按行的矩形决定）。定位
- * 坐标已是内联的视口值，这里只换入场位移的方向——同一个 fade+slide 关键帧，
- * 不另写一份。 */
+ * 坐标已是内联的视口值，这里只换入场位移的方向——同一个只动 transform 的
+ * 关键帧，不另写一份。 */
 .gui-project-hover-card--above {
 	--gui-hover-card-shift-y: 4px;
 }
 
-/* 列表本身把行收得更紧（1px 列表 gap）：一行一个目录、列表自己滚，十几行
- * 仍可整片扫读。行盒的内边距、图标与省略号来自配方；行确实能打开目录，所以
- * 行带 `--action`，指针停在上面才有底色。 */
-
-/* 每目录的打开动作:常驻可见（卡片本身就是"看一下"的界面，隐藏动作会让人
- * 以为不能操作），`:hover`/`:focus-visible` 只加强度。 */
-.gui-project-hover-card-open {
-	flex: none;
-	display: grid;
-	place-items: center;
-	width: 18px;
-	height: 18px;
-	padding: 0;
+/* 目录行就是打开目录的按钮：整行（含左侧 4px 内边距与名字右侧的空白）都是
+ * 目标，所以行盒的底色、光标与焦点环都属于这一个元素。此前行只铺 hover 而
+ * 真正能点的只有行尾 18px 的小按钮——212px 的承诺对 18px 的动作，用户点在
+ * 名字或空白处没有任何反应。
+ *
+ * `--action` 仍由组件写在行上，因为它表达的是「这一行会响应」；现在响应者
+ * 与铺底色的元素是同一个。 */
+.gui-project-hover-card-row {
+	width: 100%;
+	/* button 的默认样式清零：行盒的排版（内边距、间距、圆角、字号）来自
+	 * `.gui-hover-card-row`。用 `font: inherit` 会把字号一并重置成继承值
+	 * （16px），盖掉配方里的 xs 档位——只接字体族，字号留在配方。 */
+	margin: 0;
 	border: 0;
-	border-radius: var(--radius-sm);
 	background: transparent;
-	color: var(--color-text-faint);
-	transition: background 120ms ease, color 120ms ease;
+	color: inherit;
+	font-family: inherit;
+	text-align: start;
+	cursor: pointer;
 }
 
-.gui-project-hover-card-open:hover:not(:disabled) {
-	background: var(--color-surface-raised);
-	color: var(--color-text);
-}
-
-.gui-project-hover-card-open:focus-visible {
+.gui-project-hover-card-row:focus-visible {
 	outline: 2px solid var(--color-accent);
-	outline-offset: 1px;
-	color: var(--color-text);
+	outline-offset: -2px;
+}
+
+/* 行尾的箭头是装饰：它指向"打开"，但动作由整行承担，所以不进 tab 序、
+ * 不带自己的可访问名。悬停或聚焦时它提亮一档，给整行一个可读的收尾。 */
+.gui-project-hover-card-go {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	opacity: 0.45;
+	transition: opacity 120ms ease;
+}
+
+.gui-project-hover-card-row:hover .gui-project-hover-card-go,
+.gui-project-hover-card-row:focus-visible .gui-project-hover-card-go {
+	opacity: 0.85;
 }
 
 
