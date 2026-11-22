@@ -287,7 +287,6 @@ async function readGeometry() {
 		const lists = all(".gui-loc-list");
 		const row = document.querySelector<HTMLElement>(".gui-loc-row")!;
 		const rowMain = row.querySelector<HTMLElement>(".gui-loc-row-main")!;
-		const statusSlots = all(".gui-loc-status").map(node => Math.round(node.getBoundingClientRect().right));
 		/** Cell positions relative to their own row, so the two lists — which sit
 		 *  at different x on screen — can be compared cell for cell. */
 		const cellsOf = (scope: Element) =>
@@ -329,8 +328,6 @@ async function readGeometry() {
 			listOverflow: lists.map(list => ({ scrollWidth: list.scrollWidth, clientWidth: list.clientWidth })),
 			row: box(row),
 			rowMain: box(rowMain),
-			statusRight: statusSlots,
-			statusCount: statusSlots.length,
 			daemonCells: firstList ? cellsOf(firstList) : [],
 			workspaceCells: secondList ? cellsOf(secondList) : [],
 			docOverflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,

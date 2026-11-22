@@ -2835,11 +2835,13 @@
 
 /* ── The shared row ────────────────────────────────────────────────────────
  *
- * One anatomy for both axes: a status dot, the name and where-it-runs on one
- * line (name above, location below), and a status slot at the same x in both
- * lists. The row box IS the button (M86's honest hit area) — the wash and the
- * hit area are one rectangle, and a destructive sibling (remove) is never
- * nested inside it.
+ * One anatomy for both axes, rendered by `ConnectionLocationRow`: a dot OR a
+ * glyph in a fixed-width lead box, the name and where-it-runs on one line, and
+ * a status slot at the same offset from each row's trailing edge. The two
+ * lists differ in width, so the status slot cannot share an absolute x — what
+ * they share is where it sits inside the row. The row box IS the button
+ * (M86's honest hit area) — the wash and the hit area are one rectangle, and a
+ * destructive sibling (remove) is never nested inside it.
  */
 .gui-loc-list {
 	display: flex;
@@ -2945,9 +2947,6 @@
 	background: var(--color-surface-sunken);
 }
 
-/* Name and where-it-runs share one line, so a row scans as one fact with its
- * location beside it rather than as two stacked lines to re-read. The name
- * takes the free space; the location shrinks first and ellipsizes. */
 /* The name takes a FIXED share of the row, not a content-sized one. A
  * content-sized name (the previous `flex: 0 0 auto`) pushed `where` right by
  * whatever the name's own length happened to be, so the location column
@@ -2977,7 +2976,9 @@
 }
 
 /* The status slot is pinned to the row's trailing edge in both lists, so the
- * same fact sits at the same x wherever the row appears. */
+ * same fact sits at the same offset from that edge wherever the row appears.
+ * The lists differ in width, so it is the offset that is shared, not an
+ * absolute x. */
 .gui-loc-status {
 	margin-left: auto;
 	flex: none;
