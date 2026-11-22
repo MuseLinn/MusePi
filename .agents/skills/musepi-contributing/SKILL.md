@@ -33,7 +33,8 @@ release 模板与硬性规范，供 agent 代表用户起草与执行提交流�
 3. **不要为即将自己实现的工作开 issue**——维护者可能并行抢做。
 4. **major/跨包改动先讨论**（Discord/issue），不要直接大 PR。
 5. **AI 辅助提交四约束**：限范围拒绝无关改动、逐文件 review 并理解行为、
-   自己跑相关 check 与行为验证、**由用户发布**（agent 不自主任 push/发布）。
+   自己跑相关 check 与行为验证、**未获指令不推送**（agent 不自主 push/发布；
+   用户明确要求推送时按指令执行，并在汇报里写清推送结果与未闭环项）。
 6. **Issue 模板字段**：Bug 必填 Description / Steps / Expected / Platform
    （含 Windows native）/ **MusePi version**（`musepi --version` 输出，非 omp）/
    Bun version；Provider / Area 下拉选最贴近项。
@@ -48,6 +49,15 @@ release 模板与硬性规范，供 agent 代表用户起草与执行提交流�
   `cargo fmt`，import 顺序要 biome organize（只跑 tsgo 会被全仓 check 拦下）。
 - 涉及 win32 spawn 的改动参考仓库既有模式（windowsHide / CREATE_NO_WINDOW，
   避免 cmd.exe shim 孙进程闪窗），不要引入新的 console 泄漏。
+
+## 分支与清理
+
+- 祖先关系不等于内容是否落地：main 的历史可能被压平，旧分支会显示为
+  “未合并”且与 main 没有共同祖先。报告“未合并的工作”前，先用文件 blob 或
+  `git diff-tree` 与 main 对比，确认内容是否已经存在；不要把已落地的旧分支
+  列成待办。
+- 删除分支或工作树前，确认其中没有未提交改动、未跟踪文件和未落地提交；
+  有任何一个就保留并在汇报里点名，不要顺手清理。
 
 ## 发布（release）
 
