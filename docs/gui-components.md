@@ -28,7 +28,7 @@ English | [中文](gui-components.zh-CN.md)
 | --- | --- | --- |
 | `--bg-*` / `--fg-*` | Theme surface and foreground | Derived from the active theme; all 18 presets and both schemes follow |
 | `--border-*` / `--glass-hairline*` | Dividers, card hairlines | One ladder for the glass system; do not invent another |
-| `--glass-*` | L1 cards / L2 floats / L3 interaction states | See `gui-glass.css`; loaded last, single authority |
+| `--glass-*` | L1 cards / L2 floats / L3 interaction states; floating panes add lit bands, dark sides and a half-pixel outer hairline | Values in `tokens.css`; L1/L2 skins in `gui-glass.css`, the liquid-glass pane in `gui-base.css` |
 | `--accent-*` | Accent family | Theme hue or an explicit override |
 | `--radius-*` | Six-step radius ladder | **Literals are banned**; enforced by `scripts/check-radius-tokens.ts` |
 | `--space-*` | 4px spacing rhythm | |
@@ -37,6 +37,27 @@ English | [中文](gui-components.zh-CN.md)
 | `--z-*` | Stacking levels | Floats, modals and tips have their own tiers |
 | `--gui-grip-*` | Splitter grip geometry and three states | See `SplitterGrip` below |
 | `--gui-slider-*` | Slider hit pad, groove, fill, detents, knob, focus, hover and disabled states | Declared in `gui-chat.css` (this family's authority); one family for the in-scope sliders — see `LadderSlider` below and the exception list under it |
+
+## Glass pane (`gui-liquid-glass`)
+
+The floating pane is one primitive. `gui-base.css` paints it, `tokens.css` owns the values, and a host opts in with `class="gui-liquid-glass"` plus its radius and layout. It declares **no** `background`, `border`, `box-shadow`, blur or glow layer of its own; a component that restates the material is a defect, and a third copy means the primitive was bypassed.
+
+| Layer | Token | Dark | Light |
+| --- | --- | --- | --- |
+| Tint | `--glass-pane-tint` | `bg-raised` 40% | `bg-inset` 45% (grey, never white) |
+| Lit edges (1px top/bottom) | `--glass-pane-band` | `fg` 22% | white |
+| Side lines (1px left/right) | `--glass-pane-side` | `fg` 14% | black 24% |
+| Outer hairline (0.5px, outside the bands) | `--glass-pane-hairline` | black 50% | black 20% |
+| Lift | `--glass-pane-shadow` | 18px, 30% | 18px, 6% |
+| Spill length | `--glass-pane-spill` | radius × 1.5 (default 18px) | same |
+
+- **Anatomy.** `::before` carries the backdrop blur and the SVG warp. `::after` paints the spill (2px band plateau + flare), the two lit bands, the side lines and the outer hairlines. Nothing runs around the corners; every edge tapers through the arcs.
+- **States.** Focus changes nothing. An interactive or hue-tinted pane swaps `--glass-pane-tint` (and, for hue variants, `--glass-pane-band`) on the host. A thicker surface overrides the tint only — the recap row sets it to 84% so it stays readable over moving text.
+- **Thickness.** Tint alpha and blur move together; never raise one alone. There is no public step ladder yet — add one to the token family before a call site picks a number.
+- **Fallbacks.** The tint, edges and lift paint without `backdrop-filter`, so the pane stays delimited; win32/linux take the blur from the window material. Reduced transparency follows the same rule: solid surface, same edges.
+- **Consumers.** Composer and welcome composer, the top-bar project and open-in capsules, the settings translucent-panel preview, the session recap row. A surface that wants only the warp (the capability toolbars) keeps the class and zeroes fill, shadow and `::after` in its own scoped rule.
+- **Contract.** `apps/desktop/test/glass-pane.test.ts` reads the real cascade in Chromium: single tint, lit bands and dark sides, spill above the warp layer, light polarity, one offset-free shadow.
+- **Decision record.** `docs/adr/0005-floating-glass-pane.md` holds the rationale and the rejected alternatives; this section states the current contract.
 
 ## Desktop shell (`apps/desktop/src/components/`)
 

@@ -30,6 +30,7 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 ## GUI & Desktop
 
 - [gui-design.md](gui-design.html) — **活文档** GUI design spec: layout / tokens / motion / component patterns / pet visual style
+- [gui-components.md](gui-components.html) — **活文档** reusable component and token catalog, including the glass pane contract
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI implementation notes: daemon RPC contracts, IPC shapes, pitfalls, verification workflows
 - [gui-context-and-session.md](gui-context-and-session.html) — **活文档** structured quote contexts, session subtree collapse, and role/fallback thinking levels
 - [i18n.md](i18n.html) — **活文档** i18n architecture: per-domain locale maps, compile-time en parity, plugin translation registration
@@ -115,4 +116,4 @@ decision; **not** a description of current behaviour.
 - [windows-development.md](windows-development.html) — Windows build environment setup
 - [review/](review/) — design drafts under review and verification write-ups (~50 files)
 - [gui-verification/](gui-verification/) — GUI verification runs and screenshots (~28 files)
-- [adr/](adr/) — architecture decision records
+- [adr/](adr/) — dated decision records, one per file; current behavior stays in the owning living doc

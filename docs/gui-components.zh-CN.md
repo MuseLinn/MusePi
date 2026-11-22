@@ -28,7 +28,7 @@ scope:
 | --- | --- | --- |
 | `--bg-*` / `--fg-*` | 主题底色与前景 | 由当前主题派生，18 套预设 + 两种明暗自动跟随 |
 | `--border-*` / `--glass-hairline*` | 分隔线、卡片描边 | 玻璃层级的一套，别另造 |
-| `--glass-*` | L1 卡片 / L2 浮层 / L3 交互态 | 见 `gui-glass.css`，最后加载、单一权威 |
+| `--glass-*` | L1 卡片 / L2 浮层 / L3 交互态；浮层 pane 另有上下亮带、左右暗线与 0.5px 外发丝 | 值在 `tokens.css`；L1/L2 皮肤在 `gui-glass.css`，液态玻璃 pane 在 `gui-base.css` |
 | `--accent-*` | 强调色族 | 主题色或显式覆盖 |
 | `--radius-*` | 6 级圆角阶梯 | **禁止字面量**，`scripts/check-radius-tokens.ts` 强制 |
 | `--space-*` | 4px 间距节奏 | |
@@ -36,6 +36,26 @@ scope:
 | `--z-*` | 层级 | 浮层、模态、提示各有档位 |
 | `--gui-grip-*` | 分割握柄几何与三态 | 见下方 `SplitterGrip` |
 | `--gui-slider-*` | 滑块命中区、凹槽、填充、档位点、滑块、焦点、悬停与禁用态 | 声明在 `gui-chat.css`（该族的权威位置）；覆盖范围内的滑块共用一族——见下方 `LadderSlider` 与紧随其后的例外清单 |
+
+## 玻璃 pane（`gui-liquid-glass`）
+
+浮层玻璃只有一个 primitive：`gui-base.css` 负责绘制，`tokens.css` 持有数值，宿主只需 `class="gui-liquid-glass"` 加上圆角与布局。宿主**不得**再声明 `background`、`border`、`box-shadow`、模糊或光溢层；组件里重写配方就是缺陷，出现第三份拷贝说明绕开了 primitive。
+
+| 层 | token | 深色 | 浅色 |
+| --- | --- | --- | --- |
+| 填充 | `--glass-pane-tint` | `bg-raised` 40% | `bg-inset` 45%（灰，绝不用白） |
+| 上下亮带（1px） | `--glass-pane-band` | `fg` 22% | 白 |
+| 左右暗线（1px） | `--glass-pane-side` | `fg` 14% | 黑 24% |
+| 外侧发丝（0.5px，亮带外） | `--glass-pane-hairline` | 黑 50% | 黑 20% |
+| 抬升 | `--glass-pane-shadow` | 18px，30% | 18px，6% |
+| 光溢长度 | `--glass-pane-spill` | 半径 × 1.5（默认 18px） | 同左 |
+
+- **结构。** `::before` 承载背景模糊与 SVG warp；`::after` 绘制光溢（2px 亮带平台 + 渐隐）、上下亮带、左右暗线与外侧发丝。四角不画任何边，所有边在圆角弧上自然收口。
+- **状态。** 焦点不改变材质。可交互或带色相的 pane 只替换宿主上的 `--glass-pane-tint`（色相变体再替换 `--glass-pane-band`）。更厚的表面只覆盖 tint——会话 recap 行设为 84%，保证在滚动文字上仍可读。
+- **厚度。** tint 透明度与模糊必须一起变，不能单独调一个。目前没有公开的厚度阶梯；调用点选具体数值前，先把阶梯加进 token 族。
+- **降级。** 没有 `backdrop-filter` 时，tint、边线与抬升仍然成立，pane 不会失去轮廓；win32/linux 的模糊由窗口材质提供。降低透明度时同理：实色表面，边线不变。
+- **消费者。** 输入框与欢迎页输入框、顶栏的项目胶囊与 open-in 胶囊、设置页“半透明面板”预览、会话 recap 行。只需要 warp 的表面（能力页工具条）保留类名，在自己的作用域里清零填充、阴影与 `::after`。
+- **契约。** `apps/desktop/test/glass-pane.test.ts` 在真实 Chromium 中读取级联：单层 tint、亮带与暗线、光溢在 warp 层之上、浅色极性、以及唯一的无偏移阴影。
 
 ## 桌面壳（`apps/desktop/src/components/`）
 

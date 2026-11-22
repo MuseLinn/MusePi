@@ -29,6 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 ## GUI 与桌面
 
 - [gui-design.md](gui-design.html) — **活文档** GUI 设计规范：布局 / token / 动效 / 组件模式 / 桌宠视觉风格
+- [gui-components.md](gui-components.html) — **活文档** 可复用组件与 token 目录，含玻璃 pane 契约
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI 实现笔记：daemon RPC 契约、IPC 形状、踩坑、验证工作流
 - [gui-context-and-session.md](gui-context-and-session.html) — **活文档** 结构化引用、子会话折叠和角色/回退模型思考等级
 - [i18n.md](i18n.html) — **活文档** i18n 架构：按域 locale 表、编译期英文对等、插件翻译注册
@@ -112,4 +113,4 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 - [windows-development.md](windows-development.html) — Windows 构建环境搭建
 - [review/](review/) — 评审中的设计稿与验证记录（约 50 份）
 - [gui-verification/](gui-verification/) — GUI 验证记录与截图（约 28 份）
-- [adr/](adr/) — 架构决策记录
+- [adr/](adr/) — 按日期归档的决策记录，一事一份；现行行为留在对应的 living 文档
