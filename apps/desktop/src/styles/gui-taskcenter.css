@@ -51,7 +51,7 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	padding: 4px;
-	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */;
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	overflow-x: clip;
 }
 

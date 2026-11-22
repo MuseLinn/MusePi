@@ -2486,6 +2486,12 @@ html.gui-vt-surface-only::view-transition-new(root),
  * keyframes' 200px fallback and snap back to the strip width when it ended. */
 .gui-surface-tabs {
 	overflow-x: auto;
+	/* The counterpart sits in this rule, not across the cascade: M78 wrote the
+	 * panel strip's live geometry here (its own declarations are in
+	 * gui-settings.css, which it could not touch), and relying on that sheet's
+	 * `overflow-y: hidden` would re-introduce the one-axis scroller the
+	 * overflow contract forbids. Same shape as `.gui-session-tabs-scroll`. */
+	overflow-y: hidden;
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	overscroll-behavior-x: contain;
