@@ -41,6 +41,40 @@ describe("collectDomAssertions", () => {
 		expect(found).toHaveLength(1);
 	});
 
+	test("flags an aliased node — the shape that passed green", () => {
+		// `const node = host.querySelector(".x"); expect(node).toBeNull();` reaches
+		// the reporter exactly as the inline form does, so matching only the inline
+		// text shipped a promise narrower than the mechanism it describes.
+		const found = sites('const node = host.querySelector(".gui-row");\nexpect(node).toBeNull();');
+		expect(found).toHaveLength(1);
+		expect(found[0]?.text).toBe("expect(node).toBeNull()");
+		expect(found[0]?.line).toBe(2);
+	});
+
+	test("flags the aliased negative form and a typed generic binding", () => {
+		expect(sites('const node = host.querySelector(".a");\nexpect(node).not.toBeNull();')).toHaveLength(1);
+		expect(sites('const node = host.querySelector<HTMLElement>(".a");\nexpect(node).toBeNull();')).toHaveLength(1);
+	});
+
+	test("flags an aliased assertion that appears before its binding", () => {
+		// Bindings are collected from the whole file first, so statement order does
+		// not decide whether a node assertion is seen.
+		expect(sites('expect(node).toBeNull();\nconst node = host.querySelector(".a");')).toHaveLength(1);
+	});
+
+	test("does not treat an identifier bound to something else as a node", () => {
+		// The ban must not guess from a name: `expect(value).toBeNull()` prints a
+		// value, and flagging it would forbid the boolean replacement too.
+		expect(sites("const value = compute();\nexpect(value).toBeNull();")).toEqual([]);
+		expect(sites("const rows = await readRows();\nexpect(rows).toBeUndefined();")).toEqual([]);
+	});
+
+	test("flags an inline query with a TypeScript type argument", () => {
+		// `querySelector<HTMLElement>(` puts the type argument between the accessor
+		// and its `(`; without allowing it the inline form was skipped.
+		expect(sites('expect(host.querySelector<HTMLElement>(".gui-row")).toBeNull();')).toHaveLength(1);
+	});
+
 	test("does not fire on the boolean replacement", () => {
 		// The fix must be legal, or the ban forbids its own remedy.
 		expect(sites('expect(host.querySelector(".gui-row") === null).toBe(true);')).toEqual([]);

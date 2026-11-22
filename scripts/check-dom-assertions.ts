@@ -15,12 +15,18 @@
  * exactly how several guards passed review while their defect was present: a
  * timeout reads as flake, and flake gets re-run instead of read.
  *
- * What is flagged: an `expect(...)` whose argument is a DOM-node query and whose
- * matcher is `toBeNull`, `toBeDefined` or `toBeUndefined`. Those exist to say
- * "this node is absent" or "this node is present", and both facts are boolean:
- * write `expect(node === null).toBe(true)` or `expect(rows.length).toBe(0)`.
- * The negated forms (`.not.toBeNull()`, `.not.toBeDefined()`) are flagged too —
- * they fail by serialising the same node.
+ * What is flagged: an `expect(...)` that asserts on a DOM node with `toBeNull`,
+ * `toBeDefined` or `toBeUndefined` — directly (`expect(host.querySelector(".x"))`)
+ * or through a binding to one (`const node = host.querySelector(".x");
+ * expect(node)`). The negated forms (`.not.toBeNull()`, `.not.toBeDefined()`) are
+ * flagged too: they fail by serialising the same node. A variable is not a
+ * different subject — measured on a 400-row tree, asserting absence on a present
+ * node through a binding gave `timed out after 15000ms`, no diff, real 16.5s,
+ * which is the same failure as the inline form.
+ *
+ * An identifier only counts as a node when the same file binds it to a DOM query.
+ * A name that is not bound that way is left alone: guessing from the name would
+ * flag `expect(value).toBeNull()` and make the ban forbid its own fix.
  *
  * Where it looks: every `*.test.*` / `*.spec.*` file in `apps/desktop`, which
  * includes the co-located suites under `src/`. The reporter stall is a property
@@ -53,9 +59,30 @@ import * as path from "node:path";
 const BASELINE_PATH = "scripts/dom-assertions-baseline.json";
 const ROOT = path.resolve(import.meta.dir, "..");
 
-/** DOM accessors whose result is a node (or a node collection indexed into one). */
+/**
+ * DOM accessors whose result is a node (or a node collection indexed into one).
+ *
+ * The optional `<...>` is a TypeScript type argument (`querySelector<HTMLElement>`),
+ * which sits between the accessor and its `(` — without it the inline shape with a
+ * type argument was silently skipped.
+ */
 const DOM_QUERY =
-	/(?:\b(?:querySelector|querySelectorAll|closest|getElementById|getElementsByTagName|getElementsByClassName)\s*\(|\b(?:firstElementChild|lastElementChild|nextElementSibling|previousElementSibling|parentElement)\b)/;
+	/(?:\b(?:querySelector|querySelectorAll|closest|getElementById|getElementsByTagName|getElementsByClassName)\s*(?:<[^<>()]*>)?\s*\(|\b(?:firstElementChild|lastElementChild|nextElementSibling|previousElementSibling|parentElement)\b)/;
+
+/**
+ * A binding whose right-hand side is a DOM query: `const node = host.querySelector(".x")`.
+ *
+ * The alias is what makes the ban's subject real rather than textual. A node held
+ * in a variable stalls the reporter exactly as an inline one does — measured on a
+ * 400-row tree, asserting `toBeNull` on a present node through a binding gave
+ * `timed out after 15000ms`, no diff, real 16.5s — so matching only the inline
+ * text would ship a promise narrower than the mechanism it describes.
+ */
+const ALIAS_BINDING = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*([^;]*)/g;
+
+/** `expect(<identifier>)` followed by one of the node matchers. */
+const ALIAS_ASSERTION =
+	/expect\(\s*([A-Za-z_$][\w$]*)\s*[!?]?\s*\)\s*(\.\s*(?:not\s*\.\s*)?(?:toBeNull|toBeDefined|toBeUndefined)\s*\()/g;
 
 /** The three matchers that say "present" or "absent" and serialise a node when they fail. */
 const NODE_MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeNull|toBeDefined|toBeUndefined)\s*\(/;
@@ -74,16 +101,33 @@ interface Baseline {
 }
 
 /**
- * Find every `expect(<DOM query>)` whose matcher serialises a node.
+ * Find every `expect(...)` that asserts presence or absence of a DOM node.
  *
- * The scan walks the text once, matching `expect(` and then finding its
- * balanced closing paren, so a nested call (`expect(host.querySelector(a ?? b))`)
- * is read as one argument instead of a truncated one. Templates and strings are
- * skipped while balancing, since a selector can contain parentheses.
+ * Two shapes reach the reporter the same way, so both are collected:
+ *
+ *  - **inline** — `expect(host.querySelector(".x")).toBeNull()`. The scan walks
+ *    the text, matching `expect(` and then finding its balanced closing paren,
+ *    so a nested call is read as one argument instead of a truncated one.
+ *    Templates and strings are skipped while balancing, since a selector can
+ *    contain parentheses.
+ *  - **aliased** — `const node = host.querySelector(".x"); expect(node).toBeNull()`.
+ *    A binding whose right-hand side is a DOM query is a node, and asserting on
+ *    the variable stalls exactly as the inline form does. Every such binding in
+ *    the file is collected first, so an assertion earlier in the file than the
+ *    binding is still caught.
+ *
+ * An identifier is only treated as a node when the same file binds it to a DOM
+ * query. A name that is not bound that way is left alone: guessing from its name
+ * would flag `expect(value).toBeNull()` and make the ban forbid its own fix.
  */
 export function collectDomAssertions(file: string, source: string): DomAssertionSite[] {
 	const sites: DomAssertionSite[] = [];
 	const text = source;
+	const nodeAliases = new Set<string>();
+	for (const binding of text.matchAll(ALIAS_BINDING)) {
+		if (DOM_QUERY.test(binding[2] ?? "")) nodeAliases.add(binding[1] as string);
+	}
+
 	let index = text.indexOf("expect(");
 	while (index >= 0) {
 		const start = index + "expect(".length;
@@ -104,7 +148,9 @@ export function collectDomAssertions(file: string, source: string): DomAssertion
 		const argument = text.slice(start, cursor - 1);
 		const matchStart = cursor;
 		index = text.indexOf("expect(", cursor);
-		if (!DOM_QUERY.test(argument)) continue;
+		const trimmed = argument.trim().replace(/[!?]$/, "");
+		const isNode = DOM_QUERY.test(argument) || nodeAliases.has(trimmed);
+		if (!isNode) continue;
 		const matcher = text.slice(matchStart).match(NODE_MATCHER);
 		if (!matcher) continue;
 		const line = text.slice(0, matchStart).split("\n").length;
