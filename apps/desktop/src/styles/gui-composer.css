@@ -1041,6 +1041,59 @@
 	color: var(--color-muted, var(--color-text-dim));
 }
 
+/* Auto-compaction trigger (percent of the context window). The slider is the
+ * shared `.gui-range` primitive (gui-chat slider family); this block owns
+ * only the layout of the row inside the popover and the /context card. */
+.gui-context-threshold {
+	margin-top: 8px;
+	padding-top: 7px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-context-threshold-range {
+	width: 100%;
+	margin: 5px 0 1px;
+}
+
+.gui-context-threshold-scale {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-muted, var(--color-text-dim));
+}
+
+.gui-context-threshold-actions {
+	margin-top: 4px;
+}
+
+.gui-context-threshold-link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-accent);
+	font: inherit;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.gui-context-threshold-link:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.gui-context-threshold-link:disabled {
+	opacity: var(--gui-slider-disabled-opacity, 0.45);
+	cursor: default;
+}
+
+.gui-context-threshold-error {
+	margin-top: 4px;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-danger, #e5484d);
+}
+
 /* ── §5w composer stats row (性能与用量): L1 pills docked below the input
  * card on the window backdrop. Material (glass fill + rim + sheen +
  * hover/press) rides the footer-pill family above — layout and the
@@ -1050,25 +1103,49 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
+	gap: 10px;
 	box-sizing: border-box;
-	min-height: 32px;
-	padding: 4px 20px 2px;
+	min-height: 20px;
+	padding: 1px 20px 0;
 }
 .gui-stats-anchor {
 	display: inline-flex;
 }
-.gui-stats-pill {
+/* A session reading is not a control: one quiet line, no glass pill. The
+ * shared footer material still paints the interactive siblings; this row
+ * opts out so two lines of usage data do not become a second button bar. */
+.gui-stats-row .gui-stats-pill {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	padding: 2px 9px;
-	border-radius: 999px;
-	font-size: 11px;
+	padding: 0;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	font-size: 10.5px;
 	line-height: 16px;
-	color: var(--color-text-muted);
+	color: var(--color-text-faint);
 	cursor: default;
-	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
+	animation: none;
+}
+
+.gui-stats-row .gui-stats-pill::before {
+	content: none;
+}
+
+.gui-stats-row .gui-stats-pill:hover,
+.gui-stats-row .gui-stats-pill:active {
+	background: none;
+	box-shadow: none;
+	color: var(--color-text-muted);
+	transform: none;
+}
+
+.gui-stats-row .gui-stats-pill:focus-visible {
+	outline: 1px solid var(--color-accent);
+	outline-offset: 2px;
 }
 button.gui-stats-pill {
 	cursor: pointer;
@@ -3201,9 +3278,9 @@ button.gui-stats-pill {
  * overlay is pointer-events none, those states can never fire), and the
  * status-dock chips (mode/goal/todo/swarm/queue — 2026-09-29 批次 C1:
  * 材质一元化,accent 只承载状态,专属信号保持为内容元素), and the §5w
- * composer stats pills (time/usage — same material, plain readings and
- * popover buttons alike), and the context ring button (its donut sits on a
- * glass disc like every other round footer control).
+ * composer stats row (a plain reading, deliberately outside this family),
+ * and the context ring button (its donut sits on a glass disc like every
+ * other round footer control).
  * Layout (padding, height, font) stays with each member's own class —
  * only the MATERIAL lives here.
  *

@@ -2369,12 +2369,13 @@ html.gui-vt-surface-only::view-transition-new(root),
 
 .gui-session-tab--active,
 .gui-session-tab--active:hover {
-	background: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
 
 .gui-session-tab--active .gui-session-tab-label,
 .gui-session-tab--active:hover .gui-session-tab-label {
-	color: var(--color-accent-fg);
+	color: var(--color-accent);
 }
 
 .gui-session-tab-label {
