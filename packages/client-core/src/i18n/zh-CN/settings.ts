@@ -480,6 +480,7 @@ export const settings = {
 	"settings.noSessionsFoundSelected": "所选智能体中未找到会话",
 	"settings.noWorkspace": "未关联工作区",
 	"settings.sessionCountLabel": "{count} 个会话",
+	"settings.sessionCountOne": "1 个会话",
 	"settings.changeSelection": "重新选择",
 	"settings.scan": "扫描",
 	"settings.scanning": "正在扫描…",

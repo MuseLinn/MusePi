@@ -554,6 +554,7 @@ export const general = {
 	"general.openInPanelBrowser": "Open in side panel browser",
 	"general.projectActions": "Project actions",
 	"general.projectDirectoryCount": "{count} directories",
+	"general.projectDirectoryOne": "1 directory",
 	"general.finder": "Finder",
 	"general.addNewAction": "Add new action",
 	"general.autoDiscover": "Auto discover",

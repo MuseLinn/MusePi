@@ -204,9 +204,17 @@ export function ProjectHoverCard({
 			</div>
 			<div className="gui-project-hover-card-meta">
 				<Icon name="folder" className="gui-project-hover-card-icon" />
-				<span>{t("general.projectDirectoryCount", { count: directories.length })}</span>
+				<span>
+					{directories.length === 1
+						? t("general.projectDirectoryOne")
+						: t("general.projectDirectoryCount", { count: directories.length })}
+				</span>
 				<span className="gui-project-hover-card-dot" aria-hidden="true" />
-				<span>{t("settings.sessionCountLabel", { count: sessionCount })}</span>
+				<span>
+					{sessionCount === 1
+						? t("settings.sessionCountOne")
+						: t("settings.sessionCountLabel", { count: sessionCount })}
+				</span>
 			</div>
 			<ul className="gui-project-hover-card-list">
 				{directories.map(directory => (

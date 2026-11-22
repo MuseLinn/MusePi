@@ -136,9 +136,13 @@ describe("project hover card", () => {
 		expect(chips).toHaveLength(1);
 		expect(rows[0]!.contains(chips[0]!)).toBe(true);
 		expect(chips[0]!.textContent).toBe(t("settings.primaryDirectory"));
-		// Directory count + the project's session count.
-		expect(card!.textContent).toContain(t("general.projectDirectoryCount", { count: 3 }));
-		expect(card!.textContent).toContain(t("settings.sessionCountLabel", { count: 1 }));
+		// Directory count + the project's session count, asserted as the HUMAN
+		// strings. Re-deriving them through the same template would make a
+		// grammar defect in the template invisible by construction (which is how
+		// "1 directories" reached the UI).
+		expect(card!.textContent).toContain("3 directories");
+		expect(card!.textContent).toContain("1 session");
+		expect(card!.textContent).not.toContain("1 sessions");
 	});
 
 	it("opens a directory from its row action", async () => {
@@ -541,5 +545,52 @@ describe("mount-time measurement", () => {
 		expect(measureCard(null)).toBeNull();
 		const empty = document.createElement("div");
 		expect(measureCard(empty)).toBeNull();
+	});
+});
+
+describe("card counts read as English prose", () => {
+	async function render(count: number, sessionCount: number): Promise<HTMLElement> {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.add(root);
+		await act(async () =>
+			root.render(
+				<ProjectHoverCard
+					name="alpha"
+					directories={Array.from({ length: count }, (_, i) => ({ path: `/p/${i}`, primary: i === 0 }))}
+					sessionCount={sessionCount}
+					labelOf={path => path.split("/").pop() ?? path}
+					openLabel={t("settings.openInExplorer")}
+				/>,
+			),
+		);
+		await flush();
+		return host;
+	}
+
+	it("says 1 directory/1 session for a root-only project — the default shape", async () => {
+		const host = await render(1, 1);
+		const text = host.textContent ?? "";
+		expect(text).toContain("1 directory");
+		expect(text).toContain("1 session");
+		// The bug: every single-root project hover read "1 directories".
+		expect(text).not.toContain("1 directories");
+		expect(text).not.toContain("1 sessions");
+	});
+
+	it("pluralizes above one", async () => {
+		const host = await render(3, 4);
+		const text = host.textContent ?? "";
+		expect(text).toContain("3 directories");
+		expect(text).toContain("4 sessions");
+	});
+
+	it("does not say 2 directories for a one-directory card", async () => {
+		// Guard the branch itself: count 0 must not read as "1 directory".
+		const host = await render(1, 0);
+		const text = host.textContent ?? "";
+		expect(text).toContain("1 directory");
+		expect(text).toContain("0 sessions");
 	});
 });
