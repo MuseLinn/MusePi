@@ -58,3 +58,63 @@ describe("docker argv name guard", () => {
 		expect(exec).toContain("cliName(input.container)");
 	});
 });
+
+/**
+ * The MusePi reader, evaluated from the real source.
+ *
+ * `readMusepiSshHosts` reads the same file `remote.hosts` reads, and it is the
+ * only place a `proxyJump` in `ssh.json` becomes a catalog field. A reader that
+ * skips it makes a MusePi-registered bastion-only host dial its destination
+ * directly, so the mapping is asserted here rather than inferred from the
+ * loader test above.
+ */
+describe("readMusepiSshHosts mapping", () => {
+	const readMusepiSshHosts: (deps: {
+		path: { join: (...parts: string[]) => string };
+		fs: { readFileSync: () => string };
+		currentDataRoot: () => string;
+	}) => Array<Record<string, unknown>> = (() => {
+		const match = /\nfunction readMusepiSshHosts\(\) \{([\s\S]*?)\n\}\n/.exec(mainSource);
+		if (!match) throw new Error("readMusepiSshHosts not found in main.cjs");
+		// The extracted body reads the three dependencies as free variables, so
+		// they are passed positionally and the object wrapper is applied here.
+		const fn = new Function("path", "fs", "currentDataRoot", match[1]) as (
+			p: unknown,
+			f: unknown,
+			root: unknown,
+		) => Array<Record<string, unknown>>;
+		return deps => fn(deps.path, deps.fs, deps.currentDataRoot);
+	})();
+
+	const read = (hosts: Record<string, unknown>): Array<Record<string, unknown>> =>
+		readMusepiSshHosts({
+			path: { join: (...parts) => parts.join("/") },
+			fs: { readFileSync: () => JSON.stringify({ hosts }) },
+			currentDataRoot: () => "/data",
+		});
+
+	test("a chain in ssh.json becomes a catalog field", () => {
+		const rows = read({ internal: { host: "10.0.0.5", username: "me", proxyJump: "bastion" } });
+		expect(rows).toEqual([{ name: "internal", host: "10.0.0.5", username: "me", proxyJump: "bastion" }]);
+	});
+
+	test("a host without a chain has no proxyJump field", () => {
+		const rows = read({ direct: { host: "h.example.com" } });
+		expect(rows[0]).not.toHaveProperty("proxyJump");
+	});
+
+	test("the reader targets the file the daemon writes", () => {
+		const joined: string[][] = [];
+		readMusepiSshHosts({
+			path: {
+				join: (...parts) => {
+					joined.push(parts);
+					return parts.join("/");
+				},
+			},
+			fs: { readFileSync: () => JSON.stringify({ hosts: {} }) },
+			currentDataRoot: () => "/data",
+		});
+		expect(joined[0]).toEqual(["/data", "agent", "ssh.json"]);
+	});
+});

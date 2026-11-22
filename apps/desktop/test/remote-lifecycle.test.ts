@@ -269,6 +269,18 @@ describe("the one catalog both surfaces read", () => {
 		expect(catalog).toEqual([{ name: "build", host: "musepi.example.com", source: "musepi" }]);
 	});
 
+	test("a chain on the MusePi half reaches the catalog through the loader", async () => {
+		// The loader boundary, not the picker: the picker tests inject `catalog`
+		// directly, so nothing proved that a `proxyJump` in the `musepi` payload
+		// survives `fromMusepi`. Dropping that spread reintroduces "MusePi hosts
+		// dial the destination directly" with a green suite.
+		const catalog = await loadHostCatalog(
+			bridge({ ok: true, documents: [], musepi: [{ name: "x", host: "h", proxyJump: "bastion" }] }),
+		);
+		expect(catalog).toHaveLength(1);
+		expect(catalog[0]).toMatchObject({ name: "x", host: "h", proxyJump: "bastion", source: "musepi" });
+	});
+
 	test("no bridge, a throwing bridge or a malformed payload is an empty catalog", async () => {
 		expect(await loadHostCatalog(null)).toEqual([]);
 		expect(
