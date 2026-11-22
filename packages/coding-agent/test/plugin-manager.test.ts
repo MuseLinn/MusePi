@@ -3,18 +3,42 @@ import { createPluginManagerTools, type PluginManagementHandle } from "@musepi/p
 
 const calls: string[] = [];
 const handle: PluginManagementHandle = {
-	list: async () => [{ name: "demo", version: "1.0.0", enabled: true, path: "/plugins/demo" }],
-	setEnabled: async (name, enabled) => {
-		calls.push(`set:${name}:${String(enabled)}`);
-		return { ok: true, name, enabled, application: "applied" };
+	listPlugins: async () => [
+		{
+			id: "persona",
+			name: "@demo/plugin",
+			state: "enabled",
+			group: false,
+			layers: ["profile"],
+			pluginPath: "/plugins/demo",
+			mountable: true,
+		},
+	],
+	setPlugin: async (id, enabled) => {
+		calls.push(`row:${id}:${String(enabled)}`);
+		return { ok: true, id, application: "applied" };
 	},
-	install: async spec => {
+	listBundles: async () => [{ name: "@demo/bundle", version: "1.0.0", enabled: true, readable: true }],
+	setBundle: async (name, enabled) => {
+		calls.push(`bundle:${name}:${String(enabled)}`);
+		return { ok: true, name };
+	},
+	installBundle: async spec => {
 		calls.push(`install:${spec}`);
-		return { ok: true, name: "demo", version: "1.0.1", application: "applied" };
+		return { ok: true, name: "@demo/bundle", version: "1.0.1", application: "applied" };
 	},
-	remove: async name => {
+	removeBundle: async name => {
 		calls.push(`remove:${name}`);
 		return { ok: true, name, application: "applied" };
+	},
+	listVersionExemptions: async () => ({
+		runtimeVersion: "1.0.0",
+		exemptions: { "@demo/plugin@2.0.0": ["1.0.0"] },
+		warnings: [],
+	}),
+	setVersionExemption: async (target, _runtimeVersion, _enabled) => {
+		calls.push(`exempt:${target}`);
+		return { ok: true, name: target };
 	},
 };
 
@@ -30,32 +54,76 @@ async function run(args: Record<string, unknown>, autoApprove = false): Promise<
 }
 
 describe("plugin_manager tool", () => {
-	test("lists installed packages with their exact names", async () => {
+	test("lists composed plugin rows with their exact ids", async () => {
 		const result = await run({ action: "list_plugins" });
 		expect(result.ok).toBe(true);
-		expect(result.total).toBe(1);
-		expect((result.entries as Array<{ name: string }>)[0]?.name).toBe("demo");
+		expect((result.entries as Array<{ id: string }>)[0]?.id).toBe("persona");
 	});
 
-	test("enable/disable delegates to the profile manager", async () => {
-		const result = await run({ action: "set_plugin", target: "demo", enabled: false });
-		expect(result.ok).toBe(true);
-		expect(calls).toContain("set:demo:false");
+	test("lists stackable bundles separately from their rows", async () => {
+		const result = await run({ action: "list_bundles" });
+		expect((result.bundles as Array<{ name: string }>)[0]?.name).toBe("@demo/bundle");
+	});
+
+	test("toggles a row by id and a bundle by name", async () => {
+		expect((await run({ action: "set_plugin", target: "persona", enabled: false })).ok).toBe(true);
+		expect((await run({ action: "set_bundle", target: "@demo/bundle", enabled: true })).ok).toBe(true);
+		expect(calls).toContain("row:persona:false");
+		expect(calls).toContain("bundle:@demo/bundle:true");
 	});
 
 	test("refuses an install outside an auto-approved session", async () => {
 		const before = calls.length;
-		const result = await run({ action: "install_plugin", target: "./local/plugin" });
+		const result = await run({ action: "install_bundle", target: "./local/bundle" });
 		expect(result.ok).toBe(false);
 		expect(result.nextStep).toBeDefined();
 		expect(calls.length).toBe(before);
 	});
 
 	test("runs an install when the session is auto-approved", async () => {
-		const result = await run({ action: "install_plugin", target: "./local/plugin" }, true);
-		expect(result.ok).toBe(true);
+		const result = await run({ action: "install_bundle", target: "./local/bundle" }, true);
 		expect(result.version).toBe("1.0.1");
-		expect(calls).toContain("install:./local/plugin");
+		expect(calls).toContain("install:./local/bundle");
+	});
+
+	test("exposes exact version exemptions", async () => {
+		const listed = await run({ action: "list_version_exemptions" });
+		expect(listed.runtimeVersion).toBe("1.0.0");
+		expect((listed.exemptions as Record<string, string[]>)["@demo/plugin@2.0.0"]).toEqual(["1.0.0"]);
+	});
+
+	test("refuses to grant an exemption without explicit risk acceptance", async () => {
+		const before = calls.length;
+		const result = await run({
+			action: "set_version_exemption",
+			target: "@demo/plugin@2.0.0",
+			runtimeVersion: "1.0.0",
+			enabled: true,
+		});
+		expect(result.ok).toBe(false);
+		expect(calls.length).toBe(before);
+	});
+
+	test("grants with acceptRisk in an auto-approved session and revokes freely", async () => {
+		const granted = await run(
+			{
+				action: "set_version_exemption",
+				target: "@demo/plugin@2.0.0",
+				runtimeVersion: "1.0.0",
+				enabled: true,
+				acceptRisk: true,
+			},
+			true,
+		);
+		expect(granted.ok).toBe(true);
+		const revoked = await run({
+			action: "set_version_exemption",
+			target: "@demo/plugin@2.0.0",
+			runtimeVersion: "1.0.0",
+			enabled: false,
+		});
+		expect(revoked.ok).toBe(true);
+		expect(calls).toContain("exempt:@demo/plugin@2.0.0");
 	});
 
 	test("reports a missing daemon handle instead of pretending", async () => {
@@ -71,7 +139,6 @@ describe("plugin_manager tool", () => {
 	});
 
 	test("rejects an unknown action", async () => {
-		const result = await run({ action: "bundle" });
-		expect(result.ok).toBe(false);
+		expect((await run({ action: "bundle" })).ok).toBe(false);
 	});
 });

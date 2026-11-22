@@ -168,6 +168,7 @@ import {
 	type ModeDefinition,
 	type ResolvedMode,
 } from "./presets/resolve";
+import { STANDARD_TOP_LEVEL_TOOL_NAMES } from "./presets/standard-profile";
 import { mergeSectionsIntoBase, PromptComposer } from "./prompts/composer";
 import {
 	type PromptContextOptions,
@@ -1473,7 +1474,7 @@ const PLUGIN_OWNED_BUNDLED_SKILLS = [
 	"android-emulator",
 	"widget-design",
 	"musepi-help",
-	"musepi-extension-dev",
+	"musepi-plugin-dev",
 	"ui-ux-pro-max",
 	"board-design",
 ] as const;
@@ -3881,6 +3882,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			registeredTools.filter(tool => tool.definition.defaultInactive).map(tool => tool.definition.name),
 		);
 		const extensionMetaToolsRequested = settings.get("tools.extensionMetaTools") === true;
+		/** The preset's declared top-level surface: the
+		 *  default work profile uses the standard list, other profiles opt in. */
+		const presetTopLevelTools: readonly string[] =
+			modeRuntime.resolved?.topLevelTools ??
+			(modeRuntime.resolved === undefined || modeRuntime.resolved.id === "work"
+				? STANDARD_TOP_LEVEL_TOOL_NAMES
+				: []);
 		const requestedActiveToolNames = normalizedRequested.filter(name => name !== "goal");
 		const explicitlyRequestedToolNameSet = explicitlyRequestedToolNames
 			? new Set(explicitlyRequestedToolNames)
@@ -3917,6 +3925,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// An explicit toolNames list means the caller owns the set — don't widen.
 		if (extensionMetaToolsRequested && !options.toolNames) {
 			for (const name of CREATION_RING_TOOL_NAMES) {
+				if (toolRegistry.has(name) && !initialToolNames.includes(name)) initialToolNames.push(name);
+			}
+		}
+		// Preset-declared top-level surface: these tools stay in the schema even
+		// when the xd:// partition would otherwise mount them as devices.
+		if (!options.toolNames) {
+			for (const name of presetTopLevelTools) {
 				if (toolRegistry.has(name) && !initialToolNames.includes(name)) initialToolNames.push(name);
 			}
 		}
@@ -3963,7 +3978,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				const explicitlyRequested = explicitlyRequestedToolNameSet?.has(name) === true;
 				// Creation-ring tools stay top-level: mounting them as xd:// devices
 				// would re-hide the very tools the override just surfaced.
-				const pinnedTopLevel = extensionMetaToolsRequested && CREATION_RING_TOOL_NAMES.includes(name);
+				const pinnedTopLevel =
+					(extensionMetaToolsRequested && CREATION_RING_TOOL_NAMES.includes(name)) ||
+					presetTopLevelTools.includes(name);
 				if (
 					tool &&
 					xdevReadAvailable &&

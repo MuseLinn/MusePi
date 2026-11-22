@@ -43,7 +43,7 @@
 ## 从原型到交付
 
 - **原型**：用 `cordis_*` 在会话内定义并运行，先验证交互与工具语义。它不写盘、不跨会话，适合试错。
-- **交付**：把同一份能力写成 MusePi 的 Track A 插件包——入口 `index.ts` 具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect` 注册。包放在工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager` 的 `install_plugin` 安装、`set_plugin` 启停、`remove_plugin` 卸载；`list_plugins` 先取准确包名。非自动批准会话里安装/卸载会被拒绝，这时让用户在扩展页完成。安装/启用才是插件的持久入口；原型只做临时验证。
+- **交付**：把同一份能力写成 MusePi 的 Track A 插件包——入口 `index.ts` 具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect` 注册。包放在工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager` 管理：`list_bundles` / `install_bundle` / `set_bundle` 管包与 profile 组合，`list_plugins` / `set_plugin` 按组合条目启停，`list_version_exemptions` / `set_version_exemption` 处理精确版本豁免。非自动批准会话里安装/卸载会被拒绝，让用户在扩展页完成。安装/启用才是插件的持久入口；原型只做临时验证。
 - `extension_load` / `extension_reload` 等 `extension_*` 是 **Track B 兼容加载器**，用于把其他 agent 的旧扩展格式加载进当前会话。它们不属于创造工具集，创建模式不会自动激活，也不要用它们验证新插件。
 - 两层的代码契约不同：动态 `hostCode` 是沙箱函数体（只有 `defineTool` / timers / console）；插件包入口拿到的是宿主 `ExtensionAPI`（`ctx.tools` / `ctx.slots` / …）。不要把沙箱代码直接贴进插件包，也不要反过来。
 

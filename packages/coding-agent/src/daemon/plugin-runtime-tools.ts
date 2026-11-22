@@ -514,9 +514,7 @@ export function createExtensionRuntimeTools(
 			_signal?: AbortSignal,
 		): Promise<AgentToolResult<any, typeof inspectListSchema.infer>> {
 			const p = params as { platform?: string };
-			const providers = inspectProviderDirectory().filter(
-				provider => p.platform === undefined || provider.platform === p.platform,
-			);
+			const providers = inspectProviderDirectory(p.platform);
 			return textResult(JSON.stringify({ ok: true, providers }, null, 2));
 		},
 	};
@@ -536,13 +534,17 @@ export function createExtensionRuntimeTools(
 			_signal?: AbortSignal,
 		): Promise<AgentToolResult<any, typeof inspectQuerySchema.infer>> {
 			const p = params as { platform?: string; provider: string; method: string };
+			const session = sessionOf(_ctx);
 			return textResult(
 				JSON.stringify(
-					inspectQuery({
-						provider: p.provider,
-						method: p.method,
-						...(p.platform ? { platform: p.platform } : {}),
-					}),
+					await inspectQuery(
+						{
+							provider: p.provider,
+							method: p.method,
+							...(p.platform ? { platform: p.platform } : {}),
+						},
+						{ toolNames: session?.getActiveToolNames() ?? [] },
+					),
 					null,
 					2,
 				),
@@ -565,14 +567,18 @@ export function createExtensionRuntimeTools(
 			_signal?: AbortSignal,
 		): Promise<AgentToolResult<any, typeof inspectSchema.infer>> {
 			const p = params as { platform?: string; provider?: string; method?: string };
+			const session = sessionOf(_ctx);
 			if (p.provider !== undefined && p.method !== undefined) {
 				return textResult(
 					JSON.stringify(
-						inspectQuery({
-							provider: p.provider,
-							method: p.method,
-							...(p.platform ? { platform: p.platform } : {}),
-						}),
+						await inspectQuery(
+							{
+								provider: p.provider,
+								method: p.method,
+								...(p.platform ? { platform: p.platform } : {}),
+							},
+							{ toolNames: session?.getActiveToolNames() ?? [] },
+						),
 						null,
 						2,
 					),

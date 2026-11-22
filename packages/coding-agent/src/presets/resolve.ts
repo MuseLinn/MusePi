@@ -41,6 +41,13 @@ export interface ModeDefinition {
 	 * stays visible in the composition.
 	 */
 	plugins?: PresetPluginRow[];
+	/**
+	 * Explicit top-level tool names for this preset.
+	 * When set, these built-ins stay in the top-level schema and are never
+	 * mounted as `xd://` devices; everything else keeps the normal discovery
+	 * path. Omitted = the standard work surface.
+	 */
+	topLevelTools?: string[];
 	prompt?: ModePromptEntry[];
 	/** true = 该预设的 prompt 集成为唯一 system prompt(对齐 DSH complete:true;§5.2,决策 #2)。 */
 	promptComplete?: boolean;
@@ -97,6 +104,9 @@ export interface ResolvedMode {
 	promptComplete: boolean;
 	runtimeContext: boolean;
 	settings: Record<string, unknown>;
+	/** Explicit top-level tool names; undefined = the
+	 *  standard work surface applies only to the default work profile. */
+	topLevelTools: string[] | undefined;
 	/** The plugin composition, inheritance folded: parents first, later rows win
 	 *  by id, and a `enabled: false` row stays in the list so the UI can show it. */
 	plugins: PresetPluginRow[];
@@ -293,6 +303,7 @@ export function resolveMode(
 		promptComplete,
 		runtimeContext,
 		settings,
+		topLevelTools: top.topLevelTools === undefined ? undefined : [...top.topLevelTools],
 		plugins: [...rowsById.values()],
 		sources: order,
 	};
@@ -531,7 +542,7 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 				{
 					name: "mode:creator:role",
 					order: 25,
-					text: "你是一名 MusePi 插件与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 Modes v2 契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+					text: "你是一名 MusePi 插件与预设创作者。创建/修改扩展时遵循 musepi-plugin-dev 技能;创建预设时遵循 Modes v2 契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 				},
 			],
 		},
@@ -652,7 +663,7 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 				{
 					name: "mode:creator:role",
 					order: 25,
-					text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 Modes v2 契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+					text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-plugin-dev 技能;创建预设时遵循 Modes v2 契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 				},
 			],
 		},
@@ -669,7 +680,7 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 				{
 					name: "mode:creator:role",
 					order: 25,
-					text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 Modes v2 契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+					text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-plugin-dev 技能;创建预设时遵循 Modes v2 契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 				},
 			],
 		},
@@ -772,7 +783,7 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 				{
 					name: "mode:creator:role",
 					order: 25,
-					text: "你是一名 MusePi 插件与预设创作者。\n\n输入边界：快捷创建时，用户消息只包含创作需求。不要把宿主界面的操作说明当作用户要求，也不要要求用户补发本提示已经提供的信息。\n\n创建预设时，按以下顺序工作：\n1. 根据需求设计预设的 plugins、prompt、settings，以及可选的 extends 组合。内置预设不可覆盖；快捷创建必须使用新的预设 id。\n2. 用 modes.save 提交完整的新预设定义。该接口在写盘前执行结构、继承和扩展存在性校验。保存失败时，根据错误修正定义后重试；不要绕过接口手写字段或猜测保存结果。\n3. 保存成功后，用 modes.validate 按 id 做挂载自检。校验未通过时继续修正并重新保存、校验，不要把未通过校验的预设报告为完成。\n4. 完成后报告预设 id、保存结果和校验结果。\n\n创建或修改扩展时，遵循 musepi-extension-dev 技能。创造模式已自动激活扩展自举工具环（extension_load/extension_reload/extension_status/extension_validate/extension_rollback 与 ext_define/ext_run/ext_stop/ext_undefine/ext_inspect；extensions_list 常激活）。创建扩展后用它加载、自查、热修和回退，不要只靠写文件猜状态。\n",
+					text: "你是一名 MusePi 插件与预设创作者。\n\n输入边界：快捷创建时，用户消息只包含创作需求。不要把宿主界面的操作说明当作用户要求，也不要要求用户补发本提示已经提供的信息。\n\n创建预设时，按以下顺序工作：\n1. 根据需求设计预设的 plugins、prompt、settings，以及可选的 extends 组合。内置预设不可覆盖；快捷创建必须使用新的预设 id。\n2. 用 modes.save 提交完整的新预设定义。该接口在写盘前执行结构、继承和扩展存在性校验。保存失败时，根据错误修正定义后重试；不要绕过接口手写字段或猜测保存结果。\n3. 保存成功后，用 modes.validate 按 id 做挂载自检。校验未通过时继续修正并重新保存、校验，不要把未通过校验的预设报告为完成。\n4. 完成后报告预设 id、保存结果和校验结果。\n\n创建或修改扩展时，遵循 musepi-plugin-dev 技能。创造模式已自动激活扩展自举工具环（extension_load/extension_reload/extension_status/extension_validate/extension_rollback 与 ext_define/ext_run/ext_stop/ext_undefine/ext_inspect；extensions_list 常激活）。创建扩展后用它加载、自查、热修和回退，不要只靠写文件猜状态。\n",
 				},
 			],
 		},

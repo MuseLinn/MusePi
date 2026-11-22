@@ -319,6 +319,11 @@ function extractSnapshotText(content: unknown): string {
 export { snapshotFromJsonl } from "./jsonl-snapshot";
 
 import { ModelsConfigFile } from "../config/models-config";
+import {
+	readCompatibilityExemptions,
+	resolveCompatibilityPath,
+	setVersionExemption,
+} from "../extensibility/plugins/compat/compatibility-store";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
@@ -1495,32 +1500,66 @@ export class DaemonServer {
 	 * Null before the service registry is settled (or outside a daemon).
 	 */
 	pluginManagementHandle(): PluginManagementHandle | null {
-		let service: PluginInstallService;
+		let install: PluginInstallService;
+		let bundles: BundleService;
 		try {
-			service = this.#services.get<PluginInstallService>("pluginInstall");
+			install = this.#services.get<PluginInstallService>("pluginInstall");
+			bundles = this.#services.get<BundleService>("bundles");
 		} catch {
 			return null;
 		}
 		return {
-			list: async () =>
-				(await service.list()).map(plugin => ({
-					name: plugin.name,
-					version: plugin.version,
-					enabled: plugin.enabled,
-					path: plugin.path,
-				})),
-			setEnabled: async (name, enabled) => ({ ok: true, ...(await service.setEnabled({ name, enabled })) }),
-			install: async (spec, options) => {
-				const view = await service.installAndWait({
+			listPlugins: async () => {
+				const view = await bundles.composition();
+				return view.rows.map(row => ({
+					id: row.id,
+					name: row.name,
+					state: row.state,
+					group: row.group,
+					layers: [...row.layers],
+					pluginPath: row.pluginPath,
+					mountable: row.mountable,
+				}));
+			},
+			setPlugin: async (id, enabled) => {
+				const result = await bundles.setRowEnabled({ id, enabled });
+				return {
+					ok: result.ok,
+					id: result.id,
+					message: result.error,
+					nextStep: result.ok
+						? undefined
+						: "Read list_plugins again; a conditional row cannot be toggled from this host.",
+				};
+			},
+			listBundles: async () => {
+				const view = await bundles.composition();
+				return view.availableBundles.map(bundle => ({
+					name: bundle.name,
+					version: bundle.version,
+					enabled: bundle.selected,
+					readable: bundle.readable,
+				}));
+			},
+			setBundle: async (name, enabled) => {
+				const result = await bundles.setBundleEnabled({ name, enabled });
+				return {
+					ok: result.ok,
+					name,
+					message: result.error,
+					nextStep: result.ok ? undefined : "Install the bundle first, then select it.",
+				};
+			},
+			installBundle: async (spec, options) => {
+				const view = await install.installAndWait({
 					spec,
 					...(options?.approvedBuilds !== undefined ? { approvedBuilds: options.approvedBuilds } : {}),
 				});
 				if (view === null) {
 					return {
 						ok: false,
-						spec,
 						message: "the install is still running",
-						nextStep: "Follow it on the extension page; the package is not live until the install finishes.",
+						nextStep: "Follow it on the extension page; the bundle is not live until the install finishes.",
 					};
 				}
 				const done = view.state === "done";
@@ -1540,7 +1579,31 @@ export class DaemonServer {
 						: "Report the failure; the previous package state was restored.",
 				};
 			},
-			remove: async name => ({ ok: true, ...(await service.uninstall({ name })) }),
+			removeBundle: async name => ({ ok: true, ...(await install.uninstall({ name })) }),
+			listVersionExemptions: async () => {
+				const read = readCompatibilityExemptions(resolveCompatibilityPath());
+				return { runtimeVersion: VERSION, exemptions: read.exemptions, warnings: read.warnings };
+			},
+			setVersionExemption: async (target, runtimeVersion, enabled, acceptRisk) => {
+				try {
+					await setVersionExemption(resolveCompatibilityPath(), target, runtimeVersion, enabled, acceptRisk);
+					return {
+						ok: true,
+						name: target,
+						nextStep: enabled
+							? "This grant covers only the exact plugin and runtime versions; a different version needs its own grant."
+							: undefined,
+					};
+				} catch (error) {
+					return {
+						ok: false,
+						name: target,
+						message: error instanceof Error ? error.message : String(error),
+						nextStep:
+							"Use an exact package-name@version and the current runtime version reported by list_version_exemptions.",
+					};
+				}
+			},
 		};
 	}
 

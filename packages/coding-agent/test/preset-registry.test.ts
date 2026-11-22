@@ -32,6 +32,7 @@ function definitionOf(id: string): ResolvedMode {
 		promptComplete: false,
 		runtimeContext: true,
 		settings: {},
+		topLevelTools: undefined,
 		plugins: [],
 		sources: [id],
 	};
