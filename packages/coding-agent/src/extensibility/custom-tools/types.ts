@@ -31,6 +31,7 @@ import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { Theme } from "../../modes/theme/theme";
 import type { ReadonlySessionManager } from "../../session/session-manager";
 import type { CollabToolHandle } from "../../tools/collab";
+import type { PluginManagementHandle } from "../../tools/plugin-manager";
 import type { ScheduledTaskHandle } from "../../tools/schedule-task";
 import type { TodoItem } from "../../tools/todo";
 import type { RetryErrorUpdate } from "../shared-events";
@@ -92,6 +93,9 @@ export interface CustomToolContext {
 	/** Daemon-injected scheduled-task handle for the `schedule_task` tool
 	 *  (absent without a daemon — the daemon owns the in-memory task list). */
 	scheduledTasks?: ScheduledTaskHandle;
+	/** Daemon-injected plugin management handle for the `plugin_manager` tool
+	 *  (absent without a daemon — the tool reports unavailability at use). */
+	pluginManagement?: PluginManagementHandle;
 	/** Session manager (read-only) */
 	sessionManager: ReadonlySessionManager;
 	/** Model registry - use for API key resolution and model retrieval */

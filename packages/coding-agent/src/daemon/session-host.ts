@@ -54,6 +54,7 @@ import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
 import { resolvePromptInput } from "../system-prompt";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
+import { createPluginManagerTools, type PluginManagementHandle } from "../tools/plugin-manager";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
@@ -1105,6 +1106,12 @@ export class DaemonSessionHost {
 	setScheduledTaskProvider(provider: (sessionCwd: string) => ScheduledTaskHandle): void {
 		this.#scheduledTaskProvider = provider;
 	}
+	/** Same injection chain as scheduled tasks: the daemon owns the plugin
+	 *  manager and install service, the session tool only drives them. */
+	#pluginManagementProvider: ((sessionCwd: string) => PluginManagementHandle | null) | null = null;
+	setPluginManagementProvider(provider: (sessionCwd: string) => PluginManagementHandle | null): void {
+		this.#pluginManagementProvider = provider;
+	}
 	setOnExtensionNotification(handler: (channel: string, message: ExtensionNotificationMessage) => void): void {
 		this.#onExtensionNotification = handler;
 	}
@@ -1375,6 +1382,10 @@ export class DaemonSessionHost {
 	/** P2 动态自举:会话级动态 Cordis 插件工具链(cordis_define/cordis_run/
 	 *  cordis_stop/cordis_undefine/cordis_inspect)——实现见 plugin-runtime-tools.ts。
 	 *  每会话独立 registry,沙箱(vm)承载 host 半体。 */
+	#pluginManagerTools(sessionCwd: string): CustomTool[] {
+		const handle = this.#pluginManagementProvider?.(sessionCwd) ?? null;
+		return createPluginManagerTools(() => handle);
+	}
 	#dynamicRegistries = new Map<string, RuntimeToolRegistry>();
 
 	#dynamicPluginTools(): CustomTool[] {
@@ -1451,9 +1462,14 @@ export class DaemonSessionHost {
 				preloadedExtensionPaths: discovery.extensionPaths,
 				mcpManager,
 				// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-				customTools: [...this.#extensionManagerTools(), ...this.#dynamicPluginTools()],
+				customTools: [
+					...this.#extensionManagerTools(),
+					...this.#dynamicPluginTools(),
+					...this.#pluginManagerTools(cwd),
+				],
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
+				pluginManagement: this.#pluginManagementProvider?.(cwd) ?? undefined,
 				flushDurableToolIntent: async event => {
 					const wireEvent = toWireAgentEvent(event);
 					if (wireEvent && live.journal) {
@@ -1596,9 +1612,14 @@ export class DaemonSessionHost {
 				preloadedExtensionPaths: discovery.extensionPaths,
 				mcpManager,
 				// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-				customTools: [...this.#extensionManagerTools(), ...this.#dynamicPluginTools()],
+				customTools: [
+					...this.#extensionManagerTools(),
+					...this.#dynamicPluginTools(),
+					...this.#pluginManagerTools(cwd),
+				],
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
+				pluginManagement: this.#pluginManagementProvider?.(resumeCwd) ?? undefined,
 				flushDurableToolIntent: async event => {
 					const wireEvent = toWireAgentEvent(event);
 					if (wireEvent && live.journal) {

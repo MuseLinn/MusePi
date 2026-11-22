@@ -595,9 +595,13 @@ const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
 const EXTENSION_TOOLS = new Set([
 	"cordis_define",
 	"cordis_inspect",
+	"cordis_inspect_list",
+	"cordis_inspect_query",
+	"cordis_inspect_self",
 	"cordis_run",
 	"cordis_stop",
 	"cordis_undefine",
+	"plugin_manager",
 	"ext_define",
 	"ext_inspect",
 	"ext_run",

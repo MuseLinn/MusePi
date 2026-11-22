@@ -54,6 +54,7 @@ import {
 	type PluginInstallStartParams,
 	type PluginInstallView,
 } from "../../extensibility/plugins/management/plugin-install-machine";
+import type { InstalledPlugin } from "../../extensibility/plugins/runtime/types";
 import { applyPackageChange, type LiveApplySummary, type LiveApplyTarget } from "../live-plugin-apply";
 import type { DaemonService } from "./types";
 
@@ -186,6 +187,64 @@ export class PluginInstallService implements DaemonService {
 					}
 				: {}),
 		};
+	}
+
+	/** Installed package rows, as the model-facing `plugin_manager` lists them. */
+	async list(): Promise<InstalledPlugin[]> {
+		return this.#manager.list();
+	}
+
+	/**
+	 * Enable or disable one package for this profile.
+	 *
+	 * Enabling adds its entries to running sessions, disabling removes them —
+	 * the same live-apply path an install/uninstall uses, because the person
+	 * watching an open session must see the change either way.
+	 */
+	async setEnabled(params: { name: string; enabled: boolean }): Promise<{
+		name: string;
+		enabled: boolean;
+		application?: "applied" | "pending";
+		applied?: number;
+		deferred?: number;
+	}> {
+		const paths = await this.#deps.resolvePackagePaths?.(params.name);
+		await this.#manager.setPluginEnabled(params.name, params.enabled);
+		this.#deps.invalidatePluginCaches();
+		this.#deps.onChanged();
+		const summary = await this.#applyLive(params.enabled ? "install" : "uninstall", params.name, paths);
+		return {
+			name: params.name,
+			enabled: params.enabled,
+			...(summary !== undefined
+				? {
+						application: summary.deferred > 0 ? "pending" : "applied",
+						applied: summary.applied,
+						deferred: summary.deferred,
+					}
+				: {}),
+		};
+	}
+
+	/**
+	 * Run one install to a terminal state and return its view.
+	 *
+	 * The GUI watches `plugins.install.state`; a tool call has no event stream,
+	 * so it polls the same machine. `null` means the deadline passed while the
+	 * install was still running — the caller reports it as pending rather than
+	 * pretending it finished.
+	 */
+	async installAndWait(params: PluginInstallStartParams, timeoutMs = 10 * 60_000): Promise<PluginInstallView | null> {
+		const { installId } = this.install(params);
+		const deadline = Date.now() + timeoutMs;
+		while (Date.now() < deadline) {
+			const view = this.installStatus().installs.find(item => item.installId === installId);
+			if (view !== undefined && (view.state === "done" || view.state === "failed" || view.state === "cancelled")) {
+				return view;
+			}
+			await new Promise(resolve => setTimeout(resolve, 500));
+		}
+		return null;
 	}
 
 	/**

@@ -24,6 +24,11 @@
  * 分发；turn-tail / tool / user / assistant 都是该 seat 的节点 kind，而非
  * 独立槽。宿主按 kind 派发到注册的渲染器，无注册时回退到内建渲染。
  *
+ * 工具卡片的**按工具名**席位是 `tool.call.toolview.<wire tool name>`：
+ * 它由 `registerToolView` 贡献、由客户端的 keyed 渲染器注册表挂载，
+ * 不经过 DOM 槽位宿主。声明在这里是为了让命名与扩展文档同源；不要用
+ * `registerComponent` 往这个前缀注册——那条路不会渲染。
+ *
  * `chat.session-info.<id>` —— 会话信息卡的分区座位：收起的面板右缘那张卡片
  * 逐区贡献（当前是「插件」分区）。分区无占据者时宿主渲染内建实现。
  *

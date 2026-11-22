@@ -22,18 +22,25 @@
  * affect the GUI management paths.
  */
 
-/** Creation ring: session-scoped dynamic Cordis plugins. */
+/** Creation ring: session-scoped dynamic Cordis plugins (lifecycle + read-only inspect verbs). */
 export const CORDIS_TOOL_NAMES: readonly string[] = [
 	"cordis_define",
 	"cordis_run",
 	"cordis_stop",
 	"cordis_undefine",
 	"cordis_inspect",
+	"cordis_inspect_list",
+	"cordis_inspect_query",
+	"cordis_inspect_self",
 ] as const;
 
 /** Creation ring: the tools the creator preset activates from session start —
  *  dynamic Cordis plugins plus the read-only inventory they are verified with. */
-export const CREATION_RING_TOOL_NAMES: readonly string[] = [...CORDIS_TOOL_NAMES, "extensions_list"] as const;
+export const CREATION_RING_TOOL_NAMES: readonly string[] = [
+	...CORDIS_TOOL_NAMES,
+	"extensions_list",
+	"plugin_manager",
+] as const;
 
 /** Track B compatibility loader — explicit extension management only, never the creator ring. */
 export const LEGACY_EXTENSION_TOOL_NAMES: readonly string[] = [

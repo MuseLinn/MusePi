@@ -16,8 +16,8 @@ import { buildSystemPrompt } from "@musepi/pi-coding-agent/system-prompt";
 const sessionOf = () => null;
 
 describe("extension meta tools (issue #38 Step 2)", () => {
-	test("constants: 11 names, predicate matches exactly", () => {
-		expect(EXTENSION_META_TOOL_NAMES).toHaveLength(11);
+	test("constants: 15 names, predicate matches exactly", () => {
+		expect(EXTENSION_META_TOOL_NAMES).toHaveLength(15);
 		for (const name of EXTENSION_META_TOOL_NAMES) {
 			expect(isExtensionMetaToolName(name)).toBe(true);
 		}
@@ -27,9 +27,12 @@ describe("extension meta tools (issue #38 Step 2)", () => {
 		expect(isExtensionMetaToolName("")).toBe(false);
 	});
 
-	test("the creation ring is Cordis plus the inventory, disjoint from the Track B loader", () => {
-		expect(CREATION_RING_TOOL_NAMES.filter(name => name !== "extensions_list")).toEqual([...CORDIS_TOOL_NAMES]);
+	test("the creation ring is Cordis plus inventory and plugin management, disjoint from the Track B loader", () => {
+		expect(CREATION_RING_TOOL_NAMES.filter(name => name !== "extensions_list" && name !== "plugin_manager")).toEqual([
+			...CORDIS_TOOL_NAMES,
+		]);
 		expect(CREATION_RING_TOOL_NAMES).toContain("extensions_list");
+		expect(CREATION_RING_TOOL_NAMES).toContain("plugin_manager");
 		expect(LEGACY_EXTENSION_TOOL_NAMES.every(name => name.startsWith("extension_"))).toBe(true);
 		expect(new Set(EXTENSION_META_TOOL_NAMES).size).toBe(
 			CREATION_RING_TOOL_NAMES.length + LEGACY_EXTENSION_TOOL_NAMES.length,
@@ -65,7 +68,7 @@ describe("extension meta tools (issue #38 Step 2)", () => {
 		);
 	});
 
-	test("runtime factory: the 5 Cordis tools are the creation ring, all default-inactive", () => {
+	test("runtime factory: the 8 Cordis tools are the creation ring, all default-inactive", () => {
 		const registry = new RuntimeToolRegistry();
 		const tools = createExtensionRuntimeTools(sessionOf, () => registry);
 		expect(tools.map(t => t.name).sort()).toEqual([...CORDIS_TOOL_NAMES].sort());

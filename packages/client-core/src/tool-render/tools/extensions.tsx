@@ -57,6 +57,10 @@ interface Payload {
 	plugin: PluginEntry | null;
 	restoredFrom: string | null;
 	source: { pluginId: string; packageId: string; hostCode: string } | null;
+	providers: Array<{ platform: string; provider: string; summary: string; methods: string[] }>;
+	provider: string | null;
+	method: string | null;
+	data: unknown;
 }
 
 function strings(value: unknown): string[] {
@@ -149,7 +153,28 @@ function payloadOf(result: ToolRenderProps["result"]): Payload | null {
 		plugin: pluginEntry(parsed.plugin),
 		restoredFrom: str(parsed.restoredFrom),
 		source: parseSource(parsed.source),
+		providers: providerEntries(parsed.providers),
+		provider: str(parsed.provider),
+		method: str(parsed.method),
+		data: parsed.data,
 	};
+}
+
+function providerEntries(
+	value: unknown,
+): Array<{ platform: string; provider: string; summary: string; methods: string[] }> {
+	if (!Array.isArray(value)) return [];
+	const out: Array<{ platform: string; provider: string; summary: string; methods: string[] }> = [];
+	for (const item of value) {
+		if (!isRecord(item)) continue;
+		out.push({
+			platform: str(item.platform) ?? "host",
+			provider: str(item.provider) ?? "",
+			summary: str(item.summary) ?? "",
+			methods: strings(item.methods),
+		});
+	}
+	return out;
 }
 
 function parseSource(value: unknown): { pluginId: string; packageId: string; hostCode: string } | null {
@@ -292,6 +317,20 @@ function Summary({ name: wireName, args, result }: ToolRenderProps): ReactNode {
 				</>
 			);
 		}
+		case "cordis_inspect":
+		case "cordis_inspect_list": {
+			const count = payload?.providers.length ?? 0;
+			return count > 0 ? (
+				<Badge tone="accent">{t("tools.inspectProvidersWithCount", { count: String(count) })}</Badge>
+			) : null;
+		}
+		case "cordis_inspect_query": {
+			const provider = payload?.provider ?? str(args.provider);
+			const method = payload?.method ?? str(args.method);
+			if (provider === null || method === null) return null;
+			return <span>{`${provider}.${method}`}</span>;
+		}
+		case "cordis_inspect_self":
 		case "ext_inspect": {
 			const pluginId = payload?.plugin?.pluginId ?? pluginIdArg(args);
 			if (pluginId !== null) {
@@ -366,6 +405,30 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 		if (result?.isError === true) return <Note tone="err">{raw}</Note>;
 		return <Output text={raw} title={t("tools.raw")} variant="code" maxLines={16} />;
 	}
+	const tool = canonicalToolName(name);
+	if ((tool === "cordis_inspect" || tool === "cordis_inspect_list") && payload.providers.length > 0) {
+		return (
+			<div className="tv-list">
+				{payload.providers.map(provider => (
+					<Row key={provider.provider} k={provider.provider}>
+						<span className="tv-muted">{provider.summary}</span>
+						<Badges items={provider.methods} />
+					</Row>
+				))}
+			</div>
+		);
+	}
+	if (tool === "cordis_inspect_query") {
+		return (
+			<>
+				<KvGrid>
+					{payload.provider !== null && <Kv k={t("tools.provider")}>{payload.provider}</Kv>}
+					{payload.method !== null && <Kv k={t("tools.method")}>{payload.method}</Kv>}
+				</KvGrid>
+				<Output text={JSON.stringify(payload.data, null, 2)} variant="code" maxLines={20} />
+			</>
+		);
+	}
 	const path = pathArg(args);
 	const success = payload.ok === true;
 	return (
@@ -425,9 +488,13 @@ export const extensionsRenderer: ToolRenderer = { Summary, Body };
 export const EXTENSION_TOOL_NAMES: readonly string[] = [
 	"cordis_define",
 	"cordis_inspect",
+	"cordis_inspect_list",
+	"cordis_inspect_query",
+	"cordis_inspect_self",
 	"cordis_run",
 	"cordis_stop",
 	"cordis_undefine",
+	"plugin_manager",
 	"ext_define",
 	"ext_inspect",
 	"ext_run",

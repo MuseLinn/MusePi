@@ -72,6 +72,7 @@ import { Settings, type SkillsSettings } from "./config/settings";
 import { CursorExecHandlers, type CursorMcpResourceAdapter } from "./cursor";
 import { createBridgeEditTool, createBridgeGrepFactory } from "./cursor-bridge-tools";
 import { type CollabToolHandle, collabTool } from "./tools/collab";
+import type { PluginManagementHandle } from "./tools/plugin-manager";
 import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-task";
 import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
@@ -528,6 +529,8 @@ export interface CreateAgentSessionOptions {
 	collabTool?: CollabToolHandle;
 	/** Daemon-provided scheduled-task bridge for the `schedule_task` tool. */
 	scheduledTasks?: ScheduledTaskHandle;
+	/** Daemon-provided plugin management bridge for the `plugin_manager` tool. */
+	pluginManagement?: PluginManagementHandle;
 	/** Inline extensions (merged with discovery). */
 	extensions?: ExtensionFactory[];
 	/** Additional extension paths to load (merged with discovery). */
@@ -1091,7 +1094,11 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 // Internal Helpers
 
 function createCustomToolContext(
-	ctx: ExtensionContext & { scheduledTasks?: ScheduledTaskHandle; collab?: CollabToolHandle },
+	ctx: ExtensionContext & {
+		scheduledTasks?: ScheduledTaskHandle;
+		collab?: CollabToolHandle;
+		pluginManagement?: PluginManagementHandle;
+	},
 ): CustomToolContext {
 	// The runtime object is the agent tool context (getToolContext()), which
 	// carries the daemon-injected handles via declaration merging — but the
@@ -1108,6 +1115,7 @@ function createCustomToolContext(
 		localProtocolOptions: ctx.localProtocolOptions,
 		scheduledTasks: ctx.scheduledTasks,
 		collab: ctx.collab,
+		pluginManagement: ctx.pluginManagement,
 	};
 }
 
@@ -3310,6 +3318,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			autoApprove: options.autoApprove ?? false,
 			...(options.collabTool ? { collab: options.collabTool } : {}),
 			...(options.scheduledTasks ? { scheduledTasks: options.scheduledTasks } : {}),
+			...(options.pluginManagement ? { pluginManagement: options.pluginManagement } : {}),
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
 		const setSessionActiveToolNames = (names: Iterable<string>): void => {

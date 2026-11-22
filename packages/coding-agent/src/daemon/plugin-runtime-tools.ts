@@ -10,7 +10,11 @@
  *     mode=run 首次激活/重启当前；mode=update 切换版本（要求已在运行）。
  * - cordis_stop    { pluginId }   停用：移除该插件全部动态工具，保留定义与版本。
  * - cordis_undefine{ pluginId }   删除插件（含活动 run 与全部版本）。
- * - cordis_inspect { pluginId?, packageId? }
+ * - cordis_inspect { platform?, provider?, method? }
+ *     API 目录;给全 provider+method 即精确查询。
+ * - cordis_inspect_list / cordis_inspect_query
+ *     只读运行时 API 目录与精确契约（slots / tools 可列）。
+ * - cordis_inspect_self { pluginId?, packageId? }
  *     注册表快照；两者都给时返回该版本的 hostCode 源码，用于原位修复。
  *
  * 工具名命名空间 `extdyn__<name>`（MCP `mcp__` 同款约定），避免与内置
@@ -20,6 +24,7 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentToolResult, CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 import type { AgentSession } from "../session/agent-session";
+import { inspectProviderDirectory, inspectQuery } from "./cordis-inspect";
 import { createSandbox, evaluateHostCode, precheckCode, type SandboxToolDefinition } from "./plugin-sandbox";
 
 /** 动态工具注册名前缀(与 isMCPToolName 同族约定)。 */
@@ -171,9 +176,22 @@ export function createExtensionRuntimeTools(
 	const simpleSchema = type({
 		pluginId: type("string").describe("插件 id"),
 	});
-	const inspectSchema = type({
+	const inspectSelfSchema = type({
 		pluginId: type("string").describe("省略 = 全部插件").optional(),
 		packageId: type("string").describe("与 pluginId 同时给出时返回该版本的 hostCode 源码").optional(),
+	});
+	const inspectListSchema = type({
+		platform: type("string").describe("仅 host;省略 = 全部").optional(),
+	});
+	const inspectQuerySchema = type({
+		platform: type("string").describe("host").optional(),
+		provider: type("string").describe("目录中的 provider 名(如 runtime / package / slots / tools)"),
+		method: type("string").describe("目录中该 provider 的方法名"),
+	});
+	const inspectSchema = type({
+		platform: type("string").describe("host").optional(),
+		provider: type("string").describe("给 provider+method = 精确查询;省略 = 目录").optional(),
+		method: type("string").describe("目录中该 provider 的方法名").optional(),
 	});
 
 	const textResult = (text: string): { content: Array<{ type: "text"; text: string }> } => ({
@@ -427,20 +445,20 @@ export function createExtensionRuntimeTools(
 		},
 	};
 
-	const inspectTool: CustomTool<typeof inspectSchema> = {
-		name: "cordis_inspect",
+	const inspectSelfTool: CustomTool<typeof inspectSelfSchema> = {
+		name: "cordis_inspect_self",
 		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "检查 Cordis 插件",
 		description:
-			"会话动态插件注册表快照:插件/版本数/活动 run/工具名。只读。pluginId 与 packageId 同时给出时额外返回该不可变版本的 hostCode 源码,用于失败后原位修复(追加修正版本,不要另建插件)。",
-		parameters: inspectSchema,
+			"当前会话的动态插件注册表:插件/版本数/活动 run/工具名。只读。pluginId 与 packageId 同时给出时额外返回该不可变版本的 hostCode 源码,用于失败后原位修复(追加修正版本,不要另建插件)。",
+		parameters: inspectSelfSchema,
 		async execute(
 			_toolCallId: string,
-			params: typeof inspectSchema.infer,
+			params: typeof inspectSelfSchema.infer,
 			_onUpdate,
 			ctx: CustomToolContext,
 			_signal?: AbortSignal,
-		): Promise<AgentToolResult<any, typeof inspectSchema.infer>> {
+		): Promise<AgentToolResult<any, typeof inspectSelfSchema.infer>> {
 			const registry = registryFor(ctx);
 			const p = params as { pluginId?: string; packageId?: string };
 			if (p.pluginId) {
@@ -481,5 +499,100 @@ export function createExtensionRuntimeTools(
 		},
 	};
 
-	return [defineTool, runTool, stopTool, undefineTool, inspectTool];
+	const inspectListTool: CustomTool<typeof inspectListSchema> = {
+		name: "cordis_inspect_list",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
+		label: "列出 Cordis API",
+		description:
+			"列出动态插件可用的只读运行时 API 目录:platform / provider / method。写代码或配置插件前先查,再用 cordis_inspect_query 取精确契约。只读。",
+		parameters: inspectListSchema,
+		async execute(
+			_toolCallId: string,
+			params: typeof inspectListSchema.infer,
+			_onUpdate,
+			_ctx: CustomToolContext,
+			_signal?: AbortSignal,
+		): Promise<AgentToolResult<any, typeof inspectListSchema.infer>> {
+			const p = params as { platform?: string };
+			const providers = inspectProviderDirectory().filter(
+				provider => p.platform === undefined || provider.platform === p.platform,
+			);
+			return textResult(JSON.stringify({ ok: true, providers }, null, 2));
+		},
+	};
+
+	const inspectQueryTool: CustomTool<typeof inspectQuerySchema> = {
+		name: "cordis_inspect_query",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
+		label: "查询 Cordis API",
+		description:
+			"按目录条目精确查询一个运行时 API 的签名与输入契约(cordis_inspect_list 返回值里的 platform/provider/method),或列出 slots/tools。只读:不调用业务方法、不修改运行时。",
+		parameters: inspectQuerySchema,
+		async execute(
+			_toolCallId: string,
+			params: typeof inspectQuerySchema.infer,
+			_onUpdate,
+			_ctx: CustomToolContext,
+			_signal?: AbortSignal,
+		): Promise<AgentToolResult<any, typeof inspectQuerySchema.infer>> {
+			const p = params as { platform?: string; provider: string; method: string };
+			return textResult(
+				JSON.stringify(
+					inspectQuery({
+						provider: p.provider,
+						method: p.method,
+						...(p.platform ? { platform: p.platform } : {}),
+					}),
+					null,
+					2,
+				),
+			);
+		},
+	};
+
+	const inspectTool: CustomTool<typeof inspectSchema> = {
+		name: "cordis_inspect",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
+		label: "检查 Cordis API",
+		description:
+			"运行时 API 目录:省略 provider+method 返回目录;两者都给时等价 cordis_inspect_query。只读。会话插件/版本/源码用 cordis_inspect_self。",
+		parameters: inspectSchema,
+		async execute(
+			_toolCallId: string,
+			params: typeof inspectSchema.infer,
+			_onUpdate,
+			_ctx: CustomToolContext,
+			_signal?: AbortSignal,
+		): Promise<AgentToolResult<any, typeof inspectSchema.infer>> {
+			const p = params as { platform?: string; provider?: string; method?: string };
+			if (p.provider !== undefined && p.method !== undefined) {
+				return textResult(
+					JSON.stringify(
+						inspectQuery({
+							provider: p.provider,
+							method: p.method,
+							...(p.platform ? { platform: p.platform } : {}),
+						}),
+						null,
+						2,
+					),
+				);
+			}
+			const providers = inspectProviderDirectory().filter(
+				provider => p.platform === undefined || provider.platform === p.platform,
+			);
+			return textResult(JSON.stringify({ ok: true, providers }, null, 2));
+		},
+	};
+
+	return [
+		defineTool,
+		runTool,
+		stopTool,
+		undefineTool,
+		inspectListTool,
+		inspectQueryTool,
+		inspectSelfTool,
+		inspectTool,
+	];
 }

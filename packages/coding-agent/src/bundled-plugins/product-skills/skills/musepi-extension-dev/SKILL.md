@@ -76,7 +76,8 @@ const all = await pi.config.getAll(); // 完整值表（只含声明键）
 daemon 会话给 agent 挂了一组创造工具。**创造模式只激活 Cordis 环**；Track B 兼容加载器默认不激活：
 
 - `extensions_list`——已加载插件/扩展清单（**唯一常激活**，只读、便宜）
-- `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine` / `cordis_inspect`——会话级动态 Cordis 插件（vm 沙箱，`extdyn__` 命名空间），不写盘就能试原型。`define` 只定义不运行、每次产生不可变版本；`run` 用 `mode=run|update` 激活并返回 `runId`；`inspect` 给全 `pluginId+packageId` 时返回源码，用于原位修复。
+- `cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine` / `cordis_inspect_list` / `cordis_inspect_query` / `cordis_inspect_self`——会话级动态 Cordis 插件（vm 沙箱，`extdyn__` 命名空间），不写盘就能试原型。`define` 只定义不运行、每次产生不可变版本；`run` 用 `mode=run|update` 激活并返回 `runId`；`inspect_list/query` 查只读 API 目录与精确契约；`inspect_self` 给全 `pluginId+packageId` 时返回源码，用于原位修复。
+- `plugin_manager`——已安装插件包：`list_plugins` / `set_plugin` / `install_plugin` / `remove_plugin`。安装与卸载执行宿主代码，只在自动批准会话里运行；否则让用户从扩展页完成。
 - `extension_load` / `extension_reload` / `extension_status` / `extension_validate` / `extension_rollback`——**Track B 兼容加载器**：把其他 agent 的旧扩展格式加载进当前会话。它们不属于创造工具集，creator 预设不会激活；只在用户明确要求处理旧扩展时，通过扩展管理面（TUI 的扩展面板 / GUI 的扩展页）显式启用。`/extensions` 只是 TUI 面的入口，不是模型侧的开启方式。
 
 激活方式：**creator（创造）预设自动激活 Cordis 环**（settings `tools.extensionMetaTools`，会话起即顶层可用，不走 xd:// 设备）；Track B 环始终需要扩展管理面显式激活。默认不激活的原因：普通会话不为这些工具的 schema 付费。
@@ -87,8 +88,8 @@ daemon 会话给 agent 挂了一组创造工具。**创造模式只激活 Cordis
 
 - **入口**：具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.*` 注册（`ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect`）。
 - **禁止**：`export default function (pi) { pi.register… }` 与其他 agent 的扩展格式。平铺 `pi.register*` 只是旧别名，新插件不要用。
-- **原型**：会话内用 `cordis_*` 验证交互与工具语义（不写盘、不跨会话）。
-- **交付**：把能力写成包，放到工作区或 `~/.musepi/plugins/<name>/`，通过插件管理面安装/启用（桌面端扩展页或 `musepi plugin install <path>`）。安装/启用是插件的原生入口；不要在会话内用 Track B 的 `extension_load` 把新插件塞进去验证。
+- **原型**：会话内用 `cordis_*` 验证交互与工具语义（不写盘、不跨会话）。先 `cordis_inspect_list` / `cordis_inspect_query` 查 API，`cordis_inspect_self` 看已有插件与源码。
+- **交付**：把能力写成包，放到工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager`（`list_plugins` → `install_plugin` → `set_plugin`）安装启用；非自动批准会话里让用户在扩展页完成。不要用 Track B 的 `extension_load` 把新插件塞进去验证。
 - **两套契约不要混写**：动态 `cordis_*` 的 `hostCode` 是沙箱函数体（只有 `defineTool`/timers/console）；插件包入口拿到的是宿主 `ExtensionAPI`。原型验证交互，交付包承载完整能力。
 
 ## 进程级能力：`ctx.hmr` 与记忆后端

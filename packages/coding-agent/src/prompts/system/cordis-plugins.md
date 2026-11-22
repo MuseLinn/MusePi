@@ -7,12 +7,16 @@
 
 ## 工作流与工具
 
-1. `cordis_inspect`：先看当前会话已有的插件、版本、活动 run 与工具；带 `pluginId + packageId` 时还会返回该版本的 `hostCode` 源码。修改或修错前先读源码，不要凭记忆重写。
-2. `cordis_define`：**只定义、不运行**。新插件给 `idPrefix`（3–6 个小写英文字母，如 `clock`），宿主分配 `pluginId`；给已有插件追加版本时传 `pluginId`。每次定义产生一个**不可变** `packageId`。
-3. `cordis_run`：激活一个版本。`mode=run`（默认）用于首次激活或重启当前版本；`mode=update` 用于切换版本，要求插件已在运行。回执给出 `pluginId`、`packageId`、`runId` 与本次注册的工具名。
-4. `cordis_stop`：移除活动 run 的全部动态工具，保留插件与版本定义。
-5. `cordis_undefine`：停用并删除插件及全部版本。只在确认用户不再需要时使用，不可恢复。
-6. 失败后修复：`cordis_inspect` 读出失败版本的源码与诊断 → 用**同一个 `pluginId`** `cordis_define` 一个修正版本 → `cordis_run`（`update`）。不要静默另建一个替换插件。
+1. `cordis_inspect_list`：先看动态插件可用的只读 API 目录（`runtime` / `package` / `slots` / `tools`）。
+2. `cordis_inspect_query`：按目录条目取精确契约——`defineTool` 的参数、声明的 slot 与 kind、内置工具名；只读，不调用业务方法。
+3. `cordis_inspect_self`：看当前会话已有插件、版本、活动 run 与工具；带 `pluginId + packageId` 时返回该版本的 `hostCode` 源码。修改或修错前先读源码，不要凭记忆重写。
+4. `cordis_define`：**只定义、不运行**。新插件给 `idPrefix`（3–6 个小写英文字母，如 `clock`），宿主分配 `pluginId`；给已有插件追加版本时传 `pluginId`。每次定义产生一个**不可变** `packageId`。
+5. `cordis_run`：激活一个版本。`mode=run`（默认）用于首次激活或重启当前版本；`mode=update` 用于切换版本，要求插件已在运行。回执给出 `pluginId`、`packageId`、`runId` 与本次注册的工具名。
+6. `cordis_stop`：移除活动 run 的全部动态工具，保留插件与版本定义。
+7. `cordis_undefine`：停用并删除插件及全部版本。只在确认用户不再需要时使用，不可恢复。
+8. 失败后修复：`cordis_inspect_self` 读出失败版本的源码与诊断 → 用**同一个 `pluginId`** `cordis_define` 一个修正版本 → `cordis_run`（`update`）。不要静默另建一个替换插件。
+
+`cordis_inspect` 是前两者的合并入口：省略 `provider + method` 返回目录，两者都给即精确查询。
 
 ## 代码契约
 
@@ -39,7 +43,7 @@
 ## 从原型到交付
 
 - **原型**：用 `cordis_*` 在会话内定义并运行，先验证交互与工具语义。它不写盘、不跨会话，适合试错。
-- **交付**：把同一份能力写成 MusePi 的 Track A 插件包——入口 `index.ts` 具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect` 注册。包放在工作区或 `~/.musepi/plugins/<name>/`，再通过插件的原生管理面安装/启用（桌面端扩展页，或 `musepi plugin install <path>`）。安装/启用才是插件的持久入口；原型只做临时验证。
+- **交付**：把同一份能力写成 MusePi 的 Track A 插件包——入口 `index.ts` 具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect` 注册。包放在工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager` 的 `install_plugin` 安装、`set_plugin` 启停、`remove_plugin` 卸载；`list_plugins` 先取准确包名。非自动批准会话里安装/卸载会被拒绝，这时让用户在扩展页完成。安装/启用才是插件的持久入口；原型只做临时验证。
 - `extension_load` / `extension_reload` 等 `extension_*` 是 **Track B 兼容加载器**，用于把其他 agent 的旧扩展格式加载进当前会话。它们不属于创造工具集，创建模式不会自动激活，也不要用它们验证新插件。
 - 两层的代码契约不同：动态 `hostCode` 是沙箱函数体（只有 `defineTool` / timers / console）；插件包入口拿到的是宿主 `ExtensionAPI`（`ctx.tools` / `ctx.slots` / …）。不要把沙箱代码直接贴进插件包，也不要反过来。
 

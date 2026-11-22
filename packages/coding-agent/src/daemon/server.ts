@@ -322,6 +322,7 @@ import { ModelsConfigFile } from "../config/models-config";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
+import type { PluginManagementHandle } from "../tools/plugin-manager";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { type ArtifactServerHandle, startArtifactServer, tryStartArtifactServer } from "./artifact-server";
@@ -644,6 +645,7 @@ export class DaemonServer {
 	constructor(host: DaemonSessionHost, options: { workspaceRegistry?: WorkspaceRegistry } = {}) {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
 		host.setScheduledTaskProvider(sessionCwd => this.scheduledTaskHandle(sessionCwd));
+		host.setPluginManagementProvider(() => this.pluginManagementHandle());
 		host.setOnExtensionNotification((channel, message) => {
 			this.#services.get<EventService>("events").broadcastExtensionNotification(channel, message);
 		});
@@ -1484,6 +1486,62 @@ export class DaemonServer {
 	 *  (P1 第十刀：实现归 ScheduleService，此处为薄委托）。 */
 	scheduledTaskHandle(sessionCwd: string): ScheduledTaskHandle {
 		return this.#services.get<ScheduleService>("schedule").taskHandle(sessionCwd);
+	}
+
+	/**
+	 * Model-facing plugin management: the same manager and install machine the
+	 * extension page drives, so a tool install invalidates caches, broadcasts
+	 * the change, and applies it to running sessions exactly like a GUI install.
+	 * Null before the service registry is settled (or outside a daemon).
+	 */
+	pluginManagementHandle(): PluginManagementHandle | null {
+		let service: PluginInstallService;
+		try {
+			service = this.#services.get<PluginInstallService>("pluginInstall");
+		} catch {
+			return null;
+		}
+		return {
+			list: async () =>
+				(await service.list()).map(plugin => ({
+					name: plugin.name,
+					version: plugin.version,
+					enabled: plugin.enabled,
+					path: plugin.path,
+				})),
+			setEnabled: async (name, enabled) => ({ ok: true, ...(await service.setEnabled({ name, enabled })) }),
+			install: async (spec, options) => {
+				const view = await service.installAndWait({
+					spec,
+					...(options?.approvedBuilds !== undefined ? { approvedBuilds: options.approvedBuilds } : {}),
+				});
+				if (view === null) {
+					return {
+						ok: false,
+						spec,
+						message: "the install is still running",
+						nextStep: "Follow it on the extension page; the package is not live until the install finishes.",
+					};
+				}
+				const done = view.state === "done";
+				return {
+					ok: done,
+					installId: view.installId,
+					name: view.name,
+					version: view.version,
+					application: done ? "applied" : undefined,
+					capability: view.capability,
+					pendingBuilds: view.pendingBuilds,
+					message: view.message,
+					nextStep: done
+						? view.pendingBuilds !== undefined && view.pendingBuilds.length > 0
+							? "Ask the user to approve the blocked build scripts before relying on features that need them."
+							: undefined
+						: "Report the failure; the previous package state was restored.",
+				};
+			},
+			remove: async name => ({ ok: true, ...(await service.uninstall({ name })) }),
+		};
 	}
 
 	/**
