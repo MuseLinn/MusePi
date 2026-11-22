@@ -117,7 +117,7 @@ interface SkillRow {
 const BUNDLED_SKILL_NAMES: readonly string[] = [
 	"widget-design",
 	"musepi-help",
-	"musepi-extension-dev",
+	"musepi-plugin-dev",
 	"ui-ux-pro-max",
 	"board-design",
 ];

@@ -780,7 +780,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 
 `packages/coding-agent/src/bundled-skills/index.ts:19-26`，`BUNDLED_SKILL_NAMES` 于 `:31`（legacy 安装器迁移清单，含已移出的 `musepi-contributing`）：
 
-`widget-design`、`musepi-help`、`musepi-extension-dev`、`ui-ux-pro-max`、`board-design`
+`widget-design`、`musepi-help`、`musepi-plugin-dev`、`ui-ux-pro-max`、`board-design`
 
 单一清单源（安装器 + 扩展中心注册表共用，契约测试取交集）— `bundled-skills/index.ts:1-9`。`musepi-contributing` 是维护者规范，只作为仓库项目技能 `.agents/skills/musepi-contributing` 存在，不随发行包分发。
 

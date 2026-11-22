@@ -32,8 +32,8 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 
 ## 常见问答要点
 
-- **给 MusePi 加功能/工具/命令/hook/插件（开发扩展）**：读 `musepi-extension-dev`
-  skill（`skill://musepi-extension-dev`）——六种扩展形态 + 快速路径 + 文档路由表。
+- **给 MusePi 加功能/工具/命令/hook/插件（开发插件）**：读 `musepi-plugin-dev`
+  skill（`skill://musepi-plugin-dev`）——默认 Track A 插件、Cordis 原型、`plugin_manager` 安装、六种形态 + 文档路由表。
 - **预设/模式（Work/Design/Minimal）是什么**：命名预设 = 扩展白名单 + 提示词区块
   + settings 覆盖的组合（`~/.musepi/modes/<id>.json`）。GUI 欢迎页（输入框上方
   项目选择旁）chip 选择，创建会话时应用；TUI/CLI 用 `--preset <id>` 启动，
