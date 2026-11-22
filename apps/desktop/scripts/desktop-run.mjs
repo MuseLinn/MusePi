@@ -24,6 +24,7 @@ import { spawn, spawnSync } from "node:child_process";
 const pkgDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(pkgDir, "..", "..");
 const marker = join(pkgDir, "dist", "index.html");
+const stamp = join(pkgDir, "dist", ".build-ok");
 /** Workers the bundle needs at runtime; a build that failed before the
  *  parallel copy finished still leaves index.html, so freshness must cover
  *  them or the next start launches a dist without Monaco workers. */
@@ -63,10 +64,10 @@ const INPUT_FILES = [
 ];
 
 function distFresh() {
-	if (!existsSync(marker)) return false;
+	if (!existsSync(marker) || !existsSync(stamp)) return false;
 	if (process.env.MUSEPI_FORCE_BUILD === "1") return false;
 	if (!MONACO_WORKERS.every(file => existsSync(join(pkgDir, "dist", "monaco-workers", file)))) return false;
-	const builtAt = statSync(marker).mtimeMs;
+	const builtAt = statSync(stamp).mtimeMs;
 	const inputsNewest = Math.max(newestMtime(INPUT_DIRS), newestMtime(INPUT_FILES));
 	return builtAt >= inputsNewest;
 }
@@ -76,7 +77,7 @@ function run(cmd, args, options = {}) {
 }
 
 if (distFresh()) {
-	const ageSec = Math.round((Date.now() - statSync(marker).mtimeMs) / 1000);
+	const ageSec = Math.round((Date.now() - statSync(stamp).mtimeMs) / 1000);
 	console.log(`dist fresh (built ${ageSec}s ago, no bundler input newer) — skipping build`);
 } else {
 	console.log("dist stale or missing — rebuilding…");
