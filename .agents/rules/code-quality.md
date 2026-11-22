@@ -12,7 +12,7 @@ Load for TypeScript, Bun, shared utilities, logging, and TUI rendering work.
 - Class fields use ES `#private`; externally accessible members stay bare. Visibility keywords are allowed only on constructor parameter properties.
 - Use `Promise.withResolvers()` instead of manually constructing resolver promises.
 - Model prompts live in static `.md` files with Handlebars for dynamic content. Import with `with { type: "text" }`; never assemble prompts in code.
-- New built-in capabilities require the six-field seam declaration in their authoritative registry and an anchor in `docs/capability-seams.md`. Always-on capabilities need a stated reason; the default is an overlay-controlled lifecycle.
+- New built-in capabilities follow the seam contract in `.agents/rules/architecture.md` (six fields, inspection anchor, overlay-controlled default).
 
 ## Central utilities
 

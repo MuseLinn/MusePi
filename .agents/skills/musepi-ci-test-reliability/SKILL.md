@@ -56,4 +56,4 @@ description: Use when designing, modifying, or diagnosing MusePi CI workflows, t
 
 ## 验证与交付
 
-先跑 CI 契约测试和相关 dry-run，再跑受影响的包测试与静态检查。工作流语义、runner 版本和平台行为最终以目标 Actions run 为准；未推送或未执行的远程验证必须明确标为 pending，不能写成“CI 已绿”。推送后不要阻塞等待：发起 run 后查一次状态即可，失败再回来处理，本地门禁已通过的改动可以继续推进下一步；`gh run watch` 不是必需步骤。发布流程例外，发布门禁必须等到结果。发布前另按 `.agents/rules/release.md` 检查 changelog 与实际发布门禁。
+先跑 CI 契约测试和相关 dry-run，再跑受影响的包测试与静态检查。工作流语义、runner 版本和平台行为最终以目标 Actions run 为准；未推送或未执行的远程验证必须明确标为 pending，不能写成“CI 已绿”。推送后的等待口径见 `.agents/rules/testing.md`（异步确认，查一次即可）；发布门禁例外，必须等到结果。发布前另按 `.agents/rules/release.md` 检查 changelog 与实际发布门禁。

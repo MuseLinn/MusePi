@@ -15,6 +15,7 @@ description: 评审 MusePi PR、提交前改动或正确性。覆盖仓库代码
 - `.agents/rules/code-quality.md`：TypeScript、Bun、中央工具、日志、TUI 净化。
 - `.agents/rules/architecture.md`：catalog、worker、能力缝和插件边界。
 - `.agents/rules/testing.md`：测试契约、隔离和验证。
+- `.agents/rules/git.md`：提交时机、分支、worktree 与交接。
 - `.agents/rules/documentation.md`：文档、双语和 README。
 - `.agents/rules/release.md`：CHANGELOG 和发布。
 - `docs/gui-design.md` / `docs/gui-implementation.md`：GUI 行为、RPC 和生命周期。

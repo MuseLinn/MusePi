@@ -8,7 +8,7 @@ This file is the always-loaded hot path: execution boundaries, repository routin
 - Ask only when an unresolved answer would materially change requirements, architecture, or risk. Complete independent, well-understood items while an unrelated item is unresolved.
 - Auto-approved plans only close the planning interface; the original request determines whether to execute. Subagents require explicit user authorization under the host's rules; otherwise work inline.
 - Local reversible edits, focused tests, and read-only investigation do not need approval. Confirm irreversible or security-sensitive actions and effects beyond the local workspace unless the user already authorized that exact action.
-- Never commit, merge, push, publish, create a PR, or discard work unless asked. Plan templates and skill workflows never override this rule.
+- Local commits are part of the work: commit scoped changes at checkpoints without asking, and leave another session's uncommitted files untouched (see `.agents/rules/git.md`). Merge, push, publish, create a PR, or discard work only when asked; no skill or plan template overrides that split.
 - Never comment on GitHub or create issues unless the user specifies the exact content.
 - A blocked or unverified result is reported as such. Existing unrelated failures do not erase completed work, but no failure may be hidden or relabeled as a pass.
 
@@ -40,6 +40,7 @@ Layout: `apps/` holds deployable surfaces, `packages/` holds reusable libraries,
 | Packages, generated catalog, workers, capability seams | `.agents/rules/architecture.md` |
 | Connector catalog, remote MCP onboarding, OAuth reuse | `docs/connectors.md` |
 | Tests, smoke runs, session/daemon isolation, verification | `.agents/rules/testing.md` |
+| Commits, branches, worktrees, handoff | `.agents/rules/git.md` |
 | CI workflows, test sharding, runtime versions, flaky/async tests | `.agents/skills/musepi-ci-test-reliability/SKILL.md` |
 | Documentation, bilingual pairs, package READMEs, agent-facing docs | `.agents/rules/documentation.md` |
 | Changelog and release | `.agents/rules/release.md` |
@@ -63,7 +64,7 @@ The nearest package README and local code/test precedent supply local convention
 - For GUI work, hierarchy, restraint, and polish are part of correctness. Avoid unnecessary secondary labels and descriptions; let layout, spacing, typography, and grouping communicate structure. Keep essential guidance and accessible names, remove redundant copy and chrome, and verify the composed interface rather than accepting a functionally complete but cluttered or awkward result.
 - User-facing changes update the owning docs, both locales of paired docs, and `packages/coding-agent/CHANGELOG.musepi.md` under `[Unreleased]` with the inline English translation. Released sections are immutable.
 - Use `bun check`, never `tsc` or `npx tsc`. Package `package.json` scripts are the command source of truth.
-- Commit subjects, when a commit is explicitly requested, are Conventional Commits with a user-visible summary of at most 72 characters and no process jargon.
+- Commit subjects are Conventional Commits with a user-visible summary of at most 72 characters and no process jargon.
 
 ## Delivery contract
 
@@ -71,7 +72,7 @@ The nearest package README and local code/test precedent supply local convention
 2. Run the focused package checks and relevant tests; then run the repository checks required for the deliverable. Record environment-limited and pre-existing failures separately from regressions.
 3. Keep evidence scoped to the current tree. A prior run does not prove a later edit; unchanged code may reuse recorded evidence.
 4. Do not mark work complete with failing required checks, partial implementation, or unresolved requested behavior. Report precisely what remains instead.
-5. Finish with the changed files, behavioral result, verification commands/results, and any unverified native or platform behavior.
+5. Finish with the changed files, behavioral result, verification commands/results, any unverified native or platform behavior, and the commits created or the paths intentionally left uncommitted.
 
 <!-- rtk-instructions v2 -->
 # RTK

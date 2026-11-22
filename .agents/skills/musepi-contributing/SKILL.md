@@ -33,14 +33,17 @@ release 模板与硬性规范，供 agent 代表用户起草与执行提交流�
 3. **不要为即将自己实现的工作开 issue**——维护者可能并行抢做。
 4. **major/跨包改动先讨论**（Discord/issue），不要直接大 PR。
 5. **AI 辅助提交四约束**：限范围拒绝无关改动、逐文件 review 并理解行为、
-   自己跑相关 check 与行为验证、**未获指令不推送**（agent 不自主 push/发布；
-   用户明确要求推送时按指令执行，并在汇报里写清推送结果与未闭环项）。
+   自己跑相关 check 与行为验证、**完成即本地提交**（提交时机、分支与工作树规则
+   见 `.agents/rules/git.md`；push、PR、发布仍需用户明确指令）。
 6. **Issue 模板字段**：Bug 必填 Description / Steps / Expected / Platform
    （含 Windows native）/ **MusePi version**（`musepi --version` 输出，非 omp）/
    Bun version；Provider / Area 下拉选最贴近项。
 
 ## Commit 与 changelog 惯例
 
+- **完成即提交**：一个可交付的改动通过聚焦检查后就地 commit，不必等用户说“提交”；
+  多个独立改动分开提交，只 stage 本次涉及的路径。提交时机与分支/工作树的完整规则
+  由 `.agents/rules/git.md` 持有。
 - 标题用 conventional commits（`fix(scope): …` / `feat(scope): …` /
   `chore: …` / `docs: …`），正文可中文详述。
 - 用户可见变更要在 `CHANGELOG.musepi.md` 的 `[Unreleased]` 下补条目
@@ -52,12 +55,9 @@ release 模板与硬性规范，供 agent 代表用户起草与执行提交流�
 
 ## 分支与清理
 
-- 祖先关系不等于内容是否落地：main 的历史可能被压平，旧分支会显示为
-  “未合并”且与 main 没有共同祖先。报告“未合并的工作”前，先用文件 blob 或
-  `git diff-tree` 与 main 对比，确认内容是否已经存在；不要把已落地的旧分支
-  列成待办。
-- 删除分支或工作树前，确认其中没有未提交改动、未跟踪文件和未落地提交；
-  有任何一个就保留并在汇报里点名，不要顺手清理。
+提交时机、分支、工作树与清理规则统一由 `.agents/rules/git.md` 持有：完成即本地提交，
+push/PR/发布才需要明确指令；一个任务一个分支/工作树，清理前确认内容已落地、工作树干净。
+本技能不重复这些规则。
 
 ## 发布（release）
 

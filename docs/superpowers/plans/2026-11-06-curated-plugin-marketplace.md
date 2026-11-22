@@ -15,7 +15,7 @@
 - Defaults never auto-install plugins or modify source directories.
 - Runtime CLI version equals installed package version; never `@latest`.
 - Test stores remain isolated and default-free unless explicitly enabled.
-- Preserve unrelated worktree changes and do not commit.
+- Preserve unrelated worktree changes; commit at checkpoints per `.agents/rules/git.md`.
 
 ## Review Focus
 

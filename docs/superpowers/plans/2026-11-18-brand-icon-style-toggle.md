@@ -19,7 +19,7 @@
 - All icons come from `@lobehub/icons`; no CSS filters or hand-coded brand colours.
 - Use `bunx biome check`, never `tsc`; package `check` scripts are the command source of truth.
 - User-facing copy must be added to both `en-US` and `zh-CN` i18n.
-- Do not commit unless asked.
+- Commit at checkpoints per `.agents/rules/git.md`; push only when asked.
 
 ## Review Focus
 

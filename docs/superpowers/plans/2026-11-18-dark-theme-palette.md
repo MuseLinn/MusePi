@@ -16,7 +16,7 @@
 - Light theme tokens MUST NOT change — user explicitly likes current light theme.
 - Brand gold `#d9a441` = `oklch(0.7507 0.1295 79.85)` MUST NOT change (shared by logo gradient, TUI theme, HTML export).
 - Use `bun check`, never `tsc` or `npx tsc`. Package `package.json` scripts are the command source of truth.
-- Commit subjects when a commit is explicitly requested: Conventional Commits, user-visible summary ≤ 72 chars. (No commit requested here — do not commit.)
+- Commit at checkpoints per `.agents/rules/git.md`: Conventional Commits, user-visible summary ≤ 72 chars; push only when asked.
 - Comment provenance: do NOT name upstream projects in new source comments (`scripts/check-comment-provenance.ts` gates this).
 - Changelog: title states user-visible change in user vocabulary, not engineering decision record (`scripts/check-changelog-voice.ts`). Paired EN translation inline under the Chinese bullet.
 - User-facing changes update owning docs, both locales of paired docs, and `CHANGELOG.musepi.md` `[Unreleased]`.
