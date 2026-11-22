@@ -1,8 +1,9 @@
 import type { ToolResultMessage } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { memo } from "react";
+import { memo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { messageText } from "../../lib/format";
+import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import { ToolView } from "../../tool-render/ToolView";
 import type { ToolRenderHost, ToolResultImage } from "../../tool-render/types";
 import { detailsRecord } from "../../tool-render/util";
@@ -36,22 +37,68 @@ export function hoistToolMedia(
 	};
 }
 
-/** `notify_user` is a progress update, not a tool log: render it as annotated
- *  prose (accent dot + title + Markdown body), matching Kimi's progress row. */
-function ProgressUpdate({ args, running }: { args: unknown; running?: boolean }): ReactNode {
+/** Posting time in the viewer's locale, right-aligned on the title row. */
+function progressTime(timestamp: number | undefined): { label: string; iso: string } | null {
+	if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) return null;
+	const date = new Date(timestamp);
+	return {
+		label: date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+		iso: date.toISOString(),
+	};
+}
+
+/** `notify_user` is a progress update, not a tool log: a foldable row with the
+ * title, a live/completed state dot and the posting time pinned to the right.
+ * A running update starts open (the reader is waiting for it); a completed one
+ * starts folded so the transcript stays scannable, and either state can be
+ * toggled. */
+function ProgressUpdate({
+	args,
+	running,
+	timestamp,
+}: {
+	args: unknown;
+	running?: boolean;
+	timestamp?: number;
+}): ReactNode {
 	const record = typeof args === "object" && args !== null ? (args as Record<string, unknown>) : null;
 	const title = record !== null && typeof record.title === "string" ? record.title : "";
 	const message = record !== null && typeof record.message === "string" ? record.message : "";
+	const time = progressTime(timestamp);
+	const [open, setOpen] = useState(running === true);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	useCollapseHeight(open, bodyRef);
+	const hasBody = message.length > 0;
 	return (
-		<section className="tr-progress-update" data-running={running === true}>
+		<section className="tr-progress-update" data-running={running === true} data-open={open}>
 			<span className="tr-progress-dot" aria-hidden />
 			<div className="tr-progress-main">
-				<div className="tr-progress-title">{title || t("tools.toolNotifyUser")}</div>
-				{message ? (
-					<div className="tr-progress-body">
-						<Markdown text={message} repair="off" />
+				<button
+					type="button"
+					className="tr-progress-head"
+					aria-expanded={hasBody ? open : undefined}
+					onClick={hasBody ? () => setOpen(v => !v) : undefined}
+					disabled={!hasBody}
+				>
+					<span className="tr-progress-chev" aria-hidden />
+					<span className="tr-progress-title">{title || t("tools.toolNotifyUser")}</span>
+					{time !== null && (
+						<time className="tr-progress-time" dateTime={time.iso}>
+							{time.label}
+						</time>
+					)}
+				</button>
+				{hasBody && (
+					<div
+						ref={bodyRef}
+						className={`tr-progress-body-wrap${open ? "" : " tr-progress-body-wrap--closed"}`}
+						style={collapseStyle(open)}
+					>
+						<div className="tr-progress-body">
+							<Markdown text={message} repair="off" />
+						</div>
 					</div>
-				) : null}
+				)}
 			</div>
 		</section>
 	);
@@ -67,6 +114,10 @@ export interface ToolCardProps {
 	/** No result and the agent is idle: the call was cut off mid-flight. */
 	interrupted?: boolean;
 	partialResult?: unknown;
+	/** Message timestamp (epoch ms); the progress row's right-aligned time. */
+	timestamp?: number;
+	/** Wall-clock start of a live call (epoch ms); drives the elapsed readout. */
+	startedAt?: number;
 	host?: ToolRenderHost;
 	/** display.taskCardStyle parity: "classic" uses the plain tool-call card
 	 *  instead of the swarm member-grid card. */
@@ -110,13 +161,17 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 		running,
 		interrupted,
 		partialResult,
+		timestamp,
+		startedAt,
 		host,
 		taskCardStyle,
 		mediaOnly,
 		onPreviewImage,
 	} = props;
 	// A progress update is prose, not a tool card; no fold, no "using" chrome.
-	if (name === "notify_user" && !mediaOnly) return <ProgressUpdate args={args} running={running} />;
+	if (name === "notify_user" && !mediaOnly) {
+		return <ProgressUpdate args={args} running={running} timestamp={timestamp} />;
+	}
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";
 	const structuredPartial =
@@ -186,6 +241,7 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 				intent={intent}
 				kind={toolKind(name, intent)}
 				partial={partial || undefined}
+				startedAt={startedAt}
 				host={host}
 				taskCardStyle={taskCardStyle}
 				/* ZCode parity: live tools open while they run, fold when done;

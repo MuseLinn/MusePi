@@ -137,7 +137,10 @@
 	font-size: 11px;
 	font-weight: 600;
 	letter-spacing: 0.02em;
-	color: var(--tv-muted);
+	/* The action name is the row's title, not a secondary tag: it leads the
+	 * eye and the argument summary reads as its value. Kept at 11px so a long
+	 * action ("校验扩展") never outweighs the target it operates on. */
+	color: var(--tv-fg);
 }
 
 .tv-sum {
@@ -169,6 +172,24 @@
 
 .tv-arg:has(> .tv-sum:empty) > .tv-arg-paren {
 	display: none;
+}
+
+/* State readout on the right of the head: "运行中 · 3s", "失败", "已中断". */
+.tv-meta {
+	flex: none;
+	margin-left: 6px;
+	color: var(--tv-faint);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.tv-meta--err {
+	color: var(--tv-err);
+}
+
+.tv-meta--warn {
+	color: var(--tv-warn);
 }
 
 .tv-chev {

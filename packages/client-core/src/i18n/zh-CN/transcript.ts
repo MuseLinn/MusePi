@@ -28,6 +28,7 @@ export const transcript = {
 	"transcript.runReadWithCount": "读取了 {count} 个文件",
 	"transcript.runEditWithCount": "编辑了 {count} 个文件",
 	"transcript.runCommandWithCount": "运行了 {count} 个命令",
+	"transcript.runPluginWithCount": "插件操作 {count} 次",
 	"transcript.runOtherWithCount": "执行了 {count} 次其他操作",
 	// ── IRC / 代理间消息 ──────────────────────────────────────────────────────
 	"transcript.ircMe": "我",

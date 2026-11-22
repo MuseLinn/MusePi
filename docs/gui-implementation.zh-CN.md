@@ -1398,3 +1398,9 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 开发树在 Windows 上的参考值（构建期构件落地之后）：daemon **约 4.2s 模块加载 + 约 0.6s 装配**（打包可执行文件不付逐文件源码解析的代价），`window.created` **1.0–1.3s**，首次 `extensions.list` **约 0.5s** 且编译数为 0，热机 `boot.done` **约 4.3s**。单次测量当噪声看：同一份构建在同一台机器上出现过 4s 与 34s，取决于残留 daemon 与文件缓存状态，连续三次一致才算结论。
 
 某个阶段看起来慢时，先查下面两种模式——它们都在这里吃到过秒级代价：对**陈旧发现文件**的等待（记录着端口却没人监听，应立即判负而不是重试），以及**上限过长**的能力探测（超时本身变成了启动的等待）。构件原点、兼容渲染端原点、daemon 端口都属于第一种。
+
+## 工具卡 keyed 槽位与状态反馈
+
+- **一个槽位**：`tool.call.toolview` 是 wire 工具名 → 渲染器的 keyed 槽位（dsh 同构），由 `client-core/src/tool-render/registry.ts` 持有。内建视图以 owner 0 占位；扩展的 `registerToolView` 经 `registerExternalToolRenderers` 批量占用同一组键，释放后按注册栈回到最新的存活注册或内建视图——乱序释放不会复活旧视图，也不存在第二条分派路径。`ToolView` 每次只查这张表，未知工具回落到 generic。
+- **状态读数**：`ToolView` 头部尾端渲染 `.tv-meta`：运行中为「运行中 · 耗时」（`startedAt` 来自 `ActiveTool.startedAt`，1s 定时器只在运行时存在），失败为红色「失败」，`interrupted` 为「已中断」；成功不加文字，交给绿色状态点与结果体。`ToolCard` 把消息时间戳与 `startedAt` 下传，进展行与工具卡共用同一条时间来源。
+- **进展行**：`notify_user` 不进入工具卡，渲染为 `.tr-progress-update`：箭头 + 标题 + 右对齐 `<time>`；运行中默认展开、完成后默认折叠，body 始终挂载（`--h` 高度动画），展开不会重挂 Markdown 或丢滚动位置。

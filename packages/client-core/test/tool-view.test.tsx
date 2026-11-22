@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ToolCard } from "../src/components/transcript/ToolCard";
+import { t } from "../src/i18n/index.js";
 import { registerExternalToolRenderers } from "../src/tool-render/registry";
 import { ToolView } from "../src/tool-render/ToolView";
 
@@ -26,7 +27,7 @@ describe("ToolView xd:// dispatches", () => {
 			/>,
 		);
 
-		expect(html).toContain("xd://generate_image");
+		expect(html).toContain(t("tools.toolGenerateImage"));
 		expect(html).toContain("alpine lake");
 		expect(html).toContain('src="data:image/png;base64,aW1hZ2U="');
 	});
@@ -55,7 +56,7 @@ describe("ToolView xd:// dispatches", () => {
 			/>,
 		);
 
-		expect(html).toContain("xd://resolve");
+		expect(html).toContain(t("tools.toolResolve"));
 		expect(html).toContain("proposed → resolved");
 		expect(html).toContain("tv-badge--ok");
 		expect(html).toContain("ast_edit: edit foo.ts");
@@ -82,7 +83,7 @@ describe("ToolView xd:// dispatches", () => {
 			/>,
 		);
 
-		expect(html).toContain("xd://reject");
+		expect(html).toContain(t("tools.toolReject"));
 		expect(html).toContain("proposed → rejected");
 		expect(html).toContain("tv-badge--warn");
 		// Not the generic JSON dump.
@@ -114,7 +115,7 @@ describe("ToolView xd:// dispatches", () => {
 			/>,
 		);
 
-		expect(html).toContain("xd://propose");
+		expect(html).toContain(t("tools.toolPropose"));
 		expect(html).toContain("plan proposed");
 		expect(html).toContain("local://ship-it-plan.md");
 	});
@@ -201,11 +202,13 @@ describe("ToolView xd:// dispatches", () => {
 		}
 	});
 
-	it("renders notify_user as an annotated progress row, not a foldable tool card", () => {
+	it("renders notify_user as a foldable progress row with a right-aligned time", () => {
+		const timestamp = Date.UTC(2026, 10, 22, 14, 50, 8);
 		const html = renderToStaticMarkup(
 			<ToolCard
 				toolCallId="n1"
 				name="notify_user"
+				timestamp={timestamp}
 				args={{ title: "检查渲染", message: "已确认 **bold** 生效。\n\n- 圆点\n- 标题" }}
 			/>,
 		);
@@ -213,10 +216,63 @@ describe("ToolView xd:// dispatches", () => {
 		expect(html).toContain('class="tr-progress-update"');
 		expect(html).toContain("tr-progress-dot");
 		expect(html).toContain("检查渲染");
+		expect(html).toContain("tr-progress-time");
+		expect(html).toContain('dateTime="2026-11-22T14:50:08.000Z"');
+		// A completed update starts folded; the body stays mounted so opening it
+		// shows the markdown without a remount.
+		expect(html).toContain('aria-expanded="false"');
+		expect(html).toContain("tr-progress-body-wrap--closed");
 		// Markdown body: bold + bullets, not a pre-wrap text blob.
 		expect(html).toContain("<strong>bold</strong>");
 		expect(html).toContain("<li>圆点</li>");
 		expect(html).not.toContain("tv-card");
+	});
+
+	it("starts a running progress update expanded", () => {
+		const html = renderToStaticMarkup(
+			<ToolCard
+				toolCallId="n2"
+				name="notify_user"
+				running
+				timestamp={Date.UTC(2026, 10, 22, 14, 50, 8)}
+				args={{ title: "正在构建", message: "编译中…" }}
+			/>,
+		);
+
+		expect(html).toContain('data-running="true"');
+		expect(html).toContain('aria-expanded="true"');
+		expect(html).not.toContain("tr-progress-body-wrap--closed");
+	});
+
+	it("shows the running state with a live elapsed readout", () => {
+		const html = renderToStaticMarkup(
+			<ToolView name="bash" running startedAt={Date.now() - 3_000} args={{ command: "bun check" }} />,
+		);
+
+		expect(html).toContain("tv-meta");
+		expect(html).toContain(t("tools.running"));
+	});
+
+	it("marks a failed call in the head", () => {
+		const html = renderToStaticMarkup(
+			<ToolView
+				name="bash"
+				args={{ command: "false" }}
+				result={{ content: [{ type: "text", text: "boom" }], isError: true }}
+			/>,
+		);
+
+		expect(html).toContain("tv-meta--err");
+		expect(html).toContain(t("tools.failed"));
+	});
+
+	it("marks an interrupted call in the head", () => {
+		const html = renderToStaticMarkup(
+			<ToolCard toolCallId="w2" name="write" args={{ path: "game.js" }} interrupted />,
+		);
+
+		expect(html).toContain("tv-meta--warn");
+		expect(html).toContain(t("tools.callInterruptedShort"));
 	});
 
 	it("settles a call with no result and an idle agent as interrupted", () => {

@@ -980,6 +980,9 @@ export function ToolRunLine({
 	if (run.commands > 0) {
 		segments.push(<span key="cmds">{t("transcript.runCommandWithCount", { count: String(run.commands) })}</span>);
 	}
+	if (run.plugins > 0) {
+		segments.push(<span key="plugins">{t("transcript.runPluginWithCount", { count: String(run.plugins) })}</span>);
+	}
 	if (run.browser) {
 		const order: BrowserOperationAction[] = [
 			"click",
@@ -1395,6 +1398,8 @@ export function AssistantBody({
 						args={args}
 						result={result}
 						host={host}
+						timestamp={message.timestamp}
+						startedAt={act?.startedAt}
 						running={!result && (act !== undefined || pending)}
 						/* A persisted turn cut off mid-execution: no result, no live
 						 * tool, and the agent is idle. Settle it as interrupted

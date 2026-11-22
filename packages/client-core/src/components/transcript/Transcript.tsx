@@ -3076,6 +3076,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							intent={tool.intent}
 							args={tool.args}
 							running
+							startedAt={tool.startedAt}
 							partialResult={tool.partialResult}
 							host={host}
 							taskCardStyle={taskCardStyle}

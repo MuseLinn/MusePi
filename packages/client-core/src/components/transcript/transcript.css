@@ -5159,10 +5159,65 @@ a.tr-tool-search-title:hover {
 	min-width: 0;
 	flex: 1 1 auto;
 }
+/* Title row: fold anchor · title · posting time pinned right. */
+.tr-progress-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 0;
+	background: none;
+	border: 0;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+.tr-progress-head:disabled {
+	cursor: default;
+}
+.tr-progress-head:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+.tr-progress-chev {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-right: 1.5px solid var(--color-text-faint, var(--fg-faint));
+	border-bottom: 1.5px solid var(--color-text-faint, var(--fg-faint));
+	transform: rotate(-45deg) translateY(-1px);
+	transition: transform 0.15s ease;
+}
+.tr-progress-head[aria-expanded="true"] .tr-progress-chev {
+	transform: rotate(45deg);
+}
+.tr-progress-head:disabled .tr-progress-chev {
+	visibility: hidden;
+}
 .tr-progress-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	color: var(--color-text, var(--fg));
 	font-weight: var(--weight-medium, 550);
 	line-height: 1.4;
+}
+.tr-progress-time {
+	flex: none;
+	margin-left: auto;
+	color: var(--color-text-faint, var(--fg-faint));
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.4;
+}
+.tr-progress-body-wrap {
+	height: var(--h, 0px);
+	overflow: hidden;
+	transition: height 220ms var(--spring, ease);
 }
 .tr-progress-body {
 	margin-top: 4px;

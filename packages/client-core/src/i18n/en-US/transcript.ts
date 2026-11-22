@@ -31,6 +31,7 @@ export const transcript = {
 	"transcript.runReadWithCount": "Read {count} files",
 	"transcript.runEditWithCount": "Edited {count} files",
 	"transcript.runCommandWithCount": "Ran {count} commands",
+	"transcript.runPluginWithCount": "{count} plugin actions",
 	"transcript.runOtherWithCount": "{count} other operations",
 	"transcript.ircMe": "Me",
 	"transcript.ircAuto": "auto",

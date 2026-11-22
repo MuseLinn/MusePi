@@ -337,11 +337,11 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 - 默认导出两种合法形状之一：
   - **React 组件**：作为全卡 Card 渲染，收到 `ToolRenderProps` `{ name, args, result, running, host, kind, intent }`；
   - **ToolRenderer 对象** `{ Summary, Body?, Card? }`（guest-client 内置注册表同构）。
-- 工具名 = wire 工具名（扩展自己 registerTool 的工具名，或覆盖内置如 `bash`）；扩展渲染器**优先于内置**（`resolveToolRenderer` 先查外部表）。
+- 工具名 = wire 工具名（扩展自己 registerTool 的工具名，或覆盖内置如 `bash`）。内建视图与扩展视图占用**同一个** `tool.call.toolview` keyed 槽位（`registerToolViewSlot`,dsh 同构）：后注册者占住该键，释放时回到注册栈中最新的存活视图或内建视图；没有第二条分派路径。
 
-**分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 guest-client tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。
+**分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 guest-client 的 keyed 槽位 → `ToolView` 从同一张槽位表按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。清除扩展集合即恢复内建视图。
 
-**参考实现**：`packages/client-core/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`apps/desktop/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
+**参考实现**：`packages/client-core/src/tool-render/registry.ts`（`registerToolViewSlot` / `registerExternalToolRenderers`）、`apps/desktop/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
 
 ## 10.1 扩展 widget 类型（registerWidget）
 

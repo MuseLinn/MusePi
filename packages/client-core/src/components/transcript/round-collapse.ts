@@ -164,8 +164,21 @@ const DIFF_TOOLS = new Set(["edit", "apply_patch"]);
 
 /** Read/search/browse tools — the openchamber 活动 header's 探索了代码库
  *  segment counts these (the round looked at the codebase instead of only
- *  running commands or editing). */
-const EXPLORE_TOOLS = new Set(["read", "grep", "glob", "ast-grep", "fetch", "web-search", "inspect-image"]);
+ *  running commands or editing). Both wire spellings are listed: the registry
+ *  uses underscores (`inspect_image`, `web_search`, `ast_grep`) while older
+ *  transcripts and the CLI vocabulary use hyphens. */
+const EXPLORE_TOOLS = new Set([
+	"read",
+	"grep",
+	"glob",
+	"ast-grep",
+	"ast_grep",
+	"fetch",
+	"web-search",
+	"web_search",
+	"inspect-image",
+	"inspect_image",
+]);
 
 /** Web research tools — counted as their own segment, not as codebase
  *  exploration (openchamber's "researched" clause). */
@@ -575,6 +588,32 @@ export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean 
  *  plus the plain write tool). */
 const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
 
+/** Extension / dynamic-plugin lifecycle tools. They reach the wire as
+ *  `write xd://<tool>` device dispatches, so counting by wire name would file
+ *  every plugin action under "编辑了 N 个文件"; the run gives them their own
+ *  segment instead. */
+const EXTENSION_TOOLS = new Set([
+	"ext_define",
+	"ext_inspect",
+	"ext_run",
+	"ext_stop",
+	"ext_undefine",
+	"extension_load",
+	"extension_reload",
+	"extension_rollback",
+	"extension_status",
+	"extension_validate",
+	"extensions_list",
+]);
+
+/** Device name behind a `write xd://<tool>` result (`details.xdev.tool`), else null. */
+function xdevDeviceOf(message: { details?: unknown }): string | null {
+	if (!isRecord(message.details)) return null;
+	const xdev = message.details.xdev;
+	if (!isRecord(xdev)) return null;
+	return typeof xdev.tool === "string" && xdev.tool.length > 0 ? xdev.tool : null;
+}
+
 /** One summarized run of consecutive tool-work rows (Kimi 工具调用汇总
  *  parity): while a turn works, maximal stretches of adjacent process rows —
  *  toolCall-carrying assistants, toolResults, bash executions — collapse to
@@ -597,6 +636,8 @@ export interface ToolRunSummary {
 	edits: number;
 	/** Bash command rows. */
 	commands: number;
+	/** Extension / dynamic-plugin lifecycle actions (xd:// device dispatches). */
+	plugins: number;
 	/** Any other tool results. */
 	other: number;
 	/** Structured browser operations; browser calls are not counted in other. */
@@ -666,6 +707,7 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 			let reads = 0;
 			let edits = 0;
 			let commands = 0;
+			let plugins = 0;
 			let other = 0;
 			const browserCalls = browserCallsOf(entries, idxs);
 			for (const i of idxs) {
@@ -674,15 +716,19 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 				const m = e.message;
 				if (m.role === "bashExecution") commands++;
 				else if (m.role === "toolResult") {
-					if (EXPLORE_TOOLS.has(m.toolName)) reads++;
-					else if (WRITE_TOOLS.has(m.toolName)) edits++;
+					// A device dispatch is categorized by the tool it actually ran;
+					// the wire name is always `write`, which would read as a file edit.
+					const toolName = xdevDeviceOf(m) ?? m.toolName;
+					if (EXTENSION_TOOLS.has(toolName)) plugins++;
+					else if (EXPLORE_TOOLS.has(toolName)) reads++;
+					else if (WRITE_TOOLS.has(toolName)) edits++;
 					// A plain bash toolResult (auto-approval run) is a command,
 					//  not "other" — the summary's 命令 segment owns it.
-					else if (m.toolName === "bash") commands++;
-					else if (m.toolName !== "browser") other++;
+					else if (toolName === "bash") commands++;
+					else if (toolName !== "browser") other++;
 				}
 			}
-			if (reads + edits + commands + other + browserCalls.length >= 2) {
+			if (reads + edits + commands + plugins + other + browserCalls.length >= 2) {
 				const head = entries[idxs[0]];
 				runs.push({
 					key: head?.id ?? `idx:${idxs[0]}`,
@@ -691,6 +737,7 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 					reads,
 					edits,
 					commands,
+					plugins,
 					other,
 					browser: browserCalls.length > 0 ? summarizeBrowserOperations(browserCalls) : null,
 				});

@@ -275,6 +275,69 @@ describe("buildToolRuns (工具调用汇总, Kimi parity)", () => {
 		expect(runs[0]!.idxs).not.toContain(7);
 	});
 
+	test("xd:// extension dispatches count as plugin actions, not file edits", () => {
+		const dispatch = (id: string, tool: string): SessionEntry =>
+			withId({
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolCallId: id,
+					toolName: "write",
+					content: [{ type: "text", text: "{}" }],
+					details: { xdev: { mode: "execute", tool, args: {} } },
+					isError: false,
+					timestamp: 1,
+				},
+			});
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "write"),
+			dispatch("c1", "extension_load"),
+			assistantToolCall("c2", "write"),
+			dispatch("c2", "extension_validate"),
+			assistantText("done"),
+		];
+		const run = buildToolRuns(entries, false)[0]!;
+		expect(run.plugins).toBe(2);
+		expect(run.edits).toBe(0);
+	});
+
+	test("an xd:// device read counts as the tool it ran, not as a file read", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "write"),
+			withId({
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "write",
+					content: [{ type: "text", text: "{}" }],
+					details: { xdev: { mode: "execute", tool: "inspect_image", args: {} } },
+					isError: false,
+					timestamp: 1,
+				},
+			}),
+			assistantToolCall("c2", "write"),
+			withId({
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolCallId: "c2",
+					toolName: "write",
+					content: [{ type: "text", text: "{}" }],
+					details: { xdev: { mode: "execute", tool: "web_search", args: {} } },
+					isError: false,
+					timestamp: 1,
+				},
+			}),
+			assistantText("done"),
+		];
+		const run = buildToolRuns(entries, false)[0]!;
+		expect(run.reads).toBe(2);
+		expect(run.edits).toBe(0);
+	});
+
 	test("error results still count — the action happened even when it failed", () => {
 		const fail = withId({
 			type: "message",

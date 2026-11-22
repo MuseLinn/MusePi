@@ -1,6 +1,8 @@
 /**
- * Tool renderer registry. Keys are current wire tool names; aliases keep old
- * transcript names renderable. Unknown tools fall back to the generic JSON renderer.
+ * Tool renderer slot registry: one keyed slot per wire tool name. Keys are
+ * current wire names; aliases keep old transcript names renderable. Built-in
+ * and extension views occupy the same keyed slots, and unknown tools fall back
+ * to the generic JSON renderer.
  */
 import { tLoose } from "../i18n/index.js";
 import { TOOL_RENDER_CARD_LABELS } from "./card-tools";
@@ -16,6 +18,7 @@ import { computerRenderer } from "./tools/computer";
 import { debugRenderer } from "./tools/debug";
 import { editRenderer } from "./tools/edit";
 import { evalRenderer } from "./tools/eval";
+import { extensionsRenderer } from "./tools/extensions";
 import { fetchRenderer } from "./tools/fetch";
 import { generateImageRenderer } from "./tools/generate-image";
 import { githubRenderer } from "./tools/github";
@@ -46,7 +49,24 @@ import { writeRenderer } from "./tools/write";
 import { yieldRenderer } from "./tools/yield";
 import type { ToolRenderer } from "./types";
 
-const RENDERERS: Record<string, ToolRenderer> = {
+/**
+ * `tool.call.toolview` keyed slot: one renderer per wire tool name. Built-in
+ * views and extension-contributed views register through the same functions;
+ * a registration occupies the key (single semantics) and its disposer restores
+ * the previous occupant. `ToolView` resolves every card through this one table,
+ * so extensions never take a second dispatch path.
+ */
+const toolViewSlots = new Map<string, { renderer: ToolRenderer; owner: number }>();
+
+/** Per-key registration stack: the top entry occupies the slot, the entries
+ *  below are the views it replaced. Releases remove their own entry, so an
+ *  out-of-order release never resurrects a stale view above a newer one. */
+const toolViewStacks = new Map<string, Array<{ renderer: ToolRenderer; owner: number }>>();
+let slotOwnerSeq = 0;
+
+/** Built-in views, one module per action family. They register exactly like
+ *  extension views — the import list above is the built-in contribution set. */
+const BUILTIN_TOOL_VIEWS: Readonly<Record<string, ToolRenderer>> = {
 	agnes_video_gen: agnesVideoGenRenderer,
 	ask: askRenderer,
 	ast_edit: astEditRenderer,
@@ -63,6 +83,17 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	js: evalRenderer,
 	python: evalRenderer,
 	notebook: evalRenderer,
+	ext_define: extensionsRenderer,
+	ext_inspect: extensionsRenderer,
+	ext_run: extensionsRenderer,
+	ext_stop: extensionsRenderer,
+	ext_undefine: extensionsRenderer,
+	extension_load: extensionsRenderer,
+	extension_reload: extensionsRenderer,
+	extension_rollback: extensionsRenderer,
+	extension_status: extensionsRenderer,
+	extension_validate: extensionsRenderer,
+	extensions_list: extensionsRenderer,
 	fetch: fetchRenderer,
 	glob: globRenderer,
 	find: globRenderer,
@@ -104,48 +135,87 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	yield: yieldRenderer,
 };
 
-export function resolveToolRenderer(name: string): ToolRenderer {
-	return externalRenderers[name] ?? RENDERERS[name] ?? genericRenderer;
+for (const [key, renderer] of Object.entries(BUILTIN_TOOL_VIEWS)) {
+	toolViewSlots.set(key, { renderer, owner: 0 });
+}
+
+function settleSlot(key: string): void {
+	const stack = toolViewStacks.get(key);
+	const top = stack?.[stack.length - 1];
+	if (top !== undefined) {
+		toolViewSlots.set(key, top);
+		return;
+	}
+	const builtin = BUILTIN_TOOL_VIEWS[key];
+	if (builtin !== undefined) toolViewSlots.set(key, { renderer: builtin, owner: 0 });
+	else toolViewSlots.delete(key);
 }
 
 /**
- * Card head title: "已使用 Bash" / "Used Bash" for a labeled renderer, and
- * `running` flips the verb to "正在使用"/"Using". An explicit `label` (the
- * extension override) wins over the renderer's own `labelKey`, which wins over
- * the wire-name entry in {@link TOOL_RENDER_CARD_LABELS} — the last one is what
+ * Occupy one tool's view slot. The returned disposer removes this registration
+ * and settles the slot on the newest surviving registration (or the built-in
+ * view), so a reloaded extension set never leaves a stale card behind.
+ */
+export function registerToolViewSlot(key: string, renderer: ToolRenderer): () => void {
+	const entry = { renderer, owner: ++slotOwnerSeq };
+	const stack = toolViewStacks.get(key) ?? [];
+	stack.push(entry);
+	toolViewStacks.set(key, stack);
+	settleSlot(key);
+	return () => {
+		const current = toolViewStacks.get(key);
+		if (current === undefined) return;
+		const index = current.indexOf(entry);
+		if (index < 0) return;
+		current.splice(index, 1);
+		settleSlot(key);
+	};
+}
+
+export function resolveToolRenderer(name: string): ToolRenderer {
+	return toolViewSlots.get(name)?.renderer ?? genericRenderer;
+}
+
+/**
+ * Card head title: the tool's action name ("运行命令", "加载扩展"). The card's
+ * status chrome (spinner / dot) carries running-vs-finished, so the title never
+ * prefixes a repeated "正在使用 / Using" verb; the argument summary beside it is
+ * the variable part the user actually reads. An explicit `label` (the extension
+ * override) wins over the renderer's own `labelKey`, which wins over the
+ * wire-name entry in {@link TOOL_RENDER_CARD_LABELS} — the last one is what
  * keeps shared renderers (browser/puppeteer, eval/js/python/notebook, …) titled
  * by the wire tool that was actually called. Renderers with none of these
  * (unknown wire names, extension views that declare no label) keep the raw wire
  * name — the pre-title behavior — so an unrecognized tool never gets a
  * misleading localized identity.
  */
-export function toolCallTitle(name: string, renderer: ToolRenderer, running = false): string {
+export function toolCallTitle(name: string, renderer: ToolRenderer): string {
 	const explicit = renderer.label;
 	const labelKey = renderer.labelKey ?? TOOL_RENDER_CARD_LABELS[name];
 	let label: string | null = null;
 	if (explicit !== undefined && explicit.length > 0) label = explicit;
 	else if (labelKey !== undefined) label = tLoose(labelKey);
 	if (label === null || label.length === 0) return name;
-	return tLoose(running ? "tools.usingTool" : "tools.usedTool", { tool: label });
+	return label;
 }
 
-/** Wire tool names with a builtin card renderer (keys of the builtin
- * registry). The canonical sorted inventory lives in `card-tools.ts`; the
- * registry test guards the two against drift. */
+/** Wire tool names with a builtin card renderer (the built-in contribution
+ *  set). The canonical sorted inventory lives in `card-tools.ts`; the registry
+ *  test guards the two against drift. */
 export function builtinRendererToolNames(): string[] {
-	return Object.keys(RENDERERS);
+	return Object.keys(BUILTIN_TOOL_VIEWS);
 }
 
-/** Extension-contributed per-tool renderers (registerToolView): keyed by
- *  wire tool name, consulted
- *  BEFORE the built-in registry so an extension renderer replaces the
- *  built-in one for that tool. Registered by the GUI from extensions.list
- *  `toolViews` (compiled modules blob-imported at runtime). */
-const externalRenderers: Record<string, ToolRenderer> = {};
+/** One restore per currently registered extension view. */
+const extensionSlotRestores = new Map<string, () => void>();
 
-/** Replace the extension-contributed renderer map (called by the GUI when
- *  extensions.list toolViews change). Pass an empty map to clear. */
+/** Replace the extension-contributed view set (GUI extensions.list
+ *  `toolViews`, compiled modules blob-imported at runtime). Each key occupies
+ *  the same slot a built-in view uses; clearing restores the built-in view. */
 export function registerExternalToolRenderers(renderers: Record<string, ToolRenderer>): void {
-	for (const key of Object.keys(externalRenderers)) delete externalRenderers[key];
-	Object.assign(externalRenderers, renderers);
+	for (const restore of extensionSlotRestores.values()) restore();
+	extensionSlotRestores.clear();
+	for (const [key, renderer] of Object.entries(renderers)) {
+		extensionSlotRestores.set(key, registerToolViewSlot(key, renderer));
+	}
 }

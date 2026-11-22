@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { TOOL_RENDER_CARD_TOOLS } from "./card-tools.js";
-import { builtinRendererToolNames, registerExternalToolRenderers, resolveToolRenderer } from "./registry.js";
+import {
+	builtinRendererToolNames,
+	registerExternalToolRenderers,
+	registerToolViewSlot,
+	resolveToolRenderer,
+} from "./registry.js";
 
 describe("tool-render card inventory (TOOL_RENDER_CARD_TOOLS)", () => {
 	test("inventory matches the builtin renderer registry exactly", () => {
@@ -33,5 +38,27 @@ describe("external tool renderers (registerToolView dispatch)", () => {
 		const renderer = resolveToolRenderer("totally_unknown_tool");
 		expect(renderer).toBeDefined();
 		expect(typeof renderer.Summary).toBe("function");
+	});
+
+	test("a slot registration restores the previous occupant when released", () => {
+		const builtin = resolveToolRenderer("bash");
+		const override = { Summary: () => null } as never;
+		const release = registerToolViewSlot("bash", override);
+		expect(resolveToolRenderer("bash")).toBe(override);
+		release();
+		expect(resolveToolRenderer("bash")).toBe(builtin);
+	});
+
+	test("one key holds one view — a later registration replaces the earlier one", () => {
+		const first = { Summary: () => null } as never;
+		const second = { Summary: () => null } as never;
+		const releaseFirst = registerToolViewSlot("read", first);
+		const releaseSecond = registerToolViewSlot("read", second);
+		expect(resolveToolRenderer("read")).toBe(second);
+		// Releasing out of order must not resurrect a stale view above the newer one.
+		releaseFirst();
+		expect(resolveToolRenderer("read")).toBe(second);
+		releaseSecond();
+		expect(resolveToolRenderer("read")).not.toBe(second);
 	});
 });

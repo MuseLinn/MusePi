@@ -6,10 +6,11 @@ import { INTENT_FIELD } from "@musepi/pi-wire";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
+import { fmtDuration } from "../lib/format";
 import { collapseStyle, useCollapseHeight } from "../lib/use-collapse.js";
 import { resolveToolRenderer, toolCallTitle } from "./registry";
 import type { ToolKind, ToolRenderHost, ToolRenderProps, ToolResultLike } from "./types";
-import { isRecord, replaceTabs, stripAnsi } from "./util";
+import { isRecord, replaceTabs, resultTextOf, stripAnsi } from "./util";
 import "./tool-render.css";
 
 /**
@@ -28,6 +29,10 @@ export interface ToolViewProps {
 	result?: ToolResultLike;
 	/** Tool is still executing (live collab view). */
 	running?: boolean;
+	/** Wall-clock start of this call (epoch ms). A running card ticks its
+	 *  elapsed readout from it; absent hosts (exports, old transcripts) simply
+	 *  show the state without a timer. */
+	startedAt?: number;
 	/** The call never recorded a result and the agent is idle: a persisted turn
 	 *  was cut off mid-execution (daemon exit, crash). Distinct from `pending`,
 	 *  which is a call the live turn has not dispatched yet. */
@@ -59,6 +64,38 @@ function normalizeArgs(raw: unknown): { args: Record<string, unknown>; intent: s
 		if (k !== INTENT_FIELD) args[k] = raw[k];
 	}
 	return { args, intent };
+}
+
+const XDEV_PATH_RE = /^xd:\/\/([A-Za-z0-9_-]+)$/;
+
+/** Decode a device write's `content` (a JSON args object, possibly fully or
+ *  partially streamed). Anything unparseable renders as an empty arg set; the
+ *  card identity already comes from the `xd://` path. */
+function decodeDeviceArgs(content: unknown): Record<string, unknown> {
+	if (typeof content !== "string") return {};
+	const text = content.trim();
+	if (text.length === 0) return {};
+	try {
+		const parsed: unknown = JSON.parse(text);
+		return isRecord(parsed) ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Resolve a `write xd://<tool>` device dispatch BEFORE its result arrives.
+ * `executeXdevDispatch` can only reroute once the daemon supplies
+ * `details.xdev`; until then the row would read as a plain file write and the
+ * plugin/extension card would only appear after completion. The path alone
+ * names the device, so the running card already shows the real action.
+ */
+function pendingXdevDispatch(props: ToolViewProps): XdevDispatch | null {
+	if (props.result !== undefined || props.name !== "write") return null;
+	if (!isRecord(props.args)) return null;
+	const device = typeof props.args.path === "string" ? XDEV_PATH_RE.exec(props.args.path.trim()) : null;
+	if (device === null) return null;
+	return { tool: device[1]!, args: decodeDeviceArgs(props.args.content), inner: undefined };
 }
 
 interface XdevDispatch {
@@ -125,12 +162,14 @@ export function ToolView(props: ToolViewProps): ReactNode {
 		},
 		[],
 	);
-	const xdev = executeXdevDispatch(props);
+	const xdev = executeXdevDispatch(props) ?? pendingXdevDispatch(props);
 	const { args, intent: argIntent } = normalizeArgs(props.args);
 	const intent = props.intent?.trim() || argIntent;
 	const name = xdev?.tool ?? props.name;
 	const result = xdev
-		? { content: props.result!.content, details: xdev.inner, isError: props.result!.isError }
+		? props.result === undefined
+			? undefined
+			: { content: props.result.content, details: xdev.inner, isError: props.result.isError }
 		: props.result;
 	const renderer = resolveToolRenderer(name);
 	const renderProps: ToolRenderProps = {
@@ -154,13 +193,44 @@ export function ToolView(props: ToolViewProps): ReactNode {
 				: props.interrupted
 					? "interrupted"
 					: "pending";
-	// Known tools read as "已使用 Bash" / "Used Bash"; the key argument stays in
-	// the Summary slot beside it. Unknown tools keep the raw wire name.
-	const title = toolCallTitle(name, renderer, props.running === true);
-	const displayName = xdev ? `xd://${name}` : title;
-	const titled = !xdev && title !== name;
+	// Known tools read as their action name ("运行命令"); the key argument stays
+	// in the Summary slot beside it. Unknown tools keep the raw wire name.
+	const title = toolCallTitle(name, renderer);
+	const titled = title !== name;
+	// The first non-empty result line stands in for the argument summary on a
+	// failed call: a red card whose head still only names the target makes the
+	// user expand it to learn WHY it failed.
+	const errorLine = isError
+		? (resultTextOf(props.result)
+				.split("\n")
+				.map(line => line.trim())
+				.find(line => line.length > 0) ?? "")
+		: "";
 	const ToolIcon = renderer.Icon;
 	const partial = props.running && !props.result && props.partial ? stripAnsi(replaceTabs(props.partial)) : "";
+	// Live elapsed readout: only a running call with a known start ticks. The
+	// interval is dropped the moment the call settles, so a finished transcript
+	// holds no timers.
+	const [clock, setClock] = useState(() => Date.now());
+	useEffect(() => {
+		if (props.running !== true || props.startedAt === undefined) return;
+		setClock(Date.now());
+		const timer = setInterval(() => setClock(Date.now()), 1000);
+		return () => clearInterval(timer);
+	}, [props.running, props.startedAt]);
+	const elapsedMs =
+		props.running === true && props.startedAt !== undefined ? Math.max(0, clock - props.startedAt) : null;
+	// Visible state readout beside the argument: running carries the live
+	// elapsed time, a failure its own word, and a cut-off call its interruption.
+	// Success needs no word — the green dot and the result body already say it.
+	const meta =
+		props.running === true
+			? `${t("tools.running")}${elapsedMs === null ? "" : ` · ${fmtDuration(elapsedMs)}`}`
+			: isError
+				? t("tools.failed")
+				: props.interrupted === true
+					? t("tools.callInterruptedShort")
+					: null;
 	// Progressive per-line reveal (aicss streaming-text): each line fades in
 	// with a stagger, plus a steady caret while the tool keeps streaming.
 	const partialLines = useMemo(() => partial.split("\n"), [partial]);
@@ -210,7 +280,7 @@ export function ToolView(props: ToolViewProps): ReactNode {
 						<ToolIcon />
 					</span>
 				) : null}
-				<span className="tv-name">{displayName}</span>
+				<span className="tv-name">{title}</span>
 				<span className="tv-arg">
 					{titled ? (
 						<span className="tv-arg-paren" aria-hidden="true">
@@ -219,6 +289,14 @@ export function ToolView(props: ToolViewProps): ReactNode {
 					) : null}
 					<span className="tv-sum">
 						<renderer.Summary {...renderProps} />
+						{errorLine !== "" && (
+							<>
+								<span className="tv-faint" aria-hidden="true">
+									{" · "}
+								</span>
+								<span className="tv-err-text">{errorLine}</span>
+							</>
+						)}
 					</span>
 					{titled ? (
 						<span className="tv-arg-paren" aria-hidden="true">
@@ -226,6 +304,13 @@ export function ToolView(props: ToolViewProps): ReactNode {
 						</span>
 					) : null}
 				</span>
+				{meta !== null && (
+					<span
+						className={`tv-meta${isError ? " tv-meta--err" : ""}${props.interrupted === true ? " tv-meta--warn" : ""}`}
+					>
+						{meta}
+					</span>
+				)}
 			</button>
 			<div ref={bodyRef} className={`tv-body${open ? "" : " tv-body--closed"}`} style={collapseStyle(open)}>
 				{intent && <div className="tv-intent">{intent}</div>}
