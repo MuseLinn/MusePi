@@ -22,11 +22,12 @@ import { Icon } from "../vendor/oc-icons";
  *   mouseleave / blur 包含关系内(否则卡片会被 120ms 宽限当场收掉),也让
  *   卡片避开 `ProjectCollapse` 的 `overflow:hidden` 与列表滚动容器的裁剪。
  *
- * **高度随目录数增长,适配按几何算**:64 个目录的卡片在 800px 高的窗口里接近
- * 1.4k px,任何固定阈值都装不下,会被滚动容器裁掉——而卡片又在滚动时收起,
- * 裁掉的部分再也够不到。所以先由布局常量推出首选高度决定翻不翻,再把列表的
- * `max-height` 夹到真实可用空间(装不下就让列表自己滚);渲染后再实测一次
- * 兜底,字号被用户放大导致常量偏小时继续收缩列表,绝不让卡片溢出。
+ * **高度随目录数增长,适配按实测几何算**:64 个目录的卡片在 800px 高的窗口里
+ * 接近 1.4k px,任何固定阈值都装不下,会被滚动容器裁掉——而卡片又在滚动时
+ * 收起,裁掉的部分再也够不到。所以挂载后先量出卡片真实几何(见 `measureCard`),
+ * 交给 {@link fitProjectCard} 决定翻不翻、列表能有多高,再把列表的 `max-height`
+ * 夹到真实可用空间(装不下就让列表自己滚)。常量只是**首帧估值**:测量在绘制前
+ * 的 layout effect 里完成,用户看到的第一帧已经按实测值算过。
  *
  * 真实 Chromium 扫描(11 目录、180px 侧栏、480/700/800/1000 四种窗高、覆盖
  * 全部滚动位置):修复前 33–77% 的位置被裁(最差 300px),修复后四种窗高均为
@@ -61,8 +62,6 @@ export interface CardFit {
 	above: boolean;
 	/** 列表实际可用的高度(像素)—— 永远不超过真实可占空间。 */
 	listMax: number;
-	/** 未受可用空间限制时的列表高度(目录数 × 行步进,封顶 listMax)。 */
-	naturalList: number;
 }
 
 const clamp = (value: number, low: number, high: number): number => Math.min(Math.max(value, low), high);
@@ -97,7 +96,7 @@ export function fitProjectCard({
 	const natural = chromeHeight + naturalList;
 	// 没有测量信息(测试/首帧)时按首选方向贴下沿。
 	if (spaceBelow === undefined && spaceAbove === undefined) {
-		return { above: false, listMax: naturalList, naturalList };
+		return { above: false, listMax: naturalList };
 	}
 
 	const below = Math.max(0, (spaceBelow ?? 0) - EDGE_INSET);
@@ -110,7 +109,7 @@ export function fitProjectCard({
 	// 扫描只能证明决策形状自洽,证明不了常量是对的——常量靠挂载实测来纠偏。
 	const flip = natural > below && above > below;
 	const room = flip ? above : below;
-	return { above: flip, listMax: clamp(room - chromeHeight, 0, naturalList), naturalList };
+	return { above: flip, listMax: clamp(room - chromeHeight, 0, naturalList) };
 }
 
 /** 挂载实测:卡片固定部分的高度与一行目录的步进。 */
