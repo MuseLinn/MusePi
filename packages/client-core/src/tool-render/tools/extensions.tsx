@@ -13,7 +13,7 @@
  */
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
-import { Badge, Badges, Kv, KvGrid, Note, Output, PathText, ResultText, Row } from "../parts";
+import { Badge, Badges, Kv, KvGrid, Note, Output, PathText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { isRecord, num, resultTextOf, str, truncate } from "../util";
 
@@ -204,11 +204,15 @@ function Summary({ name, args, result }: ToolRenderProps): ReactNode {
 		case "extension_rollback": {
 			const path = pathArg(args);
 			const status =
-				name === "extension_validate" && payload?.ok === true ? (
-					<Badge tone="ok">{t("tools.extensionPassed")}</Badge>
-				) : (
-					statusBadge(payload)
-				);
+				name === "extension_validate" ? (
+					payload?.ok === true ? (
+						<Badge tone="ok">{t("tools.extensionPassed")}</Badge>
+					) : (
+						statusBadge(payload)
+					)
+				) : payload?.ok === false ? (
+					<Badge tone="err">{t("tools.extensionFailed")}</Badge>
+				) : null;
 			return (
 				<>
 					{path !== null && <PathText path={path} />}
@@ -224,9 +228,17 @@ function Summary({ name, args, result }: ToolRenderProps): ReactNode {
 			return (
 				<>
 					<span>{pluginName}</span>
-					{purpose !== null && purpose.length > 0 && <span className="tv-muted">{truncate(purpose, 48)}</span>}
+					{purpose !== null && purpose.length > 0 && (
+						<>
+							<span className="tv-faint"> · </span>
+							<span className="tv-muted">{truncate(purpose, 48)}</span>
+						</>
+					)}
 					{payload?.pluginId !== null && payload?.pluginId !== undefined && (
-						<span className="tv-faint">{payload.pluginId}</span>
+						<>
+							<span className="tv-faint"> · </span>
+							<span className="tv-faint">{payload.pluginId}</span>
+						</>
 					)}
 				</>
 			);
@@ -373,7 +385,6 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 			{payload.plugin !== null && <div className="tv-list">{pluginRow(payload.plugin)}</div>}
 			{errorsBlock(t("tools.extensionErrors"), payload.errors)}
 			{name === "extension_validate" && success && <Note tone="ok">{t("tools.extensionPassed")}</Note>}
-			<ResultText result={result} maxLines={4} />
 		</>
 	);
 }

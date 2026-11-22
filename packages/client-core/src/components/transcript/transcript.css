@@ -5146,6 +5146,12 @@ a.tr-tool-search-title:hover {
 .tr-progress-update[data-running="true"] .tr-progress-dot {
 	animation: tr-progress-pulse 1.4s ease-in-out infinite;
 }
+/* Completed updates keep a calm solid dot; the halo belongs to the live state,
+ * so "still working" and "posted" stay distinguishable even in a still frame. */
+.tr-progress-update[data-running="false"] .tr-progress-dot {
+	box-shadow: none;
+	opacity: 0.8;
+}
 @keyframes tr-progress-pulse {
 	0%,
 	100% {
