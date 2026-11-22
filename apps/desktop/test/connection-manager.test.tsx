@@ -637,3 +637,71 @@ describe("connection manager catalog", () => {
 		expect(labels).toContain(t("settings.connectionSshHost"));
 	});
 });
+
+/**
+ * Docker detection in the form.
+ *
+ * The distinction that matters: "no container publishes this port" and "the
+ * container list could not be read" are different answers, and a socket
+ * permission error must not be rendered as the former.
+ */
+describe("connection manager docker probe", () => {
+	async function openDockerForm(): Promise<HTMLElement> {
+		const host = render({ targets: [localTarget()] });
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		const tab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(node =>
+			(node.textContent ?? "").includes(t("settings.connectionKindDocker")),
+		);
+		await act(async () => {
+			tab?.click();
+			await Bun.sleep(20);
+		});
+		return host;
+	}
+
+	test("a failed container list keeps the daemon's own text", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({
+				ok: false,
+				reason: "daemon-unreachable",
+				error: "permission denied while trying to connect to the Docker daemon socket",
+			}),
+		};
+		const host = await openDockerForm();
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		const text = host.textContent ?? "";
+		expect(text).toContain(t("settings.connectionDockerListFailed"));
+		expect(text).toContain("permission denied");
+		// The failure is not dressed up as an empty, healthy list.
+		expect(text).not.toContain(t("settings.connectionDockerNone"));
+	});
+
+	test("an empty list is still its own answer", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({ ok: true, containers: [] }),
+		};
+		const host = await openDockerForm();
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		expect(host.textContent ?? "").toContain(t("settings.connectionDockerNone"));
+		expect(host.textContent ?? "").not.toContain(t("settings.connectionDockerListFailed"));
+	});
+
+	test("containers publishing the port are offered with their mapping", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({
+				ok: true,
+				containers: [{ name: "musepi-dev", image: "musepi", hostPort: 8300, containerPort: 8300 }],
+			}),
+		};
+		const host = await openDockerForm();
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		const options = Array.from(host.querySelectorAll("option")).map(option => option.textContent ?? "");
+		expect(options.some(option => option.includes("musepi-dev"))).toBe(true);
+	});
+});

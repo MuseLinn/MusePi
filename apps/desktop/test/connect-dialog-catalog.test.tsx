@@ -99,3 +99,55 @@ describe("workspace wizard host catalog", () => {
 		expect(host.textContent ?? "").toContain("managed-box");
 	});
 });
+
+/**
+ * The daemon-down case, which is the whole reason the desktop reads the catalog
+ * locally: a rejecting `remote.hosts` must still leave a usable host list.
+ */
+describe("workspace wizard when the daemon is down", () => {
+	const failingRpc = {
+		request: async (method: string) => {
+			if (method === "remote.hosts") throw new Error("daemon unreachable");
+			throw new Error(`unexpected ${method}`);
+		},
+	} as never;
+
+	async function renderFailing(): Promise<HTMLElement> {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.add(root);
+		await act(async () => {
+			root.render(
+				<ConnectDialog open onClose={() => {}} rpc={failingRpc} onOpenWorkspace={() => {}} framed={false} />,
+			);
+		});
+		const sshCard = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes("SSH"),
+		);
+		await act(async () => sshCard?.click());
+		const next = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.next")),
+		);
+		await act(async () => {
+			next?.click();
+			await Bun.sleep(20);
+		});
+		return host;
+	}
+
+	test("a rejecting remote.hosts still lists the catalog's hosts", async () => {
+		installBridge();
+		const host = await renderFailing();
+		const text = host.textContent ?? "";
+		// Not a permanent spinner: the hosts read from disk are offered.
+		expect(text).toContain("from-ssh-config");
+		expect(text).toContain("managed-box");
+	});
+
+	test("the failure is still reported, not hidden by the fallback", async () => {
+		installBridge();
+		const host = await renderFailing();
+		expect(host.textContent ?? "").toContain("daemon unreachable");
+	});
+});

@@ -106,6 +106,7 @@ import {
 	localTargetUrl,
 	stripToken,
 } from "./lib/connection/targets";
+import { useHostCatalog } from "./lib/connection/use-host-catalog";
 import { defaultWslRunner } from "./lib/connection/wsl";
 import {
 	daemonMethodProbeParams,
@@ -693,6 +694,14 @@ function AppInner(): ReactNode {
 	 * into one slot would let each overwrite the other's fact.
 	 */
 	const [managedStatuses, setManagedStatuses] = useState<Record<string, ManagedTargetStatus>>({});
+	/**
+	 * The host catalog, read once for this window.
+	 *
+	 * Both surfaces that offer a host — the instance form's picker and the
+	 * workspace wizard's list — read this same value, so they cannot disagree
+	 * about which hosts exist.
+	 */
+	const { catalog: hostCatalog } = useHostCatalog();
 	/** Read once at boot: the supervisor survives a renderer reload, so a
 	 *  reloaded window must adopt the statuses of tunnels still running. */
 	useEffect(() => {
@@ -4704,6 +4713,7 @@ function AppInner(): ReactNode {
 						: undefined
 				}
 				managed={managedStatuses}
+				catalog={hostCatalog}
 				onStartManaged={startManagedTarget}
 				onStopManaged={stopManagedTarget}
 				onConnect={target => void connectToTarget(target)}
@@ -4984,6 +4994,7 @@ function AppInner(): ReactNode {
 					open={connectOpen}
 					onClose={() => setConnectOpen(false)}
 					rpc={rpc}
+					catalog={hostCatalog}
 					onOpenWorkspace={handleOpenRemoteWorkspace}
 				/>
 			</div>
@@ -5656,6 +5667,7 @@ function AppInner(): ReactNode {
 				open={connectOpen}
 				onClose={() => setConnectOpen(false)}
 				rpc={rpc}
+				catalog={hostCatalog}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
 			{/* Avatar-menu entrance: the SAME manager the disconnected and
@@ -5676,6 +5688,7 @@ function AppInner(): ReactNode {
 						busyId={attempting ? attemptTargetId : null}
 						lastError={connectError}
 						managed={managedStatuses}
+						catalog={hostCatalog}
 						onStartManaged={startManagedTarget}
 						onStopManaged={stopManagedTarget}
 						detect={defaultWslRunner}

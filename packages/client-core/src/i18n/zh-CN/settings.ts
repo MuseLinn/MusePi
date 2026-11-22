@@ -7191,6 +7191,7 @@ export const settings = {
 	"settings.connectionCatalogPick": "从 ~/.ssh/config 或 MusePi 选择",
 	"settings.connectionCatalogFromSshConfig": "~/.ssh/config",
 	"settings.connectionContainerPick": "选择容器",
+	"settings.connectionDockerListFailed": "无法读取容器列表",
 	"settings.connectionLoopbackPlaceholder": "ws://127.0.0.1:{port}",
 } as const;
 

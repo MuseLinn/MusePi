@@ -30,7 +30,9 @@ import {
 	managedRowState,
 	managedStartBlocker,
 	shellBridge,
+	targetFromCatalogHost,
 } from "../lib/connection/remote-lifecycle";
+import { catalogEntryFor } from "../lib/connection/ssh-config";
 import { type ConnectionState, showsFailureCopy } from "../lib/connection/state";
 import type { TargetStatusMap } from "../lib/connection/target-store";
 import {
@@ -38,6 +40,7 @@ import {
 	type ConnectionTargetKind,
 	createTarget,
 	DEFAULT_DAEMON_PORT,
+	daemonPortOf,
 	isForwardedKind,
 	stripToken,
 	targetCommand,
@@ -170,7 +173,14 @@ type DockerProbe =
 	| "idle"
 	| "checking"
 	| { state: "unavailable"; reason?: string; error?: string }
-	| { state: "ready"; containers: Array<{ name: string; hostPort: number; containerPort: number }> };
+	| { state: "ready"; containers: Array<{ name: string; hostPort: number; containerPort: number }> }
+	/**
+	 * The daemon answered `docker info` but `docker ps` failed — a socket
+	 * permission problem, typically. Kept apart from `ready` with an empty list
+	 * because "no container publishes this port" and "the list could not be
+	 * read" send the user to different fixes.
+	 */
+	| { state: "list-failed"; error?: string };
 
 const STATUS_LABEL: Record<RowStatus, CopyKey> = {
 	connected: "settings.connectionStatusConnected",
@@ -216,9 +226,9 @@ export function ConnectionManager({
 	/**
 	 * Hosts from the merged catalog (MusePi's ssh.json + `~/.ssh/config`).
 	 *
-	 * Passed in rather than read here: the shell already loads it once for the
-	 * workspace wizard, and two loads would be two answers. An empty list keeps
-	 * the manual form exactly as it was.
+	 * Passed in rather than read here so the instance form and the workspace
+	 * wizard answer from one read (see `useHostCatalog`); an empty list keeps the
+	 * manual form exactly as it was.
 	 */
 	catalog?: readonly CatalogHost[];
 	/**
@@ -268,7 +278,17 @@ export function ConnectionManager({
 			return;
 		}
 		const listed = await bridge.dockerContainers?.(DEFAULT_DAEMON_PORT);
-		setDocker({ state: "ready", containers: listed?.ok ? (listed.containers ?? []) : [] });
+		// A failed list keeps its own reason: rendering it as "no containers"
+		// would drop a socket-permission error the user needs to see.
+		if (!listed) {
+			setDocker({ state: "list-failed" });
+			return;
+		}
+		if (!listed.ok) {
+			setDocker({ state: "list-failed", error: listed.error ?? listed.reason });
+			return;
+		}
+		setDocker({ state: "ready", containers: listed.containers ?? [] });
 	}, []);
 
 	useEffect(() => {
@@ -333,21 +353,39 @@ export function ConnectionManager({
 			setFormError(t("settings.instanceUrlInvalid"));
 			return;
 		}
+		// Editing keeps the row's id (and therefore its status/error and its
+		// last-used marker); creating mints a new one.
+		const id = editingId ?? `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+		/**
+		 * A row picked from the catalog is built from that entry, so the host
+		 * facts come from one place instead of being reassembled from form
+		 * strings. `catalogEntryFor` resolves the draft's own `sshHost` too, which
+		 * is why an edited row keeps matching its entry after the catalog changes.
+		 */
+		const entry =
+			draft.kind === "ssh"
+				? catalogEntryFor({ id, label, url, kind: "ssh", sshHost: draft.sshHost }, catalog)
+				: null;
+		const fromCatalog = entry ? targetFromCatalogHost(entry, daemonPortOf(url)) : null;
 		onAdd(
 			createTarget({
-				// Editing keeps the row's id (and therefore its status/error and
-				// its last-used marker); creating mints a new one.
-				id: editingId ?? `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+				id,
 				label,
 				url,
 				token: draft.token.trim() || undefined,
 				kind: draft.kind,
 				distro: draft.kind === "wsl" ? draft.distro : undefined,
-				sshHost: draft.kind === "ssh" ? draft.sshHost.trim() : undefined,
-				remotePort: draft.kind === "ssh" ? Number.parseInt(draft.remotePort, 10) || undefined : undefined,
-				sshPort: draft.kind === "ssh" ? Number.parseInt(draft.sshPort, 10) || undefined : undefined,
-				proxyJump: draft.kind === "ssh" ? draft.proxyJump.trim() || undefined : undefined,
-				keyPath: draft.kind === "ssh" ? draft.keyPath.trim() || undefined : undefined,
+				sshHost: draft.kind === "ssh" ? (fromCatalog?.sshHost ?? draft.sshHost.trim()) : undefined,
+				remotePort:
+					draft.kind === "ssh"
+						? Number.parseInt(draft.remotePort, 10) || fromCatalog?.remotePort || undefined
+						: undefined,
+				sshPort:
+					draft.kind === "ssh"
+						? Number.parseInt(draft.sshPort, 10) || fromCatalog?.sshPort || undefined
+						: undefined,
+				proxyJump: draft.kind === "ssh" ? draft.proxyJump.trim() || fromCatalog?.proxyJump || undefined : undefined,
+				keyPath: draft.kind === "ssh" ? draft.keyPath.trim() || fromCatalog?.keyPath || undefined : undefined,
 				container: draft.kind === "docker" ? draft.container.trim() : undefined,
 			}),
 		);
@@ -745,6 +783,12 @@ export function ConnectionManager({
 										</select>
 									</>
 								)}
+							{docker !== "checking" && docker !== "idle" && docker.state === "list-failed" && (
+								<p className="gui-conn-note" role="status">
+									{t("settings.connectionDockerListFailed")}
+									{docker.error ? ` — ${docker.error}` : ""}
+								</p>
+							)}
 							{docker !== "checking" &&
 								docker !== "idle" &&
 								docker.state === "ready" &&

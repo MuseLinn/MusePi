@@ -7514,5 +7514,6 @@ export const settings = {
 	"settings.connectionCatalogPick": "Pick one from ~/.ssh/config or MusePi",
 	"settings.connectionCatalogFromSshConfig": "~/.ssh/config",
 	"settings.connectionContainerPick": "Pick a container",
+	"settings.connectionDockerListFailed": "Could not read the container list",
 	"settings.connectionLoopbackPlaceholder": "ws://127.0.0.1:{port}",
 } as const satisfies Record<SettingsKey, string>;

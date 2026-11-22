@@ -111,6 +111,7 @@ export async function connectRemoteHost(params: { name?: unknown }): Promise<Rem
 		username: entry.username,
 		port: entry.port,
 		keyPath: entry.keyPath,
+		proxyJump: entry.proxyJump,
 		compat: entry.compat,
 	};
 	const mountPoint = helpers.getMountPath(target);
@@ -190,6 +191,7 @@ export async function disconnectRemoteHost(params: { name?: unknown }): Promise<
 		username: entry.username,
 		port: entry.port,
 		keyPath: entry.keyPath,
+		proxyJump: entry.proxyJump,
 		compat: entry.compat,
 	};
 	const unmounted = await helpers.unmountRemote(target);
@@ -203,6 +205,7 @@ export async function addRemoteHost(params: {
 	username?: unknown;
 	port?: unknown;
 	keyPath?: unknown;
+	proxyJump?: unknown;
 }): Promise<{ ok: boolean }> {
 	const name = typeof params?.name === "string" ? params.name.trim() : "";
 	const host = typeof params?.host === "string" ? params.host.trim() : "";
@@ -214,6 +217,7 @@ export async function addRemoteHost(params: {
 		...(typeof params.username === "string" && params.username.length > 0 ? { username: params.username } : {}),
 		...(typeof params.port === "number" && params.port > 0 ? { port: params.port } : {}),
 		...(typeof params.keyPath === "string" && params.keyPath.length > 0 ? { keyPath: params.keyPath } : {}),
+		...(typeof params.proxyJump === "string" && params.proxyJump.length > 0 ? { proxyJump: params.proxyJump } : {}),
 	};
 	await writeSSHConfigFile(helpers.sshConfigPath(), config);
 	return { ok: true };

@@ -13,6 +13,8 @@ interface RemoteHostEntry {
 	username?: string;
 	port?: number;
 	keyPath?: string;
+	/** `ProxyJump` chain; carried into the daemon's store so sshfs can use `-J`. */
+	proxyJump?: string;
 	description?: string;
 }
 
@@ -48,12 +50,19 @@ export function ConnectDialog({
 	open,
 	onClose,
 	rpc,
+	catalog: catalogProp,
 	onOpenWorkspace,
 	framed = true,
 }: {
 	open: boolean;
 	onClose(): void;
 	rpc: RpcClient | null;
+	/**
+	 * The host catalog, read once by the shell (`useHostCatalog`) and shared
+	 * with the instance form. Absent only when the caller has none — a test, or
+	 * a host with no bridge — in which case the daemon's list stands alone.
+	 */
+	catalog?: readonly CatalogHost[];
 	onOpenWorkspace(cwd: string): void;
 	/** Embed the same wizard in the instance manager without a nested modal. */
 	framed?: boolean;
@@ -104,11 +113,12 @@ export function ConnectDialog({
 		setDisconnecting(false);
 	}, [open]);
 
-	// The local catalog is independent of the daemon: it is read from disk, so
-	// it loads even when `remote.hosts` fails — which is exactly when a user is
-	// here to set a connection up.
+	// The shell owns the read and shares it with the instance form, so both
+	// surfaces answer from one catalog. A caller that passed none (a test, or a
+	// host with no bridge) falls back to reading it here rather than silently
+	// offering nothing.
 	useEffect(() => {
-		if (!open) return;
+		if (!open || catalogProp !== undefined) return;
 		let cancelled = false;
 		void loadHostCatalog().then(rows => {
 			if (!cancelled) setCatalog(rows);
@@ -116,7 +126,11 @@ export function ConnectDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open]);
+	}, [open, catalogProp]);
+
+	useEffect(() => {
+		if (catalogProp !== undefined) setCatalog([...catalogProp]);
+	}, [catalogProp]);
 
 	/**
 	 * The list this step renders: the daemon's hosts first (they carry the
@@ -126,8 +140,12 @@ export function ConnectDialog({
 	 * daemon's entry is MusePi's own, and the stated precedence is that it wins.
 	 */
 	const mergedHosts = useMemo<RemoteHostEntry[] | null>(() => {
-		if (hosts === null) return null;
-		const known = new Set(hosts.map(host => host.name));
+		// The daemon's answer is authoritative when it arrived. When it did not —
+		// a rejecting `remote.hosts`, which is the daemon-down case this local
+		// read exists for — the catalog still answers, and the error banner says
+		// why. Returning null here would leave a permanent spinner and throw away
+		// the hosts already read from disk.
+		const known = new Set((hosts ?? []).map(host => host.name));
 		const extra: RemoteHostEntry[] = catalog
 			.filter(host => !known.has(host.name))
 			.map(host => ({
@@ -136,8 +154,13 @@ export function ConnectDialog({
 				...(host.username ? { username: host.username } : {}),
 				...(host.port ? { port: host.port } : {}),
 				...(host.keyPath ? { keyPath: host.keyPath } : {}),
+				...(host.proxyJump ? { proxyJump: host.proxyJump } : {}),
 			}));
-		return [...hosts, ...extra];
+		const merged = [...(hosts ?? []), ...extra];
+		// Still null only while neither source has answered: the daemon has not
+		// replied and the local read is in flight.
+		if (hosts === null && catalog.length === 0) return null;
+		return merged;
 	}, [hosts, catalog]);
 
 	// Load the saved-host list when the config step becomes visible.
@@ -221,6 +244,7 @@ export function ConnectDialog({
 					...(entry.username ? { username: entry.username } : {}),
 					...(entry.port ? { port: entry.port } : {}),
 					...(entry.keyPath ? { keyPath: entry.keyPath } : {}),
+					...(entry.proxyJump ? { proxyJump: entry.proxyJump } : {}),
 				});
 			}
 			const res = await rpc.request<ConnectState>("remote.connect", { name: selectedHost });

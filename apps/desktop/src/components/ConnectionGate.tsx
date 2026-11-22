@@ -17,7 +17,7 @@
 
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import type { ManagedTargetStatus } from "../lib/connection/remote-lifecycle";
+import type { CatalogHost, ManagedTargetStatus } from "../lib/connection/remote-lifecycle";
 import { type ConnectionFacts, deriveConnectionState } from "../lib/connection/state";
 import type { TargetStatusMap } from "../lib/connection/target-store";
 import { type ConnectionTarget, stripToken } from "../lib/connection/targets";
@@ -37,6 +37,7 @@ export function ConnectionGate({
 	detect,
 	platform,
 	managed,
+	catalog,
 	onStartManaged,
 	onStopManaged,
 	overlay,
@@ -61,6 +62,8 @@ export function ConnectionGate({
 	platform?: string;
 	/** Managed-process status per target (tunnels, WSL daemons, containers). */
 	managed?: Record<string, ManagedTargetStatus>;
+	/** The merged host catalog, read once by the shell (see useHostCatalog). */
+	catalog?: readonly CatalogHost[];
 	onStartManaged?(target: ConnectionTarget): void;
 	onStopManaged?(target: ConnectionTarget): void;
 	/** Rendered inside the shell, above the gate (boot splash hand-off). */
@@ -84,6 +87,7 @@ export function ConnectionGate({
 				detect={detect}
 				platform={platform}
 				managed={managed}
+				catalog={catalog}
 				onStartManaged={onStartManaged}
 				onStopManaged={onStopManaged}
 				onConnect={onConnect}
