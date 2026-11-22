@@ -23,11 +23,13 @@
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
+	type CatalogHost,
 	hasManagedLifecycle,
 	type ManagedTargetStatus,
 	managedFailureText,
 	managedRowState,
 	managedStartBlocker,
+	shellBridge,
 } from "../lib/connection/remote-lifecycle";
 import { type ConnectionState, showsFailureCopy } from "../lib/connection/state";
 import type { TargetStatusMap } from "../lib/connection/target-store";
@@ -57,6 +59,14 @@ interface Draft {
 	distro: string;
 	sshHost: string;
 	remotePort: string;
+	/** `ssh` — ssh(1)'s own port, when the catalog entry names a non-default one. */
+	sshPort: string;
+	/** `ssh` — `ProxyJump` chain carried from the catalog entry. */
+	proxyJump: string;
+	/** `ssh` — identity file carried from the catalog entry. */
+	keyPath: string;
+	/** Name of the catalog entry the fields were filled from ("" = typed by hand). */
+	catalogName: string;
 	container: string;
 }
 
@@ -68,6 +78,10 @@ const emptyDraft = (kind: ConnectionTargetKind = "manual"): Draft => ({
 	distro: "",
 	sshHost: "",
 	remotePort: String(DEFAULT_DAEMON_PORT),
+	sshPort: "",
+	proxyJump: "",
+	keyPath: "",
+	catalogName: "",
 	container: "",
 });
 
@@ -97,6 +111,10 @@ function draftFromTarget(target: ConnectionTarget): Draft {
 		distro: target.distro ?? "",
 		sshHost: target.sshHost ?? "",
 		remotePort: String(target.remotePort ?? DEFAULT_DAEMON_PORT),
+		sshPort: target.sshPort ? String(target.sshPort) : "",
+		proxyJump: target.proxyJump ?? "",
+		keyPath: target.keyPath ?? "",
+		catalogName: "",
 		container: target.container ?? "",
 	};
 }
@@ -141,6 +159,19 @@ function rowStatus(
 	return status.lastError ? "failed" : "last-used";
 }
 
+/**
+ * What a Docker probe found.
+ *
+ * `unavailable` carries a reason because the two causes need different fixes —
+ * installing the CLI, versus granting the daemon socket or starting it — and a
+ * single "docker did not work" would send the user to the wrong one.
+ */
+type DockerProbe =
+	| "idle"
+	| "checking"
+	| { state: "unavailable"; reason?: string; error?: string }
+	| { state: "ready"; containers: Array<{ name: string; hostPort: number; containerPort: number }> };
+
 const STATUS_LABEL: Record<RowStatus, CopyKey> = {
 	connected: "settings.connectionStatusConnected",
 	connecting: "settings.connectionStatusConnecting",
@@ -158,6 +189,7 @@ export function ConnectionManager({
 	lastError,
 	detect = defaultWslRunner,
 	platform,
+	catalog = [],
 	managed,
 	onStartManaged,
 	onStopManaged,
@@ -182,6 +214,14 @@ export function ConnectionManager({
 	detect?: WslRunner;
 	platform?: string;
 	/**
+	 * Hosts from the merged catalog (MusePi's ssh.json + `~/.ssh/config`).
+	 *
+	 * Passed in rather than read here: the shell already loads it once for the
+	 * workspace wizard, and two loads would be two answers. An empty list keeps
+	 * the manual form exactly as it was.
+	 */
+	catalog?: readonly CatalogHost[];
+	/**
 	 * Managed-process status per target id (tunnels, WSL daemons, containers).
 	 * Beside the list like `statuses`, and derived from the supervisor rather
 	 * than from a connect attempt: a tunnel can die while the shell is idle.
@@ -204,7 +244,37 @@ export function ConnectionManager({
 	const [formError, setFormError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState<string | null>(null);
 	const [wsl, setWsl] = useState<WslDetection | "checking" | "idle">("idle");
+	/**
+	 * Docker detection and the containers publishing the daemon port.
+	 *
+	 * Probed when the Docker kind is first shown, the way WSL detection is: a
+	 * user who never opens the picker never pays for a `docker info` that may
+	 * block on a dead socket. The two answers stay separate, because "the CLI is
+	 * missing" and "the daemon will not answer" lead to different fixes.
+	 */
+	const [docker, setDocker] = useState<DockerProbe>("idle");
 	const showFailure = showsFailureCopy(state);
+
+	const runDockerDetection = useCallback(async (): Promise<void> => {
+		const bridge = shellBridge();
+		if (!bridge?.detectDocker) {
+			setDocker({ state: "unavailable", reason: "no-bridge" });
+			return;
+		}
+		setDocker("checking");
+		const detected = await bridge.detectDocker();
+		if (!detected.available) {
+			setDocker({ state: "unavailable", reason: detected.reason, error: detected.error });
+			return;
+		}
+		const listed = await bridge.dockerContainers?.(DEFAULT_DAEMON_PORT);
+		setDocker({ state: "ready", containers: listed?.ok ? (listed.containers ?? []) : [] });
+	}, []);
+
+	useEffect(() => {
+		if (!adding || draft.kind !== "docker" || docker !== "idle") return;
+		void runDockerDetection();
+	}, [adding, draft.kind, docker, runDockerDetection]);
 
 	const runDetection = useCallback(async (): Promise<void> => {
 		setWsl("checking");
@@ -275,6 +345,9 @@ export function ConnectionManager({
 				distro: draft.kind === "wsl" ? draft.distro : undefined,
 				sshHost: draft.kind === "ssh" ? draft.sshHost.trim() : undefined,
 				remotePort: draft.kind === "ssh" ? Number.parseInt(draft.remotePort, 10) || undefined : undefined,
+				sshPort: draft.kind === "ssh" ? Number.parseInt(draft.sshPort, 10) || undefined : undefined,
+				proxyJump: draft.kind === "ssh" ? draft.proxyJump.trim() || undefined : undefined,
+				keyPath: draft.kind === "ssh" ? draft.keyPath.trim() || undefined : undefined,
 				container: draft.kind === "docker" ? draft.container.trim() : undefined,
 			}),
 		);
@@ -578,6 +651,42 @@ export function ConnectionManager({
 
 					{draft.kind === "ssh" && (
 						<>
+							{catalog.length > 0 && (
+								<label className="gui-field">
+									<span className="gui-field-label">{t("settings.connectionCatalogHost")}</span>
+									<select
+										className="gui-input"
+										value={draft.catalogName}
+										onChange={e => {
+											const entry = catalog.find(host => host.name === e.target.value);
+											setDraft(current =>
+												entry
+													? {
+															...current,
+															catalogName: entry.name,
+															label: current.label || entry.name,
+															sshHost: entry.username ? `${entry.username}@${entry.host}` : entry.host,
+															sshPort: entry.port ? String(entry.port) : "",
+															proxyJump: entry.proxyJump ?? "",
+															keyPath: entry.keyPath ?? "",
+														}
+													: { ...current, catalogName: "" },
+											);
+										}}
+									>
+										<option value="">{t("settings.connectionCatalogPick")}</option>
+										{catalog.map(host => (
+											<option key={host.name} value={host.name}>
+												{host.name}
+												{host.host !== host.name ? ` — ${host.host}` : ""}
+												{host.source === "ssh-config"
+													? ` (${t("settings.connectionCatalogFromSshConfig")})`
+													: ""}
+											</option>
+										))}
+									</select>
+								</label>
+							)}
 							<label className="gui-field">
 								<span className="gui-field-label">{t("settings.connectionSshHost")}</span>
 								<input
@@ -601,15 +710,65 @@ export function ConnectionManager({
 					)}
 
 					{draft.kind === "docker" && (
-						<label className="gui-field">
+						<div className="gui-field">
 							<span className="gui-field-label">{t("settings.connectionContainer")}</span>
+							{docker === "checking" && <p className="gui-conn-note">{t("settings.connectionDetecting")}</p>}
+							{docker !== "checking" && docker !== "idle" && docker.state === "unavailable" && (
+								<p className="gui-conn-note" role="status">
+									{docker.reason === "docker-not-found"
+										? t("settings.connectionDockerNotFound")
+										: docker.reason === "daemon-unreachable"
+											? t("settings.connectionDockerDaemonDown")
+											: t("settings.connectionManagedNoBridge")}
+									{docker.reason === "daemon-unreachable" && docker.error ? ` — ${docker.error}` : ""}
+								</p>
+							)}
+							{docker !== "checking" &&
+								docker !== "idle" &&
+								docker.state === "ready" &&
+								docker.containers.length > 0 && (
+									<>
+										<p className="gui-conn-note" role="status">
+											{t("settings.connectionDockerContainers")}
+										</p>
+										<select
+											className="gui-input font-mono"
+											value={draft.container}
+											onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
+										>
+											<option value="">{t("settings.connectionContainerPick")}</option>
+											{docker.containers.map(container => (
+												<option key={container.name} value={container.name}>
+													{container.name} — 127.0.0.1:{container.hostPort}→{container.containerPort}
+												</option>
+											))}
+										</select>
+									</>
+								)}
+							{docker !== "checking" &&
+								docker !== "idle" &&
+								docker.state === "ready" &&
+								docker.containers.length === 0 && (
+									<p className="gui-conn-note" role="status">
+										{t("settings.connectionDockerNone")}
+									</p>
+								)}
 							<input
 								className="gui-input font-mono"
 								value={draft.container}
 								spellCheck={false}
 								onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
 							/>
-						</label>
+							{docker !== "checking" && (
+								<button
+									type="button"
+									className="gui-btn gui-conn-retry"
+									onClick={() => void runDockerDetection()}
+								>
+									{t("settings.retry")}
+								</button>
+							)}
+						</div>
 					)}
 
 					<label className="gui-field">

@@ -208,7 +208,12 @@ function spawnOwned(record, file, args) {
 	});
 	child.on?.("exit", (code, signal) => {
 		if (record.stopping) {
-			record.status = "stopped";
+			// A teardown never rewrites a verdict that was already reached. The
+			// timeout path marks `failed` and then terminates the child to release
+			// the port; without this guard that exit reports `stopped`, so a
+			// firewall drop, a slow host or WSL2 forwarding being off would read as
+			// "the user pressed stop" and the reason would be lost.
+			if (record.status !== "failed") record.status = "stopped";
 			emit(record);
 			return;
 		}
@@ -458,6 +463,13 @@ async function runContainer(input) {
 /**
  * Start `musepi serve` inside an existing container as an owned child.
  *
+ * Two ports, and they are different: the daemon must bind the port that is
+ * published *inside* the container (`containerPort`), while this shell can only
+ * observe the port the container maps to on the host (`hostPort`). Using the
+ * host port for both — which this did — starts a daemon on a port nothing
+ * publishes, so the poll never succeeds and the failure is misreported as "the
+ * daemon did not start".
+ *
  * `docker exec` is a client process: stopping it ends the client, and the
  * daemon inside the container is expected to exit with its stdio closed. The
  * container itself is never removed — this shell did not create it.
@@ -467,34 +479,38 @@ async function execContainer(input) {
 	const existing = owned.get(key);
 	if (existing && stillOwned(existing)) return { ok: false, reason: "already-running", status: statusOf(existing) };
 	if (existing) owned.delete(key);
-	if (await portOpen(input.port)) {
+	const containerPort = input.containerPort ?? input.port;
+	const hostPort = input.hostPort ?? containerPort;
+	if (await portOpen(hostPort)) {
 		return {
 			ok: false,
 			reason: "port-in-use",
-			error: `127.0.0.1:${input.port} is already listening — this shell did not start it, so it is left alone.`,
+			error: `127.0.0.1:${hostPort} is already listening — this shell did not start it, so it is left alone.`,
 		};
 	}
-	const args = ["exec", input.container, "musepi", "serve", "--port", String(input.port)];
+	const args = ["exec", input.container, "musepi", "serve", "--port", String(containerPort)];
 	const record = {
 		targetId: key,
 		kind: "docker",
 		status: "connecting",
 		startedAt: Date.now(),
 		stderr: [],
-		listeningPort: input.port,
+		listeningPort: hostPort,
 		containerName: input.container,
 	};
 	owned.set(key, record);
 	spawnOwned(record, input.dockerCommand ?? "docker", args);
 	emit(record);
-	const outcome = await waitForPort(input.port, timeouts.daemon, () => record.status !== "failed" && stillOwned(record));
+	const outcome = await waitForPort(hostPort, timeouts.daemon, () => record.status !== "failed" && stillOwned(record));
 	if (record.status === "failed") return { ok: false, reason: "failed", status: statusOf(record) };
 	if (outcome === "open") {
 		record.status = "running";
 		return { ok: true, status: emit(record) };
 	}
 	record.status = "failed";
-	record.error = stderrTail(record) || `docker exec did not open 127.0.0.1:${input.port} in time`;
+	record.error =
+		stderrTail(record) ||
+		`docker exec did not open 127.0.0.1:${hostPort} in time — is container port ${containerPort} published?`;
 	record.stopping = true;
 	terminate(record);
 	return { ok: false, reason: "timeout", status: emit(record) };

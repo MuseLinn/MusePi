@@ -87,7 +87,14 @@ export interface ShellBridge {
 		error?: string;
 	}>;
 	dockerRun?(input: { name: string; port: number; image?: string }): Promise<LifecycleResult>;
-	dockerExec?(input: { id: string; container: string; port: number }): Promise<LifecycleResult>;
+	dockerExec?(input: {
+		id: string;
+		container: string;
+		/** Host side: what the container publishes and the endpoint dials. */
+		port: number;
+		/** Container side: the port the daemon must bind inside. */
+		containerPort?: number;
+	}): Promise<LifecycleResult>;
 	onTargetStatus?(cb: (status: ManagedTargetStatus) => void): () => void;
 }
 

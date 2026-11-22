@@ -4,7 +4,7 @@ import { setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ConnectionManager } from "../src/components/ConnectionManager";
-import type { ManagedTargetStatus } from "../src/lib/connection/remote-lifecycle";
+import type { CatalogHost, ManagedTargetStatus } from "../src/lib/connection/remote-lifecycle";
 import type { ConnectionState } from "../src/lib/connection/state";
 import type { TargetStatusMap } from "../src/lib/connection/target-store";
 import { type ConnectionTarget, createTarget, localTarget } from "../src/lib/connection/targets";
@@ -551,5 +551,89 @@ describe("connection manager managed rows", () => {
 		await expandFirstRow(host);
 		expect(text(host)).toContain(t("settings.connectionManagedNoBridge"));
 		expect(text(host)).toContain("ssh -N");
+	});
+});
+
+/**
+ * The catalog reaching the surface.
+ *
+ * The review's finding was exact: the parser and merge were correct and tested,
+ * and no surface ever read them — so a host the user configured for ssh(1) was
+ * still invisible, which is the gap this mission exists to close. These tests
+ * assert the surface, not the functions: a catalog-only host must be
+ * *selectable* here, and choosing it must carry its facts into the row.
+ */
+describe("connection manager catalog", () => {
+	const catalog: CatalogHost[] = [
+		{ name: "managed-box", host: "managed.example.com", source: "musepi" },
+		{ name: "from-ssh-config", host: "cfg.example.com", username: "me", port: 2222, source: "ssh-config" },
+		{ name: "jump-chain", host: "10.0.0.5", proxyJump: "bastion", source: "ssh-config" },
+	];
+
+	async function openSshForm(host: HTMLElement): Promise<void> {
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		const sshTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(tab =>
+			(tab.textContent ?? "").includes(t("settings.connectionKindSsh")),
+		);
+		await act(async () => sshTab?.click());
+	}
+
+	test("an ssh-config-only host is offered in the instance form", async () => {
+		const host = render({ targets: [localTarget()], catalog });
+		await openSshForm(host);
+		const options = Array.from(host.querySelectorAll("option")).map(option => option.textContent ?? "");
+		expect(options.some(option => option.includes("from-ssh-config"))).toBe(true);
+		// The provenance is visible: the user can tell this came from their own
+		// ssh config rather than from MusePi's store.
+		expect(options.some(option => option.includes(t("settings.connectionCatalogFromSshConfig")))).toBe(true);
+	});
+
+	test("choosing a catalog host fills its facts, and the added target carries them", async () => {
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
+		await openSshForm(host);
+		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
+		expect(select).not.toBeNull();
+		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(select, "from-ssh-config");
+			select?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		expect(added).toHaveLength(1);
+		// The facts the tunnel needs, not just the label.
+		expect(added[0]).toMatchObject({ kind: "ssh", sshHost: "me@cfg.example.com", sshPort: 2222 });
+	});
+
+	test("a ProxyJump entry survives into the added target", async () => {
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
+		await openSshForm(host);
+		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
+		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(select, "jump-chain");
+			select?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		expect(added[0]).toMatchObject({ proxyJump: "bastion" });
+	});
+
+	test("no catalog leaves the manual form exactly as it was", async () => {
+		const host = render({ targets: [localTarget()] });
+		await openSshForm(host);
+		const labels = Array.from(host.querySelectorAll(".gui-field-label")).map(node => node.textContent ?? "");
+		expect(labels).not.toContain(t("settings.connectionCatalogHost"));
+		// The manual host input is still there and still usable.
+		expect(labels).toContain(t("settings.connectionSshHost"));
 	});
 });

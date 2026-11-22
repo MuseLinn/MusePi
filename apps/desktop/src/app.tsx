@@ -2619,7 +2619,14 @@ function AppInner(): ReactNode {
 			return;
 		}
 		if (target.kind === "docker") {
-			void bridge.dockerExec?.({ id: target.id, container: target.container ?? "", port: localPort });
+			// The daemon binds the container-side port; `localPort` is the host side
+			// the container publishes. Same distinction the ssh forward makes.
+			void bridge.dockerExec?.({
+				id: target.id,
+				container: target.container ?? "",
+				port: localPort,
+				containerPort: remoteDaemonPort(target, DEFAULT_PORT),
+			});
 		}
 	}, []);
 	/** Stop only what this shell started; the supervisor refuses the rest. */

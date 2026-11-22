@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { type CatalogHost, loadHostCatalog } from "../lib/connection/remote-lifecycle";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
@@ -36,6 +37,12 @@ interface ConnectState {
  * with cwd = the chosen remote directory. Docker stays a disabled card
  * (no container backend yet); collab-link joining plugs into the same shell
  * later.
+ *
+ * The host list is the daemon's `remote.hosts` merged with the local catalog
+ * (`~/.ssh/config` read through the shell bridge), so a host the user already
+ * configured for ssh(1) is selectable here too. The merge is the same one the
+ * instance form uses — MusePi's own entry wins a name collision — which is why
+ * both surfaces agree about what exists.
  */
 export function ConnectDialog({
 	open,
@@ -76,6 +83,8 @@ export function ConnectDialog({
 	const [browseBusy, setBrowseBusy] = useState(false);
 	const [browseError, setBrowseError] = useState<string | null>(null);
 	const [disconnecting, setDisconnecting] = useState(false);
+	/** Hosts only the local catalog knows (`~/.ssh/config`), merged into the list. */
+	const [catalog, setCatalog] = useState<CatalogHost[]>([]);
 
 	// Reset on open so a previous run never leaks into the next one.
 	useEffect(() => {
@@ -94,6 +103,42 @@ export function ConnectDialog({
 		setBrowseError(null);
 		setDisconnecting(false);
 	}, [open]);
+
+	// The local catalog is independent of the daemon: it is read from disk, so
+	// it loads even when `remote.hosts` fails — which is exactly when a user is
+	// here to set a connection up.
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		void loadHostCatalog().then(rows => {
+			if (!cancelled) setCatalog(rows);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open]);
+
+	/**
+	 * The list this step renders: the daemon's hosts first (they carry the
+	 * settings `remote.connect` will use), then catalog-only hosts.
+	 *
+	 * A name the daemon already returned is skipped rather than duplicated: the
+	 * daemon's entry is MusePi's own, and the stated precedence is that it wins.
+	 */
+	const mergedHosts = useMemo<RemoteHostEntry[] | null>(() => {
+		if (hosts === null) return null;
+		const known = new Set(hosts.map(host => host.name));
+		const extra: RemoteHostEntry[] = catalog
+			.filter(host => !known.has(host.name))
+			.map(host => ({
+				name: host.name,
+				host: host.host,
+				...(host.username ? { username: host.username } : {}),
+				...(host.port ? { port: host.port } : {}),
+				...(host.keyPath ? { keyPath: host.keyPath } : {}),
+			}));
+		return [...hosts, ...extra];
+	}, [hosts, catalog]);
 
 	// Load the saved-host list when the config step becomes visible.
 	useEffect(() => {
@@ -162,6 +207,22 @@ export function ConnectDialog({
 		setConnecting(true);
 		setConnectError(null);
 		try {
+			// `remote.connect` resolves the host from the daemon's own ssh.json, so
+			// a host only `~/.ssh/config` knows about must be registered first or
+			// the mount fails with "Host not found" for a host the user can plainly
+			// see. Registering is idempotent by name and writes the daemon's store,
+			// which is the same slot `remote.hosts` reads.
+			const entry = mergedHosts?.find(host => host.name === selectedHost);
+			const known = hosts?.some(host => host.name === selectedHost) ?? false;
+			if (entry && !known) {
+				await rpc.request("remote.hostAdd", {
+					name: entry.name,
+					host: entry.host,
+					...(entry.username ? { username: entry.username } : {}),
+					...(entry.port ? { port: entry.port } : {}),
+					...(entry.keyPath ? { keyPath: entry.keyPath } : {}),
+				});
+			}
 			const res = await rpc.request<ConnectState>("remote.connect", { name: selectedHost });
 			setConnected(res);
 			setStep(3);
@@ -296,7 +357,7 @@ export function ConnectDialog({
 									{t("settings.sshfsMissingHint")}
 								</div>
 							)}
-							{hosts === null ? (
+							{mergedHosts === null ? (
 								<div className="flex flex-1 items-center justify-center">
 									<Icon name="loader" className="h-6 w-6 animate-spin" />
 								</div>
@@ -380,13 +441,13 @@ export function ConnectDialog({
 								</div>
 							) : (
 								<div className="flex min-h-0 flex-1 flex-col">
-									{hosts.length === 0 ? (
+									{mergedHosts.length === 0 ? (
 										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">
 											{t("settings.noSavedHosts")}
 										</p>
 									) : (
 										<FadeScroll className="max-h-56 min-h-0 overflow-y-auto pr-1">
-											{hosts.map(h => (
+											{mergedHosts.map(h => (
 												<button
 													key={h.name}
 													type="button"

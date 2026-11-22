@@ -4078,6 +4078,18 @@ remoteTargets.onStatus(status => {
 	mainWindow.webContents.send("remote-target-status", status);
 });
 
+/**
+ * A container or image name is passed to `docker` as an argv element, so a value
+ * beginning with "-" would be read as an option rather than a name. This is the
+ * same refusal `targetInput` and the WSL handler already apply to a destination
+ * and a distribution; docker's commands were the inconsistent pair.
+ */
+function cliName(value, max = 256) {
+	const name = typeof value === "string" ? value.trim() : "";
+	if (!name || name.startsWith("-") || name.length > max) return null;
+	return name;
+}
+
 /** Validate the renderer's target payload before any process sees it. */
 function targetInput(raw) {
 	const input = raw && typeof raw === "object" ? raw : {};
@@ -4125,25 +4137,27 @@ ipcMain.handle("remote-docker-containers", async (_event, daemonPort) => {
 
 ipcMain.handle("remote-docker-run", async (_event, raw) => {
 	const input = raw && typeof raw === "object" ? raw : {};
-	const name = typeof input.name === "string" ? input.name.trim() : "";
+	const name = cliName(input.name);
 	const port = Number(input.port);
-	if (!name || !Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, reason: "invalid-input" };
-	return remoteTargets.runContainer({
-		name,
-		port,
-		image: typeof input.image === "string" && input.image.trim() ? input.image.trim() : undefined,
-	});
+	const image = input.image === undefined ? undefined : cliName(input.image);
+	if (!name || (input.image !== undefined && !image)) return { ok: false, reason: "invalid-input" };
+	if (!Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, reason: "invalid-input" };
+	return remoteTargets.runContainer({ name, port, image });
 });
 
 ipcMain.handle("remote-docker-exec", async (_event, raw) => {
 	const input = raw && typeof raw === "object" ? raw : {};
-	const container = typeof input.container === "string" ? input.container.trim() : "";
+	const container = cliName(input.container);
 	const targetId = typeof input.id === "string" ? input.id.trim() : "";
+	// Two ports: the daemon binds the container-side port, and the container
+	// publishes it on the host. `port` is the host side (what the endpoint dials).
 	const port = Number(input.port);
-	if (!container || !targetId || !Number.isInteger(port) || port <= 0 || port > 65535) {
-		return { ok: false, reason: "invalid-input" };
+	const containerPort = input.containerPort === undefined ? port : Number(input.containerPort);
+	if (!container || !targetId) return { ok: false, reason: "invalid-input" };
+	for (const value of [port, containerPort]) {
+		if (!Number.isInteger(value) || value <= 0 || value > 65535) return { ok: false, reason: "invalid-input" };
 	}
-	return remoteTargets.execContainer({ targetId, container, port });
+	return remoteTargets.execContainer({ targetId, container, hostPort: port, containerPort });
 });
 
 ipcMain.handle("remote-wsl-start", async (_event, raw) => {
@@ -4188,18 +4202,24 @@ ipcMain.handle("remote-ssh-config", () => {
 });
 
 /**
- * MusePi's own host catalog — `ssh.json` in the data root, the same file the
- * daemon's `remote.hosts` reads.
+ * MusePi's own host catalog — the file the daemon's `remote.hosts` and
+ * `remote.hostAdd` read.
+ *
+ * The path is the daemon's, not a sibling: `getSSHConfigPath("user")` resolves
+ * to `<agentDir>/ssh.json`, i.e. `~/.musepi/agent/ssh.json`, and `agentDir`
+ * follows `PI_CONFIG_DIR` (which `currentDataRoot()` also honours). Reading the
+ * data root's own `ssh.json` instead — as this first did — named a file nothing
+ * ever writes, so the two halves would have disagreed about which hosts exist.
  *
  * Read here as well because the connection manager is shown precisely when the
  * daemon is *not* reachable: the ssh-config half of the catalog is a local file
- * too, so both halves stay available while the wizard's RPC does not. This is
- * the same slot, not a second store; a malformed file is an empty list so one
- * bad edit cannot take the form away.
+ * too, so both halves stay available while the wizard's RPC does not. Same
+ * file, not a second store; a malformed file is an empty list so one bad edit
+ * cannot take the form away.
  */
 function readMusepiSshHosts() {
 	try {
-		const file = path.join(currentDataRoot(), "ssh.json");
+		const file = path.join(currentDataRoot(), "agent", "ssh.json");
 		const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
 		const hosts = parsed && typeof parsed === "object" ? parsed.hosts : null;
 		if (!hosts || typeof hosts !== "object") return [];

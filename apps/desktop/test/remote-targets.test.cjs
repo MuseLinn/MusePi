@@ -248,6 +248,41 @@ describe("ssh tunnel lifecycle", () => {
 		expect(await targets.stopTarget("someone-elses")).toEqual({ ok: true, stopped: false, reason: "not-owned" });
 	});
 
+	it("a timeout stays failed with its reason, not a deliberate stop", async () => {
+		// The defect this pins: the timeout path marks `failed`, then terminates
+		// the child to release the port, and the exit handler used to see
+		// `stopping` and rewrite the status to `stopped`. A firewall drop, a slow
+		// host or WSL2 forwarding off would then read as "the user pressed stop"
+		// and the reason would be lost.
+		const port = await freePort();
+		// Never binds, never exits: only the timeout can end this.
+		const fakes = useFakes({ ssh: "setTimeout(() => {}, 60000);" });
+		targets.resetForTests({
+			spawn: (file, args, options) =>
+				spawn(process.execPath, [path.join(fakes.dir, `${path.basename(file, ".sh")}.js`), ...args], options),
+			sshTimeoutMs: 400,
+			daemonTimeoutMs: 400,
+			terminateGraceMs: 200,
+		});
+		const result = await targets.startSshTunnel({
+			id: "timeout",
+			localPort: port,
+			remotePort: 8300,
+			destination: "me@host",
+			sshCommand: fakes.command("ssh"),
+		});
+		expect(result.ok).toBe(false);
+		expect(result.reason).toBe("timeout");
+		// The terminal status is the verdict, and it survives the teardown.
+		expect(result.status.status).toBe("failed");
+		expect(result.status.error).toContain("did not open");
+		// Let the exit handler run; it must not overwrite the verdict.
+		await new Promise(resolve => setTimeout(resolve, 600));
+		const after = targets.listTargets().find(row => row.targetId === "timeout");
+		expect(after?.status).toBe("failed");
+		expect(after?.error).toContain("did not open");
+	});
+
 	it("marks a tunnel that dies after starting as failed with its reason", async () => {
 		const port = await freePort();
 		const fakes = useFakes({
@@ -347,6 +382,26 @@ describe("docker", () => {
 			"run -d --name musepi-dev -p 127.0.0.1:8300:8300 musepi",
 			"rm -f musepi-dev",
 		]);
+	});
+
+	it("execs the daemon on the container-side port, polling the published host port", async () => {
+		// The daemon binds inside the container; the shell can only observe the
+		// host port the container publishes. Using the host port for both starts a
+		// daemon nothing can reach.
+		const containerPort = await freePort();
+		const hostPort = await freePort();
+		const scratch = tmpDir();
+		const fakes = useFakes({ docker: LOG_ARGV(scratch) + BIND(hostPort) });
+		const exec = await targets.execContainer({
+			targetId: "d2",
+			container: "theirs",
+			hostPort,
+			containerPort,
+			dockerCommand: fakes.command("docker"),
+		});
+		expect(exec.ok).toBe(true);
+		expect(readArgvLog(scratch)[0]).toBe(`exec theirs musepi serve --port ${containerPort}`);
+		expect(readArgvLog(scratch)[0]).not.toContain(`--port ${hostPort}`);
 	});
 
 	it("never removes a container it merely exec'd into", async () => {
