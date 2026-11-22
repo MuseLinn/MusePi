@@ -62,6 +62,7 @@ import {
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
+import type { CompactionThresholdView } from "./composer/auto-compact-threshold";
 import { attachmentChipActions } from "./composer/chip-actions";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
@@ -232,6 +233,20 @@ export interface SessionComposerProps {
 }
 
 type ComposerKeyEvent = globalThis.KeyboardEvent & { nativeEvent?: { isComposing?: boolean } };
+
+/** One `session.contextUsage` answer: usage ring, /context card, and the
+ *  auto-compaction threshold control all read this shape. */
+type ContextUsageSnapshot = {
+	tokens: number;
+	contextWindow: number;
+	percent: number;
+	model?: string | null;
+	snapcompact?: SnapcompactSavingsView | null;
+	breakdown?: ContextBreakdownView | null;
+	usage?: UsageSummaryView | null;
+	autoCompactBufferTokens?: number;
+	freeTokens?: number;
+} & CompactionThresholdView;
 
 function shouldSubmitOnEnter(e: ComposerKeyEvent, composing: boolean): boolean {
 	if (e.key !== "Enter") return false;
@@ -585,33 +600,13 @@ export function SessionComposer({
 	const { designStyle, pickDesignStyle } = useSessionDesignSystem(rpc, sessionId, isDesignSession);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
-	const [contextUsage, setContextUsage] = useState<{
-		tokens: number;
-		contextWindow: number;
-		percent: number;
-		model?: string | null;
-		snapcompact?: SnapcompactSavingsView | null;
-		breakdown?: ContextBreakdownView | null;
-		usage?: UsageSummaryView | null;
-		thresholdTokens?: number | null;
-	} | null>(null);
+	const [contextUsage, setContextUsage] = useState<ContextUsageSnapshot | null>(null);
 	// Shared by the 3s poll and the model-switch immediate refresh — the
 	// ring/card must follow a model change without waiting for the next tick.
 	const refreshUsage = useCallback((): void => {
 		if (!rpc || !sessionId) return;
 		void rpc
-			.request<{
-				tokens: number;
-				contextWindow: number;
-				percent: number;
-				model?: string | null;
-				snapcompact?: SnapcompactSavingsView | null;
-				breakdown?: ContextBreakdownView | null;
-				usage?: UsageSummaryView | null;
-				autoCompactBufferTokens?: number;
-				freeTokens?: number;
-				thresholdTokens?: number | null;
-			} | null>("session.contextUsage", {
+			.request<ContextUsageSnapshot | null>("session.contextUsage", {
 				sessionId,
 			})
 			.then(usage => {
@@ -639,6 +634,11 @@ export function SessionComposer({
 						prev.contextWindow === usage.contextWindow &&
 						prev.model === usage.model &&
 						prev.thresholdTokens === usage.thresholdTokens &&
+						prev.thresholdPercent === usage.thresholdPercent &&
+						prev.thresholdMode === usage.thresholdMode &&
+						prev.thresholdScope === usage.thresholdScope &&
+						prev.thresholdValuePercent === usage.thresholdValuePercent &&
+						prev.thresholdModelKey === usage.thresholdModelKey &&
 						usageSame &&
 						prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
 						? prev
@@ -731,6 +731,93 @@ export function SessionComposer({
 	}, [rpc, sessionId]);
 	/** Compaction in flight: manual RPC pending OR daemon reports it (auto). */
 	const compacting = compactBusy || modes?.isCompacting === true;
+
+	// ── Auto-compaction threshold (percent of the context window) ─────────
+	// The context popover writes the layer that actually governs this
+	// session: its per-model percentage entry when one is in force,
+	// otherwise the global percent. A fixed token trigger (`fN` /
+	// compaction.thresholdTokens) is replaced explicitly, never silently.
+	const [thresholdBusy, setThresholdBusy] = useState(false);
+	const [thresholdError, setThresholdError] = useState<string | null>(null);
+	const thresholdScope = contextUsage?.thresholdScope ?? null;
+	const thresholdModelKey = contextUsage?.thresholdModelKey ?? null;
+
+	const readModelThresholds = useCallback(async (): Promise<Record<string, number | string | null>> => {
+		if (!rpc) return {};
+		const values = await rpc.request<Record<string, unknown>>("settings.get", {
+			keys: ["compaction.modelThresholds"],
+		});
+		const raw = values?.["compaction.modelThresholds"];
+		return raw && typeof raw === "object" && !Array.isArray(raw)
+			? (raw as Record<string, number | string | null>)
+			: {};
+	}, [rpc]);
+
+	const runThresholdWrite = useCallback(
+		(write: (rpc: RpcClient) => Promise<unknown>): void => {
+			if (!rpc) return;
+			setThresholdBusy(true);
+			setThresholdError(null);
+			void write(rpc)
+				.catch((failure: unknown) => {
+					setThresholdError(failure instanceof Error ? failure.message : String(failure));
+				})
+				.finally(() => {
+					setThresholdBusy(false);
+					refreshUsage();
+				});
+		},
+		[refreshUsage, rpc],
+	);
+
+	const writeThresholdPercent = useCallback(
+		(percent: number): void => {
+			runThresholdWrite(async client => {
+				if (thresholdScope === "model" && thresholdModelKey) {
+					const current = await readModelThresholds();
+					await client.request("settings.set", {
+						key: "compaction.modelThresholds",
+						value: { ...current, [thresholdModelKey]: `${percent}%` },
+					});
+					return;
+				}
+				await client.request("settings.set", { key: "compaction.thresholdPercent", value: percent });
+			});
+		},
+		[readModelThresholds, runThresholdWrite, thresholdModelKey, thresholdScope],
+	);
+
+	const resetThresholdPercent = useCallback((): void => {
+		runThresholdWrite(async client => {
+			if (thresholdScope === "model" && thresholdModelKey) {
+				const current = await readModelThresholds();
+				await client.request("settings.set", {
+					key: "compaction.modelThresholds",
+					value: { ...current, [thresholdModelKey]: null },
+				});
+				return;
+			}
+			await client.request("settings.set", { key: "compaction.thresholdPercent", value: -1 });
+		});
+	}, [readModelThresholds, runThresholdWrite, thresholdModelKey, thresholdScope]);
+
+	const switchThresholdToPercent = useCallback(
+		(percent: number): void => {
+			runThresholdWrite(async client => {
+				if (thresholdScope === "model" && thresholdModelKey) {
+					const current = await readModelThresholds();
+					await client.request("settings.set", {
+						key: "compaction.modelThresholds",
+						value: { ...current, [thresholdModelKey]: `${percent}%` },
+					});
+					return;
+				}
+				await client.request("settings.set", { key: "compaction.thresholdTokens", value: -1 });
+				await client.request("settings.set", { key: "compaction.thresholdPercent", value: percent });
+			});
+		},
+		[readModelThresholds, runThresholdWrite, thresholdModelKey, thresholdScope],
+	);
 
 	// ── Provider subscription quota (TUI /usage parity) ───────────────────
 	// Fetched lazily by the ContextRing popover (hover/focus); converts the
@@ -883,17 +970,7 @@ export function SessionComposer({
 	const [contextPanel, setContextPanel] = useState<{
 		open: boolean;
 		loading: boolean;
-		data: {
-			tokens: number;
-			contextWindow: number;
-			percent: number;
-			model?: string | null;
-			snapcompact?: SnapcompactSavingsView | null;
-			breakdown?: ContextBreakdownView | null;
-			usage?: UsageSummaryView | null;
-			autoCompactBufferTokens?: number;
-			freeTokens?: number;
-		} | null;
+		data: ContextUsageSnapshot | null;
 	} | null>(null);
 	const openContextPanel = useCallback((): void => {
 		if (!rpc || !sessionId) {
@@ -903,17 +980,7 @@ export function SessionComposer({
 		setUsagePanel(s => ({ ...s, open: false }));
 		setContextPanel({ open: true, loading: true, data: null });
 		void rpc
-			.request<{
-				tokens: number;
-				contextWindow: number;
-				percent: number;
-				model?: string | null;
-				snapcompact?: SnapcompactSavingsView | null;
-				breakdown?: ContextBreakdownView | null;
-				usage?: UsageSummaryView | null;
-				autoCompactBufferTokens?: number;
-				freeTokens?: number;
-			} | null>("session.contextUsage", { sessionId })
+			.request<ContextUsageSnapshot | null>("session.contextUsage", { sessionId })
 			.then(usage => {
 				setContextPanel(s => (s?.open ? { open: true, loading: false, data: usage } : s));
 			})
@@ -2042,6 +2109,11 @@ export function SessionComposer({
 						<ContextUsageCard
 							data={contextPanel.data}
 							loading={contextPanel.loading}
+							thresholdBusy={thresholdBusy}
+							thresholdError={thresholdError}
+							onThresholdChange={writeThresholdPercent}
+							onThresholdReset={resetThresholdPercent}
+							onThresholdSwitchToPercent={switchThresholdToPercent}
 							onClose={() => setContextPanel(s => (s ? { ...s, open: false } : s))}
 						/>,
 					)
@@ -2391,7 +2463,12 @@ export function SessionComposer({
 								percent={contextUsage.percent}
 								tokens={contextUsage.tokens}
 								contextWindow={contextUsage.contextWindow}
-								thresholdTokens={contextUsage.thresholdTokens ?? null}
+								threshold={contextUsage}
+								thresholdBusy={thresholdBusy}
+								thresholdError={thresholdError}
+								onThresholdChange={writeThresholdPercent}
+								onThresholdReset={resetThresholdPercent}
+								onThresholdSwitchToPercent={switchThresholdToPercent}
 								onCompact={compactContext}
 								compacting={compacting}
 								compactFailed={compactFailed}

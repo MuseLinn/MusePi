@@ -3,8 +3,10 @@ import { SlidingNumber } from "@musepi/client-core/src/lib/sliding-number";
 import { CountUp } from "@musepi/client-core/src/widgets/count-up";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
+import { formatTokenCount } from "../lib/format-tokens";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
+import { AutoCompactThresholdControl, type CompactionThresholdView } from "./composer/auto-compact-threshold";
 
 /** Snapcompact wire-savings estimate (TUI /context parity) — wire shape
  *  of `SnapcompactSavingsEstimate` served by session.contextUsage. */
@@ -87,7 +89,12 @@ export function ContextRing({
 	percent,
 	tokens,
 	contextWindow,
-	thresholdTokens = null,
+	threshold = null,
+	thresholdBusy = false,
+	thresholdError = null,
+	onThresholdChange,
+	onThresholdReset,
+	onThresholdSwitchToPercent,
 	onCompact,
 	compacting = false,
 	compactFailed = false,
@@ -98,10 +105,15 @@ export function ContextRing({
 	percent: number | null | undefined;
 	tokens: number | null | undefined;
 	contextWindow: number | null | undefined;
-	/** Effective auto-compaction threshold (issue #42) — when set, the ring
-	 * fills against the THRESHOLD (that's when compaction fires), not the
-	 * physical window. */
-	thresholdTokens?: number | null | undefined;
+	/** Effective auto-compaction policy (issue #42): when a threshold is in
+	 * force the ring fills against it (that's when compaction fires), not the
+	 * physical window. The same shape drives the popover's percent control. */
+	threshold?: CompactionThresholdView | null;
+	thresholdBusy?: boolean;
+	thresholdError?: string | null;
+	onThresholdChange?(percent: number): void;
+	onThresholdReset?(): void;
+	onThresholdSwitchToPercent?(percent: number): void;
 	/** Shows a "压缩上下文" button in the popover (TUI /compact parity). */
 	onCompact?: () => void;
 	/** Compaction in flight — disables the action and shows progress. */
@@ -145,6 +157,7 @@ export function ContextRing({
 		};
 	}, [open, fetchQuota]);
 
+	const thresholdTokens = threshold?.thresholdTokens ?? null;
 	const pct = percent ?? 0;
 	// Ring benchmark (issue #42): a configured soft cap is the operative
 	// limit — compaction fires AT the threshold, so the arc/tone fill
@@ -170,13 +183,6 @@ export function ContextRing({
 	// a glass icon (that reading was the earlier miss).
 	const gradId = `ctx-ring-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 	const strokeWidth = 3.4;
-
-	const fmtTokens = (n: number | null | undefined): string => {
-		if (n == null) return "—";
-		if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-		if (n >= 1000) return `${Math.round(n / 1000)}K`;
-		return String(n);
-	};
 
 	return (
 		<div className="gui-context-ring" ref={anchorRef}>
@@ -226,19 +232,13 @@ export function ContextRing({
 					<div className="gui-context-pop-row">
 						<span>{t("general.used")}</span>
 						<span className="gui-context-pop-val">
-							{tokens != null ? <CountUp value={tokens} format={fmtTokens} /> : "—"}
+							{tokens != null ? <CountUp value={tokens} format={formatTokenCount} /> : "—"}
 						</span>
 					</div>
 					<div className="gui-context-pop-row">
 						<span>{t("general.window")}</span>
 						<span className="gui-context-pop-val">
-							{contextWindow != null ? <CountUp value={contextWindow} format={fmtTokens} /> : "—"}
-						</span>
-					</div>
-					<div className="gui-context-pop-row">
-						<span>{t("general.autoCompactThreshold")}</span>
-						<span className="gui-context-pop-val">
-							{thresholdTokens != null ? <CountUp value={thresholdTokens} format={fmtTokens} /> : "—"}
+							{contextWindow != null ? <CountUp value={contextWindow} format={formatTokenCount} /> : "—"}
 						</span>
 					</div>
 					<div className="gui-context-pop-row">
@@ -247,6 +247,16 @@ export function ContextRing({
 							<SlidingNumber value={Math.round(effPct)} />%
 						</span>
 					</div>
+					{threshold && onThresholdChange && (
+						<AutoCompactThresholdControl
+							view={threshold}
+							busy={thresholdBusy}
+							error={thresholdError}
+							onChange={onThresholdChange}
+							onReset={onThresholdReset ?? (() => {})}
+							onSwitchToPercent={onThresholdSwitchToPercent ?? (() => {})}
+						/>
+					)}
 					{/* Prompt-cache hit rate + session spend (issue #8, TUI
 					 *  `cache_hit` status-line parity). A silent cache miss
 					 *  otherwise just reads as "the model got slower and more
@@ -265,7 +275,7 @@ export function ContextRing({
 					)}
 					{usage != null && usage.cacheRead > 0 && (
 						<div className="gui-context-pop-note">
-							{t("general.cacheReadTokens")} {fmtTokens(usage.cacheRead)}
+							{t("general.cacheReadTokens")} {formatTokenCount(usage.cacheRead)}
 						</div>
 					)}
 					{pct > 100 && (
@@ -278,7 +288,7 @@ export function ContextRing({
 							<div className="gui-context-pop-row">
 								<span>{t("context.snapcompactSavings")}</span>
 								<span className="gui-context-pop-val">
-									{snapcompact.visionCapable ? `~${fmtTokens(snapcompact.savedTokens)}` : "—"}
+									{snapcompact.visionCapable ? `~${formatTokenCount(snapcompact.savedTokens)}` : "—"}
 								</span>
 							</div>
 							{!snapcompact.visionCapable ? (
@@ -289,9 +299,9 @@ export function ContextRing({
 										<div className="gui-context-pop-note">
 											{snapcompact.systemPrompt.applied
 												? t("context.systemPromptImagedTextWithTextWithFramesWithSaved", {
-														text: fmtTokens(snapcompact.systemPrompt.textTokens),
+														text: formatTokenCount(snapcompact.systemPrompt.textTokens),
 														frames: String(snapcompact.systemPrompt.frames),
-														saved: fmtTokens(snapcompact.systemPrompt.savedTokens),
+														saved: formatTokenCount(snapcompact.systemPrompt.savedTokens),
 													})
 												: t("context.systemPromptStaysTextWithReason", {
 														reason: t(
@@ -308,7 +318,7 @@ export function ContextRing({
 										<div className="gui-context-pop-note">
 											{t("context.toolResultsImagedWithImagedWithSaved", {
 												imaged: String(snapcompact.toolResults.swapped),
-												saved: fmtTokens(snapcompact.toolResults.savedTokens),
+												saved: formatTokenCount(snapcompact.toolResults.savedTokens),
 											})}
 										</div>
 									)}

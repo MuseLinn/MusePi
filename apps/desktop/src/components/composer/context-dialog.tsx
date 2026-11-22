@@ -1,15 +1,10 @@
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import type { ContextBreakdownView } from "../../lib/context-command";
+import { formatTokenCount } from "../../lib/format-tokens";
 import { Icon } from "../../vendor/oc-icons";
 import { formatSpend, type SnapcompactSavingsView, type UsageSummaryView } from "../ContextRing";
-
-/** Compact token count (K/M) for the context dialog. */
-function fmtTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1000) return `${Math.round(n / 1000)}K`;
-	return String(n);
-}
+import { AutoCompactThresholdControl, type CompactionThresholdView } from "./auto-compact-threshold";
 
 /** Snapcompact wire-savings detail lines (TUI /context legend parity):
  *  per-source savings when the model is vision-capable. `usedTokens` feeds
@@ -23,9 +18,9 @@ function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number
 			<div className="gui-context-snap-line" key="sp">
 				{sp.applied
 					? t("context.systemPromptImagedTextWithTextWithFramesWithSaved", {
-							text: fmtTokens(sp.textTokens),
+							text: formatTokenCount(sp.textTokens),
 							frames: String(sp.frames),
-							saved: fmtTokens(sp.savedTokens),
+							saved: formatTokenCount(sp.savedTokens),
 						})
 					: t("context.systemPromptStaysTextWithReason", {
 							reason: t(
@@ -46,7 +41,7 @@ function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number
 				{tr.swapped > 0
 					? t("context.toolResultsImagedWithImagedWithSaved", {
 							imaged: String(tr.swapped),
-							saved: fmtTokens(tr.savedTokens),
+							saved: formatTokenCount(tr.savedTokens),
 						})
 					: t("context.toolResultsNoneImagedWithTotal", { total: String(tr.total) })}
 			</div>,
@@ -56,7 +51,7 @@ function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number
 		lines.push(
 			<div className="gui-context-snap-line" key="next">
 				{t("context.nextRequestTokensWithTokens.info", {
-					tokens: fmtTokens(Math.max(0, usedTokens - snap.savedTokens)),
+					tokens: formatTokenCount(Math.max(0, usedTokens - snap.savedTokens)),
 				})}
 			</div>,
 		);
@@ -83,7 +78,7 @@ function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number
 					{t(label as never)}
 				</span>
 				<span className="gui-context-cat-pct">
-					{fmtTokens(tokens)} tokens · {percent.toFixed(1)}%
+					{formatTokenCount(tokens)} tokens · {percent.toFixed(1)}%
 				</span>
 			</div>
 			<div className="gui-usage-bar-track">
@@ -169,7 +164,7 @@ function renderContextGrid(breakdown: ContextBreakdownView, autoCompactBufferTok
 
 /** Wire shape of the session.contextUsage response driving the /context
  *  card (contextWindow + per-category breakdown + snapcompact savings). */
-export interface ContextUsageData {
+export interface ContextUsageData extends CompactionThresholdView {
 	tokens: number;
 	contextWindow: number;
 	percent: number;
@@ -187,10 +182,20 @@ export interface ContextUsageData {
 export function ContextUsageCard({
 	data,
 	loading,
+	thresholdBusy = false,
+	thresholdError = null,
+	onThresholdChange,
+	onThresholdReset,
+	onThresholdSwitchToPercent,
 	onClose,
 }: {
 	data: ContextUsageData | null;
 	loading: boolean;
+	thresholdBusy?: boolean;
+	thresholdError?: string | null;
+	onThresholdChange?(percent: number): void;
+	onThresholdReset?(): void;
+	onThresholdSwitchToPercent?(percent: number): void;
 	onClose(): void;
 }): ReactNode {
 	return (
@@ -207,11 +212,21 @@ export function ContextUsageCard({
 					<div className="gui-context-summary">
 						<span className="gui-context-summary-tokens">
 							{t("general.contextWindowWithTokensWithPercent", {
-								tokens: fmtTokens(data.contextWindow),
+								tokens: formatTokenCount(data.contextWindow),
 								percent: `${Math.round(data.percent)}%`,
 							})}
 						</span>
 					</div>
+					{onThresholdChange && (
+						<AutoCompactThresholdControl
+							view={data}
+							busy={thresholdBusy}
+							error={thresholdError}
+							onChange={onThresholdChange}
+							onReset={onThresholdReset ?? (() => {})}
+							onSwitchToPercent={onThresholdSwitchToPercent ?? (() => {})}
+						/>
+					)}
 					{data.breakdown && renderContextGrid(data.breakdown, data.autoCompactBufferTokens ?? 0)}
 					{data.usage && (data.usage.cacheHitRate != null || data.usage.cost > 0) && (
 						<div className="gui-context-snap">

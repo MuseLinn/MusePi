@@ -12,10 +12,11 @@
  *   time, so there is nothing to invalidate.
  */
 
-import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
+import { effectiveReserveTokens } from "@musepi/pi-agent-core/compaction";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { deriveWindowStats } from "@musepi/pi-wire";
 import { cacheHitRate } from "../../modes/utils/cache-hit";
+import { projectCompactionThreshold } from "../../session/compaction-threshold-view";
 import type { DaemonSessionHost } from "../session-host";
 import { estimateSnapcompactSavings } from "../session-host";
 import type { DaemonService } from "./types";
@@ -63,22 +64,31 @@ export class SessionInspectionService implements DaemonService {
 		const used = breakdown?.usedTokens ?? usage.tokens;
 		let autoCompactBufferTokens = 0;
 		let freeTokens = 0;
-		// Effective compaction threshold in force (issue #42): when
-		// the user configured a custom soft cap (e.g.
-		// compaction.thresholdTokens: 300_000), every frontend usage
-		// display can use it as the ring/status denominator instead
-		// of the physical context window.
+		// Effective compaction threshold in force (issue #42): the GUI
+		// renders it as a percentage of the window so one setting keeps
+		// working across models with different context lengths. The
+		// per-model `compaction.modelThresholds` entry is applied here —
+		// the popover must describe the policy this session actually
+		// runs, not the global setting behind an override.
 		let thresholdTokens: number | null = null;
+		let thresholdPercent: number | null = null;
+		let thresholdMode: "auto" | "percent" | "fixed" | null = null;
+		let thresholdScope: "global" | "model" | null = null;
+		let thresholdValuePercent: number | null = null;
+		let thresholdModelKey: string | null = null;
 		if (cw > 0) {
-			const comp = live.agentSession.settings.getGroup("compaction") as
-				| { enabled?: boolean; strategy?: string }
-				| undefined;
-			if (comp?.enabled && comp.strategy !== "off") {
-				const threshold = resolveThresholdTokens(cw, comp as Parameters<typeof resolveThresholdTokens>[1]);
-				thresholdTokens = threshold > 0 ? threshold : null;
-				autoCompactBufferTokens = Math.max(0, cw - threshold);
+			const comp = live.agentSession.settings.getGroup("compaction");
+			const projection = projectCompactionThreshold(comp, cw, live.agentSession.model);
+			if (projection) {
+				thresholdTokens = projection.thresholdTokens;
+				thresholdPercent = projection.thresholdPercent;
+				thresholdMode = projection.thresholdMode;
+				thresholdScope = projection.thresholdScope;
+				thresholdValuePercent = projection.thresholdValuePercent;
+				thresholdModelKey = projection.thresholdModelKey;
+				autoCompactBufferTokens = Math.max(0, cw - projection.thresholdTokens);
 			} else if (comp?.enabled) {
-				autoCompactBufferTokens = effectiveReserveTokens(cw, comp as Parameters<typeof effectiveReserveTokens>[1]);
+				autoCompactBufferTokens = effectiveReserveTokens(cw, comp);
 			}
 			autoCompactBufferTokens = Math.min(autoCompactBufferTokens, Math.max(0, cw - used));
 			freeTokens = Math.max(0, cw - used - autoCompactBufferTokens);
@@ -107,14 +117,23 @@ export class SessionInspectionService implements DaemonService {
 			modelRef ||
 			autoCompactBufferTokens > 0 ||
 			tokenSummary ||
-			thresholdTokens !== null
+			thresholdMode !== null
 			? {
 					...usage,
 					...(modelRef ? { model: modelRef } : {}),
 					...(snapcompact ? { snapcompact } : {}),
 					...(breakdown ? { breakdown } : {}),
 					...(tokenSummary ? { usage: tokenSummary } : {}),
-					...(thresholdTokens !== null ? { thresholdTokens } : {}),
+					...(thresholdMode !== null
+						? {
+								thresholdTokens,
+								thresholdPercent,
+								thresholdMode,
+								thresholdScope,
+								thresholdValuePercent,
+								thresholdModelKey,
+							}
+						: {}),
 					autoCompactBufferTokens,
 					freeTokens,
 					windowStats,
