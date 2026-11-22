@@ -483,6 +483,26 @@ try {
 		await shot(page, `0${index + 3}-files-tree.png`);
 	}
 
+	// The toolbar's tour is the page's guidance: each view names what to look
+	// at, and Next advances the same four steps the tabs expose.
+	const guideFor = async view => {
+		await page.evaluate(v => document.querySelector(`[data-demo-view="${v}"]`)?.click(), view);
+		return page.evaluate(() => document.querySelector("[data-demo-guide]")?.textContent.trim() ?? "");
+	};
+	const chatGuide = await guideFor("chat");
+	const filesGuide = await guideFor("files");
+	check(
+		"guide · follows the active view",
+		chatGuide.length > 12 && filesGuide.length > 12 && chatGuide !== filesGuide,
+		`chat="${chatGuide}" files="${filesGuide}"`,
+	);
+	await page.evaluate(() => document.querySelector('[data-demo-view="welcome"]')?.click());
+	await page.evaluate(() => document.querySelector("[data-demo-next]")?.click());
+	const advanced = await page.evaluate(
+		() => document.querySelector(".mp-demo-tab.is-active")?.getAttribute("data-demo-view") ?? "",
+	);
+	check("guide · next advances the tour", advanced === "chat", advanced);
+
 	const daemonRequests = net.requests.filter(entry => entry.url.includes(":8300"));
 	check(
 		"network · no request to a daemon on :8300",

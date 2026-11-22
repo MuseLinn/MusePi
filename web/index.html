@@ -6,6 +6,7 @@
   <title>MusePi — 你的 AI 搭档，不止写代码，还能按你的流程改造</title>
   <meta name="description" content="MusePi 是一个 AI 工作台：桌面应用、终端与移动伴侣共享同一批会话与设置，换界面不换上下文。它会动手——写代码、跑命令、开浏览器；也能按你的工作流重新组装——模型、工具、界面皆可替换。60+ 模型提供商，本地运行，端到端加密协作。免费测试中，社区版永久免费。" />
   <meta name="theme-color" content="#0d0d0f" />
+  <meta name="color-scheme" content="dark" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="MusePi — 你的 AI 搭档，不止写代码，还能按你的流程改造" />
   <meta property="og:description" content="会动手的 AI 搭档：写代码、跑命令、开浏览器，还能按你的工作流重新组装。桌面 · 命令行 · 手机共享同一批会话，60+ 提供商，本地运行。免费测试，社区版永久免费。" />
@@ -78,11 +79,11 @@
           <span class="mp-badge-sep" aria-hidden="true"></span>
           <span data-release-version>v0.7.7</span>
           <span class="mp-badge-sep" aria-hidden="true"></span>
-          <span class="mp-badge-platforms">macOS · Windows · Linux · Android · <span data-i18n="hero.term">终端</span></span>
+          <span class="mp-badge-platforms">macOS · Windows · Linux · Android<span class="mp-badge-note" data-i18n="hero.mobile.dev">（开发中）</span> · <span data-i18n="hero.term">终端</span></span>
         </p>
         <h1 class="mp-hero-title" data-i18n="hero.title">你的 <span class="mp-accent">AI 搭档</span>，<br />不止会写代码，<br class="mp-only-desktop" />还能按你的流程改造。</h1>
         <p class="mp-hero-sub" data-i18n="hero.sub">
-          MusePi 是一位真正能动手的 AI 搭档：写代码、跑命令、查资料、开浏览器，样样上手。桌面应用、命令行、手机随时切换，会话与设置一路跟着你；模型、工具、界面都是可换的零件，按你的工作流重新组装——而不只是浏览器里又一个标签页。
+          MusePi 是一位真正能动手的 AI 搭档：写代码、跑命令、查资料、开浏览器，样样上手。桌面应用与命令行随时切换；手机伴侣还在开发中，会话与设置已经一路跟着你。模型、工具、界面都是可换的零件，按你的工作流重新组装——而不只是浏览器里又一个标签页。
         </p>
         <div class="mp-cta-row">
           <span class="mp-dl">
@@ -109,7 +110,7 @@
               </a>
               <p class="mp-dl-group" data-i18n="dl.group.mobile">移动与终端</p>
               <a class="mp-dl-item" role="menuitem" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-asset-pattern="MusePi-*-app-debug.apk">
-                <span class="mp-dl-item-os">Android</span><span class="mp-dl-item-arch">arm64 · .apk</span>
+                <span class="mp-dl-item-os">Android</span><span class="mp-dl-item-arch">arm64 · .apk · <span class="mp-dl-item-note" data-i18n="dl.mobile.dev">开发中</span></span>
               </a>
               <a class="mp-dl-item" role="menuitem" href="#install">
                 <span class="mp-dl-item-os" data-i18n="dl.tui.os">终端 TUI</span><span class="mp-dl-item-arch" data-i18n="dl.tui.arch">全平台 · 安装脚本</span>
@@ -137,7 +138,7 @@
           </span>
           <code class="mp-term-line" id="term-line-sh" data-term-line="sh"><span class="mp-cmd-prompt">$</span> curl -fsSL <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh</span> | sh</code>
           <code class="mp-term-line" id="term-line-ps" data-term-line="ps" hidden><span class="mp-cmd-prompt">&gt;</span> irm <span class="mp-cmd-url">https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1</span> | iex</code>
-          <p class="mp-term-note" data-i18n="hero.term.note">这一条命令装的是终端版（后台服务随之启动）；想直接用图形界面，就从上面的平台菜单里挑安装包。装好后桌面版、终端 TUI 与移动伴侣共用同一批会话。</p>
+          <p class="mp-term-note" data-i18n="hero.term.note">这一条命令装的是终端版（后台服务随之启动）；想直接用图形界面，就从上面的平台菜单里挑安装包。装好后桌面版与终端 TUI 共用同一批会话；移动伴侣仍在开发中。</p>
         </div>
       </div>
     </section>
@@ -160,18 +161,16 @@
               <button class="mp-demo-tab" type="button" role="tab" id="demo-tab-board" aria-selected="false" aria-controls="demo-stage" tabindex="-1" data-demo-view="board" data-i18n="demo.tab.board">看板</button>
             </div>
             <div class="mp-demo-actions">
+              <button class="mp-demo-action" type="button" data-demo-next data-i18n="demo.guide.next">下一步</button>
               <a class="mp-demo-action" href="./app/index.html" target="_blank" rel="noopener" data-i18n="demo.action.open">新标签页打开</a>
               <button class="mp-demo-action" type="button" data-demo-fullscreen hidden aria-pressed="false" data-i18n="demo.action.fullscreen">全屏</button>
-              <span class="mp-demo-hint" data-i18n="demo.hint">真实渲染器 · 本地数据</span>
+              <span class="mp-demo-hint"><span data-demo-status aria-live="polite">待载入</span><span aria-hidden="true">·</span><span data-i18n="demo.hint">真实渲染器 · 本地数据</span></span>
             </div>
           </div>
 
+          <p class="mp-demo-guide" data-demo-guide>先看首屏：左侧是实例与分组，顶部胶囊里是模型与思考档位，右下是上下文与工具入口。</p>
+
           <div class="mp-demo-frame" id="demo-stage" role="tabpanel" aria-labelledby="demo-tab-welcome" data-demo-stage>
-            <div class="mp-demo-titlebar">
-              <span class="mp-demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-              <span class="mp-demo-title">MusePi</span>
-              <span class="mp-demo-status" data-demo-status aria-live="polite">待载入</span>
-            </div>
             <div class="mp-demo-screen" data-demo-screen>
               <div class="mp-demo-loading" data-demo-loading hidden>
                 <span class="mp-demo-spinner" aria-hidden="true"></span>
@@ -187,7 +186,7 @@
               </div>
             </div>
           </div>
-          <p class="mp-demo-caption" data-i18n="demo.caption">真实桌面渲染器 + 本地演示数据，不连接任何后台服务。</p>
+          <p class="mp-demo-guide" data-demo-guide>先看首屏：左侧是实例与分组，顶部胶囊里是模型与思考档位，右下是上下文与工具入口。</p>
         </div>
 
       </div>

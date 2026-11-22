@@ -4,6 +4,7 @@
  * 光晕只来自单一径向环境光（非多层），强调色即"荧光"。 */
 
 :root {
+  color-scheme: dark;
   --bg: #0d0d0f;
   --bg-1: #121215;          /* 抬升面板 */
   --bg-2: #17171b;          /* 更深一层凹陷/内衬 */
@@ -222,6 +223,7 @@ button { font-family: inherit; cursor: pointer; }
   padding: 8px 14px;
   font-size: 14.5px;
   font-weight: 500;
+  white-space: nowrap;
   color: var(--text-muted);
   border-radius: 8px;
   transition: color 160ms var(--ease);
@@ -320,6 +322,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 
 /* The platform list is a single phrase — it must not break inside a name. */
 .mp-badge-platforms { white-space: nowrap; }
+.mp-badge-note { color: var(--text-faint); }
 .mp-badge-sep { width: 1px; height: 12px; background: var(--line-strong); }
 .mp-pulse {
   width: 8px; height: 8px; border-radius: 50%;
@@ -500,6 +503,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-dl-item.is-rec { border-color: var(--accent-line); background: var(--accent-soft); }
 .mp-dl-item-os { font-size: 14px; font-weight: 600; color: var(--text); }
 .mp-dl-item-arch { font-family: var(--mono); font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.mp-dl-item-note { color: var(--accent); }
 .mp-dl-item.is-rec .mp-dl-item-arch { color: var(--accent); }
 
 /* ===== 区块通用 ===== */
@@ -818,7 +822,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-reveal.is-in { opacity: 1; transform: none; }
 
 /* ===== 移动端 ===== */
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .mp-nav-toggle { display: flex; }
   .mp-topbar-gh { padding: 8px; }
   .mp-topbar-gh-word { display: none; }

@@ -11,8 +11,8 @@
     "brand.aria": "MusePi",
     "nav.aria": "Main navigation",
     "nav.preview": "Preview",
-    "nav.features": "Why MusePi",
-    "nav.momentum": "Momentum",
+    "nav.features": "Why",
+    "nav.momentum": "Updates",
     "nav.pricing": "Pricing",
     "nav.faq": "FAQ",
     "nav.cta": "Try MusePi",
@@ -22,11 +22,12 @@
 
     /* 首屏 */
     "hero.phase": "Free beta",
+    "hero.mobile.dev": " (in development)",
     "hero.term": "Terminal",
     "hero.title":
       'Your <span class="mp-accent">AI partner</span> —<br />it does more than write code:<br class="mp-only-desktop" />rebuild it around your workflow.',
     "hero.sub":
-      "MusePi is a hands-on AI partner: it writes code, runs commands, reads up and drives the browser. Switch between the desktop app, the command line and your phone anytime — sessions and settings follow you. Models, tools and surfaces are swappable parts, so you can rebuild it around the way you work instead of accepting one more browser tab.",
+      "MusePi is a hands-on AI partner: it writes code, runs commands, reads up and drives the browser. Switch between the desktop app and the command line anytime; the mobile companion is still in development, with sessions and settings already following you. Models, tools and surfaces are swappable parts, so you can rebuild it around the way you work instead of accepting one more browser tab.",
     "hero.cta.community": "Ask / Report",
     "hero.cta.dl": "Download desktop",
     "hero.cta.look": "See the interface",
@@ -34,10 +35,11 @@
     "hero.term.tabs": "Choose the install command",
     "hero.term.copy": "Copy command",
     "hero.term.note":
-      "This command installs the terminal TUI (the background service starts with it). For the graphical interface, pick an installer from the platform menu above. Once installed, the desktop app, the terminal TUI and the mobile companion share the same sessions.",
+      "This command installs the terminal TUI (the background service starts with it). For the graphical interface, pick an installer from the platform menu above. Once installed, the desktop app and the terminal TUI share the same sessions; the mobile companion is still in development.",
     "dl.aria": "Choose another platform",
     "dl.group.desktop": "Desktop",
     "dl.group.mobile": "Mobile and terminal",
+    "dl.mobile.dev": "in development",
     "dl.mac.arch": "Apple silicon · .dmg",
     "dl.tui.os": "Terminal TUI",
     "dl.tui.arch": "all platforms · script",
@@ -61,10 +63,11 @@
     "demo.fallback.title": "The demo didn't load",
     "demo.fallback.body": "A network or browser restriction got in the way. Retry, or open it in a new tab.",
     "demo.fallback.retry": "Retry",
+    "demo.guide.next": "Next step",
     "demo.caption": "Real desktop renderer with local demo data — nothing here talks to a daemon.",
 
     /* 工作台能力浏览 */
-    "nav.release": "Workspace capabilities",
+    "nav.release": "Capabilities",
     "release.kicker": "Workspace · Shipped capabilities",
     "release.h2": "From doing the work to reviewing and reshaping it together",
     "release.desc":
@@ -251,8 +254,24 @@
   var JS = {
     "demo.status.idle": { zh: "待载入", en: "Not loaded" },
     "demo.status.loading": { zh: "载入中…", en: "Loading…" },
-    "demo.status.ready": { zh: "运行中 · 本地", en: "Running · local" },
+    "demo.status.ready": { zh: "运行中", en: "Running" },
     "demo.status.error": { zh: "载入失败", en: "Failed" },
+    "demo.guide.welcome": {
+      zh: "先看首屏：左侧是实例与分组，顶部胶囊里是模型与思考档位，右下是上下文与工具入口。",
+      en: "Start here: instances and groups on the left, the capsule above holds the model and thinking rung, and the right side lists context and tools.",
+    },
+    "demo.guide.chat": {
+      zh: "点开会话后：左侧是会话树，中间是回复与工具调用，右侧是文件与 Agent 面板。",
+      en: "With a session open: the session tree on the left, replies and tool calls in the middle, files and the Agent panel on the right.",
+    },
+    "demo.guide.files": {
+      zh: "文件视图：树、编辑器与预览共用一套标签；打开 README 试试。",
+      en: "Files: the tree, editor and preview share one tab set — open the README to try it.",
+    },
+    "demo.guide.board": {
+      zh: "看板视图：同一个工作区里的画布与产物，适合把任务铺开看。",
+      en: "Board: the workspace canvas and artifacts, for spreading the work out.",
+    },
     "demo.action.exitFullscreen": { zh: "退出全屏", en: "Exit full screen" },
     "demo.action.fullscreen": { zh: "全屏", en: "Full screen" },
     "demo.frame.title": { zh: "MusePi 界面演示", en: "MusePi interface demo" },

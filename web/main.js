@@ -280,6 +280,9 @@
     var demoRetryBtn = demo.querySelector("[data-demo-retry]");
     var demoTabs = Array.prototype.slice.call(demo.querySelectorAll("[data-demo-view]"));
     var demoList = demo.querySelector(".mp-demo-tabs");
+    var demoGuide = demo.querySelector("[data-demo-guide]");
+    var demoNext = demo.querySelector("[data-demo-next]");
+    var DEMO_ORDER = ["welcome", "chat", "files", "board"];
     var demoIframe = null;
     var demoState = "";
     var demoView = "welcome";
@@ -309,6 +312,10 @@
       } catch (error) {
         return null;
       }
+    }
+
+    function renderGuide() {
+      if (demoGuide) demoGuide.textContent = demoText("demo.guide." + demoView);
     }
 
     function renderDemoChrome() {
@@ -607,6 +614,7 @@
 
     function selectDemoTab(view, moveFocus) {
       demoView = view;
+      renderGuide();
       demoTabs.forEach(function (tab) {
         var active = tab.getAttribute("data-demo-view") === view;
         tab.classList.toggle("is-active", active);
@@ -627,6 +635,12 @@
         selectDemoTab(tab.getAttribute("data-demo-view"), false);
       });
     });
+    if (demoNext) {
+      demoNext.addEventListener("click", function () {
+        var index = DEMO_ORDER.indexOf(demoView);
+        selectDemoTab(DEMO_ORDER[(index + 1) % DEMO_ORDER.length], false);
+      });
+    }
     if (demoList) {
       demoList.addEventListener("keydown", function (event) {
         var index = demoTabs.indexOf(document.activeElement);
@@ -693,10 +707,12 @@
 
     document.addEventListener("mp:lang", function () {
       renderDemoChrome();
+      renderGuide();
       syncFullscreen();
       if (demoIframe) demoIframe.title = demoText("demo.frame.title");
     });
 
+    renderGuide();
     setDemoState("idle");
   }
 
