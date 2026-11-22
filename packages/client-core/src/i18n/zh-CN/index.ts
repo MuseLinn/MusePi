@@ -13,6 +13,7 @@ import { release } from "./release.js";
 import { reward } from "./reward.js";
 import { sessions } from "./sessions.js";
 import { settings } from "./settings.js";
+import { settingsCompaction } from "./settings-compaction.js";
 import { shell } from "./shell.js";
 import { tools } from "./tools.js";
 import { transcript } from "./transcript.js";
@@ -32,6 +33,7 @@ export const zhCN = {
 	...collab,
 	...transcript,
 	...settings,
+	...settingsCompaction,
 	...agents,
 	...tools,
 	...companion,
@@ -57,6 +59,7 @@ const parts = {
 	collab,
 	transcript,
 	settings,
+	settingsCompaction,
 	agents,
 	tools,
 	companion,

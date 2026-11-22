@@ -627,13 +627,12 @@ memory:
 |---|---|---|---|
 | `contextPromotion.enabled` | boolean | `false` | Context 溢出时提升到活跃 model 显式的 `contextPromotionTarget`。 |
 | `compaction.enabled` | boolean | `true` | 自动对话 compaction。 |
-| `compaction.midTurnEnabled` | boolean | `true` | 在下一个 provider 请求之前，于安全的 turn 中段 tool-loop 边界检查阈值。 |
-| `compaction.strategy` | enum | `snapcompact` | `context-full`, `handoff`, `shake`, `snapcompact`, `off`。 |
-| `compaction.thresholdPercent` | number | `-1` | Context 百分比触发；`-1` = 基于 reserve 的默认行为。 |
-| `compaction.thresholdTokens` | number | `-1` | `> 0` 时为固定 token 触发，优先于 `thresholdPercent`。用于把 context 压到模型物理窗口**以下**——例如 500K 模型设 `190000` 以避开长上下文 token 加价档位，或 1M 模型设 `300000` 以防超长上下文导致注意力涣散。 |
-| `compaction.reserveTokens` | number | `16384` | 为下一 turn 保留的 token 数。 |
-| `compaction.keepRecentTokens` | number | `20000` | 始终保留的近期 token 数。 |
-| `compaction.remoteEnabled` | boolean | `true` | 允许远程 compaction 服务。 |
+| `compaction.midTurnEnabled` | boolean | `true` | 在工具步骤之间、下次 provider 请求前检查阈值；子智能体始终检查。 |
+| `compaction.methodOrder` | array | `remote, snapcompact, handoff, shake, soft` | 首选回退顺序；不可用或失败时自动换下一种。 |
+| `compaction.thresholdPercent` | number | `-1` | 模型上下文窗口的百分比触发；`-1` 按预留空间推算（随窗口大小变化）。 |
+| `compaction.thresholdTokens` | number | `-1` | `> 0` 时为固定 token 上限，优先于百分比。设回 `-1` 恢复按百分比。用于把 context 压到模型物理窗口**以下**（长上下文加价档位或注意力明显下降）。 |
+| `compaction.reserveTokens` | number | `undefined` | 未设百分比时为下一 turn 预留的 token；未设置时解析为 `max(窗口 15%, 16384)`。 |
+| `compaction.keepRecentTokens` | number | `20000` | 压缩后始终保留的近期 token 数。 |
 | `compaction.autoContinue` | boolean | `true` | Compaction 之后自动继续。 |
 | `memory.backend` | enum | `off` | `off`, `local`, `hindsight`, `mnemopi`。每个 backend 都有自己的 `hindsight.*` / `mnemopi.*` / `memories.*` 调优键。 |
 | `autolearn.enabled` | boolean | `false` | 实验性功能：agent 停止后，推动它将经验教训记入 memory，并在 `~/.musepi/agent/managed-skills` 下创建/增强独立的 managed skill。启用 `manage_skill` tool（以及在 memory backend 激活时的 `learn`）。 |

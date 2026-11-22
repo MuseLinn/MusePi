@@ -2656,7 +2656,6 @@ export const settings = {
 	"settings.autoApproveRead.info2": "Auto-approve read-only tools; require confirmation for write and exec tools.",
 	"settings.autoApproveRead.info3":
 		"Auto-approve read, write, and exec tools. User policy can still require confirmation or block calls.",
-	"settings.context.compaction.autoCompact": "Auto-Compact",
 	"settings.autoFallback": "Auto-fallback",
 	"settings.autoInstallsViaUv": "Auto-installs via uv/pip",
 	"settings.autoLoadRepo.desc":
@@ -2890,7 +2889,6 @@ export const settings = {
 	"settings.dropHeavyContent.info": "Drop heavy content (tool results + large blocks) in place; recover via artifact",
 	"settings.earlyMaintenance": "Early maintenance",
 	"settings.earlyProtection": "Early protection",
-	"settings.context.compaction.elideUneventfulResults": "Elide Uneventful Results",
 	"settings.embeddedSilverTruetype.info":
 		"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.",
 	"settings.emitOsc9.info": "Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
@@ -3013,9 +3011,6 @@ export const settings = {
 	"settings.howStronglyPushDelegating": "How strongly to push delegating work to subagents",
 	"settings.howDrainFollowUp": "How to drain follow-up messages after a turn completes",
 	"settings.howProcessQueuedMessages": "How to process queued messages while agent is working",
-	"settings.context.compaction.idle": "Idle Compaction",
-	"settings.context.compaction.idleDelay": "Idle Compaction Delay",
-	"settings.context.compaction.idleThreshold": "Idle Compaction Threshold",
 	"settings.providers.services.imageProviderOrder": "Image Provider Order",
 	"settings.images": "Images",
 	"settings.appearance.display.imeSafePromptLayout": "IME-Safe Prompt Layout",
@@ -3140,7 +3135,6 @@ export const settings = {
 	"settings.medium": "Medium",
 	"settings.medium2": "Medium",
 	"settings.messagesBeforeRuleCan": "Messages before a rule can trigger again",
-	"settings.context.compaction.midTurn": "Mid-Turn Compaction",
 	"settings.mildNovelty": "Mild novelty",
 	"settings.mildPenalty": "Mild penalty",
 	"settings.min": "Min",
@@ -3306,7 +3300,6 @@ export const settings = {
 	"settings.releaseCompleteSentence": "Release with complete sentence",
 	"settings.remindAgentCompleteTodos": "Remind the agent to complete todos before stopping",
 	"settings.remoteCompaction": "Remote Compaction",
-	"settings.context.compaction.remoteV2": "Remote Compaction V2",
 	"settings.remove1Character.info":
 		"Remove the 1-character horizontal padding from the left and right of the terminal output",
 	"settings.renderFullTool.desc":
@@ -3348,7 +3341,6 @@ export const settings = {
 	"settings.samplingTemperature": "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
 	"settings.sandboxOnly": "Sandbox Only",
 	"settings.saveGeneratedHandoff.info": "Save generated handoff documents to markdown files for the auto-handoff flow",
-	"settings.context.compaction.saveHandoffDocs": "Save Handoff Docs",
 	"settings.saveProjectRole.info":
 		"Save project role models in .musepi/config.yml; missing project roles use global defaults",
 	"settings.saveRoleModelsActive": "Save role models in the active profile config (current behavior)",
@@ -3509,7 +3501,6 @@ export const settings = {
 	"settings.suggestsTodoList.info": "Suggests a todo list on the first message (reminder, not forced)",
 	"settings.summarizePlaceKeepCurrent": "Summarize in-place and keep the current session",
 	"settings.summary": "Summary",
-	"settings.context.compaction.supersedeStaleReads": "Supersede Stale Reads",
 	"settings.surfaceActiveModel.info":
 		"Surface the active model identifier in the system prompt so the agent knows which model it is",
 	"settings.switchTaskToolWithContexttasks.desc":

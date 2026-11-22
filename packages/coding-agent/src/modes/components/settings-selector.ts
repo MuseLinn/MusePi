@@ -150,7 +150,11 @@ class SelectSubmenu extends Container {
 		// options (e.g. UI Language choices) render in the active locale.
 		// Runtime-injected labels (theme names, thinking levels) are not
 		// translation keys and pass through unchanged.
-		const items = options.map(option => ({ ...option, label: t(option.label) }));
+		const items = options.map(option => ({
+			...option,
+			label: t(option.label),
+			...(option.description ? { description: t(option.description) } : {}),
+		}));
 		this.#selectList = new SelectList(items, Math.min(items.length, 10), getSelectListTheme());
 
 		// Pre-select current value
@@ -272,7 +276,11 @@ class MultiSelectSubmenu extends Container {
 					: this.ordered
 						? theme.fg("accent", `${String(position + 1).padStart(2)}.`)
 						: theme.fg("accent", " ● ");
-			return { value: option.value, label: `${mark} ${t(option.label)}`, description: option.description };
+			return {
+				value: option.value,
+				label: `${mark} ${t(option.label)}`,
+				description: option.description ? t(option.description) : undefined,
+			};
 		});
 		this.#selectList = new SelectList(items, Math.min(items.length, 12), getSelectListTheme());
 		this.#selectList.setSelectedIndex(this.#cursor);

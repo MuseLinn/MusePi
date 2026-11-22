@@ -180,6 +180,46 @@ const CONDITIONS: Record<string, () => boolean> = {
 			return false;
 		}
 	},
+	// Compaction dependencies: a fixed token cap replaces the percentage, and
+	// the method-specific rows only matter while that method is in the order.
+	compactionNoTokenCap: () => {
+		try {
+			const tokens = Settings.instance.get("compaction.thresholdTokens");
+			return !(typeof tokens === "number" && tokens > 0);
+		} catch {
+			return true;
+		}
+	},
+	compactionRemoteMethod: () => {
+		try {
+			const order = Settings.instance.get("compaction.methodOrder");
+			return Array.isArray(order) && order.includes("remote");
+		} catch {
+			return true;
+		}
+	},
+	compactionHandoffMethod: () => {
+		try {
+			const order = Settings.instance.get("compaction.methodOrder");
+			return Array.isArray(order) && order.includes("handoff");
+		} catch {
+			return true;
+		}
+	},
+	compactionIdleEnabled: () => {
+		try {
+			return Settings.instance.get("compaction.idleEnabled") === true;
+		} catch {
+			return false;
+		}
+	},
+	compactionModelOverrides: () => {
+		try {
+			return Settings.instance.get("compaction.modelThresholdsEnabled") !== false;
+		} catch {
+			return true;
+		}
+	},
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

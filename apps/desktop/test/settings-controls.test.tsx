@@ -13,7 +13,13 @@ import { setLocale } from "@musepi/client-core";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { SETTINGS_SCHEMA } from "../../../packages/coding-agent/src/config/settings-schema";
-import { isSettingChanged, type SchemaItem, SchemaSettings, settingsControl } from "../src/components/SchemaSettings";
+import {
+	isSettingChanged,
+	isSettingShown,
+	type SchemaItem,
+	SchemaSettings,
+	settingsControl,
+} from "../src/components/SchemaSettings";
 
 function item(key: string, overrides: Partial<SchemaItem> = {}): SchemaItem {
 	const def = SETTINGS_SCHEMA[key as keyof typeof SETTINGS_SCHEMA] as unknown as {
@@ -360,6 +366,36 @@ describe("numeric controls", () => {
 		keydown(track, "Home");
 		expect(changes.at(-1)).toEqual(["compaction.thresholdPercent", -1]);
 		expect(scope.querySelector(".gui-slider-value")?.textContent).toBe("Default");
+	});
+});
+
+describe("compaction dependency gates", () => {
+	it("hides the percentage while a fixed token cap governs", () => {
+		const row = item("compaction.thresholdPercent");
+		expect(isSettingShown(row, {})).toBe(true);
+		expect(isSettingShown(row, { "compaction.thresholdTokens": 100_000 })).toBe(false);
+	});
+
+	it("shows method-specific rows only while that method is in the order", () => {
+		const remote = item("compaction.remoteStreamingV2Enabled");
+		expect(isSettingShown(remote, { "compaction.methodOrder": ["remote", "soft"] })).toBe(true);
+		expect(isSettingShown(remote, { "compaction.methodOrder": ["soft"] })).toBe(false);
+
+		const handoff = item("compaction.handoffSaveToDisk");
+		expect(isSettingShown(handoff, { "compaction.methodOrder": ["handoff"] })).toBe(true);
+		expect(isSettingShown(handoff, { "compaction.methodOrder": ["soft"] })).toBe(false);
+	});
+
+	it("shows idle details only when idle compaction is on", () => {
+		const threshold = item("compaction.idleThresholdTokens");
+		expect(isSettingShown(threshold, {})).toBe(false);
+		expect(isSettingShown(threshold, { "compaction.idleEnabled": true })).toBe(true);
+	});
+
+	it("hides the per-model editor when per-model limits are off", () => {
+		const row = item("compaction.modelThresholds");
+		expect(isSettingShown(row, { "compaction.modelThresholdsEnabled": true })).toBe(true);
+		expect(isSettingShown(row, { "compaction.modelThresholdsEnabled": false })).toBe(false);
 	});
 });
 

@@ -88,6 +88,22 @@ const CONDITIONS: Record<string, (values: Record<string, unknown>) => boolean> =
 	// regardless, so it resolves true here.
 	hasImageProtocol: () => true,
 	unexpectedStopDetection: v => v["features.unexpectedStopDetection"] === true,
+	// Compaction dependencies: a fixed token cap replaces the percentage, and
+	// the method-specific rows only matter while that method is in the order.
+	compactionNoTokenCap: v => {
+		const tokens = Number(v["compaction.thresholdTokens"]);
+		return !Number.isFinite(tokens) || tokens <= 0;
+	},
+	compactionRemoteMethod: v => {
+		const order = v["compaction.methodOrder"];
+		return Array.isArray(order) && order.includes("remote");
+	},
+	compactionHandoffMethod: v => {
+		const order = v["compaction.methodOrder"];
+		return Array.isArray(order) && order.includes("handoff");
+	},
+	compactionIdleEnabled: v => v["compaction.idleEnabled"] === true,
+	compactionModelOverrides: v => v["compaction.modelThresholdsEnabled"] !== false,
 };
 
 /** Resolve one row's visibility. Exported so a page can assert its condition

@@ -92,6 +92,25 @@ describe("matchSettingRows", () => {
 		expect(matchSettingRows(rows, "resume").map(row => row.key)).toEqual(["appearance.accent"]);
 	});
 
+	it("resolves namespaced schema keys for both languages", () => {
+		const keyed: SettingSearchRow[] = [
+			{
+				key: "compaction.thresholdPercent",
+				section: "context",
+				tab: "context",
+				group: "settings.compaction.group.core",
+				label: "settings.compaction.threshold.title",
+				description: "settings.compaction.threshold.desc",
+			},
+		];
+		setLocale("en-US");
+		expect(matchSettingRows(keyed, "Compaction Threshold").map(row => row.key)).toEqual([
+			"compaction.thresholdPercent",
+		]);
+		expect(matchSettingRows(keyed, "压缩阈值").map(row => row.key)).toEqual(["compaction.thresholdPercent"]);
+		expect(matchSettingRows(keyed, "reserved headroom").map(row => row.key)).toEqual(["compaction.thresholdPercent"]);
+	});
+
 	it("matches the description only as a contiguous substring", () => {
 		expect(matchSettingRows(rows, "context maintenance").map(row => row.key)).toEqual([
 			"compaction.thresholdPercent",

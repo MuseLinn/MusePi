@@ -12,28 +12,28 @@ import type { CompactionSettings } from "../config/settings-schema";
 export const COMPACTION_METHOD_CHOICES = [
 	{
 		value: "remote",
-		label: "OpenAI server compaction",
-		description: "Use provider-native OpenAI-compatible server compaction when the active route supports it",
+		label: "settings.compaction.method.remote.title",
+		description: "settings.compaction.method.remote.desc",
 	},
 	{
 		value: "snapcompact",
-		label: "Snapcompact",
-		description: "Archive history onto dense bitmap images the active vision model reads back; no LLM call",
+		label: "settings.compaction.method.snapcompact.title",
+		description: "settings.compaction.method.snapcompact.desc",
 	},
 	{
 		value: "handoff",
-		label: "Handoff",
-		description: "Generate a handoff document and continue from it as the compaction summary",
+		label: "settings.compaction.method.handoff.title",
+		description: "settings.compaction.method.handoff.desc",
 	},
 	{
 		value: "soft",
-		label: "Soft compaction",
-		description: "Summarize in place with a compaction model without using server compaction",
+		label: "settings.compaction.method.soft.title",
+		description: "settings.compaction.method.soft.desc",
 	},
 	{
 		value: "shake",
-		label: "Shake",
-		description: "Drop recoverable heavy content in place without an LLM call",
+		label: "settings.compaction.method.shake.title",
+		description: "settings.compaction.method.shake.desc",
 	},
 ] as const;
 

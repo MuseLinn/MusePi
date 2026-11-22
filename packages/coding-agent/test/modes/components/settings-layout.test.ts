@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
+	getUi,
 	SETTING_TABS,
 	SETTINGS_SCHEMA,
 	type SettingPath,
 	type SettingTab,
 	TAB_GROUPS,
 } from "@musepi/pi-coding-agent/config/settings-schema";
+import { setLocale, t } from "@musepi/pi-coding-agent/i18n/index.js";
 import { getSettingsForTab } from "@musepi/pi-coding-agent/modes/components/settings-defs";
 
 interface UiShape {
@@ -22,6 +24,7 @@ describe("settings layout", () => {
 
 	afterEach(() => {
 		resetSettingsForTest();
+		setLocale("en-US");
 	});
 
 	it("every UI setting declares a group registered in TAB_GROUPS for its tab", () => {
@@ -191,5 +194,67 @@ describe("settings layout", () => {
 			label: "Ask",
 			group: "Available Tools",
 		});
+	});
+
+	it("groups compaction settings by task and reads copy through namespace keys", () => {
+		const defs = getSettingsForTab("context").filter(def => def.path.startsWith("compaction."));
+		expect([...new Set(defs.map(def => def.group))]).toEqual([
+			"settings.compaction.group.core",
+			"settings.compaction.group.behavior",
+			"settings.compaction.group.limits",
+			"settings.context.group.experimental",
+		]);
+
+		const labelOf = (path: SettingPath): string | undefined => getUi(path)?.label;
+		expect(labelOf("compaction.thresholdTokens")).toBe("settings.compaction.tokenLimit.title");
+		expect(labelOf("compaction.asyncEnabled")).toBe("settings.compaction.backgroundPre.title");
+		expect(labelOf("compaction.idleThresholdTokens")).toBe("settings.compaction.idleThreshold.title");
+		expect(labelOf("compaction.supersedeReads")).toBe("settings.compaction.supersedeReads.title");
+		expect(labelOf("compaction.dropUseless")).toBe("settings.compaction.dropUseless.title");
+		expect(labelOf("compaction.modelThresholds")).toBe("settings.compaction.perModel.title");
+
+		const enabled = getUi("compaction.enabled");
+		expect(enabled?.label).toBe("settings.compaction.autoCompact.title");
+		expect(enabled?.description).toBe("settings.compaction.autoCompact.desc");
+	});
+
+	it("resolves compaction copy through the namespace dictionaries", () => {
+		setLocale("zh-CN");
+		expect(t("settings.compaction.threshold.title")).toBe("压缩阈值");
+		expect(t("settings.compaction.threshold.option.default")).toBe("默认");
+		expect(t("settings.compaction.method.shake.title")).toBe("裁剪重内容");
+		expect(t("settings.compaction.group.core")).toBe("压缩");
+
+		setLocale("en-US");
+		expect(t("settings.compaction.threshold.title")).toBe("Compaction Threshold");
+		expect(t("settings.compaction.method.shake.title")).toBe("Prune heavy content");
+	});
+
+	it("hides compaction rows whose governing setting is off", () => {
+		const byPath = new Map(getSettingsForTab("context").map(def => [def.path, def]));
+		const visible = (path: SettingPath): boolean | undefined => byPath.get(path)?.condition?.();
+
+		expect(visible("compaction.thresholdPercent")).toBe(true);
+		Settings.instance.set("compaction.thresholdTokens", 100_000);
+		expect(visible("compaction.thresholdPercent")).toBe(false);
+		Settings.instance.set("compaction.thresholdTokens", -1);
+		expect(visible("compaction.thresholdPercent")).toBe(true);
+
+		expect(visible("compaction.remoteStreamingV2Enabled")).toBe(true);
+		expect(visible("compaction.handoffSaveToDisk")).toBe(true);
+		Settings.instance.set("compaction.methodOrder", ["soft"] as never);
+		expect(visible("compaction.remoteStreamingV2Enabled")).toBe(false);
+		expect(visible("compaction.handoffSaveToDisk")).toBe(false);
+		Settings.instance.set("compaction.methodOrder", ["remote", "handoff"] as never);
+
+		expect(visible("compaction.idleThresholdTokens")).toBe(false);
+		expect(visible("compaction.idleTimeoutSeconds")).toBe(false);
+		Settings.instance.set("compaction.idleEnabled", true);
+		expect(visible("compaction.idleThresholdTokens")).toBe(true);
+		expect(visible("compaction.idleTimeoutSeconds")).toBe(true);
+
+		expect(visible("compaction.modelThresholds")).toBe(true);
+		Settings.instance.set("compaction.modelThresholdsEnabled", false);
+		expect(visible("compaction.modelThresholds")).toBe(false);
 	});
 });

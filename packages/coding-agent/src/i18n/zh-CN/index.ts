@@ -1,9 +1,10 @@
 // ============================================================
 // MusePi zh-CN locale — Chinese translations for the TUI.
 //
-// Key naming: English text IS the key. For en-US (default locale),
-// the key is returned as-is with zero runtime cost.
-// For zh-CN, each English key maps to its Chinese translation.
+// Key naming: un-migrated copy uses English source text as the key. A touched
+// feature owns a feature namespace module (e.g. settings-compaction.ts) whose
+// zh dictionary defines the key set and whose en dictionary is checked against
+// it; the barrel spreads that module into the flat map `t()` resolves.
 //
 // Split into per-domain modules (setup, settings, shell, …) so keys are
 // edited next to their feature; this barrel merges them into the flat map
@@ -20,6 +21,7 @@ import { errors } from "./errors.ts";
 import { mcp } from "./mcp.ts";
 import { selector } from "./selector.ts";
 import { settings } from "./settings.ts";
+import { settingsCompaction } from "./settings-compaction.ts";
 import { setup } from "./setup.ts";
 import { shell } from "./shell.ts";
 import { swarm } from "./swarm.ts";
@@ -30,6 +32,7 @@ export const zhCN: TranslationMap = {
 	...setup,
 	...shell,
 	...settings,
+	...settingsCompaction,
 	...common,
 	...swarm,
 	...welcome,
@@ -49,6 +52,7 @@ export const zhCN: TranslationMap = {
 		setup,
 		shell,
 		settings,
+		settingsCompaction,
 		common,
 		swarm,
 		welcome,

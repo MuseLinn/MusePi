@@ -218,7 +218,14 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Git",
 	],
 	voice: ["Speech"],
-	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
+	context: [
+		"General",
+		"settings.compaction.group.core",
+		"settings.compaction.group.behavior",
+		"settings.compaction.group.limits",
+		"Rules (TTSR)",
+		"settings.context.group.experimental",
+	],
 	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
 	shell: ["Bash", "Bash Advanced", "Eval & Runtimes"],
@@ -2891,34 +2898,9 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Auto-Compact",
-			description: "Automatically compact context when it gets too large",
-		},
-	},
-
-	"compaction.midTurnEnabled": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "context",
-			group: "Compaction",
-			label: "Mid-Turn Compaction",
-			description: "Check thresholds at safe mid-turn tool-loop boundaries before the next provider request",
-		},
-	},
-
-	"compaction.methodOrder": {
-		type: "array",
-		default: [...DEFAULT_COMPACTION_METHOD_ORDER],
-		ui: {
-			tab: "context",
-			group: "Compaction",
-			label: "Compaction Method Order",
-			description:
-				"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice",
-			options: COMPACTION_METHOD_CHOICES,
-			ordered: true,
+			group: "settings.compaction.group.core",
+			label: "settings.compaction.autoCompact.title",
+			description: "settings.compaction.autoCompact.desc",
 		},
 	},
 
@@ -2927,23 +2909,28 @@ export const SETTINGS_SCHEMA = {
 		default: -1,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Compaction Threshold",
-			description: "Percent threshold for context maintenance; set to Default to use legacy reserve-based behavior",
+			group: "settings.compaction.group.core",
+			label: "settings.compaction.threshold.title",
+			description: "settings.compaction.threshold.desc",
+			condition: "compactionNoTokenCap",
 			options: [
-				{ value: "default", label: "Default", description: "Legacy reserve-based threshold" },
-				{ value: "10", label: "10%", description: "Extremely early maintenance" },
-				{ value: "20", label: "20%", description: "Very early maintenance" },
-				{ value: "30", label: "30%", description: "Early maintenance" },
-				{ value: "40", label: "40%", description: "Moderately early maintenance" },
-				{ value: "50", label: "50%", description: "Halfway point" },
-				{ value: "60", label: "60%", description: "Moderate context usage" },
-				{ value: "70", label: "70%", description: "Balanced" },
-				{ value: "75", label: "75%", description: "Slightly aggressive" },
-				{ value: "80", label: "80%", description: "Typical threshold" },
-				{ value: "85", label: "85%", description: "Aggressive context usage" },
-				{ value: "90", label: "90%", description: "Very aggressive" },
-				{ value: "95", label: "95%", description: "Near context limit" },
+				{
+					value: "default",
+					label: "settings.compaction.threshold.option.default",
+					description: "settings.compaction.threshold.option.default.desc",
+				},
+				{ value: "10", label: "10%" },
+				{ value: "20", label: "20%" },
+				{ value: "30", label: "30%" },
+				{ value: "40", label: "40%" },
+				{ value: "50", label: "50%" },
+				{ value: "60", label: "60%" },
+				{ value: "70", label: "70%" },
+				{ value: "75", label: "75%" },
+				{ value: "80", label: "80%" },
+				{ value: "85", label: "85%" },
+				{ value: "90", label: "90%" },
+				{ value: "95", label: "95%" },
 			],
 		},
 	},
@@ -2952,47 +2939,80 @@ export const SETTINGS_SCHEMA = {
 		default: -1,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Compaction Token Limit",
-			description:
-				"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.",
+			group: "settings.compaction.group.core",
+			label: "settings.compaction.tokenLimit.title",
+			description: "settings.compaction.tokenLimit.desc",
 			options: [
-				{ value: "default", label: "Default", description: "Use percentage-based threshold" },
-				{ value: "25000", label: "25K tokens", description: "Quarter of a 200K window" },
-				{ value: "50000", label: "50K tokens", description: "Half of a 200K window" },
-				{ value: "100000", label: "100K tokens", description: "Half of a 200K window" },
-				{ value: "150000", label: "150K tokens", description: "Three-quarters of a 200K window" },
+				{
+					value: "default",
+					label: "settings.compaction.tokenLimit.option.default",
+					description: "settings.compaction.tokenLimit.option.default.desc",
+				},
+				{
+					value: "25000",
+					label: "settings.compaction.tokenLimit.option.25k",
+					description: "settings.compaction.tokenLimit.option.25k.desc",
+				},
+				{
+					value: "50000",
+					label: "settings.compaction.tokenLimit.option.50k",
+					description: "settings.compaction.tokenLimit.option.50k.desc",
+				},
+				{
+					value: "100000",
+					label: "settings.compaction.tokenLimit.option.100k",
+					description: "settings.compaction.tokenLimit.option.100k.desc",
+				},
+				{
+					value: "150000",
+					label: "settings.compaction.tokenLimit.option.150k",
+					description: "settings.compaction.tokenLimit.option.150k.desc",
+				},
 				{
 					value: "190000",
-					label: "190K tokens",
-					description: "Just under the 200K tier break some providers bill double past",
+					label: "settings.compaction.tokenLimit.option.190k",
+					description: "settings.compaction.tokenLimit.option.190k.desc",
 				},
-				{ value: "200000", label: "200K tokens", description: "Full standard context window" },
-				{ value: "300000", label: "300K tokens", description: "Large context window" },
-				{ value: "500000", label: "500K tokens", description: "Very large context window" },
+				{
+					value: "200000",
+					label: "settings.compaction.tokenLimit.option.200k",
+					description: "settings.compaction.tokenLimit.option.200k.desc",
+				},
+				{
+					value: "300000",
+					label: "settings.compaction.tokenLimit.option.300k",
+					description: "settings.compaction.tokenLimit.option.300k.desc",
+				},
+				{
+					value: "500000",
+					label: "settings.compaction.tokenLimit.option.500k",
+					description: "settings.compaction.tokenLimit.option.500k.desc",
+				},
 			],
 		},
 	},
 
-	"compaction.handoffSaveToDisk": {
-		type: "boolean",
-		default: false,
+	"compaction.methodOrder": {
+		type: "array",
+		default: [...DEFAULT_COMPACTION_METHOD_ORDER],
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Save Handoff Docs",
-			description: "Save generated handoff documents to markdown files for the auto-handoff flow",
+			group: "settings.compaction.group.core",
+			label: "settings.compaction.methodOrder.title",
+			description: "settings.compaction.methodOrder.desc",
+			options: COMPACTION_METHOD_CHOICES,
+			ordered: true,
 		},
 	},
 
-	"compaction.remoteStreamingV2Enabled": {
+	"compaction.midTurnEnabled": {
 		type: "boolean",
 		default: true,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Remote Compaction V2",
-			description: "Use Responses streaming compaction for compatible remote compaction models",
+			group: "settings.compaction.group.core",
+			label: "settings.compaction.midTurn.title",
+			description: "settings.compaction.midTurn.desc",
 		},
 	},
 
@@ -3001,10 +3021,55 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Async Compaction",
-			description:
-				"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed",
+			group: "settings.compaction.group.behavior",
+			label: "settings.compaction.backgroundPre.title",
+			description: "settings.compaction.backgroundPre.desc",
+		},
+	},
+
+	"compaction.remoteStreamingV2Enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "settings.compaction.group.behavior",
+			label: "settings.compaction.remoteV2.title",
+			description: "settings.compaction.remoteV2.desc",
+			condition: "compactionRemoteMethod",
+		},
+	},
+
+	"compaction.handoffSaveToDisk": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "context",
+			group: "settings.compaction.group.behavior",
+			label: "settings.compaction.handoffDocs.title",
+			description: "settings.compaction.handoffDocs.desc",
+			condition: "compactionHandoffMethod",
+		},
+	},
+
+	"compaction.supersedeReads": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "settings.compaction.group.behavior",
+			label: "settings.compaction.supersedeReads.title",
+			description: "settings.compaction.supersedeReads.desc",
+		},
+	},
+
+	"compaction.dropUseless": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "settings.compaction.group.behavior",
+			label: "settings.compaction.dropUseless.title",
+			description: "settings.compaction.dropUseless.desc",
 		},
 	},
 
@@ -3013,9 +3078,9 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Per-Model Compaction Limits",
-			description: "Apply compaction.modelThresholds entries to the model they name instead of the global threshold",
+			group: "settings.compaction.group.limits",
+			label: "settings.compaction.perModelEnabled.title",
+			description: "settings.compaction.perModelEnabled.desc",
 		},
 	},
 
@@ -3024,10 +3089,10 @@ export const SETTINGS_SCHEMA = {
 		default: {} as Record<string, number | string | null>,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Model Compaction Limits",
-			description:
-				"Per-model overrides keyed by `provider/model-id` (or a trailing `provider/…*` prefix): a token count is the base the policy scales, `f90000` is a fixed trigger, and `80%` replaces the threshold percentage",
+			group: "settings.compaction.group.limits",
+			label: "settings.compaction.perModel.title",
+			description: "settings.compaction.perModel.desc",
+			condition: "compactionModelOverrides",
 		},
 	},
 
@@ -3036,9 +3101,9 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Notes-backed context windows (experimental)",
-			description: "Keep persistent notes and searchable raw history across context windows",
+			group: "settings.context.group.experimental",
+			label: "settings.compaction.notesBacked.title",
+			description: "settings.compaction.notesBacked.desc",
 		},
 	},
 
@@ -3062,9 +3127,9 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Idle Compaction",
-			description: "Compact context while idle when token count exceeds threshold",
+			group: "settings.compaction.group.limits",
+			label: "settings.compaction.idle.title",
+			description: "settings.compaction.idle.desc",
 		},
 	},
 
@@ -3073,19 +3138,20 @@ export const SETTINGS_SCHEMA = {
 		default: 200000,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Idle Compaction Threshold",
-			description: "Token count above which idle compaction triggers",
+			group: "settings.compaction.group.limits",
+			label: "settings.compaction.idleThreshold.title",
+			description: "settings.compaction.idleThreshold.desc",
+			condition: "compactionIdleEnabled",
 			options: [
-				{ value: "100000", label: "100K tokens" },
-				{ value: "200000", label: "200K tokens" },
-				{ value: "300000", label: "300K tokens" },
-				{ value: "400000", label: "400K tokens" },
-				{ value: "500000", label: "500K tokens" },
-				{ value: "600000", label: "600K tokens" },
-				{ value: "700000", label: "700K tokens" },
-				{ value: "800000", label: "800K tokens" },
-				{ value: "900000", label: "900K tokens" },
+				{ value: "100000", label: "settings.compaction.idleThreshold.option.100k" },
+				{ value: "200000", label: "settings.compaction.idleThreshold.option.200k" },
+				{ value: "300000", label: "settings.compaction.idleThreshold.option.300k" },
+				{ value: "400000", label: "settings.compaction.idleThreshold.option.400k" },
+				{ value: "500000", label: "settings.compaction.idleThreshold.option.500k" },
+				{ value: "600000", label: "settings.compaction.idleThreshold.option.600k" },
+				{ value: "700000", label: "settings.compaction.idleThreshold.option.700k" },
+				{ value: "800000", label: "settings.compaction.idleThreshold.option.800k" },
+				{ value: "900000", label: "settings.compaction.idleThreshold.option.900k" },
 			],
 		},
 	},
@@ -3095,40 +3161,18 @@ export const SETTINGS_SCHEMA = {
 		default: 300,
 		ui: {
 			tab: "context",
-			group: "Compaction",
-			label: "Idle Compaction Delay",
-			description: "Seconds to wait while idle before compacting",
+			group: "settings.compaction.group.limits",
+			label: "settings.compaction.idleDelay.title",
+			description: "settings.compaction.idleDelay.desc",
+			condition: "compactionIdleEnabled",
 			options: [
-				{ value: "60", label: "1 minute" },
-				{ value: "120", label: "2 minutes" },
-				{ value: "300", label: "5 minutes" },
-				{ value: "600", label: "10 minutes" },
-				{ value: "1800", label: "30 minutes" },
-				{ value: "3600", label: "1 hour" },
+				{ value: "60", label: "settings.compaction.idleDelay.option.1m" },
+				{ value: "120", label: "settings.compaction.idleDelay.option.2m" },
+				{ value: "300", label: "settings.compaction.idleDelay.option.5m" },
+				{ value: "600", label: "settings.compaction.idleDelay.option.10m" },
+				{ value: "1800", label: "settings.compaction.idleDelay.option.30m" },
+				{ value: "3600", label: "settings.compaction.idleDelay.option.1h" },
 			],
-		},
-	},
-
-	"compaction.supersedeReads": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "context",
-			group: "Compaction",
-			label: "Supersede Stale Reads",
-			description: "Prune older read results when the same file is read again (cache-aware, runs every turn)",
-		},
-	},
-
-	"compaction.dropUseless": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "context",
-			group: "Compaction",
-			label: "Elide Uneventful Results",
-			description:
-				"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)",
 		},
 	},
 
@@ -3139,7 +3183,7 @@ export const SETTINGS_SCHEMA = {
 		default: "none",
 		ui: {
 			tab: "context",
-			group: "Experimental",
+			group: "settings.context.group.experimental",
 			label: "Snapcompact System Prompt",
 			description:
 				"Experimental: render selected system prompt text as dense PNG image(s) and attach to the first user message (vision models only). Saves tokens; loses prompt caching for imaged text.",
@@ -3164,7 +3208,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "context",
-			group: "Experimental",
+			group: "settings.context.group.experimental",
 			label: "Snapcompact Tool Results",
 			description:
 				"Experimental: render large historical tool results as dense PNG image(s) instead of text (vision models only). Saves tokens on accumulated read/search output.",
@@ -3191,7 +3235,7 @@ export const SETTINGS_SCHEMA = {
 		default: "auto",
 		ui: {
 			tab: "context",
-			group: "Experimental",
+			group: "settings.context.group.experimental",
 			label: "Tool Calling Mode",
 			description:
 				"Controls how tools are exposed to the model. Auto uses provider-native tool calls unless the selected model is marked as not supporting them, then falls back to the GLM owned dialect. Native forces provider-native tools; the other values force the named owned dialect. Applies on session start.",
@@ -3223,7 +3267,7 @@ export const SETTINGS_SCHEMA = {
 		default: "auto",
 		ui: {
 			tab: "context",
-			group: "Experimental",
+			group: "settings.context.group.experimental",
 			label: "Snapcompact Shape",
 			description:
 				"Frame shape snapcompact prints text with (compaction archive and inline imaging). Auto picks a shape tuned for the current model.",

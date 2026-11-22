@@ -12,6 +12,7 @@ import { errors } from "./errors.ts";
 import { mcp } from "./mcp.ts";
 import { selector } from "./selector.ts";
 import { settings } from "./settings.ts";
+import { settingsCompaction } from "./settings-compaction.ts";
 import { setup } from "./setup.ts";
 import { shell } from "./shell.ts";
 import { swarm } from "./swarm.ts";
@@ -27,6 +28,7 @@ export const enUS: TranslationMap = {
 	...mcp,
 	...selector,
 	...settings,
+	...settingsCompaction,
 	...setup,
 	...shell,
 	...swarm,
@@ -45,6 +47,7 @@ export const enUS: TranslationMap = {
 		mcp,
 		selector,
 		settings,
+		settingsCompaction,
 		setup,
 		shell,
 		swarm,
