@@ -2,6 +2,7 @@ import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -44,21 +45,28 @@ import { Icon } from "../vendor/oc-icons";
  * 卡片除目录列表之外的固定高度 —— **仅作首帧的估值**,挂载后立刻用实测替换。
  *
  * 数值来自随发布版的字号阶梯(`tokens.css` 的 `--ui-font-size` 15px /
- * `--ui-font-size-xs` 13px),不是测试夹具那套 11px/13px:
- * Chromium 实测(卡片宽 / 语言 → 卡片高 − 列表高)
- *  - 152px(168 侧栏)/ en → 91.25  ← 最坏:「11 个目录 · 4 个会话」折两行(39 vs 19.5)
- *  - 152px 或 164px / zh → 71.75
- *  - 224px、240px / 任一  → 71.75
+ * `--ui-font-size-xs` 13px),不是测试夹具那套 11px/13px。Chromium 实测
+ * (卡片宽 / 语言 → 卡片高 − 列表高),2026-11-22 在 hover-card 配方
+ * (`padding: 12px 14px 10px`、标题 + 元信息行)与行内按钮之后重测,
+ * **字号档位 = 默认 15px**(`--gui-font-scale` 未设,`--mp-text-scale` = 1):
+ *  - 152px(168 侧栏)/ en 或 zh → 93.25  ← 最坏:「N 个目录 · M 个会话」折两行
+ *  - 164px / 任一 → 93.25
+ *  - 224px、240px / 任一 → 73.75
  *
- * 这组数字只保证首帧不差太远:实测(`measureCard`)在 useLayoutEffect 里跑在
- * 首次绘制之前,真实的 chrome 与行高会回灌给 {@link fitProjectCard},所以
- * 翻转方向与列表上限用的是真值,而不是这套估值。字号被放大、语言换掉、主题
- * 改行高都不再依赖常量正确。 */
-export const CARD_CHROME_HEIGHT = 92;
+ * 取 93 而不是 94:估值宁可略低一点——首帧若把卡片算高了,它会先翻向一侧再被
+ * 实测纠正;算矮只会先贴下方,两种偏差都只持续一帧。真实值由 `measureCard`
+ * 在 `useLayoutEffect` 里绘制前量出并回灌给 {@link fitProjectCard},所以翻转
+ * 方向与列表上限用的是真值,不依赖这套估值。字号被放大、语言换掉、主题改行高
+ * 都不再需要改这里。 */
+export const CARD_CHROME_HEIGHT = 93;
 /** 目录列表自身的高度上限:`min(280px, 50vh)`(见 `gui-chrome.css`)。 */
 export const LIST_MAX_HEIGHT = 280;
-/** 一行目录的步进(行高 + 1px 行间距)。实测值同上:随发布版阶梯为 26.8 行高 /
- *  27.8 步进;这里的 28 同样是首帧估值。 */
+/** 一行目录的步进(行高 + 1px 行间距)。同上重测,**默认 15px 档位**:行盒
+ *  27.8px 步进(13px 字号 + 3px 上下内边距 + 1px 列表 gap)。
+ *
+ *  这里取 28 而不是按 17px 档位量到的 31:字号阶梯跟着 `--gui-font-scale` 走,
+ *  用户放大字号时行会变高,首帧估值偏小一点只让列表先算短一帧;反过来取大值
+ *  会让默认档位下的首帧明显偏长。真实步进同样由 `measureCard` 回灌。 */
 export const ROW_HEIGHT = 28;
 /** 卡片宽度 —— 与 `gui-chrome.css` 的 `width: 240px` 同一事实,定位需要它。 */
 export const CARD_WIDTH = 240;
@@ -208,7 +216,7 @@ export function measureCard(card: HTMLElement | null): CardMetrics | null {
 	// 未布局时为 0,读数不可信。
 	if (cardHeight <= 0) return null;
 	const chrome = cardHeight - list.getBoundingClientRect().height;
-	const rows = list.querySelectorAll<HTMLElement>(".gui-project-hover-card-row");
+	const rows = list.querySelectorAll<HTMLElement>(".gui-hover-card-row");
 	if (rows.length === 0) return null;
 	const row =
 		rows.length > 1
@@ -261,6 +269,11 @@ export function ProjectHoverCard({
 	cardRef,
 }: ProjectHoverCardProps): ReactNode {
 	const localRef = useRef<HTMLDivElement | null>(null);
+	// 两阶段入场（`useTwoPhaseEnter`，全仓浮层的同一形状）：卡片先以
+	// opacity 0 挂载、合成毛玻璃背景，下一帧才翻 `--entered` 并只动
+	// transform。见 gui-chrome.css 配方注释——在 backdrop-filter 上连续
+	// 动画 opacity 会让真实屏幕合成器跳过 backdrop 采样。
+	const enteredCls = useTwoPhaseEnter(true);
 	// 挂载实测出来的真实几何。首帧用常量估值,`useLayoutEffect` 在绘制前跑完,
 	// 所以用户看到的第一次定位就已经按实测算过;常量只是"还没量到"时的过渡值。
 	const [metrics, setMetrics] = useState<CardMetrics | null>(null);
@@ -307,7 +320,9 @@ export function ProjectHoverCard({
 				localRef.current = element;
 				cardRef?.(element);
 			}}
-			className={`gui-project-hover-card${fit.above ? " gui-project-hover-card--above" : ""}`}
+			className={`gui-hover-card gui-project-hover-card${fit.above ? " gui-project-hover-card--above" : ""}${
+				enteredCls ? " gui-hover-card--entered" : ""
+			}`}
 			style={style}
 			role="group"
 			aria-label={name}
@@ -323,49 +338,59 @@ export function ProjectHoverCard({
 				onRequestReturnFocus();
 			}}
 		>
-			<div className="gui-project-hover-card-title" title={name}>
+			<div className="gui-hover-card-title gui-project-hover-card-title" title={name}>
 				{name}
 			</div>
-			<div className="gui-project-hover-card-meta">
-				<Icon name="folder" className="gui-project-hover-card-icon" />
+			<div className="gui-hover-card-meta">
+				<Icon name="folder" className="gui-hover-card-icon" />
 				<span>
 					{directories.length === 1
 						? t("general.projectDirectoryOne")
 						: t("general.projectDirectoryCount", { count: directories.length })}
 				</span>
-				<span className="gui-project-hover-card-dot" aria-hidden="true" />
+				<span className="gui-hover-card-dot" aria-hidden="true" />
 				<span>
 					{sessionCount === 1
 						? t("settings.sessionCountOne")
 						: t("settings.sessionCountLabel", { count: sessionCount })}
 				</span>
 			</div>
-			<ul className="gui-project-hover-card-list">
-				{directories.map(directory => (
-					<li key={directory.path} className="gui-project-hover-card-row">
-						<Icon name={directory.primary ? "folder-shared" : "folder"} className="gui-project-hover-card-icon" />
-						<span className="gui-project-hover-card-text" title={directory.path}>
-							{labelOf(directory.path)}
-						</span>
-						{directory.primary && (
-							<span className="gui-project-hover-card-chip">{t("settings.primaryDirectory")}</span>
-						)}
-						{onOpenDirectory && (
-							<button
-								type="button"
-								className="gui-project-hover-card-open"
-								title={`${openLabel}: ${directory.path}`}
-								aria-label={`${openLabel}: ${directory.path}`}
-								onClick={event => {
-									event.stopPropagation();
-									onOpenDirectory(directory.path);
-								}}
-							>
-								<Icon name="folder-open" className="h-3 w-3" />
-							</button>
-						)}
-					</li>
-				))}
+			<ul className="gui-hover-card-rows gui-project-hover-card-list">
+				{directories.map(directory => {
+					const icon = directory.primary ? "folder-shared" : "folder";
+					const row = (
+						<>
+							<Icon name={icon} className="gui-hover-card-icon" />
+							<span className="gui-hover-card-text" title={directory.path}>
+								{labelOf(directory.path)}
+							</span>
+							{directory.primary && (
+								<span className="gui-hover-card-chip">{t("settings.primaryDirectory")}</span>
+							)}
+						</>
+					);
+					// 整行就是打开目录的目标：图标、名字与行尾箭头都只是它的
+					// 内容，点在左侧内边距或名字右边的空白处同样会打开。没有
+					// 打开动作时退化成只读行，不留一个点不动的按钮。
+					return (
+						<li key={directory.path}>
+							{onOpenDirectory ? (
+								<button
+									type="button"
+									className="gui-hover-card-row gui-hover-card-row--action gui-project-hover-card-row"
+									title={`${openLabel}: ${directory.path}`}
+									aria-label={`${openLabel}: ${directory.path}`}
+									onClick={() => onOpenDirectory(directory.path)}
+								>
+									{row}
+									<Icon name="arrow-right-s" className="gui-project-hover-card-go" />
+								</button>
+							) : (
+								<span className="gui-hover-card-row gui-project-hover-card-row">{row}</span>
+							)}
+						</li>
+					);
+				})}
 			</ul>
 		</div>
 	);

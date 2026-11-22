@@ -132,12 +132,16 @@ describe("session hover card fork line", () => {
 		await mount(<SessionHoverCard meta={new Map()} />);
 		await act(async () => {
 			reportSessionHover(payload);
-			// The card shows after ~350ms; the entered flag needs one more frame.
+			// The card shows after ~350ms; the entrance then needs the two-phase
+			// rAF hops before `--entered` (and its transform slide) is applied.
 			await Bun.sleep(420);
 		});
 		await flush();
 		const card = document.querySelector<HTMLElement>(".gui-session-hover-card");
 		if (!card) throw new Error("hover card did not render");
+		// The recipe class carries the entire surface; assert the component still
+		// composes it rather than only its own modifier.
+		expect(card.classList.contains("gui-hover-card")).toBe(true);
 		return card;
 	}
 

@@ -108,6 +108,40 @@ scope:
 
 新增组件时，请同时更新本目录的这一行，并在 `docs/gui-design.md` 记录它遵守的契约。
 
+## 悬停卡（同一份配方）
+
+侧栏的两张悬停卡——会话卡（`SessionHoverCard.tsx`，288px）与项目卡（`ProjectHoverCard.tsx`，240px）——在 `gui-chrome.css` 里是**一份**配方：`.gui-hover-card` 及其 `-title` / `-meta` / `-dot` / `-rows` / `-row` / `-icon` / `-label` / `-text` / `-chip`。紧随其后的两张卡的区块只声明各自内容改了什么；新的浮层从这些部件起步，而不是再抄六条声明。
+
+| 部件 | 取值 | 为什么 |
+| --- | --- | --- |
+| 表面 | L2 玻璃：`color-mix` 覆盖层 + `backdrop-filter` + 六层阴影 | 与 `.gui-menu-popup` 同层；不另造玻璃家族 |
+| 标题 | `--ui-font-size`、600、`line-height: 1.35` | 两张卡同一个标题档位 |
+| 元信息行 | `--ui-font-size-xs`、2px 分隔点、一个 accent chip | 一行可读的短事实，而不是标签/值堆叠 |
+| 行盒 | `--ui-font-size-xs`、`var(--color-text-muted)`，名字格用 `var(--color-text)`、6px 间距、`3px 4px`、12px 图标 0.75 不透明度、单行省略 | 4px 横向内边距既是命中区，也是与标题对齐的文字栅格。行与图标是次要色调，只有名字是正文色——卡片自己的规则不能重新声明行的 `color`，否则特异性打平、按源码顺序胜出 |
+| 行组 | `.gui-hover-card-rows`：`1px` 步进 | 一叠事实行读成一片栅格，而不是五个独立块 |
+| 入场 | 两阶段：基础 `opacity: 0`，`--entered` 把 opacity 一步翻到 1 **并**启动 `gui-hover-card-in`，关键帧只动 **transform**（140ms `--spring`）；方向由 `--gui-hover-card-shift-x` / `-y` 给出 | 两阶段揭示上的一个滑动手势。在 `backdrop-filter` 表面上动画 opacity 会让 Chromium 在真实合成器上跳过 backdrop 采样，整段淡入期间磨砂消失（见下文） |
+| 隐藏态 | 基础规则里的 `opacity: 0`，由 `--entered` 取消 | 减弱动效或 `.gui-motion-off` 下 `animation: none` 时，`--entered` 已经把 opacity 设为 1，卡片照常落位可见，不会停在透明 |
+| 减弱动效 | `prefers-reduced-motion` 与 `.gui-motion-off` 下对 `.gui-hover-card--entered` 设 `animation: none` | 只去掉滑动；opacity 的翻转不是动画，所以仍然生效 |
+
+**按内容合理不同的部分：** 宽度（会话卡 288px、标题两行截断，因为会话标题长；项目卡 240px、标题单行，因为项目名是一个名字）、列表（项目卡的目录列表有自己的高度上限并自己滚动，由 `fitProjectCard` 按实测空间夹取；会话卡是一小叠事实行，从不滚动）、入场方向（会话卡从行的右侧滑入，项目卡从上方或下方滑入，包括 `--above` 翻转）。
+
+**命中区是诚实的。** 只有真的会响应的行才带 `.gui-hover-card-row--action`，而且铺底色的元素就是执行动作的元素。项目卡的目录行**本身就是**一个填满行盒的 `<button>`（图标、名字、主目录 chip 与行尾装饰箭头都在里面），所以底色覆盖的正是会导航的那 212px——点左侧内边距或名字右边的空白同样打开文件夹，光标是 pointer，焦点环也在行上。会话卡的行是只读的，且整张卡是 `pointer-events: none`，里面的任何元素都不会 hover。`.gui-hover-card-chip` 两张卡共用（主目录 / 会话模式），chip 的文案来源各自保留。
+
+**入场为什么不做淡入。** 配方的隐藏态是基础 `opacity: 0`，`--entered` 一步翻到 1，关键帧只动 transform。这是仓库里每张磨砂浮层共同的实测规则：在 `backdrop-filter` 元素上动画 opacity，会让 Chromium 的真实屏幕合成器跳过 backdrop 采样，卡片整段淡入期间读起来就是普通半透明，动画结束才"突然变毛玻璃"。CDP 截图走离屏合成，仍然显示模糊，所以这件事用样式探针测不出来——见 `docs/gui-design.md`（两阶段入场）与 `docs/gui-implementation.md` §6.5，以及两个在用样例（`.gui-menu-popup`、`.gui-board-focus`）。配方是之后每个浮层要照抄的东西，所以它承载这条规则，而不是重新推导。
+
+**不透明回落也是配方的一部分。** `packages/client-core/src/styles/overlay-fallback.css` 在所有组件样式表之后加载，在三种情况下把半透明填充换成 `--color-surface-raised` 加 sheen 并去掉 `backdrop-filter`：`[data-platform="win32"]`、`prefers-reduced-transparency: reduce` 与 `@supports not (backdrop-filter: …)`。它写的是 **`.gui-hover-card`** 而不是某一张卡，所以第三张用配方的卡不需要改这个文件。win32 与减弱透明度两个分支由 `hover-card-geometry.test.ts` 按计算样式对两张卡逐一验证（同一条测试还验证离开这些分支时玻璃态保持不变）；`@supports` 分支在支持该特性的浏览器里无法强制触发，但它与其他两个分支共用同一份选择器列表。
+
+契约：`apps/desktop/test/project-hover-card.test.tsx`（状态、portal、翻转）、`apps/desktop/test/session-fork-badge.test.tsx`（会话卡的「分叉自」行）与 `apps/desktop/test/hover-card-geometry.test.ts`（真实 Chromium：两张卡的内边距、行步进、标题截断、入场只动 transform、两阶段隐藏帧、减弱动效直接落位、目录行整行可点，以及 win32 / 减弱透明度下的不透明回落）。
+
+### 它背后的收敛规则
+
+用户的反馈不是「把会话卡做漂亮点」，而是「项目卡怎么看起来更精致？」——两个在不同时间建成的同类组件之间的**完成度分叉**。由此得出的规则，对下一张浮层同样适用：
+
+1. **看起来更精致的新组件成为基准。** 新建的表面明显比老兄弟更完整时，老的那个向它收敛；新组件的选择成为下一个表面的起点，而不是每次重新发现。兄弟之间的完成度分叉本身就是缺陷，即使两者单独看都说得过去。
+2. **说清要素，而不是说品味。** 造成这次差距的三个要素具体且可复用：**有真实命中区的紧凑行栅格**（真实的纵向步进 + 4px 内边距，且落在执行动作的元素上）、**一条结构化的元信息行**（分隔点 + 一个 accent chip）而不是标签/值堆叠、以及**两阶段揭示上的一个滑动手势**——卡片以 `opacity: 0` 挂载且无动画，`--entered` 一步翻转 opacity，关键帧只滑动 4–6px。抄要素，不抄像素；注意要素是**滑动**而不是淡入——在磨砂玻璃上动画 opacity 会破坏磨砂（见上文「入场为什么不做淡入」）。
+3. **在第二份副本时就抽取，而不是第四份。** 这两张卡已经把同样的六条声明抄进了同一个文件。配方（`.gui-hover-card` 及其部件）就是那次抽取，所以第三张悬停卡消费它，而不是再加一份副本。
+4. **反向规则：收敛不改行为。** 只有当点击一行真的会做事时，这一行才获得 hover 提示。项目卡的目录行会打开，会话卡的行是只读的，这个不对称是正确的，保持不变——收敛的是行栅格，不是命中区。收敛只关乎完成度，绝不等于给一个表面加上它并不具备的动作。
+
 ## 溢出契约
 
 滚动容器要声明**它用哪个轴、以及它不许用哪个轴**。只设置 `overflow-x` / `overflow-y` 之一时另一个会计算为 `auto`(规范不允许 `visible` 作为配对值),于是纵向列表悄悄也变成横向滚动容器——第一个比内容盒宽的行就会在**本来已经显示完整**的内容下面长出滚动条。项目悬浮卡就出过这个缺陷(用户原话:「内容明明显示完整却出现了不该出现的横向滚动」),同样的形状在桌面样式里还有约 70 处,所以这是一条带护栏的类别规则,而不是单点补丁。
