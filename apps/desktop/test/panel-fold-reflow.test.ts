@@ -69,7 +69,7 @@ afterAll(async () => {
 }, 60_000);
 
 describe("right panel fold", () => {
-	// @guard: revert apps/desktop/src/styles/gui-chat.css:5164 | 		width 320ms 0ms,
+	// @guard: revert apps/desktop/src/styles/gui-chat.css:5180 | 		width 320ms 220ms,
 	// @guard: test the panel's box holds — width, left edge and gutter — until one snap
 	test("the panel's box holds — width, left edge and gutter — until one snap", async () => {
 		const result = await page.evaluate(async () => {

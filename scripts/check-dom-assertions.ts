@@ -49,7 +49,7 @@ const DOM_QUERY =
 	/(?:\b(?:querySelector|querySelectorAll|closest|getElementById|getElementsByTagName|getElementsByClassName)\s*\(|\b(?:firstElementChild|lastElementChild|nextElementSibling|previousElementSibling|parentElement)\b)/;
 
 /** The three matchers that say "present" or "absent" and serialise a node when they fail. */
-const NODE_MATCHER = /^\s*\.\s*(?:not\s*\.\s*)?(?:toBeNull|toBeDefined|toBeUndefined)\s*\(/;
+const NODE_MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeNull|toBeDefined|toBeUndefined)\s*\(/;
 
 export interface DomAssertionSite {
 	file: string;
@@ -102,7 +102,7 @@ export function collectDomAssertions(file: string, source: string): DomAssertion
 		sites.push({
 			file,
 			line,
-			text: `expect(${argument.replace(/\s+/g, " ").trim()})${matcher[0].trim()}`,
+			text: `expect(${argument.replace(/\s+/g, " ").trim()}).${matcher[1] ?? ""}${matcher[2]}()`,
 		});
 	}
 	return sites;
