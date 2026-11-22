@@ -34,7 +34,10 @@ describe("parseMarkers", () => {
 	test("accepts an empty defect as a line deletion", () => {
 		// The catalog cache guard's defect IS the missing line, so the marker has
 		// to be able to say "delete this" without inventing a replacement.
-		const markers = parseMarkers("x.test.tsx", "// @guard: revert apps/desktop/src/components/ModelSelector.tsx:399 |");
+		const markers = parseMarkers(
+			"x.test.tsx",
+			"// @guard: revert apps/desktop/src/components/ModelSelector.tsx:399 |",
+		);
 		expect(markers[0]?.defect).toBe("");
 	});
 

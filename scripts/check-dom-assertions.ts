@@ -75,8 +75,8 @@ interface Baseline {
 export function collectDomAssertions(file: string, source: string): DomAssertionSite[] {
 	const sites: DomAssertionSite[] = [];
 	const text = source;
-	let index = 0;
-	while ((index = text.indexOf("expect(", index)) >= 0) {
+	let index = text.indexOf("expect(");
+	while (index >= 0) {
 		const start = index + "expect(".length;
 		let depth = 1;
 		let quote: string | null = null;
@@ -94,11 +94,11 @@ export function collectDomAssertions(file: string, source: string): DomAssertion
 		}
 		const argument = text.slice(start, cursor - 1);
 		const matchStart = cursor;
-		index = cursor;
+		index = text.indexOf("expect(", cursor);
 		if (!DOM_QUERY.test(argument)) continue;
 		const matcher = text.slice(matchStart).match(NODE_MATCHER);
 		if (!matcher) continue;
-		const line = text.slice(0, index).split("\n").length;
+		const line = text.slice(0, matchStart).split("\n").length;
 		sites.push({
 			file,
 			line,
@@ -175,9 +175,7 @@ function main(): void {
 	if (violations.length > 0) {
 		console.error(`dom-assertions: ${violations.length} file(s) gained DOM-node presence assertions`);
 		for (const violation of violations) {
-			console.error(
-				`  ${violation.file}: ${violation.count} site(s), baseline allows ${violation.allowed}`,
-			);
+			console.error(`  ${violation.file}: ${violation.count} site(s), baseline allows ${violation.allowed}`);
 			for (const site of sites.filter(item => item.file === violation.file).slice(violation.allowed)) {
 				console.error(`    ${site.file}:${site.line}  ${site.text}`);
 			}

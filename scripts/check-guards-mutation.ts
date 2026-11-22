@@ -425,6 +425,12 @@ async function main(): Promise<void> {
 	const listOnly = argv.includes("--list");
 	const asJson = argv.includes("--json");
 	const keepScratch = argv.includes("--keep");
+	const timeoutArg = argv.find(arg => arg.startsWith("--timeout-ms="));
+	const timeoutMs = timeoutArg ? Number(timeoutArg.split("=")[1]) : undefined;
+	if (timeoutArg && (!Number.isFinite(timeoutMs) || (timeoutMs as number) <= 0)) {
+		console.error(`guards-mutation: --timeout-ms needs a positive number, got ${JSON.stringify(timeoutArg)}`);
+		process.exit(1);
+	}
 	const files = argv.filter(arg => !arg.startsWith("--"));
 
 	const candidates = guardFiles(root, files.length > 0 ? files : undefined);
@@ -435,7 +441,9 @@ async function main(): Promise<void> {
 	}
 	if (listOnly) {
 		for (const marker of markers) {
-			console.log(`${marker.file}:${marker.markerLine}  ${marker.target}:${marker.line}  ${marker.defect || "<deleted>"}`);
+			console.log(
+				`${marker.file}:${marker.markerLine}  ${marker.target}:${marker.line}  ${marker.defect || "<deleted>"}`,
+			);
 		}
 		return;
 	}
@@ -449,8 +457,19 @@ async function main(): Promise<void> {
 		// The scratch tree is HEAD; a marker on an uncommitted guard would run the
 		// committed test instead. Refuse rather than report on the wrong bytes.
 		for (const marker of markers) {
+			const scratchFile = path.join(scratch, marker.file);
+			if (!fs.existsSync(scratchFile)) {
+				results.push({
+					marker,
+					outcome: "error",
+					detail: `${marker.file} is not committed — mutation control tests HEAD, so commit it first`,
+					failedTests: [],
+					durationMs: 0,
+				});
+				continue;
+			}
 			const working = fs.readFileSync(path.join(root, marker.file), "utf8");
-			const committed = fs.readFileSync(path.join(scratch, marker.file), "utf8");
+			const committed = fs.readFileSync(scratchFile, "utf8");
 			if (working !== committed) {
 				results.push({
 					marker,
@@ -462,7 +481,7 @@ async function main(): Promise<void> {
 				continue;
 			}
 			console.log(`  ${marker.file}  ${marker.target}:${marker.line}`);
-			results.push(runMarker(marker, scratch));
+			results.push(runMarker(marker, scratch, { timeoutMs }));
 		}
 	} finally {
 		run(["git", "worktree", "remove", "--force", scratch], root, 300_000);

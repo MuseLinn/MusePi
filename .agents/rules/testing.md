@@ -7,6 +7,7 @@ Load before changing behavior, tests, smoke infrastructure, or delivery verifica
 Tests and smoke runs must never write `~/.musepi/agent/sessions/` or share `%TEMP%/musepi-daemon` with production.
 
 - Placement: a unit test that exercises one module with local fixtures sits next to that module (`src/**/*.test.ts(x)`); suites that compose several modules, drive the GUI, or need shared helpers live in `<package>/test/`. Do not create a third location.
+- Run package tests from the package. A package's `bunfig.toml` — `apps/desktop` preloads the DOM shim there — is read from the working directory, so `bun test apps/desktop/test/foo.test.tsx` from the repo root silently drops it. The same file measured **21 pass / 0 fail** from `apps/desktop` and **20 pass / 1 fail** from the root on one commit, with no indication which was right. Use `bun run test:desktop [file...]` from the root (a wrapper that changes into the package and forwards the arguments), or `bun run test` inside the package.
 - Real session-storage suites use `test/helpers/isolate-agent-dir.ts`: `isolateAgentDirForTest` in `beforeAll`, `restoreAgentDirForTest` in `afterAll`, with a 30-second hook timeout on Windows. Suites passing an explicit isolated session directory for every write are exempt.
 - A temporary cwd only changes the session slug; it does not isolate the session root.
 - Manual desktop, daemon, or real-model smoke runs go through `bun scripts/dev-smoke.ts -- <command>`.
@@ -22,6 +23,17 @@ Good tests cover transformations, distinct branches, malformed input, precedence
 Prefer contract-level assertions and focused package verification. Assert externally observable behavior (state transitions, output/error mapping, the world after an action), not DOM classes, data attributes, private fields, or "the marker is absent" checks that can flip with an implementation change while the feature stays correct. Do not duplicate the same behavior at multiple abstraction levels. Small low-risk changes need tests only when they protect a real contract or regression-prone edge.
 
 A regression guard must be shown to fail on the unfixed code: reproduce the regression, watch the guard go red for that reason, then revert. A guard that passes both ways guards nothing. For delegated fixes, re-run the gates yourself on the actual tree — a report describes intent, not what landed.
+
+**Mutation control is executable, not remembered.** Five guards in one week passed with their defect restored, each found by a human who thought to try. A guard now names its own revert on the test file, and `bun run check:guards-mutation` applies it in a scratch worktree and reports the outcome per guard:
+
+```ts
+// @guard: revert apps/desktop/src/styles/gui-chrome.css:869 | color: inherit;
+// @guard: test both cards' rows take the recipe's muted tone
+```
+
+The pipe carries what the line reads **in the broken build** (empty deletes it), never a copy of the good text — a stored copy goes stale on the first reformat and then either blocks an honest revert or rewrites the wrong line. Outcomes are `caught` (the named test failed with a real diff), `unproven` (timed out, or the suite still passed — a timeout proves nothing about discrimination, and `expect(<DOM node>).toBeNull()` reddens exactly that way), and `error` (the revert could not be applied, or the guard already fails unmodified). Anything but `caught` exits non-zero. It is not in `check:tools`: it takes minutes, needs a browser, and states a fact about a guard rather than about the product.
+
+**Do not assert presence with `toBeNull`/`toBeDefined` on a DOM node.** A failing `expect(querySelector(...)).toBeNull()` makes Bun's reporter serialise the node and stall: measured here, a guard that should fail in milliseconds reported `timed out after 5000ms` and the process took 69.8s, so the failure reads as flake. The boolean form failed in 1.26ms with a proper diff. Write `expect(node === null).toBe(true)` or `expect(rows.length).toBe(0)`. `scripts/check-dom-assertions.ts` (in `check:tools`) fails on a new occurrence against `scripts/dom-assertions-baseline.json`; re-record with `--write` after paying a file's debt down.
 
 Tests must be safe in the full suite:
 

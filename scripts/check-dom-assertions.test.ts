@@ -27,7 +27,7 @@ describe("collectDomAssertions", () => {
 	});
 
 	test("flags toBeDefined on a DOM query", () => {
-		expect(sites("expect(document.getElementById(\"root\")).toBeDefined();")).toHaveLength(1);
+		expect(sites('expect(document.getElementById("root")).toBeDefined();')).toHaveLength(1);
 	});
 
 	test("flags a node reached through a child accessor", () => {
@@ -63,9 +63,13 @@ describe("collectDomAssertions", () => {
 	});
 
 	test("reports the line of the assertion", () => {
-		const source = ["import { test } from \"bun:test\";", "", 'test("x", () => {', '\texpect(host.querySelector(".a")).toBeNull();', "});"].join(
-			"\n",
-		);
+		const source = [
+			'import { test } from "bun:test";',
+			"",
+			'test("x", () => {',
+			'\texpect(host.querySelector(".a")).toBeNull();',
+			"});",
+		].join("\n");
 		expect(sites(source)[0]?.line).toBe(4);
 	});
 });
