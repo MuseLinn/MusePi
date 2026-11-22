@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="assets/readme-banner.png" width="1280" alt="MusePi — 桌面优先的 AI 编程助手">
+  <img src="assets/readme-banner.png" width="1280" alt="MusePi — 你的 AI 搭档，不止写代码">
 </p>
 
 <p align="center">
-  <strong>MusePi</strong> — 桌面优先的 AI 编程助手
+  <strong>MusePi</strong> — 你的 AI 搭档，不止写代码
 </p>
 
 <p align="center">

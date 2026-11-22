@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="assets/readme-banner.png" width="1280" alt="MusePi — desktop-first AI coding agent">
+  <img src="assets/readme-banner.png" width="1280" alt="MusePi — your AI partner, more than writing code">
 </p>
 
 <p align="center">
-  <strong>MusePi</strong> — a desktop-first AI coding agent
+  <strong>MusePi</strong> — your AI partner, more than writing code
 </p>
 
 <p align="center">
