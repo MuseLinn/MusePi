@@ -523,15 +523,21 @@ describe("fitProjectCard — the flip and list-height decision", () => {
 		expect(fit.listMax).toBe(LIST_MAX_HEIGHT);
 	});
 
-	it("derives its first-frame estimate from the shipped font ladder", () => {
-		// Re-measured 2026-11-22 after the hover-card recipe (padding 12px 14px
-		// 10px) and the row-as-button box: chrome is 92.25px at 152/164px wide
-		// and 73.25px at 224/240px, and a row steps 30–31px. These constants are
-		// only the first-frame estimate — `measureCard` replaces them with the
-		// real geometry before paint — but they must not be derived from the test
-		// fixture's 11px ladder, or the first frame is wrong on a real screen.
-		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(92.25);
-		expect(ROW_HEIGHT).toBeGreaterThanOrEqual(30);
+	it("derives its first-frame estimate from the shipped font ladder at the default scale", () => {
+		// Measured 2026-11-22 with the real cascade (tokens.css + every gui sheet +
+		// overlay-fallback), hover-card recipe padding 12px 14px 10px, row-as-button
+		// box, **default font scale** (--gui-font-scale unset, --mp-text-scale 1):
+		//   chrome 93.25px at 152/164px wide, 73.75px at 224/240px
+		//   row step 27.8px
+		// A 17px user scale gives a 31px step and ~102px chrome — a different
+		// scale, not this default. These constants are only the first-frame
+		// estimate (`measureCard` replaces them before paint), but they must not
+		// be derived from the fixture's 11px ladder, or the first frame is wrong
+		// on a real screen. Two-sided: a constant that drifts either way fails.
+		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(93.25 - 1);
+		expect(CARD_CHROME_HEIGHT).toBeLessThanOrEqual(93.25 + 1);
+		expect(ROW_HEIGHT).toBeGreaterThanOrEqual(27.8 - 1);
+		expect(ROW_HEIGHT).toBeLessThanOrEqual(27.8 + 1);
 	});
 
 	it("uses caller-supplied metrics instead of the estimate", () => {

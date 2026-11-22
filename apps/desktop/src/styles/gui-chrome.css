@@ -858,13 +858,14 @@
  * 与铺底色的元素是同一个。 */
 .gui-project-hover-card-row {
 	width: 100%;
-	/* button 的默认样式清零：行盒的排版（内边距、间距、圆角、字号）来自
-	 * `.gui-hover-card-row`。用 `font: inherit` 会把字号一并重置成继承值
-	 * （16px），盖掉配方里的 xs 档位——只接字体族，字号留在配方。 */
+	/* button 的默认样式清零：行盒的排版（内边距、间距、圆角、字号、颜色）
+	 * 来自 `.gui-hover-card-row`。两条规则特异性相同，这条在后面，所以任何
+	 * 在这里重复声明的属性都会盖掉配方——`font: inherit` 会把字号重置成
+	 * 继承的 16px，`color: inherit` 会把行与图标的次要色调重置成正文色。
+	 * 只接字体族，其余留在配方里。 */
 	margin: 0;
 	border: 0;
 	background: transparent;
-	color: inherit;
 	font-family: inherit;
 	text-align: start;
 	cursor: pointer;

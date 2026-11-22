@@ -117,7 +117,7 @@ scope:
 | 表面 | L2 玻璃：`color-mix` 覆盖层 + `backdrop-filter` + 六层阴影 | 与 `.gui-menu-popup` 同层；不另造玻璃家族 |
 | 标题 | `--ui-font-size`、600、`line-height: 1.35` | 两张卡同一个标题档位 |
 | 元信息行 | `--ui-font-size-xs`、2px 分隔点、一个 accent chip | 一行可读的短事实，而不是标签/值堆叠 |
-| 行盒 | `--ui-font-size-xs`、6px 间距、`3px 4px`、12px 图标 0.75 不透明度、单行省略 | 4px 横向内边距既是命中区，也是与标题对齐的文字栅格 |
+| 行盒 | `--ui-font-size-xs`、`var(--color-text-muted)`，名字格用 `var(--color-text)`、6px 间距、`3px 4px`、12px 图标 0.75 不透明度、单行省略 | 4px 横向内边距既是命中区，也是与标题对齐的文字栅格。行与图标是次要色调，只有名字是正文色——卡片自己的规则不能重新声明行的 `color`，否则特异性打平、按源码顺序胜出 |
 | 行组 | `.gui-hover-card-rows`：`1px` 步进 | 一叠事实行读成一片栅格，而不是五个独立块 |
 | 入场 | 两阶段：基础 `opacity: 0`，`--entered` 把 opacity 一步翻到 1 **并**启动 `gui-hover-card-in`，关键帧只动 **transform**（140ms `--spring`）；方向由 `--gui-hover-card-shift-x` / `-y` 给出 | 两阶段揭示上的一个滑动手势。在 `backdrop-filter` 表面上动画 opacity 会让 Chromium 在真实合成器上跳过 backdrop 采样，整段淡入期间磨砂消失（见下文） |
 | 隐藏态 | 基础规则里的 `opacity: 0`，由 `--entered` 取消 | 减弱动效或 `.gui-motion-off` 下 `animation: none` 时，`--entered` 已经把 opacity 设为 1，卡片照常落位可见，不会停在透明 |

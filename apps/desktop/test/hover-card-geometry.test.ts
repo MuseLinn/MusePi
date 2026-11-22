@@ -381,6 +381,41 @@ describe("session hover card geometry", () => {
 		expect(geometry.rowGap).toBe(1);
 	});
 
+	test("both cards' rows take the recipe's muted tone, not full-strength text", async () => {
+		// The regression this guards: a later single-class rule on the project row
+		// (`color: inherit`) tied on specificity with the recipe's
+		// `color: var(--color-text-muted)` and won on source order, so the project
+		// card's rows and their folder icons rendered full-strength while the
+		// session card stayed muted — backwards for a convergence whose point was
+		// to bring the older card up to the newer one's finish.
+		//
+		// Asserted as a RELATIONSHIP rather than absolute colours, so it holds for
+		// any theme: a row is muted, the name inside it is full-strength, and both
+		// cards agree. `--color-text` and `--color-text-muted` are distinct values
+		// in every preset, so "muted ≠ text" is a real discriminator.
+		await mount(`${SESSION_CARD}${PROJECT_CARD}`);
+		const colours = await page.evaluate(() => {
+			const tone = (el: Element) => getComputedStyle(el).color;
+			const sessionRow = document.querySelector(".gui-session-hover-card .gui-hover-card-row")!;
+			const projectRow = document.querySelector(".gui-project-hover-card .gui-hover-card-row")!;
+			return {
+				sessionRow: tone(sessionRow),
+				sessionIcon: tone(sessionRow.querySelector(".gui-hover-card-icon")!),
+				projectRow: tone(projectRow),
+				projectIcon: tone(projectRow.querySelector(".gui-hover-card-icon")!),
+				projectName: tone(projectRow.querySelector(".gui-hover-card-text")!),
+			};
+		});
+		// The two cards agree on the row tone …
+		expect(colours.projectRow).toBe(colours.sessionRow);
+		// … and the icon inherits the row's muted tone, not the name's colour.
+		expect(colours.projectIcon).toBe(colours.projectRow);
+		expect(colours.sessionIcon).toBe(colours.sessionRow);
+		// The name is the one cell at full strength — the differentiation `main`
+		// had and the convergence must preserve.
+		expect(colours.projectName).not.toBe(colours.projectRow);
+	});
+
 	test("entrance is a transform-only slide, with opacity flipped by --entered", async () => {
 		await mount(SESSION_CARD);
 		const geometry = await readCard(".gui-session-hover-card");
@@ -433,45 +468,45 @@ describe("session hover card geometry", () => {
 		expect(opacity).toBe(0);
 	});
 
-	test("read-only rows carry no hover wash, with the pointer actually moved onto them", async () => {
+	/**
+	 * Two separate guarantees, each asserted by the method that can actually
+	 * observe it:
+	 *
+	 *  1. **The declared rule.** No `.gui-hover-card-row--action` on any session
+	 *     row, and the row paints transparent at rest. Read from computed style.
+	 *  2. **The state really cannot arrive.** The card computes
+	 *     `pointer-events: none`, so the pointer never targets anything inside it
+	 *     and no `:hover` rule could match even if one were declared. This is the
+	 *     guarantee, not a `:hover` probe.
+	 *
+	 * `Element.matches(":hover")` is deliberately NOT used: under puppeteer's
+	 * synthetic pointer it never returns true, even for a control whose
+	 * background demonstrably changed to the `:hover` rule, so an assertion
+	 * built on it cannot fail for the reason it claims. The action-row half of
+	 * the contrast (a wash DOES appear when the state is forced) is proved with
+	 * CDP `CSS.forcePseudoState` in the project suite.
+	 */
+	test("read-only session rows declare no wash, and the card cannot take the pointer", async () => {
 		await mount(SESSION_CARD);
-		const rows = await page.evaluate(() =>
-			[...document.querySelectorAll<HTMLElement>(".gui-session-hover-card .gui-hover-card-row")].map(row => {
-				const box = row.getBoundingClientRect();
-				return {
+		const state = await page.evaluate(() => {
+			const card = document.querySelector<HTMLElement>(".gui-session-hover-card")!;
+			return {
+				cardPointerEvents: getComputedStyle(card).pointerEvents,
+				rows: [...card.querySelectorAll<HTMLElement>(".gui-hover-card-row")].map(row => ({
 					action: row.classList.contains("gui-hover-card-row--action"),
 					background: getComputedStyle(row).backgroundColor,
-					x: box.left + box.width / 2,
-					y: box.top + box.height / 2,
-				};
-			}),
-		);
-		expect(rows.length).toBe(3);
-		const cardPointerEvents = await page.evaluate(
-			() => getComputedStyle(document.querySelector<HTMLElement>(".gui-session-hover-card")!).pointerEvents,
-		);
-		// The whole session card is pointer-transparent: it never takes the
-		// pointer from the row it describes. That is why no wash could appear
-		// even if one were declared — and it is asserted rather than assumed.
-		expect(cardPointerEvents).toBe("none");
-		for (const row of rows) {
-			// A real pointer move onto the row's own coordinates.
-			await page.mouse.move(row.x, row.y);
-			const state = await page.evaluate(() => {
-				const card = document.querySelector<HTMLElement>(".gui-session-hover-card")!;
-				return {
-					cardHovered: card.matches(":hover"),
-					anyRowHovered: [...card.querySelectorAll(".gui-hover-card-row")].some(r => r.matches(":hover")),
-				};
-			});
-			// The pointer is over the row's box, and nothing inside the card
-			// reacts: no `:hover` anywhere, so no wash.
-			expect(state.cardHovered).toBe(false);
-			expect(state.anyRowHovered).toBe(false);
-			// And the declared state agrees: no action modifier, transparent fill.
+				})),
+			};
+		});
+		// (1) The declared rule: no action modifier, transparent fill.
+		expect(state.rows.length).toBe(3);
+		for (const row of state.rows) {
 			expect(row.action).toBe(false);
 			expect(row.background === "rgba(0, 0, 0, 0)" || row.background === "transparent").toBe(true);
 		}
+		// (2) The real guarantee: the card is pointer-transparent, so nothing
+		// inside it can ever be targeted — a wash could not appear.
+		expect(state.cardPointerEvents).toBe("none");
 	});
 });
 
@@ -506,6 +541,44 @@ describe("project hover card geometry", () => {
 			);
 		});
 		expect(rows).toEqual([true, true]);
+	});
+
+	test("the action row's wash appears only when the hover state is forced", async () => {
+		// The contrast to the session card's read-only rows, proved with a method
+		// that can actually drive `:hover`: CDP `CSS.forcePseudoState`. This is
+		// the discriminator `Element.matches(":hover")` cannot provide under a
+		// synthetic pointer.
+		await mount(PROJECT_CARD);
+		const cdp = await page.createCDPSession();
+		await cdp.send("DOM.enable");
+		await cdp.send("CSS.enable");
+		const { root } = await cdp.send("DOM.getDocument");
+		const { nodeId } = await cdp.send("DOM.querySelector", {
+			nodeId: root.nodeId,
+			selector: ".gui-project-hover-card .gui-hover-card-row--action",
+		});
+
+		const atRest = await page.evaluate(
+			() =>
+				getComputedStyle(
+					document.querySelector<HTMLElement>(".gui-project-hover-card .gui-hover-card-row--action")!,
+				).backgroundColor,
+		);
+		expect(atRest === "rgba(0, 0, 0, 0)" || atRest === "transparent").toBe(true);
+
+		await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
+		const hovered = await page.evaluate(
+			() =>
+				getComputedStyle(
+					document.querySelector<HTMLElement>(".gui-project-hover-card .gui-hover-card-row--action")!,
+				).backgroundColor,
+		);
+		// A real wash, not the transparent base.
+		expect(hovered === "rgba(0, 0, 0, 0)" || hovered === "transparent").toBe(false);
+		expect(hovered).not.toBe(atRest);
+
+		await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
+		await cdp.detach();
 	});
 
 	test("the row itself is the target: empty-area click navigates, cursor is a pointer", async () => {

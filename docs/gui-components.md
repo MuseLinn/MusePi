@@ -104,7 +104,7 @@ Both sidebar hover cards — the session card (`SessionHoverCard.tsx`, 288px) an
 | Surface | L2 glass: `color-mix` overlay + `backdrop-filter` + the six-layer shadow | Same layer as `.gui-menu-popup`; never a second glass family |
 | Title | `--ui-font-size`, weight 600, `line-height: 1.35` | One title size for both cards |
 | Meta line | `--ui-font-size-xs`, 2px dots, one accent chip | A short readable fact line, not a label/value stack |
-| Row box | `--ui-font-size-xs`, 6px gap, `3px 4px`, 12px icon at 0.75, one-line ellipsis | The 4px inline padding is the hit area and the text grid |
+| Row box | `--ui-font-size-xs`, `var(--color-text-muted)` with the name cell at `var(--color-text)`, 6px gap, `3px 4px`, 12px icon at 0.75, one-line ellipsis | The 4px inline padding is the hit area and the text grid. The row and its icon are muted; only the name is full-strength — a card-specific rule must not re-declare `color` on the row, or it ties on specificity and wins on source order |
 | Row group | `.gui-hover-card-rows`: `1px` step | A stack of facts scans as one grid instead of five separate blocks |
 | Entrance | Two-phase: base `opacity: 0`, `--entered` flips opacity to 1 **and** starts `gui-hover-card-in`, whose keyframe animates **transform only** (140ms `--spring`); direction from `--gui-hover-card-shift-x` / `-y` | A one-gesture slide on a two-phase reveal. Animating opacity on a `backdrop-filter` surface makes Chromium skip backdrop sampling on the real compositor, so the frost vanishes for the whole fade (see below) |
 | Hidden state | The base `opacity: 0`, cancelled by `--entered` | With `animation: none` under reduced motion or `.gui-motion-off`, `--entered` has already set opacity 1, so the card lands visible instead of stuck transparent |

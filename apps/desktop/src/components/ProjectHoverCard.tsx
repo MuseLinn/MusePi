@@ -47,22 +47,27 @@ import { Icon } from "../vendor/oc-icons";
  * 数值来自随发布版的字号阶梯(`tokens.css` 的 `--ui-font-size` 15px /
  * `--ui-font-size-xs` 13px),不是测试夹具那套 11px/13px。Chromium 实测
  * (卡片宽 / 语言 → 卡片高 − 列表高),2026-11-22 在 hover-card 配方
- * (`padding: 12px 14px 10px`、标题 + 元信息行)与行内按钮之后重测:
- *  - 152px(168 侧栏)/ en 或 zh → 92.25  ← 最坏:「N 个目录 · M 个会话」折两行
- *  - 164px / 任一 → 92.25
- *  - 224px、240px / 任一 → 73.25
+ * (`padding: 12px 14px 10px`、标题 + 元信息行)与行内按钮之后重测,
+ * **字号档位 = 默认 15px**(`--gui-font-scale` 未设,`--mp-text-scale` = 1):
+ *  - 152px(168 侧栏)/ en 或 zh → 93.25  ← 最坏:「N 个目录 · M 个会话」折两行
+ *  - 164px / 任一 → 93.25
+ *  - 224px、240px / 任一 → 73.75
  *
- * 取 93 而不是 92:估值宁可略高——首帧若把卡片算矮了,它会先贴一个位置再被
- * 实测纠正,看起来像跳一下;算高一点只会让它先翻向更宽裕的一侧。真实值由
- * `measureCard` 在 `useLayoutEffect` 里绘制前量出并回灌给 {@link fitProjectCard},
- * 所以翻转方向与列表上限用的是真值,不依赖这套估值。字号被放大、语言换掉、
- * 主题改行高都不再需要改这里。 */
+ * 取 93 而不是 94:估值宁可略低一点——首帧若把卡片算高了,它会先翻向一侧再被
+ * 实测纠正;算矮只会先贴下方,两种偏差都只持续一帧。真实值由 `measureCard`
+ * 在 `useLayoutEffect` 里绘制前量出并回灌给 {@link fitProjectCard},所以翻转
+ * 方向与列表上限用的是真值,不依赖这套估值。字号被放大、语言换掉、主题改行高
+ * 都不再需要改这里。 */
 export const CARD_CHROME_HEIGHT = 93;
 /** 目录列表自身的高度上限:`min(280px, 50vh)`(见 `gui-chrome.css`)。 */
 export const LIST_MAX_HEIGHT = 280;
-/** 一行目录的步进(行高 + 1px 行间距)。同上重测:行内按钮的行盒为 30–31px
- *  步进(单行 30、带 chip 的行 31),这里取 31 作为首帧估值。 */
-export const ROW_HEIGHT = 31;
+/** 一行目录的步进(行高 + 1px 行间距)。同上重测,**默认 15px 档位**:行盒
+ *  27.8px 步进(13px 字号 + 3px 上下内边距 + 1px 列表 gap)。
+ *
+ *  这里取 28 而不是按 17px 档位量到的 31:字号阶梯跟着 `--gui-font-scale` 走,
+ *  用户放大字号时行会变高,首帧估值偏小一点只让列表先算短一帧;反过来取大值
+ *  会让默认档位下的首帧明显偏长。真实步进同样由 `measureCard` 回灌。 */
+export const ROW_HEIGHT = 28;
 /** 卡片宽度 —— 与 `gui-chrome.css` 的 `width: 240px` 同一事实,定位需要它。 */
 export const CARD_WIDTH = 240;
 /** 卡片与侧栏之间的空隙(以及翻到左侧时的同一空隙)。 */
