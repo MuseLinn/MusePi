@@ -27,7 +27,7 @@ import {
  * 信息模型(第一性,见 docs/gui-design.md § 会话地图信息模型):
  *  - **卡片 = 索引行**,不是正文预览:固定 66px,一行预览(省略号)+ 轮号、
  *    用时、回复/工具计数、在/离路径。正文留在对话里,「查看对话」跳过去看。
- *  - **检视器 = 明细**:选中轮的头部(时间范围/计数/模型)压在逐事件行
+ *  - **检视器 = 明细**:选中轮的头部(时间范围/计数)压在逐事件行
  *    (kind · 标签 · 耗时)之上。检视器只放卡片没有的东西,不重复卡片。
  *  - **边 = 父子方向**:正交折线 + 箭头,父轮出发、子轮收尾;分叉落在干线
  *    交汇圆点上,兄弟各占一条车道,所以分裂看得见、不打架。
@@ -307,7 +307,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 });
 
 /**
- * 轮检视器:选中轮的头部(时间范围/计数/模型)+ 逐事件行(kind · 标签 · 耗时)。
+ * 轮检视器:选中轮的头部(时间范围/计数)+ 逐事件行(kind · 标签 · 耗时)。
  *
  * 与卡片的分工:卡片给「这是什么轮」,检视器给「这一轮里发生了什么」。正文
  * 不在这里——「查看对话」把用户送回对话看正文,所以检视器不会变成第二个
@@ -886,6 +886,12 @@ export function TurnMapCanvas({
 		<div
 			ref={wrapRef}
 			className="tm-wrap"
+			// 真实焦点目标:方向键遍历挂在画布上,而浏览器只能把键盘事件交给
+			// 可聚焦元素——没有 tabIndex 时 moveSelection / Home / End 在实机
+			// 永远不可达(测试直接往元素上派发 keydown 是假的)。
+			tabIndex={0}
+			role="application"
+			aria-label={t("transcript.turnMapTitle")}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
 			onPointerUp={onPointerUp}
@@ -1009,6 +1015,35 @@ export function TurnMapCanvas({
 						}}
 					>
 						<svg className="tm-edges" width={width} height={height}>
+							{/* 渐变必须真的存在:CSS 用 `stroke: url(#tm-main-line)` 引用它们,
+							    删掉 <defs> 后计算样式仍然读作 url(...),但什么也不画——连线与
+							    箭头一起消失,而所有路径几何断言依然通过。
+							    userSpaceOnUse 是必需的:垂直主线的包围盒宽度为 0,默认
+							    objectBoundingBox 单位下渐变退化成不可见描边。 */}
+							<defs>
+								<linearGradient
+									id="tm-main-line"
+									gradientUnits="userSpaceOnUse"
+									x1="0"
+									y1="0"
+									x2={horizontal ? width : 0}
+									y2={horizontal ? 0 : height}
+								>
+									<stop offset="0%" className="tm-edge-gold-1" />
+									<stop offset="100%" className="tm-edge-gold-2" />
+								</linearGradient>
+								<linearGradient
+									id="tm-branch-line"
+									gradientUnits="userSpaceOnUse"
+									x1="0"
+									y1="0"
+									x2={horizontal ? 0 : width}
+									y2={horizontal ? height : 0}
+								>
+									<stop offset="0%" className="tm-edge-gold-1" />
+									<stop offset="100%" className="tm-edge-purple" />
+								</linearGradient>
+							</defs>
 							{visibleEdges.map(e => {
 								const key = `${trajectoryTurnKey(e.from.group)}>${trajectoryTurnKey(e.to.group)}`;
 								const tri = arrowTriangle(e.arrow);
@@ -1016,6 +1051,10 @@ export function TurnMapCanvas({
 									<g
 										key={key}
 										className={`tm-edge-group${e.branch ? " tm-edge-group--branch" : ""}${e.offPath ? " tm-edge-group--off" : ""}`}
+										// 端点轮号是布局自己的事实;判定「连线穿卡」时要排除的
+										// 正是这两张卡,靠屏幕距离去猜会在 fitView 缩放后认错。
+										data-from-turn={e.from.group.turn}
+										data-to-turn={e.to.group.turn}
 									>
 										<path
 											className={`tm-edge${e.branch ? " tm-edge--branch" : " tm-edge--main"}`}

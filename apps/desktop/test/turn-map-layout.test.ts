@@ -12,6 +12,8 @@ import {
 	TURN_LANE_GAP,
 	TURN_NODE_H,
 	TURN_NODE_W,
+	type TurnMapNode,
+	type TurnMapPoint,
 	visibleTurnMapNodes,
 } from "../src/components/turn-map-layout";
 
@@ -172,37 +174,44 @@ describe("分叉是一处分裂,不是一团交叉", () => {
 		for (const e of branchEdges) expect(e.junction).toEqual({ x: split.x, y: split.y });
 	});
 
-	it("分支边是正交折线:先走干线残端,再横出到车道,最后落进卡顶", () => {
+	it("分支边是正交折线:交汇点 → 让位点 → 走廊 → 车道通道 → 卡左缘", () => {
 		const turns = [linked(1, "u1"), linked(2, "u2", "u1", true)];
 		const layout = layoutTurnMap(turns);
 		const edge = layout.edges.find(e => e.branch)!;
 		const pts = edge.points;
-		// 起点 = 交汇点;第二点 = 干线残端(同 x,下移 TURN_BRANCH_STEM)。
+		// 起点 = 交汇点。
 		expect(pts[0]).toEqual(edge.junction!);
-		expect(pts[1]!.x).toBe(pts[0]!.x);
-		expect(pts[1]!.y).toBe(pts[0]!.y + TURN_BRANCH_STEM);
-		// 落点 = 分支卡顶缘中心,箭头朝下。
+		// 落点 = 分支卡左缘中点,箭头朝右(进卡)。连线停在卡的边缘,
+		// 不进入卡内部——「不穿卡」的判定因此不会把入场段算成穿透。
 		const target = layout.nodes.find(n => n.group.turn === 2)!;
-		expect(pts[pts.length - 1]).toEqual({ x: target.x + TURN_NODE_W / 2, y: target.y });
-		expect(edge.arrow.dy).toBe(1);
+		expect(pts[pts.length - 1]).toEqual({ x: target.x, y: target.y + target.h / 2 });
+		expect(edge.arrow.dx).toBe(1);
+		expect(edge.arrow.dy).toBe(0);
 		// 每一段都正交:相邻两点的 x 或 y 至少有一个相等。
 		for (let i = 1; i < pts.length; i++) {
 			const a = pts[i - 1]!;
 			const b = pts[i]!;
 			expect(a.x === b.x || a.y === b.y).toBe(true);
 		}
+		// 有可见的干线残端:第一段沿干线走出交汇点(TURN_BRANCH_STEM 或更多)。
+		expect(Math.abs(pts[1]!.y - pts[0]!.y) + Math.abs(pts[1]!.x - pts[0]!.x)).toBeGreaterThanOrEqual(
+			TURN_BRANCH_STEM,
+		);
 	});
 
-	it("嵌套分支(父轮也是分支)留在父轮车道内,是一条直线", () => {
+	it("嵌套分支(父轮也是分支)留在父轮车道内,是一条垂直直线", () => {
 		const turns = [linked(1, "u1"), linked(2, "u2", "u1", true), linked(3, "u3", "u2", true)];
 		const layout = layoutTurnMap(turns);
 		const b2 = layout.nodes.find(n => n.group.turn === 2)!;
 		const b3 = layout.nodes.find(n => n.group.turn === 3)!;
 		expect(b3.lane).toBe(b2.lane);
 		const edge = layout.edges.find(e => e.to.group.turn === 3)!;
-		// 同车道:两点直线(x 相同),不会横穿。
+		// 同车道且同列:两点垂直直线,沿本车道中线下行。不能走通用走廊——
+		// 走廊是「绕到行外」的,起终点在同一列时会从别的卡中间穿回来。
 		expect(edge.points).toHaveLength(2);
 		expect(edge.points[0]!.x).toBe(edge.points[1]!.x);
+		expect(edge.points[0]!.x).toBe(b3.x + TURN_NODE_W / 2);
+		expect(edge.arrow.dy).toBe(1);
 	});
 
 	it("分支卡不与主线卡重叠,也不落进父轮卡内", () => {
@@ -275,6 +284,153 @@ describe("轮前元事件与顾问轮", () => {
 		const layout = layoutTurnMap([turnGroup(1), turnGroup(2, { advisor: true })]);
 		expect(layout.nodes.find(n => n.group.turn === 2)!.advisor).toBe(true);
 		expect(layout.nodes.find(n => n.group.turn === 1)!.advisor).toBe(false);
+	});
+});
+
+describe("连线不许穿过卡片(枚举 5/6/7 轮的全部父指派)", () => {
+	/**
+	 * 评审 P1-3:分支边的水平段只清交汇点 6px,于是「更早的兄弟车道占住那一
+	 * 列」时连线从它的卡背面穿过(可达形状 t1/t2/t3 + t4(off t1) +
+	 * t5(off t4) + t6(off t3):`t3→t6` 在 y=254 穿过 t5 208px)。
+	 *
+	 * 这里是穷举,而不是挑几个形状:5 轮 = 120 种指派、6 轮 = 720、7 轮 =
+	 * 5040,纵向与横向各一遍,共 11760 张布局。断言两件事:
+	 *  1. 任何一段折线的内部都不落在非端点卡片内部;
+	 *  2. 任何两条边都不相交(评审报告的 1352/10080 边-边交叉)。
+	 */
+	function groups(parents: readonly number[]): TrajectoryTurnGroup[] {
+		return parents.map((parent, index) => {
+			const turn = index + 1;
+			const branch = parent !== index;
+			return {
+				turn,
+				id: `t${turn}`,
+				parentId: branch ? `t${parent + 1}` : undefined,
+				displayTurn: turn,
+				offPath: branch || undefined,
+				events: [
+					{
+						id: `e${turn}`,
+						entryId: `t${turn}`,
+						kind: "user",
+						title: `t${turn}`,
+						turn,
+						pathTurn: turn,
+						tsMs: turn * 1000,
+						branch: branch || undefined,
+					},
+				],
+				firstTs: new Date(turn * 1000).toISOString(),
+				startMs: turn * 1000,
+				endMs: turn * 1000 + 1,
+			} as TrajectoryTurnGroup;
+		});
+	}
+
+	function segmentEntersCard(a: TurnMapPoint, b: TurnMapPoint, node: TurnMapNode): boolean {
+		const minX = node.x;
+		const maxX = node.x + TURN_NODE_W;
+		const minY = node.y;
+		const maxY = node.y + node.h;
+		const length = Math.hypot(b.x - a.x, b.y - a.y);
+		if (length < 1) return false;
+		const steps = Math.ceil(length * 2);
+		for (let i = 1; i < steps; i++) {
+			const t = i / steps;
+			const x = a.x + (b.x - a.x) * t;
+			const y = a.y + (b.y - a.y) * t;
+			// 0.5px 内缩:沿卡边走的段不算穿卡。
+			if (x > minX + 0.5 && x < maxX - 0.5 && y > minY + 0.5 && y < maxY - 0.5) return true;
+		}
+		return false;
+	}
+
+	function segmentsCross(a1: TurnMapPoint, a2: TurnMapPoint, b1: TurnMapPoint, b2: TurnMapPoint): boolean {
+		const cross = (p: TurnMapPoint, q: TurnMapPoint, r: TurnMapPoint) =>
+			(q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+		const d1 = cross(b1, b2, a1);
+		const d2 = cross(b1, b2, a2);
+		const d3 = cross(a1, a2, b1);
+		const d4 = cross(a1, a2, b2);
+		return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+	}
+
+	/** 每个轮位的父轮:parent[i] = i 表示继续主线,否则挂到 parent[i]。 */
+	function assignments(count: number): number[][] {
+		const out: number[][] = [];
+		const walk = (acc: number[]): void => {
+			if (acc.length === count) {
+				out.push([...acc]);
+				return;
+			}
+			const index = acc.length;
+			for (let parent = 0; parent <= index; parent++) {
+				acc.push(parent);
+				walk(acc);
+				acc.pop();
+			}
+		};
+		walk([]);
+		return out;
+	}
+
+	for (const count of [5, 6, 7]) {
+		it(`${count} 轮 / 两个方向:没有边穿过非端点卡片,也没有边-边交叉`, () => {
+			let layouts = 0;
+			const penetrations: string[] = [];
+			const crossings: string[] = [];
+			for (const direction of ["v", "h"] as const) {
+				for (const parents of assignments(count)) {
+					const layout = layoutTurnMap(groups(parents), { direction });
+					layouts += 1;
+					for (const edge of layout.edges) {
+						for (const node of layout.nodes) {
+							if (node === edge.from || node === edge.to) continue;
+							for (let s = 1; s < edge.points.length; s++) {
+								if (segmentEntersCard(edge.points[s - 1]!, edge.points[s]!, node)) {
+									penetrations.push(`${direction} ${parents.join(",")} → card ${node.group.turn}`);
+								}
+							}
+						}
+					}
+					for (let i = 0; i < layout.edges.length; i++) {
+						for (let j = i + 1; j < layout.edges.length; j++) {
+							const a = layout.edges[i]!;
+							const b = layout.edges[j]!;
+							if (a.from === b.from && a.to === b.to) continue;
+							let crossed = false;
+							for (let s = 1; s < a.points.length && !crossed; s++) {
+								for (let t = 1; t < b.points.length && !crossed; t++) {
+									if (segmentsCross(a.points[s - 1]!, a.points[s]!, b.points[t - 1]!, b.points[t]!))
+										crossed = true;
+								}
+							}
+							if (crossed) crossings.push(`${direction} ${parents.join(",")}`);
+						}
+					}
+				}
+			}
+			// 覆盖度自证:第 i 轮有 i+1 个父候选(0..i),所以指派数 = n!,
+			// 两个方向再乘 2。
+			const factorial = (n: number): number => (n <= 1 ? 1 : n * factorial(n - 1));
+			expect(layouts).toBe(2 * factorial(count));
+			expect(penetrations).toEqual([]);
+			expect(crossings).toEqual([]);
+		});
+	}
+
+	it("嵌套分支与后续分支共存的可达形状在枚举内被覆盖", () => {
+		// t1/t2/t3 主线 + t4(off t1)+ t5(off t4)+ t6(off t3) —— 评审点名的形状。
+		const layout = layoutTurnMap(groups([0, 1, 2, 0, 3, 2]));
+		const t6 = layout.nodes.find(n => n.group.turn === 6)!;
+		const t5 = layout.nodes.find(n => n.group.turn === 5)!;
+		expect(t5.branch).toBe(true);
+		expect(t6.branch).toBe(true);
+		// t3→t6 的折线不进 t5 的卡内部。
+		const edge = layout.edges.find(e => e.from.group.turn === 3 && e.to.group.turn === 6)!;
+		for (let s = 1; s < edge.points.length; s++) {
+			expect(segmentEntersCard(edge.points[s - 1]!, edge.points[s]!, t5)).toBe(false);
+		}
 	});
 });
 

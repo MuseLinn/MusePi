@@ -393,7 +393,26 @@ describe("离路径的轮在页面上真的后退(真实级联)", () => {
 		const liveCard = m.cards.find(c => !c.off);
 		expect(offCard).toBeDefined();
 		expect(liveCard).toBeDefined();
-		expect(offCard!.opacity).toBeLessThan(liveCard!.opacity);
+		// 淡显施加在卡的**内容**上,不是卡本身:卡面用更弱的底色与描边后退,
+		// 内容降到 0.42。卡自身的 opacity 保持 1,因为 opacity 会建立组,
+		// 组内的「旁支」标记就无法再以 1 显示(评审实测 1.45:1)。
+		const offContent = await page.evaluate(() => {
+			const off = document.querySelector(".tm-node--off");
+			const preview = off?.querySelector(".tm-card-preview");
+			const live = document.querySelector(".tm-node:not(.tm-node--off) .tm-card-preview");
+			return {
+				offPreview: preview ? Number(getComputedStyle(preview).opacity) : null,
+				livePreview: live ? Number(getComputedStyle(live).opacity) : null,
+				offTag: off?.querySelector(".tm-card-off")
+					? Number(getComputedStyle(off.querySelector(".tm-card-off")!).opacity)
+					: null,
+			};
+		});
+		expect(offContent.offPreview).not.toBeNull();
+		expect(offContent.livePreview).not.toBeNull();
+		expect(offContent.offPreview!).toBeLessThan(offContent.livePreview!);
+		// 「旁支」标记不跟着淡:它是这条规则存在的理由。
+		expect(offContent.offTag).toBe(1);
 		// 旁支仍在(不是隐藏)。
 		expect(m.cards.filter(c => c.off).length).toBe(1);
 		expect(offCard!.text).toContain("withdrawn question");

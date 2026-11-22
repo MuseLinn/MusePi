@@ -248,7 +248,7 @@ export function layoutTurnMap(
 			splits.push(split);
 		}
 		split.count += 1;
-		edges.push(branchEdge(source, n, { x: jx, y: jy }, horizontal));
+		edges.push(branchEdge(source, n, { x: jx, y: jy }, horizontal, nodes));
 	}
 
 	const laneCountUsed = Math.max(1, laneCount + 1);
@@ -294,42 +294,140 @@ function mainEdge(from: TurnMapNode, to: TurnMapNode, horizontal: boolean): Turn
 }
 
 /**
- * 分支边:交汇点 → 干线残端 → 车道 → 子轮。
+ * 分支边:交汇点 → 干线上的一小段 → 目标车道的左侧通道 → 子轮左缘。
  *
- * 落点是子轮「朝向父轮的那条边」的中点:纵向 = 卡顶中心,横向 = 卡左缘中心。
- * 同一父轮的兄弟共享交汇点与残端,从残端末梢横出到各自车道——这一步就是
- * 可见的「分裂」。嵌套分支(父轮与子轮同车道)退化为一条直线。
+ * 为什么不再「横出一条直线」:交汇点之后 6px 的水平段会以固定 y 横穿整条
+ * 车道,于是当更早的兄弟车道已经占住那一列时,连线从它的卡片**背面**穿过
+ * (实机可达形状:t1/t2/t3 主线 + t4 挂 t1 + t5 嵌套挂 t4 + t6 挂 t3,
+ * `t3→t6` 的水平段在 y=254 穿过 t5 的卡 208px)。这里改成:
+ *
+ *  1. 从交汇点沿干线走到**走廊 y**——该 y 避开了横段要经过的所有卡片
+ *     (取这些卡片底边的最大值再加一个间距);
+ *  2. 在走廊里横向走到目标车道的**通道 x**——车道左缘外的 gutter,那里
+ *     没有任何卡片;
+ *  3. 在通道里纵向落到子轮中心高度,再横向进入子轮左缘。
+ *
+ * 于是任何一段都不会穿过非端点卡片,而分裂仍然看得见:所有兄弟共享交汇点
+ * 与走廊前缀,各自在通道处下行。
  */
-function branchEdge(from: TurnMapNode, to: TurnMapNode, junction: TurnMapPoint, horizontal: boolean): TurnMapEdge {
+function branchEdge(
+	from: TurnMapNode,
+	to: TurnMapNode,
+	junction: TurnMapPoint,
+	horizontal: boolean,
+	others: readonly TurnMapNode[],
+): TurnMapEdge {
+	const gutter = horizontal ? to.y - TURN_LANE_GAP / 2 : to.x - TURN_LANE_GAP / 2;
+	// 落点 = 子轮朝向父轮的那条边的中点;连线停在卡的边缘,不进卡内部。
+	const entry = horizontal ? { x: to.x, y: to.y + to.h / 2 } : { x: to.x, y: to.y + to.h / 2 };
+
 	if (horizontal) {
-		const by = to.y + to.h / 2;
-		const stemX = junction.x + TURN_BRANCH_STEM;
-		const points: TurnMapPoint[] =
-			Math.abs(by - junction.y) < 1
-				? [junction, { x: to.x, y: by }]
-				: [junction, { x: stemX, y: junction.y }, { x: stemX, y: by }, { x: to.x, y: by }];
+		return transposeBranch(from, to, junction, others, gutter, entry);
+	}
+
+	// 嵌套分支(父轮与子轮同车道):沿本车道垂直下行即可,不能走通用走廊
+	// ——走廊是「绕到行外」的,而嵌套分支的起终点就在同一列里,绕出去会
+	// 从别的卡的中间穿回来。这里只走本车道的中线:交汇点 → 中线 → 卡顶。
+	if (Math.abs(to.x - from.x) < 1) {
+		const laneX = to.x + TURN_NODE_W / 2;
 		return {
 			from,
 			to,
 			branch: true,
-			points,
-			arrow: { x: to.x - 1, y: by, dx: 1, dy: 0 },
+			points: [
+				{ x: laneX, y: junction.y },
+				{ x: laneX, y: entry.y },
+			],
+			arrow: { x: laneX, y: entry.y - 1, dx: 0, dy: 1 },
 			junction,
 			offPath: to.offPath,
 		};
 	}
-	const bx = to.x + TURN_NODE_W / 2;
-	const stemY = junction.y + TURN_BRANCH_STEM;
-	const points: TurnMapPoint[] =
-		Math.abs(bx - junction.x) < 1
-			? [junction, { x: bx, y: to.y }]
-			: [junction, { x: junction.x, y: stemY }, { x: bx, y: stemY }, { x: bx, y: to.y }];
+
+	/*
+	 * 横段走哪一侧:分支卡排成**一行**(同一车道行的 y 相同),所以横段要么
+	 * 走这一行之上、要么走这一行之下——走「之下」会横穿起点所在的那一行
+	 * (源轮的行在分支行上方时,中间还压着别的车道),走「之上」又会撞主线。
+	 * 规则:横段走**源轮与分支行之间的空隙**;若两者之间没有空隙(源轮本身
+	 * 就在分支行里),就走该行的外侧。
+	 */
+	const laneRowTop = Math.min(...others.filter(node => node.branch).map(node => node.y), to.y);
+	const laneRowBottom = Math.max(...others.filter(node => node.branch).map(node => node.y + node.h), to.y + to.h);
+	const above = junction.y < laneRowTop;
+	// 走廊必须整体避开**所有**分支卡的竖直区间——不是取中点:车道行有高度,
+	// 中点仍落在别的卡里(实机:t4 在 y=86,车道行 104..170,中点 156 正好
+	// 压在两兄弟卡上)。所以走行的上方或下方,越过整段行高。
+	const corridorY = above
+		? Math.max(junction.y + TURN_BRANCH_STEM, laneRowTop - TURN_BRANCH_STEM)
+		: laneRowBottom + TURN_BRANCH_STEM;
+
+	// 让位点:主干列之外(否则竖段穿过主干上的后续轮)。
+	const mainRight = Math.max(...others.filter(node => !node.branch).map(node => node.x + TURN_NODE_W), 0);
+	const liftX = Math.max(mainRight + TURN_BRANCH_STEM, Math.min(junction.x + TURN_NODE_W / 2, gutter));
+
 	return {
 		from,
 		to,
 		branch: true,
-		points,
-		arrow: { x: bx, y: to.y - 1, dx: 0, dy: 1 },
+		points: [
+			junction,
+			{ x: liftX, y: junction.y },
+			{ x: liftX, y: corridorY },
+			{ x: gutter, y: corridorY },
+			{ x: gutter, y: entry.y },
+			{ x: entry.x, y: entry.y },
+		],
+		arrow: { x: entry.x - 1, y: entry.y, dx: 1, dy: 0 },
+		junction,
+		offPath: to.offPath,
+	};
+}
+
+/** 横向模式:把纵向的每一条规则转置(走廊是 x、通道是 y、行是列)。 */
+function transposeBranch(
+	from: TurnMapNode,
+	to: TurnMapNode,
+	junction: TurnMapPoint,
+	others: readonly TurnMapNode[],
+	gutter: number,
+	entry: TurnMapPoint,
+): TurnMapEdge {
+	if (Math.abs(to.y + to.h / 2 - junction.y) < 1) {
+		return {
+			from,
+			to,
+			branch: true,
+			points: [junction, { x: entry.x, y: junction.y }, { x: entry.x, y: entry.y }],
+			arrow: { x: entry.x - 1, y: entry.y, dx: 1, dy: 0 },
+			junction,
+			offPath: to.offPath,
+		};
+	}
+	const laneColLeft = Math.min(...others.filter(node => node.branch).map(node => node.x), to.x);
+	const laneColRight = Math.max(
+		...others.filter(node => node.branch).map(node => node.x + TURN_NODE_W),
+		to.x + TURN_NODE_W,
+	);
+	const leftOfLane = junction.x < laneColLeft;
+	// 同上:走廊要整体避开整列分支卡的横向区间。
+	const corridorX = leftOfLane
+		? Math.max(junction.x + TURN_BRANCH_STEM, laneColLeft - TURN_BRANCH_STEM)
+		: laneColRight + TURN_BRANCH_STEM;
+	const mainBottom = Math.max(...others.filter(node => !node.branch).map(node => node.y + node.h), 0);
+	const liftY = Math.max(mainBottom + TURN_BRANCH_STEM, Math.min(junction.y + TURN_NODE_H / 2, gutter));
+	return {
+		from,
+		to,
+		branch: true,
+		points: [
+			junction,
+			{ x: junction.x, y: liftY },
+			{ x: corridorX, y: liftY },
+			{ x: corridorX, y: gutter },
+			{ x: entry.x, y: gutter },
+			{ x: entry.x, y: entry.y },
+		],
+		arrow: { x: entry.x - 1, y: entry.y, dx: 1, dy: 0 },
 		junction,
 		offPath: to.offPath,
 	};

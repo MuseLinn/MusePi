@@ -5947,6 +5947,13 @@
 	touch-action: none;
 }
 
+/* 画布是键盘遍历的焦点目标(方向键/Home/End)。焦点环必须可见:没有它的
+ * tabIndex 等于把焦点藏起来——键盘用户看不到自己已经在画布上。 */
+.tm-wrap:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+	outline-offset: -2px;
+}
+
 .tm-wrap[data-dragging] {
 	cursor: grabbing;
 }
@@ -6313,14 +6320,33 @@ button.traj-error-note:hover {
 	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent);
 }
 
-/* 离路径:整体后退。仍在、仍可点,但永远不读成活的轮。 */
+/* 离路径:整体后退。仍在、仍可点,但永远不读成活的轮。
+ *
+ * dim 施加在卡的**内容**上,不是卡本身:opacity 会建立一个组,组内任何元素
+ * 都无法用 opacity:1 逃出来——「旁支」标记正是因此被压到 1.45:1 而读不出
+ * 来,而它存在的意义恰恰是不靠颜色也能读。卡面本身靠背景与描边后退。 */
 .tm-node--off {
+	border-color: color-mix(in oklab, var(--color-text) 7%, transparent);
+	background: color-mix(in oklab, var(--color-bg) 58%, transparent);
+	box-shadow: 0 4px 14px color-mix(in oklab, var(--color-bg) 40%, transparent);
+}
+
+.tm-node--off .tm-turn-badge,
+.tm-node--off .tm-card-preview,
+.tm-node--off .tm-card-facts,
+.tm-node--off .tm-node-dur {
 	opacity: 0.42;
 	filter: saturate(0.55);
 }
 
-.tm-node--off:hover,
-.tm-node--off.tm-node--selected {
+.tm-node--off:hover .tm-turn-badge,
+.tm-node--off:hover .tm-card-preview,
+.tm-node--off:hover .tm-card-facts,
+.tm-node--off:hover .tm-node-dur,
+.tm-node--off.tm-node--selected .tm-turn-badge,
+.tm-node--off.tm-node--selected .tm-card-preview,
+.tm-node--off.tm-node--selected .tm-card-facts,
+.tm-node--off.tm-node--selected .tm-node-dur {
 	opacity: 0.75;
 }
 
@@ -6385,7 +6411,10 @@ button.traj-error-note:hover {
 	background: color-mix(in oklab, #6fc3b8 14%, transparent);
 }
 
-/* 离路径标:文字而不是只靠透明度——色弱与低对比环境下透明度不够。 */
+/* 离路径标:文字而不是只靠透明度——色弱与低对比环境下透明度不够。
+ * 它不受 `.tm-node--off` 的内容淡显影响(那条规则只覆盖徽章/预览/计数/用时),
+ * 所以正文用 --color-text 而不是 muted,并以自身底色兜住对比度:
+ * 12px 以下的小字要 ≥4.5:1 才算读得出来。 */
 .tm-card-off {
 	flex: none;
 	font-size: 9px;
@@ -6393,8 +6422,9 @@ button.traj-error-note:hover {
 	line-height: 1;
 	padding: 2px 5px;
 	border-radius: 99px;
-	color: var(--color-text-muted);
-	border: 1px dashed color-mix(in oklab, var(--color-text) 22%, transparent);
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-bg) 88%, transparent);
+	border: 1px dashed color-mix(in oklab, var(--color-text) 45%, transparent);
 }
 
 .tm-node-dur {
@@ -6429,8 +6459,14 @@ button.traj-error-note:hover {
 }
 
 /* 悬停/焦点浮出的轮操作:盖在计数行上,不改变卡高。
- * 契约:hover 与 :focus-within 同时露出(键盘同权),且不靠 opacity 动画
- * 之外的位移——卡片是 backdrop-filter 面,M86 的规则约束其上动效。 */
+ *
+ * 透明 ≠ 可点:opacity 为 0 时按钮仍会吃掉指针,一次点击同时触发看不见的
+ * 操作和卡片本身(实机:90 个采样点里 12 个命中看不见的按钮)。透明态必须
+ * `pointer-events: none`,露出时才 `auto`——与 gui-chat.css 的
+ * .gui-project-actions / .gui-suggest-row-actions 同一份契约。
+ *
+ * 露出条件是 hover 加 :focus-visible(不是 :focus-within):后者在鼠标点击
+ * 后仍然成立,指针离开后操作条会一直开着。 */
 .tm-card-actions {
 	position: absolute;
 	right: 6px;
@@ -6439,13 +6475,15 @@ button.traj-error-note:hover {
 	align-items: center;
 	gap: 2px;
 	opacity: 0;
+	pointer-events: none;
 	transition: opacity 120ms ease;
 }
 
 .tm-node:hover .tm-card-actions,
-.tm-node:focus-within .tm-card-actions,
+.tm-node:has(.tm-card-act:focus-visible) .tm-card-actions,
 .tm-node--selected .tm-card-actions {
 	opacity: 1;
+	pointer-events: auto;
 }
 
 .tm-card-act {
@@ -6473,7 +6511,7 @@ button.traj-error-note:hover {
 }
 
 /* ── 检视器:选中轮的明细 ─────────────────────────────────────────────
- * 头部(轮号/时间范围/计数/模型/查看对话)+ 逐事件行(kind · 标签 · 耗时)。
+ * 头部(轮号/时间范围/计数/查看对话)+ 逐事件行(kind · 标签 · 耗时)。
  * 正文不进来:它属于对话,「查看对话」把用户送过去。
  *
  * 溢出:只有事件行纵向滚动,横向显式 clip(M80 溢出契约——单轴声明会把
