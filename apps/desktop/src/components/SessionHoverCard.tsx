@@ -11,18 +11,50 @@ import { Icon } from "../vendor/oc-icons";
  * 任务工作空间 / 最后活跃 / 创建时间。
  *
  * 数据分两半,由 bus 消息 + meta map 拼合:
- * - 行侧(SessionRow)只上报它手里有的展示字段(id/label/fork 来源/时间戳)
+ * - 行侧(SessionRow)只上报它手里有的展示字段(id/label/分叉来源/时间戳)
  *   和锚点矩形 — 不给 SessionRow 加任何 props,保住 memo 契约;
  * - 侧栏(sessionMeta map)持有 cwd/modeId,卡片渲染时按 id 现查。
  *
  * 卡片本体 portal 到 document.body:侧栏链路上有 backdrop-filter/transform,
  * fixed 定位会被最近的含 transform 祖先劫持,portal 出去才稳。
  */
+
+/** 会话行的血缘字段(`session.tree` 行 / `session.list` 行的交集)。 */
+export interface ForkProvenance {
+	/** 会话级父 id。子代理与顾问 transcript 也带它——是磁盘产物目录的
+	 *  父子关系,不是用户分叉。 */
+	parentId?: string | null;
+	/** `session.tree`/`session.list` 的 task/vibe 子代理标记。 */
+	subagent?: boolean;
+	/** 顾问 transcript 标记(`__advisor[.<slug>].jsonl`)。 */
+	advisor?: boolean;
+}
+
+/**
+ * 这一行是不是用户分叉出的新会话——侧栏分支标记与悬浮卡「分叉自」行的
+ * 唯一判据。
+ *
+ * `parentId` 非空只说明"有父",三种行都满足:用户分叉(`session.forkAt`
+ * 写入 header.parentSession)、子代理 transcript、顾问 transcript。后两者
+ * 的父链接是产物归属(文件落在父会话目录下),它们已有自己的身份标记
+ * (子代理名 chip / 顾问 chip),再挂分叉标记等于说"主会话的顾问是主会话
+ * 的分叉"。只有真正由用户分叉出来的会话才画分支。
+ *
+ * 层级归属不受影响:`session.tree`/`SessionList` 仍按原始 `parentId` 挂
+ * 子树,只有标记与文案改由本函数决定。
+ */
+export function isUserFork(entry: ForkProvenance): boolean {
+	return Boolean(entry.parentId) && entry.subagent !== true && entry.advisor !== true;
+}
+
 export interface SessionHoverPayload {
 	id: string;
 	/** 行显示标题(已含"未命名会话"回落)。 */
 	label: string;
-	/** fork 来源会话标题,null = 非 fork。 */
+	/** 这行是否由用户分叉而来——列表侧用 {@link isUserFork} 判定一次,行
+	 *  标记与卡片「分叉自」行读同一份结论。 */
+	forked: boolean;
+	/** 分叉来源会话标题;父行缺席时为 null。 */
 	parentLabel: string | null;
 	timestamp: string;
 	updatedAt?: string;
@@ -151,6 +183,7 @@ export function SessionHoverCard({
 	const metaRow = meta.get(hover.id);
 	const cwd = metaRow?.cwd?.trim() || null;
 	const hasBothTimes = Boolean(hover.updatedAt && hover.updatedAt !== hover.timestamp);
+	const forkParent = hover.forked ? hover.parentLabel : null;
 
 	// 贴行右侧;右侧放不下换左侧;垂直方向夹进视口。
 	const viewportW = window.innerWidth;
@@ -170,11 +203,11 @@ export function SessionHoverCard({
 			<div className="gui-session-hover-card-title" title={hover.label}>
 				{hover.label}
 			</div>
-			{hover.parentLabel && (
-				<div className="gui-session-hover-card-row" title={hover.parentLabel}>
+			{forkParent && (
+				<div className="gui-session-hover-card-row" title={forkParent}>
 					<Icon name="git-branch" className="gui-session-hover-card-icon" />
 					<span className="gui-session-hover-card-text">
-						{t("general.forkedFromWithName", { name: hover.parentLabel })}
+						{t("general.forkedFromWithName", { name: forkParent })}
 					</span>
 				</div>
 			)}

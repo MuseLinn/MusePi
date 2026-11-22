@@ -2926,8 +2926,10 @@
 	}
 }
 
-/* Forked-session marker (MusePi /tree parity): a branch glyph on rows whose
- * entry has a parent — hover shows the parent's label in the row title. */
+/* Forked-session marker (MusePi /tree parity): a branch glyph on rows created
+ * by a user fork of another session — hover shows the parent's label in the row
+ * title. Advisor and subagent transcripts also carry a parentId, but their
+ * parent link is product ownership, not a fork, and they keep their own badge. */
 .gui-tree-fork {
 	flex-shrink: 0;
 	margin-left: 4px;

@@ -43,6 +43,7 @@ import { GroupedSessionList } from "./GroupedSessionList";
 import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
 import { ProjectDialog, type ProjectDialogTarget } from "./ProjectDialog";
+import { ProjectHoverCard } from "./ProjectHoverCard";
 import { Reveal } from "./Reveal";
 import { ScrollEdgeBlur } from "./ScrollEdgeBlur";
 import { SessionHoverCard } from "./SessionHoverCard";
@@ -441,6 +442,70 @@ export function SessionSidebar({
 		if (!cwd) return;
 		openFolder(cwd);
 	};
+	/** 项目行悬浮卡当前展开的项目根。pointer hover 与键盘 focus 写同一个值:
+	 *  `:focus-visible` 由 CSS 决定,而真正的显示/隐藏必须由 React 状态驱动
+	 *  (卡片里有按钮,纯 CSS 的 `:focus-within` 会把鼠标点击后的焦点留在块
+	 *  内,卡片再也关不掉)。卡片要调 openFolder,所以放在它之后。 */
+	const [projectCard, setProjectCard] = useState<{
+		path: string;
+		spaceBelow: number;
+		spaceAbove: number;
+	} | null>(null);
+	const projectCardTimer = useRef<number | null>(null);
+	const showProjectCard = useCallback((path: string, block?: HTMLElement): void => {
+		if (projectCardTimer.current !== null) window.clearTimeout(projectCardTimer.current);
+		projectCardTimer.current = null;
+		// 卡片高度上限取「视口」与「会话列表滚动容器」中更近的那条边——
+		// 列表自己可滚，视口高度说明不了块下方还剩多少。
+		const rect = block?.getBoundingClientRect();
+		const scroller = block?.closest(".gui-sessions-list")?.getBoundingClientRect();
+		const top = rect?.top ?? 0;
+		const bottom = rect?.bottom ?? 0;
+		const limitBottom = Math.min(scroller?.bottom ?? window.innerHeight, window.innerHeight);
+		const limitTop = Math.max(scroller?.top ?? 0, 0);
+		setProjectCard({ path, spaceBelow: limitBottom - bottom, spaceAbove: top - limitTop });
+	}, []);
+	/** 指针/焦点离开后延迟收卡:跨块移动(离块→进卡)不闪灭。 */
+	const hideProjectCardSoon = useCallback((): void => {
+		if (projectCardTimer.current !== null) window.clearTimeout(projectCardTimer.current);
+		projectCardTimer.current = window.setTimeout(() => {
+			projectCardTimer.current = null;
+			setProjectCard(null);
+		}, 120);
+	}, []);
+	useEffect(() => {
+		if (projectCard === null) return;
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			setProjectCard(null);
+		};
+		// 滚动即收卡:卡片按项目行位置定位,行一滚就会离位(与会话悬浮卡
+		// `SessionHoverCard.tsx` 的 scroll 处理同一理由)。scroll 不冒泡,
+		// 捕获阶段挂 window 才能覆盖侧栏内层的滚动容器。
+		//
+		// 但卡片**自己的**目录列表必须能滚(12 个目录起就超出一屏),滚它就
+		// 收卡等于把刚做出来的可达性当场收走——包括键盘聚焦第 11 个打开按钮
+		// 时列表自动滚出的那一次。所以卡片内部的滚动一律忽略,只收外层
+		// (`.gui-sessions-list` / 滚动框架)的。
+		const onScroll = (event: Event): void => {
+			const target = event.target;
+			if (target instanceof Element && target.closest(".gui-project-hover-card")) return;
+			setProjectCard(null);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		window.addEventListener("scroll", onScroll, true);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+			window.removeEventListener("scroll", onScroll, true);
+		};
+	}, [projectCard]);
+	useEffect(
+		() => () => {
+			if (projectCardTimer.current !== null) window.clearTimeout(projectCardTimer.current);
+		},
+		[],
+	);
 	const [viewMenu, setViewMenu] = useState(false);
 	const viewMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
 	const projMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -1541,6 +1606,20 @@ export function SessionSidebar({
 																			? ` gui-drop-line${projInsert.edge === "after" ? " gui-drop-line--after" : ""}`
 																			: ""
 																	}`}
+																	onMouseEnter={e => showProjectCard(path, e.currentTarget)}
+																	onMouseLeave={hideProjectCardSoon}
+																	onFocus={e => {
+																		// 键盘焦点落在可见控件上才展开(与 `:focus-visible` 同一判据);
+																		// 鼠标点击留下的焦点不展开,否则卡片会一直挂在屏幕上。
+																		if (!(e.target as HTMLElement).matches(":focus-visible")) return;
+																		showProjectCard(path, e.currentTarget);
+																	}}
+																	onBlur={e => {
+																		// 焦点仍在块内(移到另一个控件)时不收。
+																		if (e.currentTarget.contains(e.relatedTarget as Node | null))
+																			return;
+																		hideProjectCardSoon();
+																	}}
 																>
 																	<button
 																		type="button"
@@ -1682,6 +1761,24 @@ export function SessionSidebar({
 																			<Icon name="add" className="h-3 w-3" />
 																		</button>
 																	</span>
+																	{projectCard?.path === path && (
+																		<ProjectHoverCard
+																			name={label}
+																			directories={[
+																				{ path, primary: true },
+																				...project.additionalDirs.map(root => ({
+																					path: root,
+																					primary: false,
+																				})),
+																			]}
+																			sessionCount={list.length}
+																			labelOf={pathBaseName}
+																			onOpenDirectory={openFolder}
+																			openLabel={openFolderLabel()}
+																			spaceBelow={projectCard.spaceBelow}
+																			spaceAbove={projectCard.spaceAbove}
+																		/>
+																	)}
 																</div>
 																<ProjectCollapse collapsed={isCollapsed}>
 																	{list.length === 0 ? (

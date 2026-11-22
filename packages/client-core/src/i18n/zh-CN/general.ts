@@ -541,6 +541,8 @@ export const general = {
 	"general.citeFileComposer": "引用文件到输入框",
 	"general.openInPanelBrowser": "在侧边面板浏览器打开",
 	"general.projectActions": "项目操作",
+	"general.projectDirectoryCount": "{count} 个目录",
+	"general.projectDirectoryOne": "1 个目录",
 	"general.finder": "访达",
 	"general.addNewAction": "添加新操作",
 	"general.autoDiscover": "自动发现",

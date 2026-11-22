@@ -519,6 +519,7 @@ export const settings = {
 	"settings.noSessionsFoundSelected": "No sessions found in the selected agents",
 	"settings.noWorkspace": "No workspace",
 	"settings.sessionCountLabel": "{count} sessions",
+	"settings.sessionCountOne": "1 session",
 	"settings.changeSelection": "Change selection",
 	"settings.scan": "Scan",
 	"settings.scanning": "Scanning…",
