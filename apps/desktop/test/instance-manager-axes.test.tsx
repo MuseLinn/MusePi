@@ -111,14 +111,22 @@ describe("the dialog states the two-axis model", () => {
 		expect(text(host)).toContain(t("settings.workspaceAxisTitle"));
 	});
 
-	test("a section heading is not restated by its own tab or a nested heading", async () => {
-		const host = await render();
-		const titles = Array.from(host.querySelectorAll<HTMLElement>(".gui-loc-section-title")).map(
+	test("a section heading is not restated by a nested heading", async () => {
+		// `DialogFrame` portals to `document.body`, so querying `host` returned
+		// `[]` and `expect([]).toEqual([])` could never fail. The assertion has to
+		// read the portal, and it has to fail on something real — hence the
+		// non-empty precondition: with zero sections found the equality below
+		// would pass vacuously all over again.
+		await render();
+		const titles = Array.from(document.body.querySelectorAll<HTMLElement>(".gui-loc-section-title")).map(
 			node => node.textContent,
 		);
+		expect(titles).toHaveLength(2);
+		expect(titles).toContain(t("settings.instanceAxisTitle"));
+		expect(titles).toContain(t("settings.workspaceAxisTitle"));
 		// The embedded wizard must not print a second heading for the axis the
-		// section already names.
-		const headings = Array.from(host.querySelectorAll<HTMLElement>("h2, h3")).map(node => node.textContent);
+		// section already names: the section headings are the only headings.
+		const headings = Array.from(document.body.querySelectorAll<HTMLElement>("h2, h3")).map(node => node.textContent);
 		expect(headings).toEqual(titles);
 	});
 });
@@ -280,6 +288,44 @@ describe("empty, loading and error states", () => {
 		const host = await render();
 		expect(document.body.querySelector('[role="alert"]')).toBeNull();
 		expect(text(host)).not.toContain(t("settings.instanceConnectionFailed"));
+	});
+
+	test("a failed probe shows the daemon's own reason, not one generic sentence", async () => {
+		// The workspace axis beside this one renders its real error; a single
+		// "cannot connect" for a timeout, a refused token and a DNS failure
+		// sends every user to the same wrong fix. The probe's socket is made to
+		// fail deterministically, and the transport's own words must reach the UI.
+		const RealWebSocket = globalThis.WebSocket;
+		class FailingSocket extends EventTarget {
+			constructor() {
+				super();
+				queueMicrotask(() => this.dispatchEvent(new Event("error")));
+			}
+			close(): void {}
+		}
+		(globalThis as { WebSocket?: unknown }).WebSocket = FailingSocket;
+		const host = await render();
+		const daemon = await openAddForm(host);
+		const inputs = daemon.querySelectorAll<HTMLInputElement>("input.gui-input");
+		const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(inputs[0], "Dead box");
+			inputs[0]?.dispatchEvent(new Event("input", { bubbles: true }));
+			setter?.call(inputs[1], "ws://127.0.0.1:1");
+			inputs[1]?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		const submit = daemon.querySelector<HTMLButtonElement>(".gui-loc-actions .gui-btn-primary");
+		await act(async () => {
+			submit?.click();
+			await Bun.sleep(400);
+		});
+		const alert = daemon.querySelector('[role="alert"]');
+		const text = alert?.textContent ?? "";
+		(globalThis as { WebSocket?: unknown }).WebSocket = RealWebSocket;
+		// The generic sentence is still there — it names what to check — and the
+		// transport's own reason must accompany it.
+		expect(text).toContain(t("settings.instanceConnectionFailed"));
+		expect(text).toContain("cannot connect to ws://127.0.0.1:1");
 	});
 
 	test("a rejected endpoint is reported inline, in the axis that rejected it", async () => {

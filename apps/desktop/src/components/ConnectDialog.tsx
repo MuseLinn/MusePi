@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type CatalogHost, loadHostCatalog } from "../lib/connection/remote-lifecycle";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
+import { ConnectionLocationRow } from "./ConnectionLocationRow";
 import { DialogFrame } from "./DialogFrame";
 import { FadeScroll } from "./FadeScroll";
 
@@ -333,7 +334,12 @@ export function ConnectDialog({
 				<div className="gui-wizard-body flex min-w-0 flex-1 flex-col p-4">
 					{step === 0 && (
 						<>
-							<h2 className="mb-1 text-[15px] font-semibold">{t("settings.selectConnectionMethod")}</h2>
+							{/* Embedded, the section names the axis and the step rail names this
+							 * step, so the heading only restated both. Standalone it is the
+							 * dialog's only title for the step, so it stays. */}
+							{framed && (
+								<h2 className="mb-1 text-[15px] font-semibold">{t("settings.selectConnectionMethod")}</h2>
+							)}
 							<p className="mb-4 text-[13px] text-[var(--color-text-muted)]">
 								{t("settings.chooseHowReachWorkspace")}
 							</p>
@@ -482,34 +488,27 @@ export function ConnectDialog({
 												const saved = hosts?.some(host => host.name === h.name) ?? false;
 												const selected = selectedHost === h.name;
 												return (
-													<li
+													<ConnectionLocationRow
 														key={h.name}
-														className="gui-loc-row"
-														data-current={selected ? "true" : undefined}
-													>
-														<button
-															type="button"
-															className="gui-loc-row-main"
-															onClick={() => setSelectedHost(h.name)}
-															aria-pressed={selected}
-														>
-															<span className="gui-loc-glyph" aria-hidden>
-																<Icon name="server" className="h-3.5 w-3.5" />
-															</span>
-															<span className="gui-loc-name">{h.name}</span>
-															<span className="gui-loc-where">
-																{h.username ? `${h.username}@` : ""}
-																{h.host}
-																{h.port ? `:${h.port}` : ""}
-															</span>
-															<span className="gui-loc-status">
-																{saved
-																	? t("settings.connectionHostSaved")
-																	: t("settings.connectionHostLocalOnly")}
-															</span>
-															{selected && <Icon name="check" className="h-3.5 w-3.5 gui-loc-check" />}
-														</button>
-													</li>
+														leading="glyph"
+														glyph="server"
+														name={h.name}
+														where={`${h.username ? `${h.username}@` : ""}${h.host}${h.port ? `:${h.port}` : ""}`}
+														status={
+															saved
+																? t("settings.connectionHostSaved")
+																: t("settings.connectionHostLocalOnly")
+														}
+														statusKind={selected ? "connected" : "idle"}
+														current={selected}
+														pressed={selected}
+														onActivate={() => setSelectedHost(h.name)}
+														action={
+															selected ? (
+																<Icon name="check" className="h-3.5 w-3.5 gui-loc-check" aria-hidden />
+															) : undefined
+														}
+													/>
 												);
 											})}
 										</ul>

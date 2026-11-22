@@ -47,7 +47,6 @@ export const settings = {
 	"settings.instances": "Instances",
 	"settings.currentInstanceBadge": "Current",
 	"settings.instanceManager": "Instances & remote workspaces",
-	"settings.instanceListDescription": "Choose the MusePi background service to connect to.",
 	"settings.remoteWorkspaces": "Remote workspaces",
 	"settings.testAndAddInstance": "Test and add",
 	"settings.disconnectCurrent": "Disconnect current instance",
@@ -62,7 +61,6 @@ export const settings = {
 	"settings.workspaceAxisHint":
 		"Local files open directly; files on the instance's own machine come along with it; only files on another machine need a mount here.",
 	"settings.instanceListEmpty": "No other instances yet. Add one to run sessions on another machine.",
-	"settings.connectionWhereLocal": "This machine",
 	"settings.connectionWhereSsh": "ssh {host}",
 	"settings.connectionWhereForwarded": "Reached through a tunnel",
 	"settings.connectionLocations": "Connection locations",
@@ -7466,7 +7464,6 @@ export const settings = {
 	"settings.secretsSetFailed": "Could not save the secret: {error}",
 	"settings.secretsDeleteFailed": "Could not delete the secret: {error}",
 	"settings.connectionManager": "Instances & connections",
-	"settings.connectionTargets": "Known endpoints",
 	"settings.connectionKind": "Connection type",
 	"settings.connectionKindLocal": "Local",
 	"settings.connectionKindWsl": "WSL",

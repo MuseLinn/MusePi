@@ -2862,6 +2862,9 @@
 }
 
 .gui-loc-row {
+	/* One name column width for both lists. A shared custom property is what
+	 * lets the two surfaces agree without either knowing the other's markup. */
+	--gui-loc-name-w: 140px;
 	display: flex;
 	align-items: center;
 	min-width: 0;
@@ -2904,10 +2907,20 @@
 	border-radius: var(--radius-md);
 }
 
+/* One fixed-width lead box for both marks: the name must start at the same
+ * offset whether the row leads with a 7px presence dot or a 24px kind glyph. */
+.gui-loc-lead {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 24px;
+	height: 24px;
+}
+
 .gui-loc-dot {
 	width: 7px;
 	height: 7px;
-	flex: none;
 	border-radius: 50%;
 	background: var(--color-text-faint);
 }
@@ -2925,7 +2938,6 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	flex: none;
 	width: 24px;
 	height: 24px;
 	border-radius: var(--radius-md);
@@ -2936,12 +2948,14 @@
 /* Name and where-it-runs share one line, so a row scans as one fact with its
  * location beside it rather than as two stacked lines to re-read. The name
  * takes the free space; the location shrinks first and ellipsizes. */
+/* The name takes a FIXED share of the row, not a content-sized one. A
+ * content-sized name (the previous `flex: 0 0 auto`) pushed `where` right by
+ * whatever the name's own length happened to be, so the location column
+ * started at a different x in each list and the two axes never lined up. The
+ * fixed share is what makes the cells comparable across surfaces. */
 .gui-loc-name {
-	/* The name is the row's identity: it keeps its width and the location
-	 * yields first. The reverse truncated `build-box` to `buil…` while the
-	 * endpoint beside it kept room it did not need. */
-	flex: 0 0 auto;
-	max-width: 60%;
+	flex: 0 0 var(--gui-loc-name-w);
+	max-width: var(--gui-loc-name-w);
 	overflow: hidden;
 	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
@@ -2952,7 +2966,7 @@
 /* Where it runs, not the endpoint it is reached at: a tunnel's loopback
  * address says nothing about the machine behind it. */
 .gui-loc-where {
-	flex: 0 1 auto;
+	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	font-family: var(--font-mono);
@@ -2973,25 +2987,25 @@
 
 .gui-loc-check {
 	flex: none;
+	margin-right: 6px;
 	color: var(--color-accent);
 }
 
-.gui-loc-chip {
-	margin-left: auto;
+/* The action slot is always present at a fixed width, so the status x does not
+ * depend on whether a row happens to carry a control. */
+.gui-loc-action {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
 	flex: none;
-	padding: 1px 7px;
-	border-radius: 999px;
-	font-size: 10.5px;
-	font-weight: 500;
-	color: var(--color-success);
-	background: color-mix(in oklab, var(--color-success) 16%, transparent);
+	width: 30px;
+	padding-right: 6px;
 }
 
 /* Removal is a destructive secondary action: hover/focus reveal keeps the
  * list calm without hiding it from the keyboard. */
 .gui-loc-remove {
 	opacity: 0;
-	margin-right: 6px;
 	transition: opacity 120ms ease-out;
 }
 

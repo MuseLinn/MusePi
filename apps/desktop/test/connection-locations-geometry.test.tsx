@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import { renderToStaticMarkup } from "react-dom/server";
 import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/tools/browser/launch";
+import { ConnectionLocationRow } from "../src/components/ConnectionLocationRow";
 
 /**
  * The two-axis dialog, measured in real Chromium.
@@ -75,23 +77,84 @@ const HOSTS = [
 	{ name: "gpu-rig", where: "me@10.0.0.9:2222", status: "Local config only" },
 ];
 
-function rowMarkup(host: { name: string; where: string; status: string }, index: number): string {
-	return `
-		<li class="gui-loc-row"${index === 0 ? ' data-current="true" data-status="connected"' : ""}>
-			<button type="button" class="gui-loc-row-main">
-				<span class="gui-loc-dot"></span>
-				<span class="gui-loc-copy">
-					<span class="gui-loc-name">${host.name}</span>
-					<span class="gui-loc-where" title="${host.where}">${host.where}</span>
-				</span>
-				<span class="gui-loc-status">${host.status}</span>
-			</button>
-			<button type="button" class="gui-tool-btn gui-loc-remove" aria-label="Remove">×</button>
-		</li>`;
+/**
+ * The rows in this fixture are rendered by the **shipped component**, not
+ * hand-written. The previous version built its own markup, including a
+ * `.gui-loc-copy` class that exists in zero files under `src/`, and gave both
+ * lists the same shape — so it could not see the divergence it was supposed to
+ * guard (the daemon list led with a 7px dot, the workspace list with a 24px
+ * glyph, and only one of them had a trailing slot on every row).
+ *
+ * Rendering the component means a change to its structure reaches this test
+ * automatically: the fixture cannot drift from what ships.
+ */
+function renderedRow(options: {
+	leading: "dot" | "glyph";
+	name: string;
+	where: string;
+	status: string;
+	current?: boolean;
+	action?: string;
+}): string {
+	return renderToStaticMarkup(
+		<ConnectionLocationRow
+			leading={options.leading}
+			glyph="server"
+			name={options.name}
+			where={options.where}
+			status={options.status}
+			statusKind={options.current ? "connected" : "idle"}
+			current={options.current ?? false}
+			disabled={options.current ?? false}
+			onActivate={() => {}}
+			action={
+				options.action ? (
+					<button type="button" className="gui-tool-btn gui-loc-remove" aria-label={options.action}>
+						×
+					</button>
+				) : undefined
+			}
+		/>,
+	);
 }
 
 function fixture(): string {
-	const rows = HOSTS.map(rowMarkup).join("");
+	// The daemon list: dot-led, every row carries a status, stored rows carry a
+	// remove action (the local row does not).
+	const daemonRows = [
+		renderedRow({
+			leading: "dot",
+			name: "This machine",
+			where: "127.0.0.1:8300",
+			status: "Connected",
+			current: true,
+		}),
+		renderedRow({
+			leading: "dot",
+			name: HOSTS[0]!.name,
+			where: HOSTS[0]!.where,
+			status: HOSTS[0]!.status,
+			action: "Remove",
+		}),
+		renderedRow({
+			leading: "dot",
+			name: HOSTS[1]!.name,
+			where: HOSTS[1]!.where,
+			status: HOSTS[1]!.status,
+			action: "Remove",
+		}),
+	].join("");
+	// The workspace list: glyph-led, a provenance status on every row.
+	const workspaceRows = [
+		renderedRow({
+			leading: "glyph",
+			name: HOSTS[0]!.name,
+			where: HOSTS[0]!.where,
+			status: HOSTS[0]!.status,
+			current: true,
+		}),
+		renderedRow({ leading: "glyph", name: HOSTS[1]!.name, where: HOSTS[1]!.where, status: HOSTS[1]!.status }),
+	].join("");
 	return `
 		<div class="gui-dialog-backdrop gui-dialog-backdrop--entered">
 			<div class="gui-dialog gui-dialog--instance-manager gui-dialog--entered" role="dialog" aria-modal="true">
@@ -107,7 +170,7 @@ function fixture(): string {
 								<h2 class="gui-loc-section-title" id="gui-loc-instances">Daemon (instance)</h2>
 								<p class="gui-loc-section-hint">Decides which machine's MusePi daemon runs the session.</p>
 							</header>
-							<ul class="gui-loc-list">${rows}</ul>
+							<ul class="gui-loc-list">${daemonRows}</ul>
 							<div class="gui-loc-fields">
 								<label class="gui-field"><span class="gui-field-label">Instance label</span><input class="gui-input" /></label>
 								<label class="gui-field"><span class="gui-field-label">Service address</span><input class="gui-input" /></label>
@@ -125,7 +188,7 @@ function fixture(): string {
 								<div class="gui-wizard-split flex min-h-0 flex-1">
 									<div class="gui-wizard-rail w-36 flex-shrink-0 border-r p-3"></div>
 									<div class="gui-wizard-body flex min-w-0 flex-1 flex-col p-4">
-										<ul class="gui-loc-list">${rows}</ul>
+										<ul class="gui-loc-list">${workspaceRows}</ul>
 									</div>
 								</div>
 							</div>
@@ -225,6 +288,29 @@ async function readGeometry() {
 		const row = document.querySelector<HTMLElement>(".gui-loc-row")!;
 		const rowMain = row.querySelector<HTMLElement>(".gui-loc-row-main")!;
 		const statusSlots = all(".gui-loc-status").map(node => Math.round(node.getBoundingClientRect().right));
+		/** Cell positions relative to their own row, so the two lists — which sit
+		 *  at different x on screen — can be compared cell for cell. */
+		const cellsOf = (scope: Element) =>
+			Array.from(scope.querySelectorAll<HTMLElement>(".gui-loc-row")).map(node => {
+				const rowLeft = node.getBoundingClientRect().left;
+				const at = (selector: string) => {
+					const cell = node.querySelector<HTMLElement>(selector);
+					return cell ? Math.round(cell.getBoundingClientRect().left - rowLeft) : null;
+				};
+				const rowBox = node.getBoundingClientRect();
+				const statusBox = node.querySelector<HTMLElement>(".gui-loc-status")?.getBoundingClientRect();
+				return {
+					name: at(".gui-loc-name"),
+					where: at(".gui-loc-where"),
+					status: at(".gui-loc-status"),
+					/** Distance from the row's own trailing edge. The two lists have
+					 *  different widths, so a trailing slot cannot share an absolute
+					 *  x; what must match is where it sits *within* the row. */
+					trailingGap: statusBox ? Math.round(rowBox.right - statusBox.right) : null,
+					hasStatus: statusBox !== undefined,
+				};
+			});
+		const [firstList, secondList] = lists;
 		return {
 			dialog: box(document.querySelector<HTMLElement>(".gui-dialog")!),
 			sections: sections.map(box),
@@ -245,6 +331,8 @@ async function readGeometry() {
 			rowMain: box(rowMain),
 			statusRight: statusSlots,
 			statusCount: statusSlots.length,
+			daemonCells: firstList ? cellsOf(firstList) : [],
+			workspaceCells: secondList ? cellsOf(secondList) : [],
 			docOverflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
 		};
 	});
@@ -320,13 +408,47 @@ describe("two-axis dialog at the narrowest supported window (720)", () => {
 });
 
 describe("row anatomy is identical in both lists", () => {
-	test("the status slot sits at the same edge in every row", async () => {
+	test("every row in both lists has a status slot", async () => {
 		await mount(1280, 900);
 		const geometry = await readGeometry();
-		// Four rows across two lists, all right-aligned to their row.
-		expect(geometry.statusCount).toBe(4);
-		const unique = new Set(geometry.statusRight);
-		expect(unique.size).toBeLessThanOrEqual(2);
+		// Five rows across the two lists (three daemon, two workspace); none may
+		// omit the trailing slot, which is what made half the daemon list end
+		// early in the shape this replaced.
+		expect(geometry.daemonCells).toHaveLength(3);
+		expect(geometry.workspaceCells).toHaveLength(2);
+		for (const cell of [...geometry.daemonCells, ...geometry.workspaceCells]) {
+			expect(cell.hasStatus).toBe(true);
+		}
+	});
+
+	test("name and where sit at exactly the same x in both lists", async () => {
+		await mount(1280, 900);
+		const geometry = await readGeometry();
+		// Exact, not bounded: the row is one component, so a divergence is a
+		// defect rather than a permitted variation. Left-anchored cells must
+		// match regardless of the list's width — this is the assertion that
+		// catches a 7px dot beside a 24px glyph shifting the name.
+		const all = [...geometry.daemonCells, ...geometry.workspaceCells];
+		const first = all[0]!;
+		for (const cell of all) {
+			expect(cell.name).toBe(first.name);
+			expect(cell.where).toBe(first.where);
+		}
+	});
+
+	test("the status slot sits at exactly the same offset from the row's trailing edge", async () => {
+		await mount(1280, 900);
+		const geometry = await readGeometry();
+		// The lists differ in width, so a trailing slot cannot share an absolute
+		// x; what must be identical is its position inside the row. This is the
+		// assertion that catches "half the daemon rows have no trailing slot".
+		const all = [...geometry.daemonCells, ...geometry.workspaceCells];
+		const first = all[0]!;
+		expect(first.trailingGap).not.toBeNull();
+		for (const cell of all) {
+			expect(cell.hasStatus).toBe(true);
+			expect(cell.trailingGap).toBe(first.trailingGap);
+		}
 	});
 
 	test("the row box is the target, and it spans the row", async () => {

@@ -32,7 +32,7 @@ import { t } from "@musepi/client-core";
 import { LoaderCircle as LoaderCircleIconData, Plus as PlusIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CatalogHost } from "../lib/connection/remote-lifecycle";
 import { stripToken } from "../lib/connection/targets";
 import { useHostCatalog } from "../lib/connection/use-host-catalog";
@@ -40,6 +40,7 @@ import { buildWsUrl, normalizeRemoteHostUrl, type RemoteHost } from "../lib/remo
 import { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { ConnectDialog } from "./ConnectDialog";
+import { ConnectionLocationRow } from "./ConnectionLocationRow";
 import { DialogFrame } from "./DialogFrame";
 
 /** Loopback endpoints are forwards, not locations: the daemon answers there,
@@ -116,20 +117,16 @@ export function InstanceManagerDialog({
 	const [adding, setAdding] = useState(false);
 	const [formOpen, setFormOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	/** `refresh` is rebuilt on every render by the hook, so it cannot be an
-	 *  effect dependency: doing so re-fires the effect forever. Held in a ref
-	 *  and read at open instead. */
-	const refreshRef = useRef(refresh);
-	refreshRef.current = refresh;
-
 	useEffect(() => {
 		if (!open) return;
 		setError(null);
 		setFormOpen(false);
 		// The files can change under a long-lived window; opening is the moment
-		// the user expects the list to be current.
-		refreshRef.current();
-	}, [open]);
+		// the user expects the list to be current. `refresh` is a dependency
+		// because the hook guarantees its identity is stable (`useCallback` in
+		// `use-host-catalog.ts`, guarded by `test/use-host-catalog-identity`).
+		refresh();
+	}, [open, refresh]);
 
 	const addInstance = async (): Promise<void> => {
 		let url: string;
@@ -159,8 +156,14 @@ export function InstanceManagerDialog({
 			onAddHost({ label, url, token });
 			setDraft({ label: "", url: "", token: "" });
 			setFormOpen(false);
-		} catch {
-			setError(t("settings.instanceConnectionFailed"));
+		} catch (cause) {
+			// The reason, not a summary: a timeout, a refused token and a DNS
+			// failure need different fixes, and the workspace axis beside this one
+			// already shows its own error text. The sentence that says what to
+			// check stays as the second line, because the raw message alone does
+			// not name the token.
+			const reason = cause instanceof Error ? cause.message : String(cause);
+			setError(`${t("settings.instanceConnectionFailed")} — ${reason}`);
 		} finally {
 			if (timer !== null) clearTimeout(timer);
 			probe.close();
@@ -173,51 +176,52 @@ export function InstanceManagerDialog({
 		[hosts, daemonUrl],
 	);
 
+	/**
+	 * One row per instance, through the shared primitive.
+	 *
+	 * The status word is what makes the trailing slot meaningful on every row:
+	 * the current row says 当前 / 已断开, and a stored row says whether a probe
+	 * has reached it. The old shape put a chip on the current row only, so half
+	 * the list had no trailing slot and the two axes did not line up.
+	 */
 	const renderHost = (host: RemoteHost | null): ReactNode => {
 		const active = host ? host.id === activeHostId : activeHostId === null;
 		const label = host?.label ?? t("general.local");
-		const where = whereItRuns(host, catalog, daemonUrl);
+		const status = active
+			? connected
+				? t("settings.connectionStatusConnected")
+				: t("settings.disconnected")
+			: t("settings.connectionStatusUnknown");
 		return (
-			<li
+			<ConnectionLocationRow
 				key={host?.id ?? "local"}
-				className="gui-loc-row"
-				data-current={active ? "true" : undefined}
-				data-status={active ? (connected ? "connected" : "disconnected") : "idle"}
-			>
-				{/* The row is its own target (M86): one button fills the row box,
-				 * so the wash and the hit area are the same rectangle. Removal is
-				 * a sibling, never nested. */}
-				<button
-					type="button"
-					className="gui-loc-row-main"
-					onClick={() => {
-						if (!active) {
-							onSwitchHost(host);
-							onClose();
-						}
-					}}
-					disabled={active}
-					aria-current={active ? "true" : undefined}
-				>
-					<span className="gui-loc-dot" aria-hidden />
-					<span className="gui-loc-name">{label}</span>
-					<span className="gui-loc-where" title={host ? stripToken(host.url) : daemonUrl}>
-						{where}
-					</span>
-					{active && <span className="gui-loc-chip">{t("settings.currentInstanceBadge")}</span>}
-				</button>
-				{host && (
-					<button
-						type="button"
-						className="gui-tool-btn gui-loc-remove"
-						title={t("general.remove")}
-						aria-label={t("general.remove")}
-						onClick={() => onRemoveHost(host.id)}
-					>
-						<Icon name="delete-bin" className="h-3.5 w-3.5" />
-					</button>
-				)}
-			</li>
+				leading="dot"
+				name={label}
+				where={whereItRuns(host, catalog, daemonUrl)}
+				whereTitle={host ? stripToken(host.url) : daemonUrl}
+				status={status}
+				statusKind={active ? (connected ? "connected" : "disconnected") : "idle"}
+				current={active}
+				disabled={active}
+				onActivate={() => {
+					if (active) return;
+					onSwitchHost(host);
+					onClose();
+				}}
+				action={
+					host ? (
+						<button
+							type="button"
+							className="gui-tool-btn gui-loc-remove"
+							title={t("general.remove")}
+							aria-label={t("general.remove")}
+							onClick={() => onRemoveHost(host.id)}
+						>
+							<Icon name="delete-bin" className="h-3.5 w-3.5" />
+						</button>
+					) : undefined
+				}
+			/>
 		);
 	};
 

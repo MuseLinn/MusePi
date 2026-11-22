@@ -10,7 +10,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import puppeteer from "puppeteer-core";
+import { renderToStaticMarkup } from "react-dom/server";
 import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/tools/browser/launch";
+import { ConnectionLocationRow } from "../src/components/ConnectionLocationRow";
+import { iconSpriteData } from "../src/vendor/oc-icons/sprite";
 
 const STYLES = path.resolve(import.meta.dir, "../src/styles");
 /** A run stamp in the filename: an image reader that caches by path would
@@ -69,22 +72,29 @@ const HOSTS = [
 	{ name: "nas", where: "me@192.168.1.100", status: "Saved" },
 ];
 
-function row(host: { name: string; where: string; status: string }, index: number): string {
-	return `
-		<li class="gui-loc-row"${index === 0 ? ' data-current="true" data-status="connected"' : ""}>
-			<button type="button" class="gui-loc-row-main">
-				<span class="gui-loc-dot"></span>
-				<span class="gui-loc-name">${host.name}</span>
-				<span class="gui-loc-where">${host.where}</span>
-				<span class="gui-loc-status">${host.status}</span>
-			</button>
-			<button type="button" class="gui-tool-btn gui-loc-remove" aria-label="Remove">×</button>
-		</li>`;
+function row(host: { name: string; where: string; status: string }, index: number, leading: "dot" | "glyph"): string {
+	return renderToStaticMarkup(
+		<ConnectionLocationRow
+			leading={leading}
+			glyph="server"
+			name={host.name}
+			where={host.where}
+			status={host.status}
+			statusKind={index === 0 ? "connected" : "idle"}
+			current={index === 0}
+			onActivate={() => {}}
+			action={
+				<button type="button" className="gui-tool-btn gui-loc-remove" aria-label="Remove">
+					×
+				</button>
+			}
+		/>,
+	);
 }
 
 function fixture(): string {
-	const rows = HOSTS.map(row).join("");
-	const wizardRows = HOSTS.map((h, i) => row(h, i)).join("");
+	const rows = HOSTS.map((h, i) => row(h, i, "dot")).join("");
+	const wizardRows = HOSTS.map((h, i) => row(h, i, "glyph")).join("");
 	return `
 		<div class="gui-dialog-backdrop gui-dialog-backdrop--entered">
 			<div class="gui-dialog gui-dialog--instance-manager gui-dialog--entered" role="dialog" aria-modal="true">
@@ -101,14 +111,7 @@ function fixture(): string {
 								<p class="gui-loc-section-hint">决定会话由哪台机器上的 MusePi 守护进程运行。</p>
 							</header>
 							<ul class="gui-loc-list">
-								<li class="gui-loc-row" data-current="true" data-status="connected">
-									<button type="button" class="gui-loc-row-main">
-										<span class="gui-loc-dot"></span>
-										<span class="gui-loc-name">本机</span>
-										<span class="gui-loc-where">127.0.0.1:8300</span>
-										<span class="gui-loc-chip">当前</span>
-									</button>
-								</li>
+								${row({ name: "本机", where: "127.0.0.1:8300", status: "已连接" }, 0, "dot")}
 								${rows}
 							</ul>
 							<button type="button" class="gui-btn gui-btn-primary gui-loc-add">＋ 添加实例</button>
@@ -147,6 +150,14 @@ function fixture(): string {
  *  override block here would drift from it — and did: a duplicated
  *  `--color-surface` made the glass sample a light card with white text, a UI
  *  that does not exist. */
+/** `Icon` injects its sprite in a mount effect, which static rendering never
+ *  runs — without this every glyph in the review image is a blank square. */
+const SPRITE = `<svg id="openchamber-icon-sprite" aria-hidden="true" style="display:none">${Object.entries(
+	iconSpriteData,
+)
+	.map(([name, content]) => `<symbol id="oc-${name}" viewBox="0 0 24 24">${content}</symbol>`)
+	.join("")}</svg>`;
+
 const TOKENS = `
 	${fs.readFileSync(path.resolve(import.meta.dir, "../../../packages/client-core/src/styles/tokens.css"), "utf8")}
 	html, body { height: 100%; margin: 0; background: var(--color-bg); color: var(--color-text); }
@@ -169,7 +180,7 @@ async function main(): Promise<void> {
 			// The dialog ships on the app's dark theme; headless Chromium reports a
 			// light colour scheme, whose token sheet would override the dark one.
 			await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }]);
-			await page.setContent(`<style>${TOKENS}${UTILITIES}${CASCADE}</style>${fixture()}`);
+			await page.setContent(`${SPRITE}<style>${TOKENS}${UTILITIES}${CASCADE}</style>${fixture()}`);
 			await page.evaluate(() => {
 				document.documentElement.setAttribute("data-theme", "dark");
 				document.documentElement.setAttribute("data-platform", "linux");
@@ -182,7 +193,10 @@ async function main(): Promise<void> {
 				const footer = document.querySelector(".gui-loc-foot");
 				return {
 					rows: rows.length,
-					dotsPerRow: rows.map(row => row.querySelectorAll(".gui-loc-dot").length),
+					// Every row has exactly one lead box, whichever mark it holds; and
+					// exactly one status slot, which is what the primitive guarantees.
+					leadPerRow: rows.map(row => row.querySelectorAll(".gui-loc-lead").length),
+					statusPerRow: rows.map(row => row.querySelectorAll(".gui-loc-status").length),
 					footerInsideDialog: Boolean(footer?.closest(".gui-dialog")),
 					sections: document.querySelectorAll(".gui-loc-section").length,
 					dialogWidth: Math.round(
@@ -198,7 +212,8 @@ async function main(): Promise<void> {
 					),
 				};
 			});
-			if (audit.dotsPerRow.some(count => count !== 1)) throw new Error(`row markup: ${JSON.stringify(audit)}`);
+			if (audit.leadPerRow.some(count => count !== 1)) throw new Error(`row lead: ${JSON.stringify(audit)}`);
+			if (audit.statusPerRow.some(count => count !== 1)) throw new Error(`row status: ${JSON.stringify(audit)}`);
 			if (!audit.footerInsideDialog) throw new Error(`footer escaped the dialog: ${JSON.stringify(audit)}`);
 			console.log(size.name, JSON.stringify(audit));
 			const file = path.join(OUT, `connection-locations-${size.name}-${STAMP}.png`);

@@ -42,7 +42,6 @@ export const settings = {
 	"settings.instances": "实例",
 	"settings.currentInstanceBadge": "当前",
 	"settings.instanceManager": "实例与远程工作区",
-	"settings.instanceListDescription": "选择要连接的 MusePi 后台服务。",
 	"settings.remoteWorkspaces": "远程工作区",
 	"settings.testAndAddInstance": "测试并添加",
 	"settings.disconnectCurrent": "断开当前实例",
@@ -57,7 +56,6 @@ export const settings = {
 	"settings.workspaceAxisHint":
 		"本机文件直接打开；与实例同一台机器时随实例一起用；只有文件在远端时，才在这里挂载目录。",
 	"settings.instanceListEmpty": "还没有其他实例。添加一个，让会话在另一台机器上运行。",
-	"settings.connectionWhereLocal": "本机",
 	"settings.connectionWhereSsh": "ssh {host}",
 	"settings.connectionWhereForwarded": "经隧道转发",
 	"settings.connectionLocations": "连接位置",
@@ -7146,7 +7144,6 @@ export const settings = {
 	"settings.secretsSetFailed": "保存密钥失败：{error}",
 	"settings.secretsDeleteFailed": "删除密钥失败：{error}",
 	"settings.connectionManager": "实例与连接",
-	"settings.connectionTargets": "已知端点",
 	"settings.connectionKind": "连接方式",
 	"settings.connectionKindLocal": "本机",
 	"settings.connectionKindWsl": "WSL",

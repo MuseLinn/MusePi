@@ -100,7 +100,7 @@ scope:
 
 - 对话框统一走 `DialogFrame`，规则见 `docs/gui-dialog-spec.md`（尺寸档位、滚动容器、焦点、修饰类特异度）。
 - 看板与内联卡片的几何、注册对等、源文本规则见 `docs/gui-widget-spec.md`。
-- **位置行（`.gui-loc-row`）**：连接两条轴共用的唯一行结构——`InstanceManagerDialog` 的实例列表与 `ConnectDialog` 的主机列表都用它，同一个事实无论出现在哪里都落在同一横坐标。一行是 `状态点 · 名称 · 在哪里运行 · 状态`；名称保留自己的宽度、位置先让位，状态以 `margin-left: auto` 固定到行尾，**行本身就是一个 `<button>`**（`.gui-loc-row-main`），删除动作是它的兄弟节点。`where-it-runs` 说明的是机器，绝不是隧道的回环地址。列表是 `<ul class="gui-loc-list">`；`.gui-loc-list--scroll` 只用于向导的独立对话框——那里列表就是该界面自己的正文——在管理器里正文才是唯一的滚动容器（见「溢出契约」）。契约：`apps/desktop/test/instance-manager-axes.test.tsx` 与真实 Chromium 的 `apps/desktop/test/connection-locations-geometry.test.ts`。
+- **位置行（`ConnectionLocationRow`，`.gui-loc-row`）**：连接两条轴共用的唯一行结构——`InstanceManagerDialog` 的实例列表与 `ConnectDialog` 的主机列表由**同一个组件**渲染，所以两边的单元格落在同一横坐标。差异是 props 而不是布局：`leading` 为 `"dot"`（在线状态点）或 `"glyph"`（类型图标），两者都放在**固定宽度的 `.gui-loc-lead` 盒子**里，因此名称的起始偏移完全一致。`status` **始终渲染**，这正是让每一行的尾部槽位距行尾保持同一偏移的原因；`action` 是可选的尾部控件，作为行按钮的**兄弟节点**渲染在始终预留、固定宽度的 `.gui-loc-action` 槽位中，因此没有控件的行不会把按钮撑宽。行本身是 `<button>`（`.gui-loc-row-main`）——悬停底色与命中区是同一个矩形（M86）——删除类控件绝不嵌套在它要删除的目标内部。名称列占行的**固定份额**（`--gui-loc-name-w`）而非按内容宽度：按内容宽度时，名称自身的长短会把 `where` 推右，导致两个列表的位置列起始 x 不同。`where` 说明的是机器，绝不是隧道的回环地址。列表是 `<ul class="gui-loc-list">`；`.gui-loc-list--scroll` 只用于向导的独立对话框——在管理器里正文才是唯一的滚动容器（见「溢出契约」）。几何契约**通过组件**（`renderToStaticMarkup`）渲染行，而不是手写标记，因此夹具无法与真实产物漂移；它精确比较两个列表中名称/位置列的 x，以及状态槽位距各自行尾的偏移。契约：`apps/desktop/test/instance-manager-axes.test.tsx` 与真实 Chromium 的 `apps/desktop/test/connection-locations-geometry.test.tsx`。
 
 ## 已知缺口（记录在案，不是已完成）
 
