@@ -44,7 +44,7 @@ const CASCADE = [
 	.map(file => fs.readFileSync(path.join(STYLES, file), "utf8"))
 	.join("\n");
 
-const TITLE = "一个很长的会话标题用来验证省略而不是挤压";
+const TITLE = "一个很长的会话标题用来验证省略而不是挤压 — a-really-long-session-title-that-cannot-fit-one-tab";
 
 /** Three header tabs in a 360px strip: 3 × 176px cannot fit, so the contract's
  *  two halves are both exercised — equal widths AND real overflow. */

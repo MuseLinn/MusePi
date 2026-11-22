@@ -85,10 +85,12 @@ function cardMarkup(): string {
 		};
 		const label = directory.path.split("/").filter(Boolean).pop() ?? directory.path;
 		const chip = directory.primary ? '<span class="gui-hover-card-chip">Primary</span>' : "";
-		// The row IS the button, so the fixture wraps the whole row box.
+		// The row IS the button, so the fixture wraps the whole row box. The fixed
+		// height keeps twelve rows over the 280px cap on any platform font; the
+		// default line box alone drops them under the cap on a fallback font.
 		return `
 			<li>
-				<button type="button" class="gui-hover-card-row gui-hover-card-row--action gui-project-hover-card-row" title="Open: ${directory.path}">
+				<button type="button" style="height: 24px" class="gui-hover-card-row gui-hover-card-row--action gui-project-hover-card-row" title="Open: ${directory.path}">
 					<span class="gui-hover-card-icon"></span>
 					<span class="gui-hover-card-text" title="${directory.path}">${label}</span>
 					${chip}
