@@ -1,6 +1,6 @@
 import { useLocale } from "@musepi/client-core";
-import type { CSSProperties, ReactNode } from "react";
-import { useSliderDrag } from "../LadderSlider";
+import type { ReactNode } from "react";
+import { SliderTrack, useSliderDrag } from "../LadderSlider";
 
 /** One detent on a preset ladder. */
 export interface LadderStep {
@@ -32,9 +32,10 @@ function withCurrent(steps: readonly LadderStep[], value: number): LadderStep[] 
  * support and hid every preset label. This control owns one detent per
  * declared preset, so a release and the arrow keys can only land on legal
  * values, and the current preset's label is always on screen. The pointer
- * math is the thinking ladder's (`useSliderDrag`): the thumb tracks the
- * pointer continuously and snaps to the nearest detent on release, and the
- * gesture writes once instead of once per pointer tick.
+ * math is the thinking ladder's (`useSliderDrag`) and so is the track
+ * (`SliderTrack`): the two ladders are one control with two heads. Only the
+ * head differs — this one has no section label, so the value sits over the
+ * track instead of beside one.
  */
 export function LadderSlider({
 	steps,
@@ -69,60 +70,24 @@ export function LadderSlider({
 	// The readout names the rung the release would land on, so the label and
 	// `aria-valuetext` never disagree with the magnetic target.
 	const active = points[slider.target] ?? points[0];
+	const readout = active?.label ?? Number(value).toLocaleString(locale, { maximumFractionDigits: 3 });
 
 	return (
-		<div className={`gui-ladder${disabled ? " gui-ladder--disabled" : ""}`}>
-			<span className="gui-ladder-value" title={active?.description}>
-				{active?.label ?? Number(value).toLocaleString(locale, { maximumFractionDigits: 3 })}
-			</span>
-			<div
-				className="gui-ladder-track"
-				role="slider"
-				tabIndex={disabled ? -1 : 0}
-				aria-label={ariaLabel}
-				aria-disabled={disabled || undefined}
-				aria-valuemin={0}
-				aria-valuemax={last}
-				aria-valuenow={slider.target}
-				aria-valuetext={active?.label}
-				data-dragging={slider.dragging ? "" : undefined}
-				style={{ "--gui-ladder-p": slider.position / last } as CSSProperties}
-				{...slider.handlers}
-				onKeyDown={event => {
-					if (disabled) return;
-					const moves: Record<string, number> = {
-						ArrowRight: 1,
-						ArrowUp: 1,
-						ArrowLeft: -1,
-						ArrowDown: -1,
-						PageUp: 5,
-						PageDown: -5,
-					};
-					const delta = moves[event.key];
-					if (delta !== undefined) {
-						event.preventDefault();
-						slider.step(slider.target + delta);
-					} else if (event.key === "Home") {
-						event.preventDefault();
-						slider.step(0);
-					} else if (event.key === "End") {
-						event.preventDefault();
-						slider.step(last);
-					}
-				}}
-			>
-				<span ref={slider.setRail} className="gui-ladder-rail" aria-hidden />
-				<span className="gui-ladder-fill" aria-hidden />
-				{points.map((step, stop) => (
-					<span
-						key={`${stop}:${step.value}`}
-						className={`gui-ladder-tick${stop <= slider.target ? " gui-ladder-tick--on" : ""}`}
-						style={{ "--gui-ladder-dot-p": stop / last } as CSSProperties}
-						aria-hidden
-					/>
-				))}
-				<span className="gui-ladder-thumb" aria-hidden />
+		<div className="gui-slider gui-slider--detent" data-disabled={disabled ? "true" : undefined}>
+			<div className="gui-slider-head">
+				<span className="gui-slider-value" title={active?.description}>
+					{readout}
+				</span>
 			</div>
+			<SliderTrack
+				slider={slider}
+				last={last}
+				labels={points.map(step => step.label)}
+				pageStep={5}
+				disabled={disabled}
+				ariaLabel={ariaLabel}
+				valueText={readout}
+			/>
 		</div>
 	);
 }

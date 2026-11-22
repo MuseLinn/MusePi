@@ -489,11 +489,15 @@ describe("agent info pane", () => {
 			pointer(track, "pointerdown", 9);
 			pointer(track, "pointermove", 172);
 		});
-		const ticks = [...host.querySelectorAll(".gui-slider-tick")];
+		// No caption row exists; the rung is named three ways instead: the dot's
+		// `title`, the screen reader's `aria-valuetext`, and the head's readout.
+		const dots = [...host.querySelectorAll(".gui-slider-dot")];
 		expect(track.getAttribute("aria-valuenow")).toBe("3");
-		expect(track.getAttribute("aria-valuetext")).toBe(ticks[3]?.textContent);
-		expect(host.querySelector(".gui-slider-value")?.textContent).toBe(ticks[3]?.textContent);
-		expect(ticks[3]?.classList.contains("gui-slider-tick--on")).toBe(true);
+		expect(track.getAttribute("aria-valuetext")).toBe("中");
+		expect(dots[3]?.getAttribute("title")).toBe(track.getAttribute("aria-valuetext"));
+		expect(host.querySelector(".gui-slider-value")?.textContent).toBe(track.getAttribute("aria-valuetext"));
+		expect(dots[3]?.classList.contains("gui-slider-dot--on")).toBe(true);
+		expect(host.querySelector(".gui-slider-ticks")).toBeNull();
 		await act(async () => pointer(track, "pointercancel", 172));
 		await unmount();
 	});
@@ -541,8 +545,10 @@ describe("agent info pane", () => {
 			pointer(track, "pointerup", rungX(5));
 		});
 		expect(level(calls)).toBe("high");
-		const ticks = [...host.querySelectorAll(".gui-slider-tick")];
-		expect(ticks[5]?.classList.contains("gui-slider-tick--capped")).toBe(true);
+		const dots = [...host.querySelectorAll(".gui-slider-dot")];
+		expect(dots[5]?.hasAttribute("data-capped")).toBe(true);
+		// A capped rung is still discoverable: its dot keeps the name.
+		expect(dots[5]?.getAttribute("title")).toBeTruthy();
 		await unmount();
 	});
 
@@ -595,7 +601,11 @@ describe("agent info pane", () => {
 		const { host, unmount } = await mount(autoRpc);
 		const track = slider(host);
 		expect(track.getAttribute("aria-valuenow")).toBe("6");
-		expect(host.querySelector(".gui-slider-resolved")?.textContent).toContain("高");
+		// The readout IS the auto level plus the resolved effort, in one string,
+		// so the visible head and `aria-valuetext` cannot disagree.
+		const readout = host.querySelector(".gui-slider-value")?.textContent ?? "";
+		expect(readout).toContain("高");
+		expect(readout).toBe(track.getAttribute("aria-valuetext"));
 		await unmount();
 	});
 });

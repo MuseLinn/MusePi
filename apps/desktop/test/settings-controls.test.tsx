@@ -136,18 +136,18 @@ describe("settingsControl", () => {
 describe("numeric controls", () => {
 	it("renders a detent ladder for a preset numeric setting", () => {
 		const scope = mount([item("temperature")], { temperature: 0.7 });
-		expect(scope.querySelector(".gui-ladder")).not.toBeNull();
+		expect(scope.querySelector(".gui-slider--detent")).not.toBeNull();
 		expect(scope.querySelector('input[type="number"]')).toBeNull();
 		// One tick per declared preset, and the active preset's label is shown.
 		const presets = (SETTINGS_SCHEMA.temperature.ui.options ?? []).length;
-		expect(scope.querySelectorAll(".gui-ladder-tick").length).toBe(presets);
-		expect(scope.querySelector(".gui-ladder-value")?.textContent).toBe("0.7");
+		expect(scope.querySelectorAll(".gui-slider-dot").length).toBe(presets);
+		expect(scope.querySelector(".gui-slider-value")?.textContent).toBe("0.7");
 	});
 
 	it("moves one preset per arrow key instead of accepting arbitrary numbers", () => {
 		const changes: [string, unknown][] = [];
 		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
-		const track = scope.querySelector(".gui-ladder-track");
+		const track = scope.querySelector(".gui-slider-track");
 		if (!track) throw new Error("no ladder track");
 		keydown(track, "ArrowRight");
 		expect(changes.at(-1)).toEqual(["temperature", 0.7]);
@@ -158,7 +158,7 @@ describe("numeric controls", () => {
 	it("puts the thumb under the cursor on the press frame, not on a detent", () => {
 		const changes: [string, unknown][] = [];
 		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
-		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		const track = scope.querySelector<HTMLElement>(".gui-slider-track");
 		if (!track) throw new Error("no ladder track");
 		const rect = (left: number, width: number): DOMRect =>
 			({
@@ -173,10 +173,10 @@ describe("numeric controls", () => {
 				toJSON: () => ({}),
 			}) as DOMRect;
 		track.getBoundingClientRect = () => rect(0, 300);
-		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		const rail = track.querySelector<HTMLElement>(".gui-slider-rail");
 		if (!rail) throw new Error("no rail");
 		rail.getBoundingClientRect = () => rect(0, 300);
-		const thumb = (): number => Number(track.style.getPropertyValue("--gui-ladder-p")) * 300;
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-slider-p")) * 300;
 		const presets = (SETTINGS_SCHEMA.temperature.ui.options ?? []).length - 1;
 		if (presets < 2) return;
 
@@ -197,7 +197,7 @@ describe("numeric controls", () => {
 	it("writes nothing when a settings drag is cancelled", () => {
 		const changes: [string, unknown][] = [];
 		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
-		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		const track = scope.querySelector<HTMLElement>(".gui-slider-track");
 		if (!track) throw new Error("no ladder track");
 		const rect = (left: number, width: number): DOMRect =>
 			({
@@ -212,10 +212,10 @@ describe("numeric controls", () => {
 				toJSON: () => ({}),
 			}) as DOMRect;
 		track.getBoundingClientRect = () => rect(0, 300);
-		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		const rail = track.querySelector<HTMLElement>(".gui-slider-rail");
 		if (!rail) throw new Error("no rail");
 		rail.getBoundingClientRect = () => rect(0, 300);
-		const thumb = (): number => Number(track.style.getPropertyValue("--gui-ladder-p")) * 300;
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-slider-p")) * 300;
 		const resting = thumb();
 
 		act(() => track.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 30 })));
@@ -231,7 +231,7 @@ describe("numeric controls", () => {
 	it("drags continuously and writes once, on release", () => {
 		const changes: [string, unknown][] = [];
 		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
-		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		const track = scope.querySelector<HTMLElement>(".gui-slider-track");
 		if (!track) throw new Error("no ladder track");
 		// Happy-dom lays nothing out; give the measured rail a 300px span.
 		const rect = (left: number, width: number): DOMRect =>
@@ -247,10 +247,10 @@ describe("numeric controls", () => {
 				toJSON: () => ({}),
 			}) as DOMRect;
 		track.getBoundingClientRect = () => rect(0, 300);
-		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		const rail = track.querySelector<HTMLElement>(".gui-slider-rail");
 		if (!rail) throw new Error("no rail");
 		rail.getBoundingClientRect = () => rect(0, 300);
-		const thumb = (): number => Number(track.style.getPropertyValue("--gui-ladder-p")) * 300;
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-slider-p")) * 300;
 		const presets = (SETTINGS_SCHEMA.temperature.ui.options ?? []).length - 1;
 
 		act(() => track.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 0 })));
@@ -270,7 +270,7 @@ describe("numeric controls", () => {
 	it("snaps to the nearest detent without writing every pointer tick", () => {
 		const changes: [string, unknown][] = [];
 		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
-		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		const track = scope.querySelector<HTMLElement>(".gui-slider-track");
 		if (!track) throw new Error("no ladder track");
 		const rect = (left: number, width: number): DOMRect =>
 			({
@@ -285,7 +285,7 @@ describe("numeric controls", () => {
 				toJSON: () => ({}),
 			}) as DOMRect;
 		track.getBoundingClientRect = () => rect(0, 300);
-		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		const rail = track.querySelector<HTMLElement>(".gui-slider-rail");
 		if (!rail) throw new Error("no rail");
 		rail.getBoundingClientRect = () => rect(0, 300);
 
@@ -348,18 +348,18 @@ describe("numeric controls", () => {
 			),
 		);
 		host = scope;
-		const track = scope.querySelector(".gui-ladder-track");
+		const track = scope.querySelector(".gui-slider-track");
 		if (!track) throw new Error("no ladder track");
-		expect(scope.querySelectorAll(".gui-ladder-tick").length).toBe(13);
-		expect(scope.querySelector(".gui-ladder-value")?.textContent).toBe("Default");
+		expect(scope.querySelectorAll(".gui-slider-dot").length).toBe(13);
+		expect(scope.querySelector(".gui-slider-value")?.textContent).toBe("Default");
 
 		keydown(track, "ArrowRight");
 		expect(changes.at(-1)).toEqual(["compaction.thresholdPercent", 10]);
-		expect(scope.querySelector(".gui-ladder-value")?.textContent).toBe("10%");
+		expect(scope.querySelector(".gui-slider-value")?.textContent).toBe("10%");
 
 		keydown(track, "Home");
 		expect(changes.at(-1)).toEqual(["compaction.thresholdPercent", -1]);
-		expect(scope.querySelector(".gui-ladder-value")?.textContent).toBe("Default");
+		expect(scope.querySelector(".gui-slider-value")?.textContent).toBe("Default");
 	});
 });
 

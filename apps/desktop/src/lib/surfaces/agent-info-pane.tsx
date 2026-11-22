@@ -358,13 +358,15 @@ export function AgentInfoPane({
 			</section>
 
 			<section className="gui-agent-info-section">
-				<div className="gui-agent-info-section-head">
-					<span>{t("general.agentInfoThinking")}</span>
-				</div>
 				{info === null ? (
-					<p className="gui-agent-info-note">
-						{infoError ? t("sessionInfo.unavailable") : t("sessionInfo.loading")}
-					</p>
+					<>
+						<div className="gui-agent-info-section-head">
+							<span>{t("general.agentInfoThinking")}</span>
+						</div>
+						<p className="gui-agent-info-note">
+							{infoError ? t("sessionInfo.unavailable") : t("sessionInfo.loading")}
+						</p>
+					</>
 				) : (
 					<LadderSlider
 						efforts={efforts}

@@ -35,7 +35,7 @@ scope:
 | `--spring-*` / `--gui-motion-*` | 动效曲线与时长 | `prefers-reduced-motion` 与动效开关需同时关闭 |
 | `--z-*` | 层级 | 浮层、模态、提示各有档位 |
 | `--gui-grip-*` | 分割握柄几何与三态 | 见下方 `SplitterGrip` |
-| `--gui-slider-*` | 滑块轨道、填充、档位点、滑块、焦点、悬停与禁用态 | 声明在 `gui-chat.css`（该族的权威位置）；覆盖范围内的滑块共用一族——见下方 `LadderSlider` 与紧随其后的例外清单 |
+| `--gui-slider-*` | 滑块命中区、凹槽、填充、档位点、滑块、焦点、悬停与禁用态 | 声明在 `gui-chat.css`（该族的权威位置）；覆盖范围内的滑块共用一族——见下方 `LadderSlider` 与紧随其后的例外清单 |
 
 ## 桌面壳（`apps/desktop/src/components/`）
 
@@ -47,13 +47,16 @@ scope:
 | `WorkspacePageHeader` | 页面级标题头（图标/标题/描述/动作） | 看板、任务中心、能力中心等页面 |
 | `RightRail` | 右边缘 44px 图标栏 | 右面板的入口；**面板收起时也必须渲染** |
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
-| `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选 |
-| `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；松手与方向键只能落在已声明档位 |
-| `--gui-slider-*` 消费方 | 两套自定义阶梯 + 两个自愿接入的原生 range | 两套阶梯共用完整轨道；原生 `<input class="gui-range">` 全仓只有两处：通知主音量（`settings-sections/notifications.tsx`）与桌宠尺寸（`settings-sections/companion.tsx`）。适用范围与例外见下 |
+| `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选。标题行只有一行（「思考强度」+ 当前档位），轨道下方没有任何标签行 |
+| `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；松手与方向键只能落在已声明档位。与思考阶梯共用同一条轨道，只有标题行不同 |
+| `SliderTrack` | 两套阶梯共用的轨道本体 | 由 `components/LadderSlider.tsx` 导出；全仓唯一的轨道标记——新的阶梯只提供标签与标题行，不再画第二条轨道 |
+| `--gui-slider-*` 消费方 | 两套自定义阶梯 + 两个自愿接入的原生 range | 两套阶梯渲染同一个 `SliderTrack`；原生 `<input class="gui-range">` 全仓只有两处：通知主音量（`settings-sections/notifications.tsx`）与桌宠尺寸（`settings-sections/companion.tsx`）。适用范围与例外见下 |
 | `SplitterGrip` 的宿主命中带 | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | 三条接缝各自的定位层 |
 | `SecretSettingsSection` | 密钥库设置页 | `settings-sections/secret-settings.tsx`；一张静态状态卡、`密钥 · N` + 添加，随后**只有一块正文**（`form ? 表单 : 空态或行列表`，两者绝不并存）；行用 `gui-agent-card`、控件消费 `--control-*`。**不要**为行添加可用性 chip：`secret.list` 只携带元数据 |
 
-**滑块拖动契约（`useSliderDrag`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都调用这一个 hook，设置阶梯自己不再持有任何指针数学。指针驱动的是**连续的**位置——`--gui-slider-p` / `--gui-ladder-p` 是 `position / last`，从来不是档位序号——所以滑块跟着指针走，而不是在档位之间跳。档位是吸附而不是绑定：最近的**可达**档位就是磁性目标，指针停在两档之间时，数值读数、高亮的档位名与 `aria-valuenow`/`aria-valuetext` 都指向这个目标，标签与读屏不会互相矛盾。滑块只在手势结束时落到目标上：松手（或按键步进）恢复 `left` 上的 `--gui-slider-ease` 过渡，档位把滑块吸进去；手势期间 `[data-dragging]` 关掉过渡，滑块不会落后指针。「减弱动效」下过渡被去掉，吸附立即到位、不做动画。滑块从按下的第一帧起就停在指针处——在两档之间按下不会先跳到某一档再回来；没有位移的单击也会落在指针下的档位，因为松手时才解析最后的指针位置。手势期间不写任何值——一次手势只触发一次 `onSettle`，因此设置阶梯不再每个指针事件写一次 `settings.set`，思考阶梯也保持「一次手势一次 RPC」。取消手势不写值，并回到已提交的档位。方向键 / Home / End 仍是逐档步进，但走同一条落位路径，键盘与指针因此共享同一个视觉过渡。模型上限以上的档位在轨道上和提交时一样不可达；指针停在其中时报的是上限档位。
+**滑块视觉契约（`SliderTrack`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都渲染这一个组件，谁也不再自带轨道标记。它画的是紧凑的「内嵌」力道条，而不是表单字段：一条 `--gui-slider-hit`（28px）的命中胶囊，内部凹槽高 `--gui-slider-track`（22px）、上下各内缩 3px，描边用内阴影发丝线而不是 border（轨道的盒子就是指针测量的行程，border 会让指针数学偏移一像素）。它由两层承担：一层不可见、按滑块半径内缩的测量轨道（指针读它的盒子）和一条铺满胶囊、上下各内缩 3px 的可见凹槽——凹槽若只到测量轨道处，就会像一条两头留空的滑轨。档位是落在凹槽**上**的 `--gui-slider-dot-size` 圆点；填充从胶囊左边缘穿过滑块，所以连第一档也在强调色上；滑块是取页面正文墨色的浅色圆盘，悬停与拖动时放大。配色是我们的（`--color-accent` 画轨道与填充；滑块取 `--color-text`，填充内的档位点取 on-accent 墨色，因为两者都压在强调色上），不是「中性手柄 + 外来蓝」。由此有两条必须守住的结果：轨道下方**没有标签行**——每一档把名字放在自己圆点的 `title` 上，并配一条加宽的透明悬停带，因为 4px 且 `pointer-events: none` 的圆点根本不可能成为悬停目标；思考阶梯的标题行**只有一行**，分区标签与当前档位并排（选中 Auto 时由 `Auto · <档位>` 取代档位本身），所以数值不会在窄版 Agent 面板里折到标签下面。设置阶梯共用胶囊、凹槽、圆点和滑块，只有标题行不同：它所在的设置行左侧已经写了设置名，所以数值单独占轨道上方那一行，并保留该行 210px 的宽度。
+
+**滑块拖动契约（`useSliderDrag`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都调用这一个 hook，设置阶梯自己不再持有任何指针数学。指针驱动的是**连续的**位置——`--gui-slider-p` 是 `position / last`，从来不是档位序号——所以滑块跟着指针走，而不是在档位之间跳。档位是吸附而不是绑定：最近的**可达**档位就是磁性目标，指针停在两档之间时，数值读数、高亮的档位圆点与 `aria-valuenow`/`aria-valuetext` 都指向这个目标，标签与读屏不会互相矛盾。滑块只在手势结束时落到目标上：松手（或按键步进）恢复 `left` 上的 `--gui-slider-ease` 过渡，档位把滑块吸进去；手势期间 `[data-dragging]` 关掉过渡，滑块不会落后指针。「减弱动效」下过渡被去掉，吸附立即到位、不做动画。滑块从按下的第一帧起就停在指针处——在两档之间按下不会先跳到某一档再回来；没有位移的单击也会落在指针下的档位，因为松手时才解析最后的指针位置。手势期间不写任何值——一次手势只触发一次 `onSettle`，因此设置阶梯不再每个指针事件写一次 `settings.set`，思考阶梯也保持「一次手势一次 RPC」。取消手势不写值，并回到已提交的档位。方向键 / Home / End 仍是逐档步进，但走同一条落位路径，键盘与指针因此共享同一个视觉过渡。模型上限以上的档位在轨道上和提交时一样不可达；指针停在其中时报的是上限档位。
 
 **滑块适用范围。** 该族覆盖两套阶梯与上述两个原生 range。有四处已发布滑块**有意**留在族外，各自属于独立表面：`.gui-sketch-range`（画板笔宽，`gui-composer.css`）、浏览器设备栏的宽高 range（`gui-browser-toolbar.css`）、截图编辑器的描边宽度（`.gui-shot-weight input`，`ScreenshotEditorDialog.tsx`）与 `.tr-ui-range`（`packages/client-core/src/ui-blocks/ui-blocks.css`）；移动端 `VoicePanel` 的语速是第五处。它们可以在各自的 scope 内收敛到该族；在此之前不得手抄族内几何。桌面端语音设置没有滑块——`tts.rate` 是 schema 数值，渲染成滚动数字。
 

@@ -27,6 +27,7 @@ const SETTINGS_COMPONENT = "apps/desktop/src/components/settings-controls/Ladder
 const PANE = "apps/desktop/src/lib/surfaces/agent-info-pane.tsx";
 
 const FAMILY = [
+	"--gui-slider-hit",
 	"--gui-slider-track",
 	"--gui-slider-dot-size",
 	"--gui-slider-knob-size",
@@ -36,7 +37,7 @@ const FAMILY = [
 	"--gui-slider-dot",
 	"--gui-slider-dot-on",
 	"--gui-slider-knob",
-	"--gui-slider-knob-rim",
+	"--gui-slider-hairline",
 	"--gui-slider-focus",
 	"--gui-slider-hover-scale",
 	"--gui-slider-ease",
@@ -64,28 +65,45 @@ describe("shared slider tokens", () => {
 		// A rail, a detent and a knob cannot drift apart: the inset derives
 		// from the knob instead of restating a number.
 		expect(css).toMatch(/--gui-slider-inset:\s*calc\(var\(--gui-slider-knob-size\)\s*\/\s*2\)/);
-		// The knob is the accent, not a hollow ring — that is what makes it
-		// readable at a glance in both schemes.
-		expect(css).toMatch(/--gui-slider-knob:\s*var\(--color-accent\)/);
+		// The handle sits on the accent fill and takes text ink: the accent is
+		// mid-luminance, so text always contrasts with it while an accent disc
+		// would need a rim that reads as a ring at 18px.
+		expect(css).toMatch(/--gui-slider-knob:\s*var\(--color-text\)/);
+		// Filled detents sit on that same fill, so they share the ink.
+		expect(css).toMatch(/--gui-slider-dot-on:\s*color-mix\(in oklab, var\(--color-accent-fg\)/);
 	});
 
-	test("both custom ladders draw from the family", () => {
+	test("one track markup draws both ladders from the family", () => {
 		const chat = read(CHAT);
-		const thinkingRail = rules(chat, ".gui-slider-rail");
-		expect(thinkingRail.length).toBeGreaterThan(0);
-		expect(thinkingRail.some(rule => uses(rule.body, "--gui-slider-track"))).toBe(true);
-		const thinkingFill = rules(chat, ".gui-slider-fill");
-		expect(thinkingFill.some(rule => uses(rule.body, "--gui-slider-inset"))).toBe(true);
-
-		const thinkingKnob = rules(chat, ".gui-slider-knob");
-		expect(thinkingKnob.some(rule => uses(rule.body, "--gui-slider-knob-size"))).toBe(true);
-		expect(thinkingKnob.some(rule => uses(rule.body, "--gui-slider-knob"))).toBe(true);
-
-		const settingsRail = rules(chat, ".gui-ladder-rail");
-		expect(settingsRail.some(rule => uses(rule.body, "--gui-slider-rest"))).toBe(true);
-		const settingsKnob = rules(chat, ".gui-ladder-thumb");
-		expect(settingsKnob.some(rule => uses(rule.body, "--gui-slider-knob-size"))).toBe(true);
-		expect(settingsKnob.some(rule => uses(rule.body, "--gui-slider-hover-scale"))).toBe(true);
+		const thinking = read(COMPONENT);
+		const settings = read(SETTINGS_COMPONENT);
+		// The track is ONE component: the settings ladder renders the thinking
+		// ladder's `SliderTrack` instead of carrying a second track, so the two
+		// cannot drift into two controls that merely resemble each other.
+		expect(settings).toContain("SliderTrack");
+		expect(settings).not.toContain("gui-ladder");
+		// Two layers, two jobs: an INVISIBLE measured rail inset by the handle
+		// radius (so hit-testing follows the token), and a full-bleed visible band
+		// inset top/bottom inside the 28px hit pad.
+		const rail = rules(chat, ".gui-slider-rail");
+		expect(rail.length).toBeGreaterThan(0);
+		expect(rail.some(rule => uses(rule.body, "--gui-slider-hit"))).toBe(true);
+		const groove = rules(chat, ".gui-slider-groove");
+		expect(groove.length).toBeGreaterThan(0);
+		expect(groove.some(rule => uses(rule.body, "--gui-slider-track"))).toBe(true);
+		expect(groove.some(rule => uses(rule.body, "--gui-slider-rest"))).toBe(true);
+		expect(groove.some(rule => rule.body.includes("--gui-slider-hairline"))).toBe(true);
+		const fill = rules(chat, ".gui-slider-fill");
+		// The fill runs from the pill's edge and grows by the handle's diameter,
+		// so even the first rung sits on accent instead of bare groove.
+		expect(fill.some(rule => uses(rule.body, "--gui-slider-knob-size"))).toBe(true);
+		expect(fill.some(rule => uses(rule.body, "--gui-slider-p"))).toBe(true);
+		const knob = rules(chat, ".gui-slider-knob");
+		expect(knob.some(rule => uses(rule.body, "--gui-slider-knob-size"))).toBe(true);
+		expect(knob.some(rule => uses(rule.body, "--gui-slider-knob"))).toBe(true);
+		// Both rungs are dots on the groove, not tick marks beside it.
+		expect(thinking).toContain("gui-slider-dot${index <= slider.target");
+		expect(chat).toContain(".gui-slider-dot::after");
 	});
 
 	test("native settings ranges consume the same colours and states", () => {
@@ -97,17 +115,28 @@ describe("shared slider tokens", () => {
 		expect(range.some(rule => rule.selector.includes(":hover:not(:disabled)"))).toBe(true);
 	});
 
-	test("the agent slider no longer collides with the settings ladder", () => {
+	test("the two ladders differ by their head, never by a second track", () => {
 		const chat = read(CHAT);
 		const component = read(COMPONENT);
+		const settings = read(SETTINGS_COMPONENT);
 		// The retired native-range classes must not come back.
 		expect(chat).not.toContain(".gui-ladder-range");
 		expect(component).not.toContain("gui-ladder-range");
-		// The agent slider is its own root, so the settings ladder's width and
-		// alignment never leak into it again.
+		// One root class, one track; the settings ladder adds only a head/width
+		// modifier, because two ladders that look like two controls is the
+		// convergence defect this family exists to remove.
 		expect(component).toContain('className="gui-slider"');
+		expect(settings).toContain('className="gui-slider gui-slider--detent"');
 		expect(rules(chat, ".gui-slider-track").length).toBeGreaterThan(0);
-		expect(rules(chat, ".gui-ladder-track").length).toBeGreaterThan(0);
+		// The settings ladder still owns its own width, so a 210px control never
+		// leaks into the Agent pane.
+		const detent = rules(chat, ".gui-slider--detent");
+		expect(detent.some(rule => rule.body.includes("width: 210px"))).toBe(true);
+		// No caption strip under the track: it was the row that read as
+		// misaligned and pushed the head onto two lines.
+		expect(chat).not.toContain(".gui-slider-ticks");
+		expect(chat).not.toContain(".gui-slider-tick");
+		expect(component).not.toContain("gui-slider-tick");
 	});
 
 	test("the model disclosure keeps the keyboard contract without :focus-within", () => {
@@ -134,12 +163,9 @@ describe("shared slider tokens", () => {
 		for (const rule of knob) {
 			expect(rule.selector).toContain(':not([data-disabled="true"])');
 		}
-		// Same for the settings ladder's `--disabled` modifier class.
-		const thumb = rules(chat, ".gui-ladder-thumb").filter(rule => rule.body.includes("hover-scale"));
-		expect(thumb.length).toBeGreaterThan(0);
-		for (const rule of thumb) {
-			expect(rule.selector).toContain(":not(.gui-ladder--disabled)");
-		}
+		// The settings ladder renders the same track, so the same gate covers it —
+		// there is no second thumb rule left to guard separately.
+		expect(chat).not.toContain(".gui-ladder-thumb");
 	});
 
 	test("pointer math reads the laid-out rail, never a restated knob radius", () => {
@@ -162,16 +188,66 @@ describe("shared slider tokens", () => {
 		expect(settings).toContain('from "../LadderSlider"');
 		expect(settings).toContain("useSliderDrag");
 		expect(settings).not.toContain("getBoundingClientRect");
-		// The rendered position is `--gui-slider-p` / `--gui-ladder-p`, and the
-		// knob is placed by it in both primitives.
+		// The rendered position is `--gui-slider-p`, and the knob AND the fill are
+		// placed by it — one property, so the fill always ends under the knob.
 		const sliderKnob = rules(chat, ".gui-slider-knob");
 		expect(sliderKnob.some(rule => uses(rule.body, "--gui-slider-p"))).toBe(true);
-		const ladderThumb = rules(chat, ".gui-ladder-thumb");
-		expect(ladderThumb.some(rule => uses(rule.body, "--gui-ladder-p"))).toBe(true);
-		// A held thumb must not lag its pointer; the release restores the ease so
+		const sliderFill = rules(chat, ".gui-slider-fill");
+		expect(sliderFill.some(rule => uses(rule.body, "--gui-slider-p"))).toBe(true);
+		// A held knob must not lag its pointer; the release restores the ease so
 		// the detent snaps it in.
 		expect(chat).toContain(".gui-slider-track[data-dragging] .gui-slider-fill");
-		expect(chat).toContain(".gui-ladder-track[data-dragging] .gui-ladder-thumb");
+		expect(chat).toContain(".gui-slider-track[data-dragging] .gui-slider-knob");
+	});
+
+	test("the thinking head is one line; no rung label sits under the track", () => {
+		const chat = read(CHAT);
+		const component = read(COMPONENT);
+		// The head carries the section label and the current level together, and
+		// the row cannot wrap: the level was the line the narrow Agent pane
+		// pushed underneath the label.
+		const head = rules(chat, ".gui-slider-head");
+		expect(head.length).toBeGreaterThan(0);
+		expect(head.some(rule => rule.body.includes("white-space: nowrap"))).toBe(true);
+		expect(component).toContain('className="gui-slider-label"');
+		expect(component).toContain('className="gui-slider-value"');
+		// The pane no longer prints a second section head above the slider: that
+		// stacked label was what made the value look like a caption.
+		const pane = read(PANE);
+		const sliderAt = pane.indexOf("<LadderSlider");
+		expect(sliderAt).toBeGreaterThan(-1);
+		// Nothing between the slider and the end of its section may print a head:
+		// the control owns the label, so the pane cannot stack a second one above
+		// it. Only the loading/unsupported branch keeps a head, and that branch
+		// renders no slider.
+		const thinkingSection = pane.slice(sliderAt, pane.indexOf("</section>", sliderAt));
+		expect(thinkingSection).not.toContain("gui-agent-info-section-head");
+		// Every rung names itself on its dot, which is the only label surface.
+		expect(component).toContain("title={label}");
+		expect(component).toContain("aria-valuetext={valueText}");
+	});
+
+	test("the auto readout replaces the value instead of adding a second line", () => {
+		const component = read(COMPONENT);
+		// One readout string feeds the head, `aria-valuetext` and the dots, so the
+		// visible value and the announcement cannot disagree — and `Auto · <level>`
+		// spends the same slot as a plain level rather than a row of its own.
+		expect(component).toContain("const readout = rung.auto && resolved ?");
+		expect(component).toContain("valueText={readout}");
+		expect(component).not.toContain("gui-slider-resolved");
+	});
+
+	test("a capped rung stays named and the off rung stays reachable", () => {
+		const chat = read(CHAT);
+		const component = read(COMPONENT);
+		// Capped is a SHAPE change, not a disappearance: the dot keeps its title,
+		// so a rung above the model's ceiling is still readable by hover.
+		expect(chat).toContain(".gui-slider-dot[data-capped]");
+		expect(chat).toContain(".gui-slider-dot::after");
+		expect(component).toContain("capped?.[index]");
+		// `off` is rung 0 of the ladder and the ladders' first stop, never a
+		// filtered-out label.
+		expect(component).toContain("{ level: null, label: labelFor(null), capped: false, auto: false }");
 	});
 
 	test("reduced motion drops the new transitions", () => {
