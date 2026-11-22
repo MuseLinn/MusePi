@@ -110,6 +110,12 @@ export class SessionInspectionService implements DaemonService {
 						totalTokens: tokenStats?.totalTokens ?? 0,
 						cost: tokenStats?.cost ?? 0,
 						cacheHitRate: hitRate,
+						// Spend of off-transcript calls (compaction per method, recaps)
+						// folded into `cost`; the panel breaks it out so compaction is
+						// not hidden inside the session total.
+						...(tokenStats?.offTranscriptCost && Object.keys(tokenStats.offTranscriptCost).length > 0
+							? { offTranscriptCost: tokenStats.offTranscriptCost }
+							: {}),
 					}
 				: null;
 		return snapcompact ||

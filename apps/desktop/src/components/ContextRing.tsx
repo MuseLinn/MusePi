@@ -62,6 +62,8 @@ export interface UsageSummaryView {
 	cost: number;
 	/** null when there have been no cache reads at all. */
 	cacheHitRate: number | null;
+	/** Off-transcript spend folded into `cost`, by call family (`compaction`, `recap`). */
+	offTranscriptCost?: Record<string, number>;
 }
 
 /** USD with sub-cent precision kept visible — session totals are small. */
@@ -261,6 +263,15 @@ export function ContextRing({
 						<div className="gui-context-pop-row">
 							<span>{t("general.sessionSpend")}</span>
 							<span className="gui-context-pop-val">{formatSpend(usage.cost)}</span>
+						</div>
+					)}
+					{/* Compaction spend is real billed cost that the transcript never
+					 * shows, so the total alone would read as "the model got
+					 * expensive" with nothing to point at. */}
+					{usage?.offTranscriptCost?.compaction != null && usage.offTranscriptCost.compaction > 0 && (
+						<div className="gui-context-pop-row">
+							<span>{t("general.compactionSpend")}</span>
+							<span className="gui-context-pop-val">{formatSpend(usage.offTranscriptCost.compaction)}</span>
 						</div>
 					)}
 					{usage != null && usage.cacheRead > 0 && (

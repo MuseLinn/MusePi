@@ -70,6 +70,8 @@
 
 `compaction.modelThresholds` 可为单个模型覆盖策略，键是 `provider/model-id` 或末尾带 `provider/…*` 的前缀（精确键优先于最长前缀）。令牌数是百分比/预留策略缩放的基准，`"f90000"` 是精确触发点，`"80%"` 替换阈值百分比。`compaction.modelThresholdsEnabled: false` 会忽略所有条目。维护、顾问维护与上下文刻度都按当前模型解析，所以 200K/1M 分档切换时触发点也会跟着切换。设置页把它编辑成「每个覆盖一行」（选择器 + 触发值，`80%` / `f90000` / `90k`），不再编辑 JSON 对象；落盘仍是配置文件使用的映射。
 
+压缩花费会被记账。每次尝试写入一条 `model_usage` 会话条目，用途为 `compaction:<method>`（`compaction:remote`、`compaction:handoff`、`compaction:soft` 等）：条目携带计费用量与耗时，永不进入模型上下文，也不出现在转录里。`getUsageStatistics()` 把它计入会话总量，并以 `offTranscriptCost` 给出按族的拆分（`compaction`、`recap`），`/usage` 与 GUI 上下文弹窗分别展示，压缩花费不会被误读成普通回合开销。
+
 GUI 的上下文弹窗（输入框旁的用量圆环与 `/context` 卡片）从 `session.contextUsage` 读取同一份投影（`thresholdPercent`、`thresholdMode`、`thresholdScope`），并直接按窗口占比调节触发值：百分比会随每个模型的窗口缩放，而 `compaction.thresholdTokens` 与模型条目里的 `fN` 仍是精确上限，界面会明确标注并提供一键换算成同名百分比。写入落在真正生效的层——有模型条目时写该条目，否则写全局百分比——所以读数不会给出下一轮不会采用的数值。`auto` 保持旧的预留策略，只把其生效占比作为滑块的静止位置。
 
 ### 笔记式上下文窗口（实验性）

@@ -92,6 +92,7 @@ import {
 	stripImagesFromMessage,
 } from "./messages";
 import { resolveModelCompactionSettings } from "./model-compaction-threshold";
+import { journalCompaction } from "./model-usage-journal";
 import { isTerminalTextAssistantAnswer } from "./queued-messages";
 import {
 	resolveCompactionConfiguredTarget,
@@ -1072,6 +1073,7 @@ export class SessionMaintenance {
 				// of the result-derived locals are reachable only on success.
 				try {
 					const result = await this.#compactWithFallbackModel(
+						selectedMethod,
 						preparation,
 						options?.internalGuidance ?? customInstructions,
 						compactionAbortController.signal,
@@ -1467,6 +1469,7 @@ export class SessionMaintenance {
 				phase: "standalone_turn",
 			});
 			const result = await this.#compactWithFallbackModel(
+				method,
 				preparation,
 				undefined,
 				signal,
@@ -2315,6 +2318,7 @@ export class SessionMaintenance {
 	}
 
 	async #compactWithFallbackModel(
+		method: CompactionMethod,
 		preparation: CompactionPreparation,
 		customInstructions: string | undefined,
 		signal: AbortSignal,
@@ -2325,6 +2329,9 @@ export class SessionMaintenance {
 			precomputedCandidates ?? this.#getCompactionModelCandidates(this.#host.modelRegistry.getAvailable());
 		const telemetry = resolveTelemetry(this.#host.agent.telemetry, this.#host.sessionId());
 		let nativeCompactionFailure: { error: NativeCompactionError; provider: string } | undefined;
+		// The summary lands on the compaction entry; only the spend needs
+		// journaling, and the method keeps remote/handoff/summary apart.
+		const journal = journalCompaction(this.#host.sessionManager, method);
 
 		for (const candidate of candidates) {
 			const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
@@ -2369,8 +2376,11 @@ export class SessionMaintenance {
 						// #3751).
 						completeImpl: async (requestModel, requestContext, requestOptions) => {
 							const stream = await this.#host.sideStreamFn(requestModel, requestContext, requestOptions);
-							return stream.result();
+							const message = await stream.result();
+							journal?.(message);
+							return message;
 						},
+						onRemoteUsage: journal,
 					},
 				);
 			} catch (error) {

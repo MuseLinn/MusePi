@@ -187,4 +187,81 @@ describe("SessionManager usage statistics", () => {
 		expect(usage.cacheRead).toBe(200);
 		expect(usage.cost).toBeCloseTo(18, 8);
 	});
+
+	it("counts journaled off-transcript spend and groups it by purpose family", () => {
+		const session = SessionManager.inMemory();
+
+		session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+		session.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "hi" }],
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-sonnet-4",
+			usage: {
+				input: 1,
+				output: 2,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 3,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 1 },
+			},
+			stopReason: "stop",
+			timestamp: 2,
+		});
+		// Compaction summaries are billed like any request but never appear in the
+		// transcript; their spend must still reach the session totals.
+		for (const [purpose, total] of [
+			["compaction:remote", 2],
+			["compaction:handoff", 3],
+			["recap", 0.5],
+		] as const) {
+			session.appendModelUsage({
+				purpose,
+				api: "anthropic-messages",
+				provider: "anthropic",
+				model: "claude-sonnet-4",
+				usage: {
+					input: 10,
+					output: 5,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 15,
+					cost: { input: total, output: 0, cacheRead: 0, cacheWrite: 0, total },
+				},
+				stopReason: "stop",
+			});
+		}
+
+		const usage = session.getUsageStatistics();
+		expect(usage.cost).toBeCloseTo(6.5, 8);
+		expect(usage.totalTokens).toBe(3 + 15 * 3);
+		// `compaction:remote` and `compaction:handoff` share one family; recap is its own.
+		expect(usage.offTranscriptCost).toEqual({ compaction: 5, recap: 0.5 });
+	});
+
+	it("keeps journaled spend out of the transcript entries", () => {
+		const session = SessionManager.inMemory();
+		session.appendModelUsage({
+			purpose: "compaction:soft",
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-sonnet-4",
+			usage: {
+				input: 1,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 2,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+		});
+
+		const entries = session.getEntries();
+		expect(entries.map(entry => entry.type)).toEqual(["model_usage"]);
+		// The model context never takes it: only `message`/`custom_message` entries
+		// contribute, so a usage record cannot leak into a prompt.
+		expect(session.buildSessionContext().messages).toEqual([]);
+	});
 });

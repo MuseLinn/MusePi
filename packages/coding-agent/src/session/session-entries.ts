@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
-import type { ImageContent, MessageAttribution, ServiceTierByFamily, TextContent } from "@musepi/pi-ai";
+import type { ImageContent, MessageAttribution, ServiceTierByFamily, TextContent, Usage } from "@musepi/pi-ai";
 import type { StructuredSubagentSchemaMode } from "../task/types";
 import type { CompactionMethod } from "./compaction-methods";
 
@@ -96,6 +96,34 @@ export interface ServiceTierChangeEntry extends SessionEntryBase {
 	serviceTier: ServiceTierByFamily | null;
 }
 
+/**
+ * Usage from a model call that does not belong in the conversation transcript:
+ * compaction summaries, handoffs, recaps and other side channels. It is never
+ * sent to the model and never rendered in the transcript — it exists so their
+ * spend counts in session totals and per-purpose reporting survives a restart.
+ */
+export interface ModelUsageEntry extends SessionEntryBase {
+	type: "model_usage";
+	/**
+	 * What the call was for. A `compaction:<method>` name groups under its base
+	 * in reporting (`compaction:remote`, `compaction:handoff`, …).
+	 */
+	purpose: string;
+	/** Resolved model role used for the call, such as `smol`. */
+	role?: string;
+	api: string;
+	provider: string;
+	model: string;
+	usage: Usage;
+	stopReason: string;
+	errorMessage?: string;
+	/** Wall time of the request in milliseconds. */
+	duration?: number;
+}
+
+/** A {@link ModelUsageEntry} as its writer supplies it; the session adds identity and time. */
+export type ModelUsageRecord = Omit<ModelUsageEntry, keyof SessionEntryBase>;
+
 export interface CompactionEntry<T = unknown> extends SessionEntryBase {
 	type: "compaction";
 	summary: string;
@@ -178,6 +206,7 @@ declare module "@musepi/pi-agent-core/compaction/entries" {
 	interface CustomCompactionSessionEntries {
 		titleChange: TitleChangeEntry;
 		credentialPin: CredentialPinEntry;
+		modelUsage: ModelUsageEntry;
 	}
 }
 
@@ -275,6 +304,7 @@ export type SessionEntry =
 	| ModelChangeEntry
 	| ServiceTierChangeEntry
 	| CompactionEntry
+	| ModelUsageEntry
 	| BranchSummaryEntry
 	| CustomEntry
 	| CustomMessageEntry
@@ -311,4 +341,11 @@ export interface UsageStatistics {
 	orchestrationCacheRead: number;
 	premiumRequests: number;
 	cost: number;
+	/**
+	 * Spend of off-transcript calls (`model_usage` entries) folded into `cost`
+	 * above, grouped by their base purpose: `compaction` covers every
+	 * `compaction:<method>` record, so remote/handoff/summary spend is visible
+	 * without listing each method. Absent when nothing was journaled.
+	 */
+	offTranscriptCost?: Record<string, number>;
 }

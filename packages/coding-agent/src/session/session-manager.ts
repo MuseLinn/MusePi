@@ -37,6 +37,8 @@ import {
 	type LabelEntry,
 	type ModeChangeEntry,
 	type ModelChangeEntry,
+	type ModelUsageEntry,
+	type ModelUsageRecord,
 	type NewSessionOptions,
 	type ResetBoundaryEntry,
 	type ServiceTierChangeEntry,
@@ -160,7 +162,14 @@ function emptyUsageStatistics(): UsageStatistics {
 		orchestrationCacheRead: 0,
 		premiumRequests: 0,
 		cost: 0,
+		offTranscriptCost: {},
 	};
+}
+
+/** `compaction:remote` → `compaction`: one bucket per call family. */
+function purposeBase(purpose: string): string {
+	const colon = purpose.indexOf(":");
+	return colon === -1 ? purpose : purpose.slice(0, colon);
 }
 
 function taskUsageFrom(details: unknown): Usage | undefined {
@@ -209,6 +218,9 @@ function isDraftOnlyMetadataEntry(entry: SessionEntry): boolean {
 		case "service_tier_change":
 		case "mode_change":
 		case "credential_pin":
+		// A usage record is accounting, not conversation: a session holding only
+		// these still has nothing to resume.
+		case "model_usage":
 			return true;
 		default:
 			return false;
@@ -258,7 +270,17 @@ class SessionEntryIndex {
 			else this.#labels.delete(entry.targetId);
 		}
 
-		addUsage(this.#usage, entryUsage(entry));
+		if (entry.type === "model_usage") {
+			// Off-transcript spend counts in the totals and keeps its family
+			// visible, so compaction cost is not hidden inside one number.
+			addUsage(this.#usage, entry.usage);
+			const base = purposeBase(entry.purpose);
+			const costs = this.#usage.offTranscriptCost ?? {};
+			costs[base] = (costs[base] ?? 0) + entry.usage.cost.total;
+			this.#usage.offTranscriptCost = costs;
+		} else {
+			addUsage(this.#usage, entryUsage(entry));
+		}
 	}
 
 	has(id: string): boolean {
@@ -302,7 +324,9 @@ class SessionEntryIndex {
 	}
 
 	usageSnapshot(): UsageStatistics {
-		return { ...this.#usage };
+		// The per-purpose map is shared state; a snapshot must not let a caller
+		// mutate the running totals.
+		return { ...this.#usage, offTranscriptCost: { ...(this.#usage.offTranscriptCost ?? {}) } };
 	}
 
 	pathTo(id: string | null | undefined = this.#leaf): SessionEntry[] {
@@ -2291,6 +2315,18 @@ export class SessionManager {
 	 */
 	appendResetBoundary(): string {
 		const entry: ResetBoundaryEntry = { type: "reset_boundary", ...this.#freshEntryFields() };
+		this.#recordEntry(entry);
+		return entry.id;
+	}
+
+	/**
+	 * Journal one off-transcript model call (a compaction summary, a handoff, a
+	 * recap) as a `model_usage` entry: its spend joins the session totals and
+	 * the record survives a restart, while the transcript and the model context
+	 * never see it.
+	 */
+	appendModelUsage(record: ModelUsageRecord): string {
+		const entry: ModelUsageEntry = { type: "model_usage", ...this.#freshEntryFields(), ...record };
 		this.#recordEntry(entry);
 		return entry.id;
 	}

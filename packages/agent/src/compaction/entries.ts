@@ -1,4 +1,4 @@
-import type { ImageContent, MessageAttribution, ServiceTierByFamily, TextContent } from "@musepi/pi-ai";
+import type { ImageContent, MessageAttribution, ServiceTierByFamily, TextContent, Usage } from "@musepi/pi-ai";
 import type { AgentMessage } from "../types";
 
 export interface SessionEntryBase {
@@ -127,6 +127,25 @@ export interface ResetBoundaryEntry extends SessionEntryBase {
 	type: "reset_boundary";
 }
 
+/**
+ * Usage from a model call that does not belong in the conversation transcript
+ * (compaction summaries, handoffs, recaps). Never sent to the model and never
+ * rendered; it exists so that spend counts in session totals.
+ */
+export interface ModelUsageEntry extends SessionEntryBase {
+	type: "model_usage";
+	/** `compaction:<method>` groups under its base in reporting. */
+	purpose: string;
+	role?: string;
+	api: string;
+	provider: string;
+	model: string;
+	usage: Usage;
+	stopReason: string;
+	errorMessage?: string;
+	duration?: number;
+}
+
 export interface CustomCompactionSessionEntries {}
 
 export type SessionEntry =
@@ -144,6 +163,7 @@ export type SessionEntry =
 	| SessionInitEntry
 	| ModeChangeEntry
 	| ResetBoundaryEntry
+	| ModelUsageEntry
 	| CustomCompactionSessionEntries[keyof CustomCompactionSessionEntries];
 
 export interface ReadonlySessionManager {

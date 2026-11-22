@@ -167,5 +167,10 @@ export async function buildUsageReportText(runtime: SlashCommandRuntime): Promis
 		...(orchestrationTokens > 0 ? [`Orchestration tokens: ${orchestrationTokens}`] : []),
 		`Premium requests: ${stats.premiumRequests}`,
 		`Cost: $${stats.cost.toFixed(6)}`,
+		// Off-transcript spend is inside `Cost`; breaking it out keeps compaction
+		// from reading as ordinary turn cost.
+		...Object.entries(stats.offTranscriptCost ?? {})
+			.filter(([, cost]) => cost > 0)
+			.map(([purpose, cost]) => `Off-transcript ${purpose}: $${cost.toFixed(6)}`),
 	].join("\n");
 }

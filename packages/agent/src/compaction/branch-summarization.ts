@@ -204,6 +204,7 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 		case "ttsr_injection":
 		case "session_init":
 		case "mode_change":
+		case "model_usage":
 			return undefined;
 	}
 }

@@ -317,6 +317,7 @@ export const general = {
 	"general.autoCompactFollowGlobal": "Follow global setting",
 	"general.cacheHit": "Cache hit",
 	"general.sessionSpend": "Session spend",
+	"general.compactionSpend": "of it: compaction",
 	"general.cacheReadTokens": "Cache read",
 	"general.cacheWriteTokens": "Cache write",
 	"general.statsTurnsSteps": "{turns} turns · {steps} steps",

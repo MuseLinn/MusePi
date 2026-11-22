@@ -19,6 +19,7 @@ import { obfuscateProviderContext } from "../secrets/message-transform";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { HandoffResult, SessionHandoffOptions } from "./agent-session-types";
 import type { BashSessionTransition } from "./bash-runner";
+import { journalCompletion } from "./model-usage-journal";
 import type { SessionContext } from "./session-context";
 import type { SessionManager } from "./session-manager";
 
@@ -170,6 +171,9 @@ export class SessionHandoff {
 			// Both can diverge from this.#host.sessionId() (tan/subagent/shared sessions), so
 			// mirror exactly what the live turn populated the cache under.
 			const handoffPromptCacheKey = this.#host.agent.promptCacheKey ?? this.#host.agent.sessionId;
+			// Every handoff document is committed as a compaction entry; only its
+			// spend needs journaling, under the same `compaction:handoff` purpose.
+			const journalHandoff = journalCompletion(this.#host.sessionManager, { purpose: "compaction:handoff" });
 			const handoffPromptText = renderHandoffPrompt(this.#host.obfuscateTextForProvider(customInstructions));
 			const handoffSnapshot: AgentMessage[] = [
 				...this.#host.agent.state.messages,
@@ -208,7 +212,9 @@ export class SessionHandoff {
 					streamOptions: handoffStreamOptions,
 					completeImpl: async (requestModel, requestContext, requestOptions) => {
 						const stream = await this.#host.sideStreamFn(requestModel, requestContext, requestOptions);
-						return stream.result();
+						const message = await stream.result();
+						journalHandoff?.(message);
+						return message;
 					},
 					telemetry: resolveTelemetry(this.#host.agent.telemetry, this.#host.sessionId()),
 					// Honor the user's /model thinking selection on the handoff path.
@@ -328,6 +334,9 @@ export class SessionHandoff {
 			// Both can diverge from this.#host.sessionId() (tan/subagent/shared sessions), so
 			// mirror exactly what the live turn populated the cache under.
 			const handoffPromptCacheKey = this.#host.agent.promptCacheKey ?? this.#host.agent.sessionId;
+			// Every handoff document is committed as a compaction entry; only its
+			// spend needs journaling, under the same `compaction:handoff` purpose.
+			const journalHandoff = journalCompletion(this.#host.sessionManager, { purpose: "compaction:handoff" });
 			const handoffPromptText = renderHandoffPrompt(this.#host.obfuscateTextForProvider(customInstructions));
 			const handoffSnapshot: AgentMessage[] = [
 				...this.#host.agent.state.messages,
@@ -366,7 +375,9 @@ export class SessionHandoff {
 					streamOptions: handoffStreamOptions,
 					completeImpl: async (requestModel, requestContext, requestOptions) => {
 						const stream = await this.#host.sideStreamFn(requestModel, requestContext, requestOptions);
-						return stream.result();
+						const message = await stream.result();
+						journalHandoff?.(message);
+						return message;
 					},
 					telemetry: resolveTelemetry(this.#host.agent.telemetry, this.#host.sessionId()),
 					// Honor the user's /model thinking selection on the handoff path.

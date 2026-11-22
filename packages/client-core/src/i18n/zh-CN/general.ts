@@ -305,6 +305,7 @@ export const general = {
 	"general.autoCompactFollowGlobal": "跟随全局设置",
 	"general.cacheHit": "缓存命中",
 	"general.sessionSpend": "本次会话花费",
+	"general.compactionSpend": "其中压缩",
 	"general.cacheReadTokens": "缓存读取",
 	"general.cacheWriteTokens": "缓存写入",
 	"general.statsTurnsSteps": "{turns} 轮 · {steps} 步",
