@@ -817,7 +817,8 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
 - **快捷键**：快捷键注册表新增 `tab-next` / `tab-prev`（默认 ⌘Tab / ⌘⇧Tab，可改键，分组「会话」）。每标签 ⌘1–9 直达 v1 刻意不做——与 `panel-surfaces` 的裸 ⌘1–8 冲突。
 - **标签带行为**：dnd-kit 横向排序（整个标签即拖拽把手，8px 触发距离保证单击仍是单击）；纵向滚轮映射为横向滚动（Shift/Cmd-滚轮与原生横向增量放行）；滚动容器两端 24px 渐隐（`SESSION_TAB_EDGE_FADE_PX`），激活标签自动滚入视野且在渐隐前停住（`lib/session-tab-reveal.ts`）。
 - **状态**：`working` 在标签上转小加载图标；`unread`（非当前）显示强调色小圆点——两者与侧栏同源（`sessionMeta` / `unreadSessions`）。
-- **统一标签尺寸**：当前与非当前标签共用 176px 宽度、padding、字号和标题元素；选中只增加 accent 背景与前景，hover 不清除选中色。草稿与 preview 标题斜体。标签带外的紧凑最近会话按钮在折叠侧栏时保留新建与最近会话导航，并与非 tab 标题共用同一个 switcher 菜单。
+- **统一标签尺寸与标签带滚动**：当前与非当前标签共用 176px 宽度（`--gui-session-tab-w`）、padding、字号和标题元素；选中只增加 accent 背景与前景，hover 不清除选中色。草稿与 preview 标题斜体。标签带外的紧凑最近会话按钮在折叠侧栏时保留新建与最近会话导航，并与非 tab 标题共用同一个 switcher 菜单。
+- **标签带：等宽、保留滚动、隐藏指示器（2026-11-22）**：顶栏标签带与右栏 `.gui-surface-tabs` 遵循同一契约，规则只写在 `gui-chat.css` 的「Header session tabs」一处。① 每个标签持有一个固定宽度（`--gui-session-tab-w` = 176px；面板 `--gui-surface-tab-w` = 132px，因为它的面板最窄可到 260px），拥挤时不再挤压标题——过长的标题在自己的标签内省略。② 拥挤时标签带仍然滚动：`overflow-x: auto` 保留，指示器只用 `scrollbar-width: none` + `::-webkit-scrollbar { display: none }` 隐藏。用取消滚动来隐藏滚动条正是本契约要防的回归；指针在标签带上的纵向滚轮映射为横向滚动（`scrollTabsWithWheel`）。③ 激活标签会把它带入视野——顶栏经 `lib/session-tab-reveal.ts`（在两端渐隐前停住），面板经 `scrollIntoView`。拖拽重排不受影响：槽位保持固定宽度，落点与插入间隙的几何不变。面板的固定宽度写在 `max-width` 上，因为进出场关键帧动画的就是该属性；关闭中的标签仍可收拢。测试：`test/tab-strip-geometry.test.ts`（真实层叠）与 `test/session-tabs-strip-wheel.test.tsx`。
 - **共享菜单**：尾部「⋯」与右键渲染同一组 `ContextMenu` 项，右键不激活标签。保持打开、重命名、复制 ID、导出、mini chat、工作树、归档、删除、关闭其他与关闭均按菜单所属标签 id 执行；归档非当前标签不切换会话。
 - **测试**：六个会话标签/Markdown 测试文件（每种入口 locale 各 43 例：preview 迁移、持久化、尺寸、固定手势、共享菜单、tab 模式导航、跨文件 locale/DOM 隔离与精确 pre-seed locale 恢复）。
 
