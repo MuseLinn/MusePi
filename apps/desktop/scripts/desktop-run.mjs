@@ -24,6 +24,10 @@ import { spawn, spawnSync } from "node:child_process";
 const pkgDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(pkgDir, "..", "..");
 const marker = join(pkgDir, "dist", "index.html");
+/** Workers the bundle needs at runtime; a build that failed before the
+ *  parallel copy finished still leaves index.html, so freshness must cover
+ *  them or the next start launches a dist without Monaco workers. */
+const MONACO_WORKERS = ["editor.worker.js", "json.worker.js", "css.worker.js", "html.worker.js", "ts.worker.js"];
 
 /** Recursive newest-mtime walk (dirs recursed; missing paths skipped). */
 function newestMtime(paths) {
@@ -61,6 +65,7 @@ const INPUT_FILES = [
 function distFresh() {
 	if (!existsSync(marker)) return false;
 	if (process.env.MUSEPI_FORCE_BUILD === "1") return false;
+	if (!MONACO_WORKERS.every(file => existsSync(join(pkgDir, "dist", "monaco-workers", file)))) return false;
 	const builtAt = statSync(marker).mtimeMs;
 	const inputsNewest = Math.max(newestMtime(INPUT_DIRS), newestMtime(INPUT_FILES));
 	return builtAt >= inputsNewest;
