@@ -15,14 +15,20 @@
  *    an advanced disclosure for people who know the address;
  *  - per-target status lives outside the row (see `target-store.ts`).
  *
- * What this component does NOT do: start a WSL daemon, open an SSH tunnel or
- * run a container. Those rows show the exact command to copy and say the
- * managed lifecycle is not wired yet — claiming otherwise would be a lie the
- * first failed connect would expose.
+ * What this component does NOT do: spawn a process itself. A forwarded row can
+ * ask the main process to start its tunnel/daemon, and the answer — including
+ * ssh's own stderr — is rendered in the row; the renderer never owns a handle.
  */
 
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import {
+	hasManagedLifecycle,
+	type ManagedTargetStatus,
+	managedFailureText,
+	managedRowState,
+	managedStartBlocker,
+} from "../lib/connection/remote-lifecycle";
 import { type ConnectionState, showsFailureCopy } from "../lib/connection/state";
 import type { TargetStatusMap } from "../lib/connection/target-store";
 import {
@@ -152,6 +158,9 @@ export function ConnectionManager({
 	lastError,
 	detect = defaultWslRunner,
 	platform,
+	managed,
+	onStartManaged,
+	onStopManaged,
 	onConnect,
 	onAdd,
 	onRemove,
@@ -172,6 +181,15 @@ export function ConnectionManager({
 	/** WSL runner seam — tests inject a stub; the shell passes the default. */
 	detect?: WslRunner;
 	platform?: string;
+	/**
+	 * Managed-process status per target id (tunnels, WSL daemons, containers).
+	 * Beside the list like `statuses`, and derived from the supervisor rather
+	 * than from a connect attempt: a tunnel can die while the shell is idle.
+	 */
+	managed?: Record<string, ManagedTargetStatus>;
+	/** Start the process a forwarded row needs; absent = the shell has no bridge. */
+	onStartManaged?(target: ConnectionTarget): void;
+	onStopManaged?(target: ConnectionTarget): void;
 	onConnect(target: ConnectionTarget): void;
 	onAdd(target: ConnectionTarget): void;
 	onRemove(id: string): void;
@@ -274,9 +292,24 @@ export function ConnectionManager({
 		const command = targetCommand(target);
 		const publish = targetPublishHint(target);
 		const isOpen = expanded === target.id;
-		const canExpand = command !== null || (error !== null && status === "failed");
+		// Managed process state is independent of the connect attempt: a tunnel
+		// that died while the shell sat idle still has to say so.
+		const managedStatus = managed?.[target.id];
+		const managedState = managedRowState(managedStatus);
+		const managedFailure = managedFailureText(managedStatus);
+		const blocker = managedStartBlocker(target, platform);
+		const canManage = onStartManaged !== undefined && blocker === null;
+		const running = managedState === "running" || managedState === "starting";
+		const canExpand =
+			command !== null || (error !== null && status === "failed") || managedFailure !== null || running;
 		return (
-			<li key={target.id} className="gui-conn-row" data-status={status} data-kind={target.kind}>
+			<li
+				key={target.id}
+				className="gui-conn-row"
+				data-status={status}
+				data-kind={target.kind}
+				data-managed={managedState}
+			>
 				<div className="gui-conn-row-main">
 					<span className="gui-conn-glyph" aria-hidden>
 						<Icon name={KIND_GLYPH[target.kind]} className="h-3.5 w-3.5" />
@@ -299,7 +332,30 @@ export function ConnectionManager({
 						 * so a narrow window hides the word but keeps it for readers. */}
 						<span className="gui-conn-status-word">{t(STATUS_LABEL[status])}</span>
 					</span>
+					{managedState !== "idle" && (
+						<span className="gui-conn-managed" data-managed={managedState}>
+							{managedState === "starting"
+								? t("settings.connectionManagedStarting")
+								: managedState === "running"
+									? t("settings.connectionManagedRunning")
+									: t("settings.connectionManagedFailed")}
+						</span>
+					)}
 					<span className="gui-conn-actions">
+						{canManage && (
+							<button
+								type="button"
+								className="gui-tool-btn gui-conn-manage"
+								disabled={managedState === "starting"}
+								aria-label={
+									running ? t("settings.connectionStopManaged") : t("settings.connectionStartManaged")
+								}
+								title={running ? t("settings.connectionStopManaged") : t("settings.connectionStartManaged")}
+								onClick={() => (running ? onStopManaged?.(target) : onStartManaged?.(target))}
+							>
+								<Icon name={running ? "stop" : "play"} className="h-3.5 w-3.5" />
+							</button>
+						)}
 						{canExpand && (
 							<button
 								type="button"
@@ -356,6 +412,15 @@ export function ConnectionManager({
 								{error}
 							</p>
 						)}
+						{/* ssh's own words, not a generic failure: "Permission denied
+						 * (publickey)" and "bind: Address already in use" are what a
+						 * user can act on, so they are shown verbatim. */}
+						{managedFailure && (
+							<div className="gui-conn-managed-error" role="alert">
+								<span className="gui-conn-command-label">{t("settings.connectionManagedStderr")}</span>
+								<pre>{managedFailure}</pre>
+							</div>
+						)}
 						{command && (
 							<div className="gui-conn-command">
 								<span className="gui-conn-command-label">
@@ -389,6 +454,15 @@ export function ConnectionManager({
 									<Icon name="file-copy" className="h-3.5 w-3.5" />
 								</button>
 							</div>
+						)}
+						{isForwardedKind(target.kind) && !canManage && blocker === null && (
+							<p className="gui-conn-note">
+								{t(
+									hasManagedLifecycle()
+										? "settings.connectionManagedUnsupported"
+										: "settings.connectionManagedNoBridge",
+								)}
+							</p>
 						)}
 						{isForwardedKind(target.kind) && (
 							<p className="gui-conn-note">{t("settings.connectionForwardingNote")}</p>

@@ -4,6 +4,7 @@ import { setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ConnectionManager } from "../src/components/ConnectionManager";
+import type { ManagedTargetStatus } from "../src/lib/connection/remote-lifecycle";
 import type { ConnectionState } from "../src/lib/connection/state";
 import type { TargetStatusMap } from "../src/lib/connection/target-store";
 import { type ConnectionTarget, createTarget, localTarget } from "../src/lib/connection/targets";
@@ -434,5 +435,121 @@ describe("connection manager list scrolling", () => {
 		});
 		const connectButtons = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-connect"));
 		expect(connectButtons.every(button => button.disabled)).toBe(true);
+	});
+});
+
+/**
+ * Managed lifecycle in the row.
+ *
+ * The reported gap this closes: a tunnel that fails had nowhere to say why. The
+ * row now carries the supervisor's status and — the part that matters — the
+ * process's own stderr, so "Permission denied (publickey)" reaches the user
+ * instead of a generic 无法连接.
+ */
+describe("connection manager managed rows", () => {
+	const ssh: ConnectionTarget = createTarget({
+		id: "s1",
+		label: "Build box",
+		url: "ws://127.0.0.1:9400",
+		kind: "ssh",
+		sshHost: "me@build.example.com",
+		remotePort: 8300,
+	});
+
+	const status = (over: Partial<ManagedTargetStatus> = {}): ManagedTargetStatus => ({
+		targetId: "s1",
+		kind: "ssh",
+		status: "running",
+		pid: 4242,
+		startedAt: 1,
+		listeningPort: 9400,
+		error: null,
+		stderr: "",
+		command: "ssh -N …",
+		...over,
+	});
+
+	/** Open the row's detail disclosure. */
+	async function expandFirstRow(host: HTMLElement): Promise<void> {
+		const details = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-actions button")).find(
+			button => button.getAttribute("aria-label") === t("settings.connectionDetails"),
+		);
+		await act(async () => {
+			details?.click();
+		});
+	}
+
+	test("a failed tunnel shows ssh's own stderr in its row", async () => {
+		const host = render({
+			targets: [localTarget(), ssh],
+			managed: {
+				s1: status({
+					status: "failed",
+					stderr: "Permission denied (publickey).",
+					error: "ssh exited with code 255",
+				}),
+			},
+			onStartManaged: () => {},
+		});
+		await expandFirstRow(host);
+		const row = q(host, '.gui-conn-row[data-kind="ssh"]');
+		expect(row).not.toBeNull();
+		expect(row?.getAttribute("data-managed")).toBe("failed");
+		const detail = row?.querySelector(".gui-conn-managed-error");
+		expect(detail?.textContent).toContain("Permission denied (publickey).");
+		// The generic summary must not stand in front of the real reason.
+		expect(detail?.textContent).not.toContain("ssh exited with code 255");
+	});
+
+	test("a running tunnel is named as started by MusePi, not as connected", () => {
+		const host = render({ targets: [localTarget(), ssh], managed: { s1: status() }, onStartManaged: () => {} });
+		expect(text(host)).toContain(t("settings.connectionManagedRunning"));
+		// The process is running; the daemon connection is a separate fact.
+		expect(text(host)).not.toContain(t("settings.connectionStatusConnected"));
+	});
+
+	test("a stopped tunnel reads idle rather than failed", () => {
+		const host = render({
+			targets: [localTarget(), ssh],
+			managed: { s1: status({ status: "stopped" }) },
+			onStartManaged: () => {},
+		});
+		expect(q(host, '.gui-conn-row[data-managed="failed"]')).toBeNull();
+		expect(text(host)).not.toContain(t("settings.connectionManagedFailed"));
+	});
+
+	test("the start control offers start, then stop once it runs", async () => {
+		const started: string[] = [];
+		const stopped: string[] = [];
+		const host = render({
+			targets: [localTarget(), ssh],
+			onStartManaged: target => started.push(target.id),
+			onStopManaged: target => stopped.push(target.id),
+		});
+		const start = host.querySelector<HTMLButtonElement>(".gui-conn-manage");
+		expect(start?.getAttribute("aria-label")).toBe(t("settings.connectionStartManaged"));
+		await act(async () => start?.click());
+		expect(started).toEqual(["s1"]);
+
+		const running = render({
+			targets: [localTarget(), ssh],
+			managed: { s1: status() },
+			onStartManaged: () => {},
+			onStopManaged: target => stopped.push(target.id),
+		});
+		const stop = running.querySelector<HTMLButtonElement>(".gui-conn-manage");
+		expect(stop?.getAttribute("aria-label")).toBe(t("settings.connectionStopManaged"));
+		await act(async () => stop?.click());
+		expect(stopped).toEqual(["s1"]);
+	});
+
+	test("a row without a bridge keeps its copyable command and says so", async () => {
+		// No onStartManaged: the shell has no process bridge, so the row must not
+		// pretend it can start anything — it offers the command instead.
+		const host = render({ targets: [localTarget(), ssh] });
+		expect(q(host, ".gui-conn-manage")).toBeNull();
+		await expandFirstRow(host);
+		expect(text(host)).toContain(t("settings.connectionManagedNoBridge"));
+		expect(text(host)).toContain("ssh -N");
 	});
 });

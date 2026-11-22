@@ -17,6 +17,7 @@
 
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
+import type { ManagedTargetStatus } from "../lib/connection/remote-lifecycle";
 import { type ConnectionFacts, deriveConnectionState } from "../lib/connection/state";
 import type { TargetStatusMap } from "../lib/connection/target-store";
 import { type ConnectionTarget, stripToken } from "../lib/connection/targets";
@@ -35,6 +36,9 @@ export function ConnectionGate({
 	error,
 	detect,
 	platform,
+	managed,
+	onStartManaged,
+	onStopManaged,
 	overlay,
 	onConnect,
 	onAdd,
@@ -55,6 +59,10 @@ export function ConnectionGate({
 	error: string | null;
 	detect?: WslRunner;
 	platform?: string;
+	/** Managed-process status per target (tunnels, WSL daemons, containers). */
+	managed?: Record<string, ManagedTargetStatus>;
+	onStartManaged?(target: ConnectionTarget): void;
+	onStopManaged?(target: ConnectionTarget): void;
 	/** Rendered inside the shell, above the gate (boot splash hand-off). */
 	overlay?: ReactNode;
 	onConnect(target: ConnectionTarget): void;
@@ -75,6 +83,9 @@ export function ConnectionGate({
 				lastError={lastError}
 				detect={detect}
 				platform={platform}
+				managed={managed}
+				onStartManaged={onStartManaged}
+				onStopManaged={onStopManaged}
 				onConnect={onConnect}
 				onAdd={onAdd}
 				onRemove={onRemove}

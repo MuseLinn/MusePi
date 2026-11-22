@@ -488,3 +488,36 @@ dictationStatus: () => ipcRenderer.invoke("dictation:status"),
 		action: (type, params) => ipcRenderer.send("tray-menu:action", { type, ...params }),
 	},
 });
+
+/**
+ * Managed remote targets — the shell half of `lib/connection/wsl.ts` and
+ * `lib/connection/remote-lifecycle.ts`.
+ *
+ * The renderer is sandboxed and exposes no command runner, so every probe and
+ * every spawn goes through this namespace. Each call returns the supervisor's
+ * own result (`{ ok, status }` / `{ ok, reason, error }`) rather than throwing,
+ * so a row can show ssh's stderr instead of a generic failure; only a genuinely
+ * broken bridge rejects.
+ *
+ * `listWslDistributions` keeps the documented contract of the seam it was
+ * written for: stdout of `wsl.exe -l -q`, `null` when this host cannot run it,
+ * rejection when it ran and failed.
+ */
+contextBridge.exposeInMainWorld("musepiShell", {
+	platform: process.platform,
+	listWslDistributions: () => ipcRenderer.invoke("remote-wsl-distros"),
+	sshConfig: () => ipcRenderer.invoke("remote-ssh-config"),
+	startSshTunnel: input => ipcRenderer.invoke("remote-target-start", input),
+	startWslDaemon: input => ipcRenderer.invoke("remote-wsl-start", input),
+	stopTarget: targetId => ipcRenderer.invoke("remote-target-stop", targetId),
+	listTargets: () => ipcRenderer.invoke("remote-target-list"),
+	detectDocker: () => ipcRenderer.invoke("remote-docker-detect"),
+	dockerContainers: daemonPort => ipcRenderer.invoke("remote-docker-containers", daemonPort),
+	dockerRun: input => ipcRenderer.invoke("remote-docker-run", input),
+	dockerExec: input => ipcRenderer.invoke("remote-docker-exec", input),
+	onTargetStatus: cb => {
+		const listener = (_e, status) => cb(status);
+		ipcRenderer.on("remote-target-status", listener);
+		return () => ipcRenderer.removeListener("remote-target-status", listener);
+	},
+});

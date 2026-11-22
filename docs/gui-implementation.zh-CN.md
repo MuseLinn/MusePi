@@ -119,12 +119,32 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 每次启动尝试的退出都会结算一个结果:`lib/connection/boot-attempt.ts`(`runBootAttempt`)把抛错、或没有结算就返回,都转成一条已记录的失败,于是 `lastAttemptFailed` 绝不会在一次没有连上的启动之后仍为 false。失败总会存下一条行上能显示的原因——有捕获到的连接错误就用它,否则用 `settings.cannotReachLocalDaemon`。普通冷启动在 `connect()` 之前就于 `daemonPortOpen` 短路,没有这条兜底,行上就会在「无法连接」下面显示原始的哨兵字符串 `unreachable`。
 
 存储沿用既有槽位、不新增存储:`lib/connection/target-store.ts` 拥有 `musepi-gui-hosts`(行加宽出 `kind` 与参数;旧行读作 `manual`)、`musepi-gui-url`(上次成功的端点)、`musepi-gui-target-id`(上次尝试起始的行)与 `musepi-gui-target-status`(每行上次尝试与错误,放在列表旁,失败绝不改写行)。`loadTargets` 始终先返回本机行且能承受损坏的槽位;`app.tsx` 里的 `hosts` 由端点列表派生,实例切换器与管理器因此不会漂移。启动从选中行的端点进入,而 `bootTargetFor` 不让一个连不上的 `wsl`/`ssh`/`docker` 行成为下次启动的端点——这些行要靠本构建尚未托管的外部进程才能到达,于是行带着错误留在列表里,启动回退到可以探测和拉起本机守护进程的本机行;`manual` 行是用户自己的地址,绝不会被静默替换。一次尝试记在真正应答的那个端点上,而不是传进来的那一行:启动会逐个探测本机守护进程的端口,所以到达守护进程的那一行才是显示结果的那一行。`stripToken` 是这里唯一的去 token 端点比较,归属与当前行标记共用它。
-
-WSL:`lib/connection/wsl.ts` 解析 `wsl.exe -l -q` 输出(UTF-16 按 Latin-1 读出的 NUL 折叠、BOM/CRLF、`*` 与 `(Default)` 标记、`-v` 的列截到名称、拒绝表头行),并区分 `ok` / `unsupported` / `unavailable`。renderer 没有命令执行通道(沙箱化,preload 未暴露),所以默认 runner 读取文档化的 `window.musepiShell.listWslDistributions` 接缝,在 preload 桥存在之前返回 `unsupported`;界面于是说明「无法检测」,而不是显示空列表。
-
-本模块不托管隧道与容器:行上以可复制文本给出 `wsl.exe -d <发行版> -- musepi serve --port N`、`ssh -N -L <本地>:127.0.0.1:<远端> <user@host>`、`docker exec <容器> musepi serve --port N`(外加 `docker run -p` 发布提示),并说明生命周期托管后续再做。
+WSL:`lib/connection/wsl.ts` 解析 `wsl.exe -l -q` 输出(UTF-16 按 Latin-1 读出的 NUL 折叠、BOM/CRLF、`*` 与 `(Default)` 标记、`-v` 的列截到名称、拒绝表头行),并区分 `ok` / `unsupported` / `unavailable`。renderer 没有命令执行通道(沙箱化,preload 未暴露),所以默认 runner 读取文档化的 `window.musepiShell.listWslDistributions` 接缝;该桥现已存在(`electron/preload.cjs` 与 `ipcMain.handle("remote-wsl-distros")`,见 §1d-ter)。
 
 验证:`test/connection-targets.test.ts`(状态纯函数、目标命令、持久化往返、WSL 解析 + 三种 runner 结果)、`test/connection-manager.test.tsx`(每个状态的界面、主动断开不出现失败文案、失败尝试带诊断、从已存端点连接、上次成功读作「上次用过」而非「已连接」、两行都成功过时不会同时显示已连接、WSL 两/零/失败/无桥/非 Windows、无嵌套滚动条)与 `test/connection-gate.test.tsx`(门本身对每个状态的选择——也就是这起报告出问题的那一层)。
+
+## 1d-ter. 受管远程目标与 SSH 主机目录(2026-11-22)
+
+**进程归属是本节存在的理由。** 转发型端点所需的每个进程都由主进程 spawn、记录在 `electron/remote-targets.cjs`,并以 `ChildProcess` 句柄加每次 spawn 的令牌标识——绝不用 pid。pid 会被复用,对复用后的号码调用 `process.kill(pid)` 等于给别人的进程发信号;supervisor 只对自己创建的句柄调用 `kill`,且调用前重新核对 `child.pid`、`exitCode`、`signalCode`。由此得出的每条结论都有测试钉住:
+
+- **绝不接管。** 启动前先探测 `127.0.0.1:<本地端口>`;若已有应答,以 `port-in-use` 拒绝,且**不 spawn 任何子进程**(测试断言假命令的 argv 日志根本没被写过)。对未知 id 调 `stopTarget` 返回 `{ stopped: false, reason: "not-owned" }`,不发任何信号。
+- **同一目标只允许一条隧道。** 第一条还活着时再次启动以 `already-running` 拒绝。这项检查在端口探测**之前**依据归属记录完成,因为仍在连接的隧道还没占住端口——只看端口会让两次 `-L` 绑定互相竞争;该用例用一条永不绑定的假命令覆盖。
+- **崩溃是失败,不是静默。** ssh/docker/wsl 把原因写到 stderr;其尾部成为目标的 `stderr`,子进程非零退出时还成为 `error`。行上显示进程自己的话(`Permission denied (publickey)`、`bind: Address already in use`),通用摘要只在 stderr 为空时兜底。`stopped` 与 `failed` 区分开:按下「停止」的用户得到了他要的结果,所以 `managedRowState` 把它映射为 `idle`——与 §1d-bis 对「主动断开」的处理同理。
+- **退出时拆掉本次运行启动的东西。** `before-quit` 在守护进程拆除之前调用 `stopAll()`,于是残留的 `ssh -N` 不会占着本地端口,让下次启动把它当成别人的。
+
+**确切命令。** ssh:`ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes [-p <sshPort>] [-i <keyPath>] [-J <proxyJump>] -L <本地>:127.0.0.1:<远端> <目标>`。用 `BatchMode=yes` 是因为后台子进程没有终端——密码或主机密钥提示会把连接挂死,而不是带着原因失败;`ExitOnForwardFailure=yes` 让绑定冲突立刻失败。主机密钥绝不自动接受。**可复制**的命令刻意不是这条 argv:它去掉批处理选项,好让用户自己的 shell 仍能弹出提示,只补上行已知的事实。Docker:`docker run -d --name <名称> -p 127.0.0.1:<端口>:<端口> musepi` 创建,`docker exec <容器> musepi serve --port <端口>` 在已有容器内启动。WSL:`wsl.exe -d <发行版> -- musepi serve --port <端口>`。检测命令为 `docker info --format {{.ServerVersion}}` 与 `wsl.exe -l -q`;容器列表为 `docker ps --format "{{.Names}}\t{{.Image}}\t{{.Ports}}"`,再筛出发布守护进程端口的容器。
+
+**只停我们自己启动的。** 经 `docker run` 由本壳层创建的容器在停止时用 `docker rm -f` 删除;只是 `exec` 进去的容器不删——只给 exec 客户端发信号,容器继续存在。两者都由假命令的 argv 日志断言。
+
+**SSH 主机目录。** 用户早已为 `ssh(1)` 配好的主机此前在两个界面里都看不见,因为目录只来自 MusePi 的 `ssh.json`。现在 `electron/ssh-config-read.cjs` **只读**地读取 `~/.ssh/config`(绝不写入),按 ssh(1) 的方式就地展开 `Include`,同时受深度**和**已访问集合约束(自包含的文件会停下而不是递归),缺失文件视为空目录,某个 include 读不到只损失它自己的主机。`src/lib/connection/ssh-config.ts` 解析这些文档(`Host`、`HostName`、`User`、`Port`、`IdentityFile`、`ProxyJump`;`Key=value` 与 `Key = value`;注释;首个 `Host` 之前的指令作为全局默认),`mergeHostCatalog` 在一处声明优先级:**同名时 MusePi 的 `ssh.json` 条目胜出**,ssh config 补齐其余所有名称。通配或取反的 `Host` 模式不会成为行——它没有单一地址——而取反旁边那个具体别名仍然会。主进程也自己读取 MusePi 那一槽(`readMusepiSshHosts`),因为连接管理界面恰恰在守护进程连不上时出现;那是同一个文件,不是第二个存储。`ProxyJump` 链原样进入 `-J`,所以用户配好的跳板机照常工作。
+
+**两条轴,刻意不合并。** *实例*目标(`lib/connection/targets.ts`)说的是守护进程跑在哪——本机、ssh 主机、容器、WSL 发行版;*工作区*(`ConnectDialog` 的 sshfs `mountPath`,按会话持久化)说的是文件在哪。常见情形是两条轴指向同一位置,而挂载远程这一情形仍作为自己的行类型被支持;只共享主机事实(`sshHost`、`sshPort`、`proxyJump`、`keyPath`),并且这个区分就写在行类型定义处。
+
+**平台注意事项,写出来因为它们确实会咬人。** WSL2 的 localhost 转发默认开启,但 `.wslconfig` 可以关掉,较早的配置也从未有过,所以端口没应答会报成超时并点名这种可能,而不是报成隧道已关闭。ssh 主机密钥绝不自动接受:`BatchMode=yes` 让未知主机直接退出并打印原因。Docker 套接字权限是 `docker ps` 失败的常见真因——失败会报成 `daemon-unreachable` 并附守护进程自己的文字,绝不报成空容器列表。
+
+没有真实基础设施就无法验证的部分:真实 ssh 主机(认证、主机密钥提示、真实 `ProxyJump` 跳转)、Docker 守护进程(套接字权限、真实端口映射)与 WSL 发行版(localhost 转发)。这些路径由会真正绑定端口并输出真实 stderr 的假命令覆盖,所以 supervisor 的判断都有覆盖;没覆盖的是真实工具是否如其文档所述。
+
+验证:`test/remote-targets.test.cjs`(隧道 argv、启动→running→停止、重复启动拒绝含尚未绑定端口的用例、ssh stderr 作为失败原因、不接管已在监听的端口、拒绝停止未知目标、启动后崩溃的隧道、`docker ps` fixture 解析、空列表与失败列表之分、只删自己创建的容器、WSL argv/解码/启动/失败命令/缺失二进制)、`test/remote-lifecycle.test.ts`(解析器的默认值/`=` 语法/通配/重复/畸形、合并优先级、经桥加载目录、受管行判定、状态裁剪)与 `test/ssh-config-read.test.cjs`(缺失文件、`Include` 顺序、glob、自包含、互相包含、深度上限、读不到的 include、名为 `config` 的目录)。渲染用例在 `test/connection-manager.test.tsx`(失败的隧道在行内显示 ssh 的 stderr、运行中的隧道读作「已由 MusePi 启动」而非「已连接」、已停止读作 idle、启动→停止标签、没有桥的行保留命令并照实说明)。
 
 ## 1e. 自定义供应商模型发现(models.discover,2026-08-22)
 
