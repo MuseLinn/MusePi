@@ -382,6 +382,16 @@ export function runMarker(marker: GuardMarker, scratch: string, options: RunOpti
 	}
 }
 
+/**
+ * Test files that carry a marker as fixture DATA rather than as a claim about
+ * the tree. `check-guards-mutation.integration.test.ts` writes a guard with a
+ * marker into a throwaway repository to prove the timeout path; running its
+ * marker here would test a `guard-me.ts` that exists only inside that temp
+ * directory, so it is excluded by name with the reason recorded rather than
+ * silently skipped.
+ */
+const FIXTURE_GUARDS = new Set(["scripts/check-guards-mutation.integration.test.ts"]);
+
 /** Guard files carrying at least one marker, in stable order. */
 export function guardFiles(root: string, candidates?: readonly string[]): string[] {
 	if (candidates && candidates.length > 0) return [...candidates].sort();
@@ -390,6 +400,7 @@ export function guardFiles(root: string, candidates?: readonly string[]): string
 		.split("\0")
 		.map(part => part.trim())
 		.filter(file => /\.(ts|tsx)$/.test(file))
+		.filter(file => !FIXTURE_GUARDS.has(file))
 		.filter(file => fs.existsSync(path.join(root, file)))
 		.filter(file => parseMarkers(file, fs.readFileSync(path.join(root, file), "utf8")).length > 0)
 		.sort();
