@@ -1395,7 +1395,11 @@ html.gui-vt-surface-only::view-transition-new(root),
 }
 
 /* The capsule is pinned inside the chat head; the preview has no head, so it
- * gets its own centered band and drops that absolute positioning. */
+ * gets its own centered band and drops that absolute positioning. The centring
+ * rides `--gui-capsule-shift`, NOT `transform`: the pill still owns a real
+ * press gesture, and overriding `transform` here is what used to leave
+ * `:active`'s translate in place (a click shifted the pill half its width
+ * left). Zeroing the shift keeps the press scaling in place. */
 .gui-effect-preview-identity {
 	position: relative;
 	display: flex;
@@ -1405,7 +1409,10 @@ html.gui-vt-surface-only::view-transition-new(root),
 .gui-effect-preview-identity > .gui-agent-capsule {
 	position: static;
 	top: auto;
-	transform: none;
+	/* `translateX(0)`, not `none`: the press composes with this value, and
+	 * `none scale(0.97)` is an invalid transform that would drop the whole
+	 * declaration — the preview would lose its press entirely. */
+	--gui-capsule-shift: translateX(0);
 }
 
 .gui-effect-preview .tr-gutter {
@@ -5162,18 +5169,33 @@ body.gui-resizing .gui-pane-right {
 	z-index: -1;
 }
 
-/* Right panel width collapse: stays mounted, animates 288px → 0px.
- * Margin rides the SAME spring as width: the folded state drops the card
- * gutter (margin: 0 below + the appended gutter rule), and without a margin
- * transition that 8px → 0 snap fired at class-toggle time — the panel's
- * border box instantly widened 8px into the freed margin space, then the
- * width animation played (user: 收起时面板会突然放大一点再收起). Measured
- * 2026-09-22 via scripts/debug-panel-collapse-sample.ts. */
+/* Right panel fold: the panel stays mounted and folds to zero width, but the
+ * fold is NOT an animated width any more.
+ *
+ * Animating `width` (the old 320ms spring) re-laid out the panel's whole
+ * subtree AND reflowed the chat column on every frame — the transcript is a
+ * flex sibling, so each intermediate width moved every message row. Opening
+ * the capsule therefore spent its first 300ms reflowing text it was not
+ * changing, which is most of what read as "卡顿". The closed state now snaps
+ * its box and the motion lives in `transform`/`opacity` on the contents, both
+ * compositor properties. The panel still folds, still animates, and
+ * `aria-expanded` is untouched — it is the LAYOUT cost that is gone.
+ *
+ * The margin rides the same transition so the card gutter cannot snap 8px
+ * wider at class-toggle time (user: 收起时面板会突然放大一点再收起).
+ *
+ * The WIDTH itself is a delayed, zero-duration snap (`0s`), never an
+ * interpolated length: the box jumps to its target, and the 220ms delay on the
+ * closing side is what keeps it at full width while the contents fade — so the
+ * fold reads as contents leaving, then the column reflowing ONCE. Opening
+ * drops the delay, because the panel's box must be there for its contents to
+ * slide into. */
 .gui-pane-right--inner {
 	transition:
-		width 220ms var(--spring),
-		margin 220ms var(--spring),
+		width 0s 0ms,
+		transform 220ms var(--spring),
 		opacity 160ms ease;
+	transform-origin: right center;
 }
 
 .gui-pane-right--inner--closed {
@@ -5181,11 +5203,48 @@ body.gui-resizing .gui-pane-right {
 	border-left-width: 0;
 	opacity: 0;
 	pointer-events: none;
+	/* Hold the box at full width for the length of the fade, then snap. The
+	 * transcript reflows exactly once instead of once per frame. */
+	transition:
+		width 0s 220ms,
+		transform 220ms var(--spring),
+		opacity 160ms ease;
 	/* Folded states leave no trace: margins drop to 0 (the appended gutter
-	 * rule used to override this -8px, making the snap instant). The margin
-	 * change now rides the panel's spring transition (see the --inner rule
-	 * above), so folding no longer flashes the border box 8px wider. */
+	 * rule used to override this -8px, making the snap instant). */
 	margin-right: 0;
+}
+
+/* The contents carry the motion: one composited translate + fade, so the
+ * fold never re-measures a row. Reversing the class replays it from the
+ * same origin, which is why open and fold share one curve. The seam band is
+ * excluded: it is `position: fixed` with its own centring transform, and it
+ * is hidden while the panel is folded anyway. */
+.gui-pane-right--inner > :not(.gui-pane-resize-x) {
+	transition:
+		transform 220ms var(--spring),
+		opacity 160ms ease;
+}
+.gui-pane-right--inner--closed > :not(.gui-pane-resize-x) {
+	transform: translateX(18px);
+	opacity: 0;
+}
+
+/* Reduced motion / 动效关闭: land on the target state, no slide. */
+@media (prefers-reduced-motion: reduce) {
+	.gui-pane-right--inner,
+	.gui-pane-right--inner > :not(.gui-pane-resize-x) {
+		transition: none;
+	}
+	.gui-pane-right--inner--closed > :not(.gui-pane-resize-x) {
+		transform: none;
+	}
+}
+.gui-motion-off .gui-pane-right--inner,
+.gui-motion-off .gui-pane-right--inner > :not(.gui-pane-resize-x) {
+	transition: none;
+}
+.gui-motion-off .gui-pane-right--inner--closed > :not(.gui-pane-resize-x) {
+	transform: none;
 }
 
 /* Maximize modal scrim: dims the chat column behind the floated panel
@@ -6984,7 +7043,16 @@ body.gui-resizing .gui-pane-right {
 	 * and the card clips its overflow, so the pill keeps that room inside the
 	 * reserved band instead of letting the top of the ring be cut off. */
 	top: 6px;
-	transform: translateX(-50%);
+	/* TWO parts, separate on purpose: `--gui-capsule-shift` is the centring
+	 * the absolute placement needs (`left: 50%`), `--gui-capsule-press` is the
+	 * gesture. A surface that centres the pill by LAYOUT instead (the settings
+	 * effects preview, see `.gui-effect-preview-identity`) zeroes only the
+	 * shift, so its press still scales. Before the split `:active` re-applied
+	 * `translateX(-50%)` and the preview pill jumped half its width left on
+	 * every click. */
+	--gui-capsule-shift: translateX(-50%);
+	--gui-capsule-press: scale(1);
+	transform: var(--gui-capsule-shift) var(--gui-capsule-press);
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -7036,9 +7104,10 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text);
 }
 /* Press feedback only in the pressed state: the resting pill never scales,
- * so its measured box stays inside the reserved band. */
+ * so its measured box stays inside the reserved band. The shift is untouched
+ * — a press must scale the pill in place, never nudge it. */
 .gui-agent-capsule:active {
-	transform: translateX(-50%) scale(0.97);
+	--gui-capsule-press: scale(0.97);
 }
 .gui-agent-capsule:focus-visible {
 	outline: 2px solid var(--color-accent);
@@ -7073,7 +7142,7 @@ body.gui-resizing .gui-pane-right {
 		transition: none;
 	}
 	.gui-agent-capsule:active {
-		transform: translateX(-50%);
+		--gui-capsule-press: scale(1);
 	}
 }
 .gui-agent-capsule-name {

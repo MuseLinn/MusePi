@@ -167,6 +167,24 @@ function pushRecentModel(id: string, provider?: string): void {
 }
 
 /**
+ * Catalog snapshot cache — keyed by the read a selector makes (the session's
+ * `models.list` or the registry's `models.listAvailable`).
+ *
+ * The agent tab's catalogue is unmounted while its disclosure is folded, so
+ * without this every re-mount rebuilt the list from an empty state: the tab's
+ * own `Reveal` and the panel's fold both re-mount it, and each mount painted
+ * no rows until a full catalog round-trip answered. The cache is SEEDED only —
+ * the mount still re-reads, so an external `models.yml` edit and a
+ * `models.changed` broadcast keep working exactly as before; the difference is
+ * that a re-mount paints its rows on the first frame instead of waiting.
+ */
+const catalogCache = new Map<string, WireModel[]>();
+
+function catalogCacheKey(sessionId: string | null | undefined): string {
+	return sessionId ? `session:${sessionId}` : "registry";
+}
+
+/**
  * Live model selector — with a session it lists the session's available
  * models (daemon models.list) and switches ONLY that session via
  * session.setModel (TUI /switch parity — other sessions keep their own
@@ -242,7 +260,9 @@ export function ModelSelector({
 	allowNone?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
-	const [models, setModels] = useState<WireModel[]>([]);
+	// Seeded from the cache so a re-mount (the agent tab's disclosure, the
+	// panel's fold) paints its rows immediately; the mount still re-reads.
+	const [models, setModels] = useState<WireModel[]>(() => catalogCache.get(catalogCacheKey(sessionId)) ?? []);
 	const [modelId, setModelId] = useState<string>("");
 	// Searchable list: filter by id/name/provider.
 	const [query, setQuery] = useState("");
@@ -322,14 +342,18 @@ export function ModelSelector({
 	}, [open]);
 
 	// Refresh the catalog only (no seeding): session mode lists the session's
-	// available models, welcome mode the shared registry catalog.
+	// available models, welcome mode the shared registry catalog. The answer is
+	// written back to the module cache so the NEXT mount of this same read
+	// paints rows on its first frame (see catalogCache).
 	useEffect(() => {
 		let alive = true;
 		const method = sessionId ? "models.list" : "models.listAvailable";
 		const params = sessionId ? { sessionId } : {};
+		const key = catalogCacheKey(sessionId);
 		void rpc
 			.request<WireModel[]>(method, params)
 			.then(list => {
+				catalogCache.set(key, list ?? []);
 				if (!alive) return;
 				setModels(list ?? []);
 			})

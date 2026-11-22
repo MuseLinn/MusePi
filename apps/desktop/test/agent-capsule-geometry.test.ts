@@ -106,6 +106,22 @@ const FIXTURE = `
 				</div>
 			</div>
 		</div>
+	</div>
+	<!-- The settings effects preview: the same pill, centred by LAYOUT (no
+	     absolute head, no left: 50%), which is exactly the surface whose press
+	     used to jump. -->
+	<div class="gui-effect-preview" id="preview" style="width: 420px; margin-top: 24px">
+		<div class="gui-effect-preview-identity">
+			<button type="button" class="gui-agent-capsule" aria-expanded="false" data-agent-status="idle" data-agent-role="coder">
+				<span class="gui-agent-avatar" role="img" aria-label="agent listening">
+					<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/></svg>
+				</span>
+				<span class="gui-agent-capsule-name">助手</span>
+				<span class="gui-agent-role-tag">编码</span>
+				<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
+				<span class="gui-agent-capsule-status">空闲</span>
+			</button>
+		</div>
 	</div>`;
 
 let browser: Browser;
@@ -344,6 +360,83 @@ describe("agent capsule geometry", () => {
 		expect(expanded.transform.startsWith("matrix(-1")).toBe(true);
 		await page.evaluate(() => document.querySelector(".gui-agent-capsule")!.setAttribute("aria-expanded", "false"));
 		await page.evaluate(() => document.querySelector<HTMLElement>(".gui-agent-capsule")!.blur());
+	});
+
+	test("presses in place: the centre holds and the scale applies, in the chat and in the preview", async () => {
+		/** Read the capsule's box and the transform the `:active` rule composes
+		 *  to, in both surfaces. The pill is measured with its own transform
+		 *  neutralised so the assertion is about the RULE, not a paint order. */
+		const read = () =>
+			page.evaluate(() => {
+				const measure = (selector: string) => {
+					const capsule = document.querySelector<HTMLElement>(selector)!;
+					const style = getComputedStyle(capsule);
+					const box = capsule.getBoundingClientRect();
+					return {
+						centre: box.left + box.width / 2,
+						shift: style.getPropertyValue("--gui-capsule-shift").trim(),
+						press: style.getPropertyValue("--gui-capsule-press").trim(),
+						transform: style.transform,
+					};
+				};
+				return {
+					chat: measure("#shell .gui-agent-capsule"),
+					preview: measure("#preview .gui-agent-capsule"),
+				};
+			});
+
+		/** Force the pressed state on both pills. Chromium cannot be told to
+		 *  hold a real `:active` without a pointer, so the cascade is probed by
+		 *  re-declaring the same rule under a class the fixture carries. */
+		const press = (on: boolean) =>
+			page.evaluate(pressed => {
+				for (const selector of ["#shell .gui-agent-capsule", "#preview .gui-agent-capsule"]) {
+					document.querySelector<HTMLElement>(selector)!.classList.toggle("force-active", pressed);
+				}
+			}, on);
+
+		/** The press is a 120ms transform transition; read the settled value,
+		 *  never an intermediate frame (a mid-flight read once left the pill at
+		 *  0.97 for the tests after this one). */
+		const settle = () =>
+			page.evaluate(() =>
+				Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))).then(() => {}),
+			);
+
+		await page.addStyleTag({
+			content: `
+				#shell .gui-agent-capsule.force-active,
+				#preview .gui-agent-capsule.force-active {
+					--gui-capsule-press: scale(0.97);
+				}`,
+		});
+
+		const rest = await read();
+		// Rest: the chat pill is centred by its own shift, the preview by layout.
+		expect(rest.chat.shift).toBe("translateX(-50%)");
+		expect(rest.preview.shift).toBe("translateX(0)");
+		expect(rest.chat.press).toBe("scale(1)");
+		expect(rest.preview.press).toBe("scale(1)");
+
+		await press(true);
+		await settle();
+		const pressed = await read();
+
+		// THE regression: the centre must not move when the pill is pressed. The
+		// preview used to re-apply `translateX(-50%)` here and jumped half its
+		// width left.
+		expect(Math.abs(pressed.chat.centre - rest.chat.centre)).toBeLessThanOrEqual(0.5);
+		expect(Math.abs(pressed.preview.centre - rest.preview.centre)).toBeLessThanOrEqual(0.5);
+		// The press is still a press in BOTH surfaces (3% smaller, centred).
+		for (const surface of [pressed.chat, pressed.preview]) {
+			expect(surface.press).toBe("scale(0.97)");
+			expect(surface.transform).toContain("0.97");
+		}
+		// And the preview's transform carries no horizontal translation.
+		expect(pressed.preview.transform).not.toContain("-");
+		expect(pressed.chat.transform.startsWith("matrix(0.97")).toBe(true);
+		await press(false);
+		await settle();
 	});
 
 	test("keeps a visible focus ring outside the pill, unclipped", async () => {
