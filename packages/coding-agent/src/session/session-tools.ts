@@ -837,11 +837,11 @@ export class SessionTools {
 	}
 
 	/**
-	 * Activates the extension meta-tool set (issue #38 Step 2): the 10
-	 * extension bootstrap/lifecycle tools that are registered
-	 * `defaultInactive` to keep their schemas out of the prompt and request.
-	 * The `/extensions` command is the explicit trigger; until it runs, an
-	 * ordinary session never pays for these tools.
+	 * Activates the extension meta-tool set (issue #38 Step 2): the 11
+	 * creation/compatibility tools (Cordis ring + inventory + Track B loader)
+	 * that are registered `defaultInactive` to keep their schemas out of the
+	 * prompt and request. The extension management surface is the explicit
+	 * trigger; until it runs, an ordinary session never pays for these tools.
 	 *
 	 * Cache discipline: the system prompt rebuild on activation appends the
 	 * `## functions` inventory at the same template position, so the prompt
