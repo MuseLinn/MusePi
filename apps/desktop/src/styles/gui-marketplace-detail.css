@@ -1,3 +1,4 @@
+/* Marketplace detail dialog — a desktop stylesheet in the `gui-*` family. */
 .gui-marketplace-detail-shell {
 	display: flex;
 	flex-direction: column;

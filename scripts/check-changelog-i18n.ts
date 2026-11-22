@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
 /**
- * Guard the bilingual (Chinese + English) shape of `CHANGELOG.musepi.md`.
+ * Guard the shape of `CHANGELOG.musepi.md`: the bilingual (Chinese + English)
+ * pairing of released entries, and the line structure of `[Unreleased]`.
  *
  * Why this exists: that one file is the single source for the GUI "what's-new"
  * panel, `/changelog`, the OTA `update-manifest.json` notes and the GitHub
@@ -9,36 +10,59 @@
  * bullet without its `- EN:` child therefore ships a half-Chinese release page,
  * which is exactly what happened to 0.4.29 and 0.4.30 before this check.
  *
- * Contract (see AGENTS.md → Changelog → "Bilingual entries"):
+ * The structure half exists because a deleted bullet *title* is invisible to a
+ * bullet-shaped check: the body became an untitled paragraph, the bullet count
+ * fell by one, and every surface rendered a bare paragraph in Chinese under an
+ * English page. `scripts/render-release-notes.ts` only counts blocks that start
+ * with `- `, so the page keeps such a block and the count loses it — the guard
+ * runs that same block split rather than a second parser that could drift.
+ *
+ * Contract (see `.agents/rules/release.md` → "Changelog ownership"):
  *   - every `- ` bullet under a released version gets exactly one nested
  *     `  - EN: ...` child, directly beneath it;
  *   - the child must be the translation of the whole bullet (a multi-line
- *     Chinese bullet still gets a single EN child).
+ *     Chinese bullet still gets a single EN child);
+ *   - in `[Unreleased]`, every non-blank line is a category heading, a bullet,
+ *     an indented child of one, or a bullet's own continuation. A paragraph
+ *     that opens without a bullet is an orphan and fails with its line number.
  *
  * Exit 0 when compliant (or when there is nothing to check), exit 1 with a
- * per-bullet report otherwise.
+ * per-line report otherwise.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isEntryBlock, sectionBlockRanges } from "./render-release-notes.ts";
 
 const CHANGELOG_PATH = "packages/coding-agent/CHANGELOG.musepi.md";
 
-/** A `## [x.y.z] - date` heading (released versions only — `[Unreleased]` is exempt). */
+/** A `## [x.y.z] - date` heading (released versions — `[Unreleased]` is judged by structure only). */
 const VERSION_HEADING = /^## \[(\d+\.\d+\.\d+)\]/;
+/** One `### Category` heading; the only heading `[Unreleased]` may carry. */
 const SECTION_HEADING = /^### /;
-const BULLET = /^(\s*)- /;
+/** A line indented under the bullet above it: the EN child or a wrapped body. */
+const INDENTED = /^\s+\S/;
 
 interface Problem {
-	/** 1-based line number of the offending bullet (or the file header). */
+	/** 1-based line number of the offending line (or the file header). */
 	line: number;
 	version: string;
 	message: string;
 }
 
 export interface CheckResult {
-	/** Bullets that were checked, i.e. top-level bullets in released sections. */
-	checked: number;
+	/**
+	 * Released bullets whose `- EN:` translation was checked. These are the only
+	 * bullets a translation is required on.
+	 */
+	released: number;
+	/**
+	 * `[Unreleased]` bullets whose line structure was checked. Their translation
+	 * is not required — a mid-cycle entry may carry none — so they are counted
+	 * separately rather than reported as bullets that "carry a nested EN
+	 * translation".
+	 */
+	unreleased: number;
 	problems: Problem[];
 }
 
@@ -48,16 +72,94 @@ const TOP_BULLET = /^- /;
 const EN_CHILD = /^\s+- EN: /;
 /** Any `## [` heading — used to tell "mid-cycle, [Unreleased] only" from a malformed file. */
 const ANY_RELEASE_HEADING = /^## \[/;
+/** `## [Unreleased]` — the section whose line structure is also judged. */
+const UNRELEASED_HEADING = /^## \[Unreleased\]/;
 
 /** True when the file actually declares a version section (even an unparseable one). */
 function hasReleasedHeading(content: string): boolean {
 	return content.split(/\r?\n/).some(line => ANY_RELEASE_HEADING.test(line) && !/^## \[Unreleased\]/.test(line));
 }
 
+/**
+ * The `[Unreleased]` section's lines, with the 1-based file line of the first
+ * one. Null when the file has no such section.
+ */
+function unreleasedLines(lines: readonly string[]): { firstLine: number; lines: string[] } | null {
+	const start = lines.findIndex(line => UNRELEASED_HEADING.test(line));
+	if (start < 0) return null;
+	const rest = lines.slice(start + 1);
+	const end = rest.findIndex(line => ANY_RELEASE_HEADING.test(line));
+	return { firstLine: start + 2, lines: end < 0 ? rest : rest.slice(0, end) };
+}
+
+/**
+ * Judge `[Unreleased]` by the release renderer's own rule: a blank-line-
+ * separated block is either a category heading or an entry, and inside an entry
+ * every line is the bullet, a heading, or an indented continuation of it.
+ *
+ * An entry carries at most ONE `- EN:` child — the same invariant the released
+ * sections already enforce. Without that cap a deleted *mid-block* title is
+ * invisible: the previous bullet is still open, so the orphaned translation is
+ * read as a second child of it, the block renders as one card carrying two
+ * translations of two different features, and the entry count drops by one.
+ */
+function checkUnreleasedStructure(section: { firstLine: number; lines: string[] }, problems: Problem[]): number {
+	let bullets = 0;
+	for (const block of sectionBlockRanges(section.lines.join("\n"))) {
+		const line = section.firstLine + block.line - 1;
+		const head = block.lines[0] ?? "";
+		if (!SECTION_HEADING.test(head) && !isEntryBlock(head)) {
+			problems.push({
+				line,
+				version: "Unreleased",
+				message:
+					`orphan paragraph — an entry starts with \`- \`, so this block renders as an untitled paragraph ` +
+					`and drops out of the entry count`,
+			});
+			continue;
+		}
+		let inBullet = false;
+		let enChildren = 0;
+		for (const [offset, text] of block.lines.entries()) {
+			if (TOP_BULLET.test(text)) {
+				inBullet = true;
+				enChildren = 0;
+				bullets++;
+				continue;
+			}
+			if (SECTION_HEADING.test(text)) {
+				inBullet = false;
+				continue;
+			}
+			if (inBullet && INDENTED.test(text)) {
+				if (EN_CHILD.test(text)) {
+					enChildren++;
+					if (enChildren > 1) {
+						problems.push({
+							line: line + offset,
+							version: "Unreleased",
+							message:
+								`${enChildren} \`- EN:\` children in one entry — a title deleted mid-block leaves its ` +
+								`translation here, where it renders as a second translation of the entry above`,
+						});
+					}
+				}
+				continue;
+			}
+			problems.push({
+				line: line + offset,
+				version: "Unreleased",
+				message: `orphan line — not a category heading, a \`- \` bullet, or an indented child of one`,
+			});
+		}
+	}
+	return bullets;
+}
+
 export function checkChangelogI18n(content: string): CheckResult {
 	const lines = content.split(/\r?\n/);
 	const problems: Problem[] = [];
-	let checked = 0;
+	let released = 0;
 
 	let version: string | null = null;
 	let sawVersion = false;
@@ -77,7 +179,7 @@ export function checkChangelogI18n(content: string): CheckResult {
 
 		// Top-level bullet: scan its indented continuation lines (a bullet may
 		// wrap, and so may its EN child) for the translation marker.
-		checked++;
+		released++;
 		const enHits: number[] = [];
 		for (let j = i + 1; j < lines.length; j++) {
 			const next = lines[j] ?? "";
@@ -93,12 +195,15 @@ export function checkChangelogI18n(content: string): CheckResult {
 		}
 	}
 
+	const unreleasedSection = unreleasedLines(lines);
+	const unreleased = unreleasedSection ? checkUnreleasedStructure(unreleasedSection, problems) : 0;
+
 	if (!sawVersion && hasReleasedHeading(content)) {
 		// A version heading exists but carried no parseable x.y.z prefix.
 		problems.push({ line: 1, version: "-", message: "no parseable `## [x.y.z]` version section found" });
 	}
 
-	return { checked, problems };
+	return { released, unreleased, problems };
 }
 
 function main(): number {
@@ -116,7 +221,10 @@ function main(): number {
 
 	if (result.problems.length === 0) {
 		if (!quiet) {
-			console.log(`check-changelog-i18n: OK — ${result.checked} bullet(s) carry a nested EN translation.`);
+			console.log(
+				`check-changelog-i18n: OK — ${result.released} released bullet(s) carry their nested EN translation; ` +
+					`${result.unreleased} [Unreleased] bullet(s) have a valid line structure.`,
+			);
 		}
 		return 0;
 	}
@@ -129,7 +237,10 @@ function main(): number {
 	console.error("Every bullet in a released section needs its translation as a nested child line:");
 	console.error("  - 中文条目。");
 	console.error("    - EN: The same entry in English.");
-	console.error('See AGENTS.md → Changelog → "Bilingual entries".');
+	console.error(
+		"In [Unreleased], every line is a `###` category heading, a `- ` bullet, or an indented child of one.",
+	);
+	console.error('See .agents/rules/release.md → "Changelog ownership".');
 	return 1;
 }
 

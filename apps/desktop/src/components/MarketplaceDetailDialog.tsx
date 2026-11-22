@@ -5,7 +5,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { DialogFrame } from "./DialogFrame";
 import { PluginIcon } from "./PluginIcon";
-import "./marketplace-detail.css";
+import "../styles/gui-marketplace-detail.css";
 
 export interface MarketplaceDetailEntry extends MarketplaceCardEntry {
 	displayName?: string;

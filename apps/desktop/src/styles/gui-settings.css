@@ -4983,7 +4983,14 @@ body.gui-resizing {
  * instances INSIDE one surface (docs / canvas / browser), WorkBuddy doc-tabs
  * parity. The rail stays the navigation axis — this switches instances within
  * the surface, the same boundary as .gui-pane-subtabs above, plus drag
- * reorder and close. Shares the sub-tab visual language and tokens. */
+ * reorder and close. Shares the sub-tab visual language and tokens.
+ *
+ * This is the strip's only declaration. Its geometry is the second half of the
+ * tab-strip contract stated in gui-chat.css § Header session tabs: equal-width
+ * tabs (`--gui-surface-tab-w`), horizontal scrolling kept, indicator hidden.
+ * The contract prose lives there because the header strip is the same fact;
+ * the declarations live here, beside `.gui-surface-tab` and the enter/exit
+ * keyframes that animate it. */
 .gui-surface-tabs {
 	display: flex;
 	align-items: stretch;
@@ -4995,11 +5002,11 @@ body.gui-resizing {
 	overflow-x: auto;
 	/* Tabs must never scroll vertically: the drag handles' dashed tails
 	 * overflowed the 30px strip and a vertical scrollbar appeared (user
-	 * report 2026-09-16). Horizontal-only. */
+	 * report 2026-09-16). Horizontal-only, both axes named. */
 	overflow-y: hidden;
-	/* No visible horizontal scrollbar (dsh parity): the row fits by shrinking
-	 * the tabs and ellipsizing their titles; scrolling stays available for the
-	 * pathological case but never paints a track under the strip. */
+	/* No visible horizontal scrollbar (dsh parity): the row fits by giving
+	 * every tab the same width and ellipsizing its title; scrolling stays
+	 * available for the pathological case but never paints a track. */
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	overscroll-behavior-x: contain;
@@ -5014,12 +5021,17 @@ body.gui-resizing {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	/* Shrink-to-fit (dsh parity): four surface tabs plus the header controls
-	 * must fit the narrowest right pane without a scrollbar, so the floor is a
-	 * readable glyph+two characters, not a fixed 96px per tab. */
-	flex: 1 1 auto;
-	min-width: 48px;
-	max-width: 200px;
+	/* Fixed width (dsh parity): every tab holds --gui-surface-tab-w so a long
+	 * title ellipsizes inside its own tab instead of being squeezed by its
+	 * neighbours. `min-width: 0` keeps the flex item's automatic minimum size
+	 * from inflating around a long nowrap title, and `max-width` carries the
+	 * same token because the enter/exit keyframes animate that property — the
+	 * motion target is the strip width, not the keyframes' 200px fallback. */
+	--gui-tab-motion-width: var(--gui-surface-tab-w);
+	flex: 0 0 auto;
+	width: var(--gui-surface-tab-w);
+	min-width: 0;
+	max-width: var(--gui-surface-tab-w);
 	height: 26px;
 	padding: 0 8px;
 	border-radius: var(--radius-md);
@@ -5169,6 +5181,38 @@ body.gui-resizing {
 .gui-surface-tab-close:hover {
 	background: var(--color-surface-raised);
 	opacity: 1;
+}
+
+/* The tab's two optional adornments: a leading icon and the agent-role chip.
+ * Both belong to the same component as the rules above, so they live here
+ * rather than in the sheet that happens to render the chat surface. */
+.gui-surface-tab-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 14px;
+	width: 14px;
+	height: 14px;
+}
+
+.gui-surface-tab-icon > :is(img, svg) {
+	display: block;
+	width: 14px;
+	height: 14px;
+	object-fit: contain;
+}
+
+.gui-surface-tab-agent {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	padding: 1px 4px;
+	border-radius: 999px;
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 1.2;
 }
 
 .gui-surface-tabpanel {

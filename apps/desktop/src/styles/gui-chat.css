@@ -2280,10 +2280,10 @@ html.gui-vt-surface-only::view-transition-new(root),
  *    same title box; selection changes color only. ── */
 /* Tab strips: equal width, horizontal scroll, no indicator.
  *
- * Both strips in the app obey one contract:
+ * Both strips in the app obey one contract, stated here and nowhere else:
  *   1. every tab holds the SAME width — the header's --gui-session-tab-w and
- *      the right panel's --gui-surface-tab-w below — so no title is squeezed
- *      by its neighbours and a long one ellipsizes inside its own tab;
+ *      the right panel's --gui-surface-tab-w — so no title is squeezed by its
+ *      neighbours and a long one ellipsizes inside its own tab;
  *   2. a crowded strip still SCROLLS (`overflow-x: auto`) — hiding the
  *      indicator is `scrollbar-width: none` + `::-webkit-scrollbar`, never
  *      `overflow: hidden`, because removing the scrolling is the regression
@@ -2295,8 +2295,10 @@ html.gui-vt-surface-only::view-transition-new(root),
  * wide while the header spans the window; icons and titles are the same shape,
  * so only the number differs.
  *
- * `.gui-surface-tabs` is declared in gui-settings.css (imported first), so the
- * panel half of the contract lives here where it also wins the cascade. */
+ * Only the header half is declared in this file. `.gui-surface-tabs` and
+ * `.gui-surface-tab` are declared in gui-settings.css beside the enter/exit
+ * keyframes that animate them, so the panel strip has one home and this file
+ * carries the shared contract rather than a second copy of it. */
 :root {
 	--gui-session-tab-w: 176px;
 	--gui-surface-tab-w: 132px;
@@ -2323,7 +2325,8 @@ html.gui-vt-surface-only::view-transition-new(root),
 	 * removing the scrolling — a crowded row keeps `overflow-x: auto` and every
 	 * tab keeps its width; the strip slides under the pointer instead of
 	 * squeezing titles. `.gui-surface-tabs` (right panel) is the same contract
-	 * with a narrower width and lives next to it in this file. */
+	 * with a narrower width; its declarations live in gui-settings.css beside
+	 * the enter/exit keyframes that animate them. */
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	overscroll-behavior-x: contain;
@@ -2501,43 +2504,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 .gui-session-tab-ctl:hover {
 	background: var(--color-hover);
 	color: var(--color-text);
-}
-
-/* Right panel tab strip — the second half of the tab-strip contract stated at
- * the top of this section. It overrides gui-settings.css (imported first) so
- * BOTH strips keep equal width, unrestricted horizontal scrolling and no
- * indicator from one place; the panel's only difference is the narrower
- * --gui-surface-tab-w.
- *
- * `min-width: 0` is what keeps the width fixed: the button is a flex item, so
- * its automatic minimum size would otherwise inflate around a long nowrap
- * title instead of letting the title ellipsize inside the tab. The enter/exit
- * keyframes in gui-settings.css animate `max-width`, so the motion target is
- * pointed at the same token — otherwise every panel tab would grow to the
- * keyframes' 200px fallback and snap back to the strip width when it ended. */
-.gui-surface-tabs {
-	overflow-x: auto;
-	/* The counterpart sits in this rule, not across the cascade: M78 wrote the
-	 * panel strip's live geometry here (its own declarations are in
-	 * gui-settings.css, which it could not touch), and relying on that sheet's
-	 * `overflow-y: hidden` would re-introduce the one-axis scroller the
-	 * overflow contract forbids. Same shape as `.gui-session-tabs-scroll`. */
-	overflow-y: hidden;
-	scrollbar-width: none;
-	-ms-overflow-style: none;
-	overscroll-behavior-x: contain;
-}
-
-.gui-surface-tabs::-webkit-scrollbar {
-	display: none;
-}
-
-.gui-surface-tab {
-	--gui-tab-motion-width: var(--gui-surface-tab-w);
-	flex: 0 0 auto;
-	width: var(--gui-surface-tab-w);
-	min-width: 0;
-	max-width: var(--gui-surface-tab-w);
 }
 
 .gui-header-session-row {
@@ -6960,35 +6926,6 @@ body.gui-resizing .gui-pane-right {
  * equal specificity, so this override is appended last to win. */
 .gui-pane-right--maximized {
 	margin: 0;
-}
-
-.gui-surface-tab-icon {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex: 0 0 14px;
-	width: 14px;
-	height: 14px;
-}
-
-.gui-surface-tab-icon > :is(img, svg) {
-	display: block;
-	width: 14px;
-	height: 14px;
-	object-fit: contain;
-}
-
-.gui-surface-tab-agent {
-	display: inline-flex;
-	align-items: center;
-	flex: none;
-	padding: 1px 4px;
-	border-radius: 999px;
-	background: var(--color-accent-soft);
-	color: var(--color-accent);
-	font-size: 9px;
-	font-weight: 600;
-	line-height: 1.2;
 }
 
 /* ── Session info card (collapsed right panel's stand-in) ─────────────── */

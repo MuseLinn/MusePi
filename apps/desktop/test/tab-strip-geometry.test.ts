@@ -18,9 +18,10 @@ import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/too
  *     regression this file guards;
  *  3. ACTIVE TAB REACHABLE: an off-screen tab can be brought fully into view.
  *
- * The panel strip is declared in gui-settings.css but its fixed width and its
- * scroll behaviour come from gui-chat.css (imported later, so it wins); the
- * cascade assembled below is the real import order from styles/gui.css.
+ * The panel strip's declarations all live in gui-settings.css, including its
+ * fixed width and both overflow axes; gui-chat.css carries only the shared
+ * contract prose and the `--gui-surface-tab-w` token. The cascade assembled
+ * below is the real import order from styles/gui.css.
  */
 
 const STYLES = path.resolve(import.meta.dir, "../src/styles");
