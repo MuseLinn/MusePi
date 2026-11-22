@@ -17,9 +17,15 @@
 
 import type { SessionPresence } from "@musepi/pi-wire";
 import type { OrbState } from "../vendor/thinking-orbs";
-import { type AgentSignals, activityVerbForTool, DROWSY_AFTER_MS } from "./agent-signals";
+import {
+	type AgentSignals,
+	activityVerbForTool,
+	BORED_AFTER_MS,
+	DROWSY_AFTER_MS,
+	SLEEPING_AFTER_MS,
+} from "./agent-signals";
 
-export { type AgentSignals, DROWSY_AFTER_MS } from "./agent-signals";
+export { type AgentSignals, BORED_AFTER_MS, DROWSY_AFTER_MS, SLEEPING_AFTER_MS } from "./agent-signals";
 
 export type CompanionMood = "rest" | "working" | "waiting" | "analyzing" | "error";
 /** Petdex-only moods — spritesheet rows 1/2 (hover/dragging) that the
@@ -28,7 +34,7 @@ export type CompanionMood = "rest" | "working" | "waiting" | "analyzing" | "erro
 export type SpriteMood = CompanionMood | "hover" | "dragging";
 
 /**
- * The 31-state session vocabulary — the axis the BUILTIN pet renders.
+ * The 39-state session vocabulary — the axis the BUILTIN pet renders.
  *
  * Why a second axis, and why this big (2026-09-20): seven moods cannot say
  * anything a session actually does. `working` covered "running a tool",
@@ -71,7 +77,9 @@ export const COMPANION_STATES = [
 	"thinking",
 	"working",
 	"searching",
+	"reading",
 	"writing",
+	"composing",
 	// B — transfer
 	"sending",
 	"receiving",
@@ -84,14 +92,17 @@ export const COMPANION_STATES = [
 	"thinking-dots",
 	"humming",
 	// D — notification / input
+	"waiting",
 	"notifying",
 	"alerting",
 	"dictating",
+	"refusing",
 	// E — emotion (result-shaped)
 	"excited",
 	"happy",
 	"celebrate",
 	"confused",
+	"sad",
 	"curious",
 	"proud",
 	"shy",
@@ -101,11 +112,14 @@ export const COMPANION_STATES = [
 	"powering-down",
 	"bouncing",
 	"dragging",
+	"bored",
 	"drowsy",
+	"sleeping",
+	"waking",
 ] as const;
 export type CompanionState = (typeof COMPANION_STATES)[number];
 
-/** Collapse a 31-state reading onto the legacy 7-mood axis (spritesheet rows
+/** Collapse a 39-state reading onto the legacy 7-mood axis (spritesheet rows
  *  and the CSS material classes). Loud states win over quiet ones: every
  *  transfer and progress state is a flavour of working/analyzing, every
  *  emotion is a flavour of rest (a spritesheet has no "proud" row to play). */
@@ -115,7 +129,9 @@ export const COMPANION_STATE_TO_SPRITE_MOOD: Record<CompanionState, SpriteMood> 
 	thinking: "analyzing",
 	working: "working",
 	searching: "analyzing",
+	reading: "analyzing",
 	writing: "working",
+	composing: "working",
 	sending: "working",
 	receiving: "analyzing",
 	uploading: "working",
@@ -125,13 +141,16 @@ export const COMPANION_STATE_TO_SPRITE_MOOD: Record<CompanionState, SpriteMood> 
 	radar: "analyzing",
 	"thinking-dots": "analyzing",
 	humming: "rest",
+	waiting: "waiting",
 	notifying: "waiting",
 	alerting: "error",
 	dictating: "working",
+	refusing: "error",
 	excited: "working",
 	happy: "rest",
 	celebrate: "rest",
 	confused: "error",
+	sad: "rest",
 	curious: "rest",
 	proud: "rest",
 	shy: "rest",
@@ -140,7 +159,10 @@ export const COMPANION_STATE_TO_SPRITE_MOOD: Record<CompanionState, SpriteMood> 
 	"powering-down": "rest",
 	bouncing: "rest",
 	dragging: "dragging",
+	bored: "rest",
 	drowsy: "rest",
+	sleeping: "rest",
+	waking: "rest",
 };
 
 /** Legacy-mood lookup with a `rest` fallback — for callers holding a string
@@ -204,14 +226,20 @@ const COMPANION_MOOD_PRIORITY: Record<CompanionMood, number> = {
 // tell different stories: waiting > analyzing > working > error > rest.
 const COMPANION_STATE_PRIORITY: readonly CompanionState[] = [
 	"notifying",
+	"waiting",
 	"thinking",
 	"searching",
+	"reading",
+	"composing",
 	"writing",
 	"working",
 	"alerting",
+	"refusing",
 	"confused",
 	"curious",
 	"celebrate",
+	"happy",
+	"sad",
 	"idle",
 ];
 
@@ -259,7 +287,7 @@ export interface CompanionActivity {
 	 *  per-event session bubbles. Pushed with state/recent pushes. */
 	sessions?: CompanionSessionCard[];
 	mood?: CompanionMood;
-	/** The 31-state reading (see COMPANION_STATES). Pushed alongside `mood`: the
+	/** The 39-state reading (see COMPANION_STATES). Pushed alongside `mood`: the
 	 *  mood still picks the spritesheet row, the state drives the builtin's
 	 *  face / motion / effects. Optional, so a pet window on an older build
 	 *  (or a partial push) keeps working off `mood` alone.
@@ -891,24 +919,29 @@ export function companionMoodFromSession(opts: {
 export function companionStateFromSignals(s: AgentSignals = {}): CompanionState {
 	if (s.dragging || s.interaction === "drag") return "dragging";
 	if (s.spawning || s.presence === "starting") return "spawning";
+	if (s.presence === "waking") return "waking";
 	if (s.presence === "closing") return "powering-down";
 	if (s.toolFailed || s.outcome?.kind === "failure" || s.phase === "error") return "alerting";
-	if (s.ambiguous || s.interaction === "deny" || s.outcome?.kind === "refused") return "confused";
-	if (s.presence === "hidden") return "drowsy";
+	if (s.interaction === "deny" || s.outcome?.kind === "refused") return "refusing";
+	if (s.ambiguous) return "confused";
+	if (s.presence === "hidden") return "sleeping";
 	if (s.interaction === "bounce") return "bouncing";
 	if (s.interaction === "hum") return "humming";
 	// A pending approval is the loudest "you are needed" there is — the agent
-	// is not working, it is WAITING, and the badge is the whole message.
+	// is not working, it is notifying, and the badge is the whole message.
+	// A pause with nothing else pending is waiting, which is not idle.
 	if ((s.approvals ?? 0) > 0 || (s.unread ?? 0) > 0) return "notifying";
 	if ((s.questions ?? 0) > 0 || s.awaitingInput || s.phase === "awaiting-user") return "curious";
-	if (s.streaming || s.phase === "streaming") return "writing";
+	if (s.phase === "paused") return "waiting";
+	if (s.streaming || s.phase === "streaming") return "composing";
 	if (s.phase === "thinking") return "thinking";
 	if (s.working || s.phase === "tool") {
 		switch (s.activity) {
 			case "searching":
 			case "browsing":
-			case "reading":
 				return "searching";
+			case "reading":
+				return "reading";
 			case "writing":
 			case "coding":
 			case "generating":
@@ -916,7 +949,7 @@ export function companionStateFromSignals(s: AgentSignals = {}): CompanionState 
 			case "sending":
 				return "sending";
 			case "waiting":
-				return "notifying";
+				return "waiting";
 			default:
 				return "working";
 		}
@@ -924,8 +957,12 @@ export function companionStateFromSignals(s: AgentSignals = {}): CompanionState 
 	if (s.sending) return "sending";
 	if (s.receiving) return "receiving";
 	if (s.goal?.enabled && s.goal.total > 0 && s.goal.done >= s.goal.total) return "proud";
-	if (s.phase === "done" || s.justFinished || s.outcome?.kind === "success") return "celebrate";
+	if (s.justFinished) return "celebrate";
+	if (s.phase === "done" || s.outcome?.kind === "success") return "happy";
+	if ((s.idleMs ?? 0) >= SLEEPING_AFTER_MS) return "sleeping";
 	if ((s.idleMs ?? 0) >= DROWSY_AFTER_MS) return "drowsy";
+	if ((s.idleMs ?? 0) >= BORED_AFTER_MS) return "bored";
+	if (s.personaMood === "sad") return "sad";
 	return "idle";
 }
 
@@ -940,7 +977,7 @@ export function companionStateFromPresence(presence: SessionPresence): Companion
 		case "error":
 			return "alerting";
 		case "paused":
-			return "idle";
+			return "waiting";
 		case "compacting":
 			return "progress";
 		case "tool":
@@ -948,7 +985,7 @@ export function companionStateFromPresence(presence: SessionPresence): Companion
 				? companionStateFromSignals({ phase: "tool", activity: activityVerbForTool(presence.activeTool) })
 				: "working";
 		case "streaming":
-			return "writing";
+			return "composing";
 		case "thinking":
 			return "thinking";
 		case "starting":

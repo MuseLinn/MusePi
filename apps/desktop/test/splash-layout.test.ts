@@ -64,12 +64,15 @@ describe("splash content", () => {
 			}
 			const stops = (id: string) =>
 				Array.from(document.querySelectorAll(`#${id} stop`), stop => getComputedStyle(stop).stopColor);
-			return { shell: stops("gui-splash-orb-shell"), accessories: stops("gui-splash-orb-rose") };
+			const wear = stops("gui-splash-orb-wear");
+			return { shell: stops("gui-splash-orb-shell"), wear };
 		});
-		expect(colors).toEqual({
-			shell: ["rgb(1, 20, 40)", "rgb(2, 20, 40)", "rgb(3, 20, 40)"],
-			accessories: ["rgb(4, 20, 40)", "rgb(5, 20, 40)", "rgb(6, 20, 40)"],
-		});
+		expect(colors.shell).toEqual(["rgb(1, 20, 40)", "rgb(2, 20, 40)", "rgb(3, 20, 40)"]);
+		// The cans are a fixed cream, so the gold tokens do not recolor them.
+		expect(colors.wear).toHaveLength(2);
+		expect(
+			colors.wear.some(color => color.startsWith("rgb(4") || color.startsWith("rgb(5") || color.startsWith("rgb(6")),
+		).toBe(false);
 	});
 
 	it("keeps indeterminate activity animated after the intro finishes", async () => {

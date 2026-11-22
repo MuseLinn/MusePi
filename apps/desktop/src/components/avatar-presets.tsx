@@ -179,7 +179,7 @@ const THINKING_ORB_TO_SPRITE_MOOD: Record<OrbState, SpriteMood> = {
 };
 
 /**
- * OrbState → the 31-state axis. This is the mapping that finally answers
+ * OrbState → the 39-state axis. This is the mapping that finally answers
  * "does the session AVATAR get the morph richness too?" — yes, and it gets it
  * from the same table the desktop pet does.
  *
@@ -194,7 +194,7 @@ const THINKING_ORB_TO_COMPANION_STATE: Record<OrbState, CompanionState> = {
 	working: "working",
 	searching: "searching",
 	solving: "thinking",
-	composing: "writing",
+	composing: "composing",
 	shaping: "progress",
 	waiting: "notifying",
 };

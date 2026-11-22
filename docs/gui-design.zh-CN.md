@@ -133,7 +133,7 @@ lang: zh-CN
 
 ### 伙伴(Agent Companion,BitFun parity,2026-08-06)
 
-- **默认形象：内置球体品牌伙伴（2026-11-05）**：`DEFAULT_COMPANION_ART_ID = BUILTIN_VECTOR_ART_ID`（`musepi-note-bot`），由 `CompanionArt.tsx` 的内置分支绘制手绘球体——`.gui-pet-svg__shell` 加 `lib/companion-face.ts` 的表情层（眼动追踪、眨眼、31 态情绪）、`lib/companion-decor.ts` 的 `headphones` 配饰，以及 `pet-gesture` 按压/拖拽弹簧；这张脸的 `happy` 环也是应用与站点 Logo 的表情来源。设置与首次启动的列表以它开头，其后是全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。`ThinkingOrb` 画布不是伙伴形象——它仍是智能体头像与顶栏活动指示器。
+- **默认形象：内置球体品牌伙伴（2026-11-05）**：`DEFAULT_COMPANION_ART_ID = BUILTIN_VECTOR_ART_ID`（`musepi-note-bot`），由 `CompanionArt.tsx` 的内置分支绘制手绘球体——`.gui-pet-svg__shell` 加 `lib/companion-face.ts` 的表情层（眼动追踪、眨眼、39 态会话表情）、`lib/companion-decor.ts` 的 `headphones` 配饰，以及 `pet-gesture` 按压/拖拽弹簧；这张脸的 `happy` 环也是应用与站点 Logo 的表情来源。设置与首次启动的列表以它开头，其后是全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。`ThinkingOrb` 画布不是伙伴形象——它仍是智能体头像与顶栏活动指示器。
 - **两种绘制模式（2026-11-08）**：伙伴只有两个渲染器，且选择本身不保存模式。`CompanionArtFormat = "vector" | "sprite"` 由解析出的 id 推导——`artFormatForPackage` 把 `format:"svg"` 映射到 vector、sheet/atlas 映射到 sprite，内置球体是 vector。设置页与首次启动先选模式，网格只显示该模式的形象；雪碧图导入只在 sprite 下出现，vector 列出内置球体与 SVG 导入。切换模式会恢复该模式上次的选择（`musepi-gui-pet-vector-id` / `musepi-gui-pet-sprite-id`），`musepi-gui-pet-id` 仍是唯一活动选择，所以模式出现之前存下的数据按推导归位，不需要迁移写入。
 - **预置**:10 个内置 Petdex 预置(`src/lib/companion.ts` 的 `BUILTIN_SPRITE_PRESETS`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
 - **形象选择**:`.gui-pet-trigger` 行显示当前伙伴缩略图 + 名称 + 箭头(展开翻转);预览缩略图用 `zoom: 0.55`。删除按钮只出现在导入卡,hover 显现,`stopPropagation` 防选中。
@@ -410,8 +410,8 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 本轮由一条方法论指令及其功能落地驱动:「我们以后不能靠语义来复刻,而是直接吸收源码——语义相似但效果千差万别,完整复现后我们的伙伴形象才精致完好」,以及让导入的 SVG 伙伴与内置球体支持同一套状态、特效与参数。
 
 - **吸收,不是神似**:运动表、dash 飞行公式与 settle 时序全部换成源站的字面值,逐字对照反解出的引擎源码(注释完整)核验。"语义相似"的 sway 并排一看就是两种东西;数字完全一致,伙伴才读作同一物种的运动。数值由测试钉死。
-- **状态轴天然 shape-agnostic——导入 SVG 伙伴直接继承**:此前 `format:"svg"` 的 petdex 包退化到 transform 行 mood;现在经 `PetdexStateStage` 渲染,获得与内置完全相同的 31 态运动、七类特效与 dots/glyph 身体消解,全部按 face-unit(228.541 盒)归一,任意宿主尺寸下比例不变形。这正是源站自己的契约:"an uploaded logo behaves exactly like the built-in circle"。
-- **耳机是 AirPods Max,也是身体的成员**:白色阳极氧化板 + 玫瑰金轨/滑杆/Digital Crown,固定身份(从 accent 派生的配色会溶进金色壳;中间的炭灰版被读作秃头)。blobstudio 没有配饰系统——附属于身体的东西都活在身体组里——所以整套耳机住在 `bodyRef`:dash 飞行带着耳机,dots 消解连球带耳机一起化掉。旧炭灰头梁、滑杆、耳罩与麦克风臂全部移除(AirPods Max 没有麦克风臂;Crown 才是签名)。
+- **状态轴天然 shape-agnostic——导入 SVG 伙伴直接继承**:此前 `format:"svg"` 的 petdex 包退化到 transform 行 mood;现在经 `PetdexStateStage` 渲染,获得与内置完全相同的 39 态运动、七类特效与 dots/glyph 身体消解,全部按 face-unit(228.541 盒)归一,任意宿主尺寸下比例不变形。这正是源站自己的契约:"an uploaded logo behaves exactly like the built-in circle"。
+- **耳机是共轴短罐,也是身体的成员**:奶油色头梁过顶,每侧一只耳罩,垫圈、罐壁和面板共用一条 XZ 平面内的轴。正视读出的是柱面(圆盘纵横比是 cos 60°)。实体留在金球之外,头梁到耳罩是一段短直接接合。blobstudio 没有配饰系统——附属于身体的东西都活在身体组里——所以整套耳机住在 `bodyRef`:dash 飞行带着耳机,dots 消解连球带耳机一起化掉。奶油色是固定身份;从 accent 派生的配色会溶进金色壳。
 - **特效层以兄弟身份夹住 rig**:后层轨迹被球正确遮挡,前层火花浮在上方,两层都不继承身体的 motion transform——尾巴要采样飞行路径,不是搭车在里面。
 
 ## 5p. 定制跟着预览走,挂靠小球长回来(2026-09-21)
@@ -420,7 +420,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 - **外观细节组住在预览旁边**:光泽开关 + 配饰选择器从伴侣页尾部搬到常规页 Agent 头像网格正下方。宠物头像卡就是活的 `BuiltinCompanionArt`——拨动开关立刻在上方网格里读到反馈,而不是跑到另一个页面去看。组件自持状态(自己解析、订阅 `omp-pet-changed` 重解析),挂哪都成立;伴侣页保留形象选择/尺寸/导入。
 - **挂靠球保留清晰的响应式盒子**：容器查询 clamp 为 48–64px；≤380px 的输入框保持 46px，即完整面部的下限，不进入 micro 变体。矢量球体填满盒子的 100%，不再停留在 fallback 尺寸，因此图形与可点击包装层同步缩放。宿主仍通过 `--gui-composer-pet-size` 覆盖尺寸，不在 JS 中指定像素几何。
-- **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
+- **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩按单位比例绘制,放大就是引擎每帧配件 transform 里的一次 scale。舞台留白由这份缩放后的轮廓推出,所以耳朵留在视图内。尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
 ## 5r. 轮渲染视觉语言（M1，2026-09-21 转正）
 

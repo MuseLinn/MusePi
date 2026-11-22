@@ -225,7 +225,7 @@ function PetApp(): ReactNode {
 	// broadcast the composer/avatar do rather than receiving a prop.
 	const decor = useCompanionDecor();
 	const [mood, setMood] = useState<CompanionMood>("rest");
-	// The 31-state session reading pushed from the main window. Separate from
+	// The 39-state session reading pushed from the main window. Separate from
 	// `mood` for the same reason the two axes exist at all: the mood picks the
 	// spritesheet row, the state picks the face / motion / effects.
 	const [sessionState, setSessionState] = useState<CompanionState | null>(null);

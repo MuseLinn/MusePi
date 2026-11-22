@@ -62,7 +62,7 @@ export const COMPANION_MOOD_MOTION: Record<string, BodyMotion> = {
 };
 
 /**
- * Body motion per SESSION STATE (companion.ts CompanionState) — 31 entries where the old
+ * Body motion per SESSION STATE (companion.ts CompanionState) — 39 entries where the old
  * COMPANION_MOOD_MOTION had 7.
  *
  * The numbers that came from blobstudio / OpenMausBot are ported as measured
@@ -101,8 +101,12 @@ export const COMPANION_STATE_MOTION: Record<string, BodyMotion> = {
 	working: { bob: [2.4, 880], squash: 0.26 },
 	// Searching: a wider, faster sweep — it is covering ground.
 	searching: { sway: [4, 1800], pulse: [0.012, 1800] },
+	// Reading: a slower page sway than searching. The lowered lid is the face.
+	reading: { sway: [2.2, 3200], pulse: [0.01, 3200] },
 	// Writing: the tightest, quickest motion in the set — a hand moving.
 	writing: { bob: [1.4, 620], squash: 0.18 },
+	// Composing: a medium sway with the eyes open. Not writing's nod.
+	composing: { sway: [3, 1800], pulse: [0.012, 1800] },
 	// ── B. transfer — blobstudio-measured: the body shrinks to a flying dot
 	// and RIDES its dash path; the comet tails in pet-effects are drawn on
 	// the same flight line, so radius/period must stay in lockstep with the
@@ -126,17 +130,21 @@ export const COMPANION_STATE_MOTION: Record<string, BodyMotion> = {
 	// Humming: a contented slow bob, the quietest "alive" state.
 	humming: { bob: [1.8, 2400], pulse: [0.014, 2400] },
 	// ── D. notification / input
+	// Same lean as the waiting mood, and not idle's breath.
+	waiting: { pulse: [0.02, 5400], tilt: 1.6 },
 	notifying: { pulse: [0.02, 5400], tilt: 1.6 },
 	// Alerting: the nervous shimmer — the only state allowed to jitter.
 	alerting: { jitter: [1.1, 110], tilt: 2 },
 	// Dictating: transcribing has a rhythm, so a mid-tempo sway.
 	dictating: { sway: [3.2, 1400], pulse: [0.016, 1400] },
+	refusing: { sway: [1.6, 2200] },
 	// ── E. emotion — all one-shot arrivals, all decaying (see COMPANION_STATES).
 	excited: { enter: [1.06, 440], bob: [3, 480] },
 	happy: { bob: [2.6, 620], squash: 0.22 },
 	celebrate: { enter: [0.9, 560], bob: [3.6, 520], squash: 0.26 },
 	// Confused: a wobbly head-shake, no bounce (nothing was achieved).
 	confused: { sway: [2.6, 1300], tilt: 2.5 },
+	sad: { pulse: [0.012, 5200], tilt: 1.2 },
 	curious: { tilt: -6, pulse: [0.014, 3000] },
 	// Proud: held, lifted, still — the opposite of a bounce.
 	proud: { tilt: -1.5, scale: 1.02, pulse: [0.012, 3000] },
@@ -149,8 +157,13 @@ export const COMPANION_STATE_MOTION: Record<string, BodyMotion> = {
 	"powering-down": { tilt: 4, settle: 0.12 },
 	bouncing: { bob: [5.2, 560], squash: 0.3 },
 	dragging: { tilt: -7, sway: [3.4, 820] },
+	// Bored: a slower breath than idle, still short of drowsy.
+	bored: { pulse: [0.016, 5600] },
 	// Drowsy: the deepest, slowest breath in the table.
 	drowsy: { pulse: [0.03, 6400], tilt: 2.4, scale: 0.985 },
+	// Sleeping: almost still. Waking is a short settle back toward idle.
+	sleeping: { pulse: [0.006, 9000] },
+	waking: { enter: [0.96, 480] },
 };
 
 /**
