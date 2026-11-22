@@ -129,6 +129,7 @@
 	max-height: 252px;
 	overflow-y: auto;
 	padding-right: 4px;
+	overflow-x: clip;
 }
 
 .gui-import--embedded .gui-import-sources {
@@ -284,6 +285,7 @@
 	min-height: 0;
 	overflow-y: auto;
 	padding-right: 4px;
+	overflow-x: clip;
 }
 
 .gui-import--embedded .gui-import-sessions {

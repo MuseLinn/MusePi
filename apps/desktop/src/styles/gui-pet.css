@@ -669,6 +669,7 @@
 	display:grid;
 	grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
 	overflow-y:auto;
+	overflow-x:clip;
 	gap:10px;
 	max-height:340px;
 	margin-top:10px;

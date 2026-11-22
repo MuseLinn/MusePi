@@ -847,6 +847,7 @@
 	overflow-y: auto;
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
+	overflow-x: clip;
 }
 
 /* Content-boundary feather (transcript parity): the expanded list
@@ -1250,6 +1251,7 @@
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
 	padding-right: 2px;
+	overflow-x: clip;
 }
 
 .pet-bubble__dismiss {

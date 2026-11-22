@@ -51,7 +51,8 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	padding: 4px;
-	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */;
+	overflow-x: clip;
 }
 
 .gui-select-opt {
@@ -535,6 +536,7 @@
 	max-height: 180px;
 	overflow-y: auto;
 	padding-top: 8px;
+	overflow-x: clip;
 }
 
 .gui-taskcal-day-task {

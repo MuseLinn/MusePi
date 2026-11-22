@@ -711,6 +711,7 @@
 	gap: 4px;
 	max-height: 220px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 .gui-scheduled-run {
 	display: flex;
@@ -4257,7 +4258,15 @@
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	/* A real data table, not a list: `.gui-agents-row` is a five-column grid
+	 * whose tracks have hard floors (10+140+160+110+80 plus 4×10 gap ≈ 540px).
+	 * When the pane is narrower than that, clipping the overflowing axis would
+	 * silently drop the last column — the agent's state — with no way to reach
+	 * it. Both axes scroll here, and the rule is named in
+	 * `scripts/check-overflow-axis.ts` (`HORIZONTAL_SCROLLERS`) with this
+	 * reason. */
 	overflow-y: auto;
+	overflow-x: auto;
 	padding: 4px 12px 12px;
 }
 
@@ -4473,6 +4482,7 @@
 	overflow-wrap: anywhere;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
+	overflow-x: clip;
 }
 .gui-action-toast-title {
 	font-size: var(--ui-font-size-sm);
@@ -4695,6 +4705,7 @@
 	overflow-y: auto;
 	max-height: 220px;
 	opacity: 1;
+	overflow-x: clip;
 }
 @media (prefers-reduced-motion: reduce) {
 	.gui-update-toast-notes-scroll {

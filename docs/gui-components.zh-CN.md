@@ -105,6 +105,17 @@ scope:
 
 新增组件时，请同时更新本目录的这一行，并在 `docs/gui-design.md` 记录它遵守的契约。
 
+## 溢出契约
+
+滚动容器要声明**它用哪个轴、以及它不许用哪个轴**。只设置 `overflow-x` / `overflow-y` 之一时另一个会计算为 `auto`(规范不允许 `visible` 作为配对值),于是纵向列表悄悄也变成横向滚动容器——第一个比内容盒宽的行就会在**本来已经显示完整**的内容下面长出滚动条。项目悬浮卡就出过这个缺陷(用户原话:「内容明明显示完整却出现了不该出现的横向滚动」),同样的形状在桌面样式里还有约 70 处,所以这是一条带护栏的类别规则,而不是单点补丁。
+
+1. **一个轴滚动,另一个轴显式声明。** `overflow-y: auto; overflow-x: clip;` 是标准的纵向列表形状。容器内可能有 `position: sticky` 子元素时用 `clip` 而不是 `hidden`:`hidden` 会让盒子变成滚动容器,悄悄破坏吸顶偏移,`clip` 不会。
+2. **`nowrap` 内容用省略号或换行。** 不换行的单行行,文本格声明 `overflow: hidden; text-overflow: ellipsis`,并用 `title` 带上完整值。绝不用横向滚动去揭示一个本来就已显示的值。
+3. **只有明示且登记的地方才允许横向滚动。** 真正需要横向的容器(标签条、代码块、数据表)两个轴都声明,并按选择器登记在 `scripts/check-overflow-axis.ts` 的 `HORIZONTAL_SCROLLERS` 里,每项一句理由。那份列表是唯一事实来源,本文只指明它而不复制它,所以不会出现「文档里的白名单过期、护栏还在按旧表放行」。
+4. **简写可以。** `overflow: hidden` 按定义设置两个轴,不需要配对值。
+
+护栏会失败于:只声明一个轴的规则、未登记的横向滚动容器、以及已经不再横向滚动或已不存在的白名单项(过期的豁免正是白名单变成 bug 藏身处的方式)。契约:`scripts/check-overflow-axis.ts` + `scripts/check-overflow-axis.test.ts`;卡片的真实 Chromium 证明(两个 `scrollWidth === clientWidth` 以及它开在侧栏旁边)在 `apps/desktop/test/project-hover-card-geometry.test.ts`。
+
 ## 护栏(代码胜于文字)
 
 文字规则只是建议,检查才是契约。能被机械验证的标准都配了护栏并接进 `bun run check:tools`,破坏它会让 CI 失败,而不是靠评审发现:
@@ -112,6 +123,7 @@ scope:
 | 护栏 | 强制内容 |
 | --- | --- |
 | `scripts/check-radius-tokens.ts` | 禁止字面量 `border-radius`;每个 `--radius-*` 都必须有定义 |
+| `scripts/check-overflow-axis.ts` | 样式规则必须同时声明两个溢出轴(或用简写);横向滚动容器要在护栏的白名单里带理由登记;不得留下过期白名单项 |
 | `scripts/check-splitter-grip.ts` | 只有 `SplitterGrip.tsx` 能输出握柄类名;拖动态挂在胶囊自身的 `data-resizing` 上,绝不用全局 `body.gui-resizing`;已退役的 `.gui-resize-grip` 不得回归 |
 | `test/splitter-grip.test.ts` | 握柄原语的 token、三态与接缝几何 |
 | `test/slider-tokens.test.ts` | 共享滑块 token 族、两套阶梯、原生 range 配色与模型折叠卡片的焦点契约 |

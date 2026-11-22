@@ -946,6 +946,7 @@
 	resize: none;
 	max-height: calc(1.5em * 5);
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-ask-card-head {
@@ -1944,6 +1945,7 @@
 	color: var(--color-text);
 	white-space: pre-wrap;
 	word-break: break-word;
+	overflow-x: clip;
 }
 
 .gui-plan-content--edit {
@@ -2043,6 +2045,7 @@
 	max-height: 200px;
 	overflow-y: auto;
 	padding-right: 4px;
+	overflow-x: clip;
 }
 
 .gui-goal-meta {
@@ -2867,6 +2870,7 @@
 	word-break: break-word;
 	max-height: 220px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-dbg-path {
@@ -3042,6 +3046,7 @@
 	flex-direction: column;
 	gap: 12px;
 	scrollbar-width: thin;
+	overflow-x: clip;
 }
 
 .gui-btw-turn {

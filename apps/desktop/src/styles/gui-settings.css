@@ -8,6 +8,7 @@
 	 * clashed with the dialog's dark glass (user report: 样式有点不规范). */
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 22%, transparent) transparent;
+	overflow-x: clip;
 }
 .gui-dialog--settings::-webkit-scrollbar {
 	width: 8px;
@@ -206,6 +207,7 @@
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 22%, transparent) transparent;
+	overflow-x: clip;
 }
 .gui-cpf-summary {
 	display: flex;
@@ -1604,6 +1606,7 @@
 	border-left: 1px solid var(--border);
 	padding: 6px 4px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-knowledge-nav-resize {
@@ -2352,6 +2355,7 @@
 	min-height: 0;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 
 .gui-collab-col {
@@ -2404,6 +2408,7 @@
 	flex-direction: column;
 	gap: 12px;
 	min-height: 0;
+	overflow-x: clip;
 }
 /* 插件安装输出转录：包管理器的实时输出按行追加，失败时是唯一可读的原因。 */
 .gui-plugin-log {
@@ -2423,6 +2428,7 @@
 	/* 输出是一段可复制的文本，不允许长包名把面板撑出横向滚动条。 */
 	overflow-wrap: anywhere;
 	user-select: text;
+	overflow-x: clip;
 }
 .gui-plugin-log-err {
 	color: var(--color-danger, #f87171);
@@ -3129,6 +3135,7 @@
 	padding: 18px 24px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 
 .gui-remote-disclaimer-status {
@@ -5182,6 +5189,7 @@ body.gui-resizing {
 	min-height: 0;
 	padding: 24px 20px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-panel-empty-heading {
@@ -5659,6 +5667,7 @@ body.gui-resizing {
 	max-height: 320px;
 	overflow-y: auto;
 	padding: 4px 10px 10px;
+	overflow-x: clip;
 }
 .gui-session-detail-scroll mark {
 	padding: 0 1px;
@@ -5924,6 +5933,7 @@ body.gui-resizing {
 	white-space: pre-wrap;
 	overflow-x: hidden;
 	overflow-wrap: anywhere;
+	overflow-y: clip;
 }
 
 /* ZCode code-preview cards (light/dark side by side, active tag). */
@@ -5962,6 +5972,7 @@ body.gui-resizing {
 	font-size: var(--gui-code-size, 13.5px);
 	line-height: 1.5;
 	overflow-x: auto;
+	overflow-y: clip;
 }
 
 /* ── Settings: shortcuts reference table ────────────────────────────── */
@@ -6375,6 +6386,7 @@ body.gui-resizing {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
+	overflow-x: clip;
 }
 
 /* Device sign-in is a short, centred task: a code, one page to open, a wait. */
@@ -6385,6 +6397,7 @@ body.gui-resizing {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
+	overflow-x: clip;
 }
 
 /* Import: the row itself is the control, and the badges say what the source
@@ -6396,6 +6409,7 @@ body.gui-resizing {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
+	overflow-x: clip;
 }
 
 .gui-import-body {
@@ -6650,6 +6664,7 @@ body.gui-resizing {
 	overflow-wrap: anywhere;
 	font-family: var(--font-mono);
 	font-size: 11px;
+	overflow-y: clip;
 }
 
 /* ── Settings: 预设页分组卡片 + 「查看配置」只读视图 ─────────────────────
@@ -6836,6 +6851,7 @@ body.gui-resizing {
 .gui-memory-code {
 	max-height: 320px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 /* ── Workspace memory (settings → memory, ZCode 记忆面板 parity) ──────── */
@@ -6903,6 +6919,7 @@ body.gui-resizing {
 	gap: 1px;
 	max-height: 260px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 .gui-memory-workspace-row {
 	display: flex;
@@ -7341,6 +7358,7 @@ body.gui-resizing {
 	padding: 6px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 @keyframes gui-browser-pop {
 	from { opacity: 0; transform: translateY(-5px) scale(0.99); }
@@ -8296,7 +8314,8 @@ body.gui-resizing {
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		padding: 4px;
-	}
+	overflow-x: clip;
+}
 
 	.gui-settings-search-pop-group {
 		padding: 6px 8px 2px;
@@ -8436,6 +8455,7 @@ body.gui-resizing {
 .gui-browser-extension-list {
 	max-height: 184px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-browser-extension-empty {
@@ -8476,6 +8496,7 @@ body.gui-resizing {
 	padding: 8px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 
 .gui-browser-extensions-popup-head {
