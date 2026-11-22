@@ -104,6 +104,18 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 - **服务端心跳**(`ws-transport.ts`):15s PING、3 次 PONG 超时 destroy 连接(清死连接订阅/缓冲区,`teardown` 同步清 interval)。
 - 验证:真实 Electron + CDP 杀 daemon 模拟掉线 → UI 恢复可交互、无 error bar、renderer 日志含恢复路径;暂停状态重连后一致。
 
+## 1d-bis. 连接状态与端点(2026-11-22)
+
+启动门不再是 `if (!rpc)`。事实(`connected`、`attempting`、`disconnectedByUser`、`lastAttemptFailed`、`hasTargets`)经 `lib/connection/state.ts` 的纯函数 `deriveConnectionState` 归约(顺序:已连接 → 连接中 → 用户断开 → 失败 → 未配置),于是每种原因渲染自己的界面。`disconnect()` 置 `disconnectedByUser`;`boot()` 与 `connect()` 清除它并结算 `lastAttemptFailed`(`boot` 在每条退出路径结算,`connect()` 仅在非 boot 驱动时结算)。`showsFailureCopy(state)` 同时约束失败文案与 `BootRecoveryActions`,这正是「导出诊断」不会出现在平静界面的原因。
+
+存储沿用既有槽位、不新增存储:`lib/connection/target-store.ts` 拥有 `musepi-gui-hosts`(行加宽出 `kind` 与参数;旧行读作 `manual`)、`musepi-gui-url`(上次成功的端点)、`musepi-gui-target-id`(上次尝试起始的行)与 `musepi-gui-target-status`(每行上次尝试与错误,放在列表旁,失败绝不改写行)。`loadTargets` 始终先返回本机行且能承受损坏的槽位;`app.tsx` 里的 `hosts` 由端点列表派生,实例切换器与管理器因此不会漂移。启动从选中行的端点进入,而 `bootTargetFor` 不让一个连不上的 `wsl`/`ssh`/`docker` 行成为下次启动的端点——这些行要靠本构建尚未托管的外部进程才能到达,于是行带着错误留在列表里,启动回退到可以探测和拉起本机守护进程的本机行;`manual` 行是用户自己的地址,绝不会被静默替换。一次尝试记在真正应答的那个端点上,而不是传进来的那一行:启动会逐个探测本机守护进程的端口,所以到达守护进程的那一行才是显示结果的那一行。`stripToken` 是这里唯一的去 token 端点比较,归属与当前行标记共用它。
+
+WSL:`lib/connection/wsl.ts` 解析 `wsl.exe -l -q` 输出(UTF-16 按 Latin-1 读出的 NUL 折叠、BOM/CRLF、`*` 与 `(Default)` 标记、`-v` 的列截到名称、拒绝表头行),并区分 `ok` / `unsupported` / `unavailable`。renderer 没有命令执行通道(沙箱化,preload 未暴露),所以默认 runner 读取文档化的 `window.musepiShell.listWslDistributions` 接缝,在 preload 桥存在之前返回 `unsupported`;界面于是说明「无法检测」,而不是显示空列表。
+
+本模块不托管隧道与容器:行上以可复制文本给出 `wsl.exe -d <发行版> -- musepi serve --port N`、`ssh -N -L <本地>:127.0.0.1:<远端> <user@host>`、`docker exec <容器> musepi serve --port N`(外加 `docker run -p` 发布提示),并说明生命周期托管后续再做。
+
+验证:`test/connection-targets.test.ts`(状态纯函数、目标命令、持久化往返、WSL 解析 + 三种 runner 结果)与 `test/connection-manager.test.tsx`(每个状态的界面、主动断开不出现失败文案、失败尝试带诊断、从已存端点连接、WSL 两/零/失败/无桥/非 Windows、无嵌套滚动条)。
+
 ## 1e. 自定义供应商模型发现(models.discover,2026-08-22)
 
 「获取可用模型」按钮的 daemon 契约:配置期对**草稿**端点的一次性询问,不写任何配置、不入缓存。

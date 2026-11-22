@@ -1,0 +1,320 @@
+/*
+ * Connection manager — the surface a shell with no live daemon shows, and the
+ * same component the avatar menu opens.
+ *
+ * Composition: one brand header, one labelled list of known endpoints, one
+ * add form/button, one footer for entrance-owned actions. No card faces inside
+ * card faces and no second visual family — the rows reuse the instance
+ * manager's language (7px status dot, mono endpoint line, one accent chip).
+ *
+ * Scrolling: the page scrolls, the list never does. A nested list scroller
+ * inside a page scroller produces two competing scrollbars for a handful of
+ * rows (M80's overflow contract), so `.gui-conn-list` is a plain list and only
+ * `.gui-conn` / `.gui-conn-overlay` scroll — each declaring BOTH axes.
+ */
+
+.gui-conn {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	width: 100%;
+	max-width: 560px;
+	margin: auto;
+	padding: 32px 24px 28px;
+	overflow-x: clip;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.gui-conn-head {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-conn-sub {
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	text-wrap: pretty;
+}
+
+.gui-conn-section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-conn-title {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+
+.gui-conn-list {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface) 35%, transparent);
+}
+
+.gui-conn-row + .gui-conn-row {
+	border-top: 1px solid var(--border);
+}
+
+.gui-conn-row-main {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.gui-conn-glyph {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	background: var(--color-surface-sunken);
+}
+
+.gui-conn-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.gui-conn-name {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+}
+
+.gui-conn-label {
+	overflow: hidden;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-conn-kind {
+	flex: none;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-conn-chip {
+	flex: none;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 500;
+	color: var(--color-success);
+	background: color-mix(in oklab, var(--color-success) 16%, transparent);
+}
+
+.gui-conn-url {
+	overflow: hidden;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Status is text as well as a dot: colour alone never carries the meaning. */
+.gui-conn-status {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex: none;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-conn-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.gui-conn-status[data-status="connected"] {
+	color: var(--color-success);
+}
+
+.gui-conn-status[data-status="connecting"] {
+	color: var(--color-warning);
+}
+
+.gui-conn-status[data-status="failed"] {
+	color: var(--color-danger);
+}
+
+.gui-conn-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+}
+
+.gui-conn-connect {
+	padding: 4px 10px;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-conn-detail {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 0 12px 12px 48px;
+}
+
+.gui-conn-command {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-conn-command-label {
+	flex: none;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-conn-command code {
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 4px 7px;
+	border-radius: var(--radius-sm);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	white-space: nowrap;
+	background: var(--color-surface-sunken);
+}
+
+.gui-conn-note {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	text-wrap: pretty;
+}
+
+.gui-conn-error {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-danger);
+	overflow-wrap: anywhere;
+}
+
+.gui-conn-add {
+	align-self: flex-start;
+}
+
+.gui-conn-kinds {
+	display: flex;
+	gap: 6px;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.gui-conn-kind-btn {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex: none;
+	padding: 5px 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: transparent;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-conn-kind-btn[aria-selected="true"] {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-conn-form {
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface) 55%, transparent);
+}
+
+.gui-conn-retry {
+	align-self: flex-start;
+}
+
+.gui-conn-form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.gui-conn-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding-top: 4px;
+	border-top: 1px solid var(--border);
+}
+
+/* Avatar-menu entrance: the manager keeps its own composition inside a
+ * bounded dialog, so the host page never scrolls under it. */
+.gui-conn-overlay {
+	display: flex;
+	max-height: min(78vh, 720px);
+	overflow-x: clip;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.gui-conn-overlay .gui-conn {
+	padding: 20px 22px 18px;
+}
+
+/* Avatar-menu entrance frame: wide enough for a command line, never wider
+ * than the instance manager beside it. */
+.gui-dialog.gui-dialog--connection-manager {
+	width: min(680px, 94vw);
+	height: auto;
+	max-height: min(88vh, 820px);
+	overflow: hidden;
+}
+
+/* A row is name + endpoint + status + three actions. Below ~560px the status
+ * word is the first thing to go: the dot and the row's own detail keep the
+ * meaning, where dropping an action would hide it. */
+@media (max-width: 560px) {
+	.gui-conn-status-word {
+		display: none;
+	}
+	.gui-conn-detail {
+		padding-left: 12px;
+	}
+}

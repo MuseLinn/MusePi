@@ -24,6 +24,7 @@ import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
 import { ChatBootPlaceholder } from "./components/ChatBootPlaceholder";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { ConnectionManager } from "./components/ConnectionManager";
 import type { CreationMessage } from "./components/CreationModeRow";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
@@ -77,6 +78,29 @@ import {
 	companionStateFromSignals,
 } from "./lib/companion";
 import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
+import { deriveConnectionState } from "./lib/connection/state";
+import {
+	bootTargetFor,
+	dropTarget,
+	loadChosenTargetId,
+	loadStoredTargets,
+	loadTargetStatuses,
+	loadTargets,
+	recordTargetStatus,
+	resolveActiveTargetId,
+	saveChosenTargetId,
+	saveTargetStatuses,
+	storeTarget,
+	type TargetStatusMap,
+} from "./lib/connection/target-store";
+import {
+	type ConnectionTarget,
+	createTarget,
+	LOCAL_TARGET_ID,
+	localTargetUrl,
+	stripToken,
+} from "./lib/connection/targets";
+import { defaultWslRunner } from "./lib/connection/wsl";
 import {
 	daemonMethodProbeParams,
 	isMissingDaemonExtensionError,
@@ -87,7 +111,7 @@ import {
 	shouldRestartForMissingExtensions,
 	shouldRestartForMissingMethods,
 } from "./lib/daemon-version";
-import { openMiniChat } from "./lib/electron";
+import { copyToClipboard, openMiniChat } from "./lib/electron";
 import { escapeStopsTurn } from "./lib/escape-stop";
 import { invalidateGitStatuses } from "./lib/git-status-cache";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
@@ -98,7 +122,7 @@ import { installPanelMaximizeController } from "./lib/panel-maximize";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { railPeekEligible, resolveSidebarPanel } from "./lib/rail-peek";
 import { grantRemoteAccessConsent, hasRemoteAccessConsent } from "./lib/remote-access-consent";
-import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
+import { buildWsUrl, newHostId, type RemoteHost } from "./lib/remote-hosts";
 import { ExpectedDisconnects, RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
@@ -171,6 +195,23 @@ const STARTUP_SHELL =
 			).electronAPI;
 const DEFAULT_PORT = STARTUP_SHELL?.daemonPort ?? 8300;
 const DEFAULT_URL = `ws://127.0.0.1:${DEFAULT_PORT}`;
+
+/** Where this launch starts. Read once: a `useState` initializer still runs on
+ *  every render, and re-reading storage there would cost a parse per paint. */
+const INITIAL_URL = (() => {
+	// Last successful connection wins (`musepi-gui-url`): a daemon on a
+	// non-default port keeps working across app restarts. When the chosen target
+	// is a stored row whose endpoint did not answer, boot goes back to the local
+	// row instead of failing the same way again.
+	try {
+		const stored = localStorage.getItem("musepi-gui-url");
+		if (!stored) return DEFAULT_URL;
+		const boot = bootTargetFor(loadTargets(DEFAULT_PORT), loadChosenTargetId(), loadTargetStatuses());
+		return boot.kind === "local" ? stored : boot.url;
+	} catch {
+		return DEFAULT_URL;
+	}
+})();
 
 /** Renderer-side startup marks, sent over the opt-in preload IPC bridge. */
 function markStartup(phase: string): void {
@@ -596,17 +637,45 @@ function AppInner(): ReactNode {
 			observer.disconnect();
 		};
 	}, []);
-	const [url, setUrl] = useState<string>(() => {
-		// Last successful connection wins (connect() persists it): a daemon on
-		// a non-default port keeps working across app restarts.
-		try {
-			return localStorage.getItem("musepi-gui-url") ?? DEFAULT_URL;
-		} catch {
-			return DEFAULT_URL;
-		}
-	});
+	const [connTargets, setConnTargets] = useState<ConnectionTarget[]>(() => loadTargets(DEFAULT_PORT));
+	/**
+	 * "Configured" means the user has stored at least one row of their own.
+	 * The built-in local row is always present, so counting `connTargets`
+	 * would make every install configured and `unconfigured` unreachable.
+	 */
+	const configured = loadStoredTargets().some(target => target.id !== LOCAL_TARGET_ID);
+	/** The target the last attempt started from — the row the manager is
+	 *  pointed at and the row whose error belongs to the attempt. */
+	const chosenTargetIdRef = useRef<string | null>(loadChosenTargetId());
+	const [targetStatuses, setTargetStatuses] = useState<TargetStatusMap>(() => loadTargetStatuses());
+	const [attempting, setAttempting] = useState(false);
+	/** Which row's attempt is in flight, so the manager marks that row rather
+	 *  than whatever row happens to be chosen. */
+	const [attemptTargetId, setAttemptTargetId] = useState<string | null>(null);
+	const connTargetsRef = useRef<ConnectionTarget[]>(connTargets);
+	connTargetsRef.current = connTargets;
+	/** Set only by the user's own 断开; cleared by any new attempt. It is what
+	 *  keeps a deliberate disconnect off the failure page. */
+	const [disconnectedByUser, setDisconnectedByUser] = useState(false);
+	const [lastAttemptFailed, setLastAttemptFailed] = useState(false);
+	const [url, setUrl] = useState<string>(INITIAL_URL);
 	const [rpc, setRpc] = useState<RpcClient | null>(null);
-	const [hosts, setHosts] = useState<RemoteHost[]>(() => loadHosts());
+	/**
+	 * The legacy host slice of the target list — one source of truth.
+	 *
+	 * `hosts` is what the instance switcher and the avatar menu consume
+	 * (`RemoteHost` = endpoint + token + label). It is derived from
+	 * `connTargets`, so adding a target in the connection manager shows up in
+	 * the switcher and vice versa, and there is no second persisted list to
+	 * drift. The local row is the switcher's `null` entry, so it is filtered out.
+	 */
+	const hosts: RemoteHost[] = useMemo(
+		() =>
+			connTargets
+				.filter(target => target.id !== LOCAL_TARGET_ID)
+				.map(target => ({ id: target.id, label: target.label, url: target.url, token: target.token })),
+		[connTargets],
+	);
 	const [status, setStatus] = useState<"idle" | "connecting" | "open" | "closed">("idle");
 	const [error, setError] = useState<string | null>(null);
 	// GUI motion packs (extension center → injected <style>): declared
@@ -769,6 +838,10 @@ function AppInner(): ReactNode {
 	});
 	const [store, setStore] = useState<GuiSessionStore | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
+	/** Same value for callbacks declared above it: boot settles the row's status
+	 *  from whatever the last failed `connect()` reported. */
+	const connectErrorRef = useRef<string | null>(null);
+	connectErrorRef.current = connectError;
 	const [booting, setBooting] = useState(true);
 	// Splash diagnostics: the stage boot() is in (probe → spawn → gate →
 	// connect) and a per-phase watchdog. Both are in-memory only — they
@@ -776,6 +849,10 @@ function AppInner(): ReactNode {
 	// owns its own budget; cumulative time across phases never trips it.
 	const [bootPhase, setBootPhase] = useState<BootPhase>("probe");
 	const bootStatus = useBootStatus(booting, bootPhase);
+	/** Mirror of `booting` for callbacks declared above it: `connect()` needs
+	 *  to know whether boot (which owns its own attempt flag) is driving. */
+	const bootingRef = useRef(booting);
+	bootingRef.current = booting;
 	// The splash outlives `booting` by one orb hand-off (particle orb → brand
 	// sphere), so the shell never cuts in on a half-formed splash.
 	const splashHold = useSplashHold(booting);
@@ -943,6 +1020,10 @@ function AppInner(): ReactNode {
 		}
 	});
 	const [connectOpen, setConnectOpen] = useState(false);
+	/** The connection manager as an in-app overlay: this is the avatar menu's
+	 *  entrance. The disconnected and failure surfaces render the same
+	 *  component full-page, so there is one implementation, three entrances. */
+	const [connectionManagerOpen, setConnectionManagerOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
 	const [collabScope, setCollabScope] = useState<"workspace" | "session">("workspace");
 	const [remoteDisclaimerOpen, setRemoteDisclaimerOpen] = useState(false);
@@ -1916,6 +1997,11 @@ function AppInner(): ReactNode {
 				setStatus("idle");
 				const message = err instanceof Error ? err.message : String(err);
 				setConnectError(message);
+				// A failed attempt is a fact the gate renders: without this the
+				// shell fell back to "no client" and showed the same page it shows
+				// after a deliberate disconnect. Boot() owns its own attempt flag
+				// and settles this at the end, so only non-boot callers set it here.
+				if (!bootingRef.current) setLastAttemptFailed(true);
 				// Re-throw so auto-connect callers can distinguish success from
 				// failure and try the next candidate.
 				throw new Error(message);
@@ -1941,6 +2027,16 @@ function AppInner(): ReactNode {
 				invalidateGitStatuses(roots);
 			});
 			localStorage.setItem("musepi-gui-url", targetUrl);
+			// Reaching an endpoint clears a previous failure and records which
+			// target boot should try next time. Only a row whose own endpoint
+			// answered becomes the chosen row: boot walks discovered ports for
+			// the local daemon and normalizes the port, so a WSL/SSH row's URL
+			// arrives here only when that row's endpoint is what answered.
+			setLastAttemptFailed(false);
+			setDisconnectedByUser(false);
+			const chosen = chosenTargetIdRef.current;
+			const answered = connTargetsRef.current.find(row => row.id === chosen);
+			if (answered && stripToken(answered.url) === stripToken(targetUrl)) saveChosenTargetId(answered.id);
 			// Fetch the session list; errors (unknown method) are non-fatal on
 			// older daemons — surface but keep the connection.
 			try {
@@ -2030,6 +2126,29 @@ function AppInner(): ReactNode {
 		// in the daemon and never holds the interactive shell hostage.
 		markStartup("boot.start");
 		const t0 = performance.now();
+		// The row this boot is trying. A boot starts from `url`, which is the row
+		// the last attempt started from (or the local fallback when that row did
+		// not answer); it ends on whichever endpoint actually answered, so the
+		// manager's list shows the success where it happened instead of on a row
+		// that was never dialled.
+		const bootFrom = resolveActiveTargetId(connTargetsRef.current, url, chosenTargetIdRef.current);
+		// Boot settles the connection facts the gate reads: a failure here is
+		// `unreachable`, a success is `connected` — never "the user disconnected".
+		// The row is settled the same way, so a stale error from an earlier launch
+		// does not outlive the attempt that replaced it.
+		const recordBootOutcome = (ok: boolean, at: string): void => {
+			setLastAttemptFailed(!ok);
+			setDisconnectedByUser(false);
+			const rowId = resolveActiveTargetId(connTargetsRef.current, at, bootFrom);
+			if (!rowId) return;
+			chosenTargetIdRef.current = rowId;
+			saveChosenTargetId(rowId);
+			setTargetStatuses(current => {
+				const next = recordTargetStatus(current, rowId, ok ? null : (connectErrorRef.current ?? "unreachable"));
+				saveTargetStatuses(next);
+				return next;
+			});
+		};
 		// Remote hosts (instance switcher) skip the Electron version gate and
 		// the local probe/spawn fallback — those only make sense for the
 		// machine's own daemon.
@@ -2209,29 +2328,46 @@ function AppInner(): ReactNode {
 		try {
 			// A closed port cannot answer a handshake: skip the attempt instead of
 			// waiting out its timeout (measured ~2 s on the boot path).
+			setDisconnectedByUser(false);
+			setLastAttemptFailed(false);
 			const initialPort = Number.parseInt(new URL(url).port || String(DEFAULT_PORT), 10);
 			const reachable = !(isElectron() && isLocalUrl(url)) || (await daemonPortOpen(initialPort));
-			if (reachable && (await tryUrl(url)) === true) return;
+			if (reachable && (await tryUrl(url)) === true) {
+				recordBootOutcome(true, url);
+				return;
+			}
 			// Electron shell: discover a running daemon, else spawn one.
 			if (isElectron() && isLocalUrl(url)) {
 				setBootPhase("probe");
 				const probeAt = performance.now();
 				const port = await probeDaemonPort();
 				markStartup(`daemon.probed ${Math.round(performance.now() - probeAt)}ms :${port ?? 0}`);
-				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) return;
+				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) {
+					recordBootOutcome(true, `ws://127.0.0.1:${port}`);
+					return;
+				}
 				try {
 					setBootPhase("spawn");
 					const spawned = await startDaemonViaShell(DEFAULT_PORT);
 					markStartup("daemon.spawned");
-					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) return;
+					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) {
+						recordBootOutcome(true, `ws://127.0.0.1:${spawned}`);
+						return;
+					}
 					// The spawn returned a port but the first WebSocket handshake
 					// raced the listener; retry once before giving up.
 					await new Promise(resolve => setTimeout(resolve, 400));
-					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) return;
+					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) {
+						recordBootOutcome(true, `ws://127.0.0.1:${spawned}`);
+						return;
+					}
 				} catch (err) {
 					setConnectError(err instanceof Error ? err.message : String(err));
 				}
 			}
+			// Every path above returned on success: getting here means the boot
+			// tried and failed, which is exactly the `unreachable` fact.
+			recordBootOutcome(false, url);
 		} finally {
 			// 650ms covers the splash's orb-in intro (620ms) without adding a
 			// second of wait on warm boots; the shell itself mounts immediately
@@ -2316,6 +2452,64 @@ function AppInner(): ReactNode {
 		rpcRef.current = null;
 		setRpc(null);
 		setStatus("idle");
+		// The distinction this exists for: an intentional disconnect is not a
+		// failure, so the gate must show the connection manager, not 无法连接.
+		setDisconnectedByUser(true);
+		setAttempting(false);
+	}, []);
+
+	/** Connect from one stored target: the only path the manager uses. */
+	const connectToTarget = useCallback(
+		async (target: ConnectionTarget): Promise<void> => {
+			const targetUrl = buildWsUrl({ id: target.id, label: target.label, url: target.url, token: target.token });
+			const endpoint = stripToken(targetUrl);
+			setDisconnectedByUser(false);
+			setLastAttemptFailed(false);
+			setAttempting(true);
+			setAttemptTargetId(target.id);
+			setUrl(targetUrl);
+			chosenTargetIdRef.current = target.id;
+			saveChosenTargetId(target.id);
+			/**
+			 * Record the attempt against the row whose stored endpoint is the one
+			 * that answered. Boot walks discovered ports for the local daemon and
+			 * reconnects after a capability restart, so `connect()` may dial a URL
+			 * other than the one handed to it; a row that was listed and never
+			 * attempted must not inherit the success or the failure.
+			 */
+			const attribute = (reachedUrl: string, error: string | null): void => {
+				const reached = stripToken(reachedUrl);
+				const reachedId =
+					endpoint === reached
+						? target.id
+						: (connTargetsRef.current.find(row => stripToken(row.url) === reached)?.id ?? target.id);
+				setTargetStatuses(current => {
+					const next = recordTargetStatus(current, reachedId, error);
+					saveTargetStatuses(next);
+					return next;
+				});
+				if (reachedId !== target.id) saveChosenTargetId(reachedId);
+			};
+			try {
+				await connect(targetUrl);
+				attribute(endpoint, null);
+			} catch (err) {
+				// The row keeps its error; the list is never replaced by it.
+				attribute(endpoint, err instanceof Error ? err.message : String(err));
+				setLastAttemptFailed(true);
+			} finally {
+				setAttempting(false);
+				setAttemptTargetId(null);
+			}
+		},
+		[connect],
+	);
+
+	const addTarget = useCallback((target: ConnectionTarget): void => {
+		setConnTargets(current => storeTarget(current, target));
+	}, []);
+	const removeConnTarget = useCallback((id: string): void => {
+		setConnTargets(current => dropTarget(current, id));
 	}, []);
 
 	// ── Session selection → subscribe ──────────────────────────────────────
@@ -3438,32 +3632,40 @@ function AppInner(): ReactNode {
 	const activeAsk =
 		pendingAsk && (pendingAsk.sessionId === undefined || pendingAsk.sessionId === selectedId) ? pendingAsk : null;
 
-	const switchHost = useCallback((host: RemoteHost | null): void => {
-		const targetUrl = host ? buildWsUrl(host) : "ws://127.0.0.1:8300";
-		setUrl(targetUrl);
-		localStorage.setItem("musepi-gui-url", targetUrl);
-	}, []);
+	const switchHost = useCallback(
+		(host: RemoteHost | null): void => {
+			const target = host
+				? connTargets.find(row => row.id === host.id)
+				: connTargets.find(row => row.id === LOCAL_TARGET_ID);
+			if (target) {
+				void connectToTarget(target);
+				return;
+			}
+			// A host handed in without a stored row (the switcher's own add form
+			// normalized it): still point the shell at it and remember the
+			// endpoint, so a restart does not silently go back to the default.
+			const targetUrl = host ? buildWsUrl(host) : localTargetUrl(DEFAULT_PORT);
+			setUrl(targetUrl);
+			localStorage.setItem("musepi-gui-url", targetUrl);
+			void connect(targetUrl).catch(() => {
+				// error already surfaced via connectError
+			});
+		},
+		[connTargets, connectToTarget, connect],
+	);
 	const addHost = useCallback(
 		(input: { label: string; url: string; token?: string }): void => {
-			const h: RemoteHost = {
-				id: newHostId(),
-				label: input.label,
-				url: input.url,
-				token: input.token || undefined,
-			};
-			const next = [...hosts, h];
-			setHosts(next);
-			saveHosts(next);
+			addTarget(
+				createTarget({ id: newHostId(), label: input.label, url: input.url, token: input.token, kind: "manual" }),
+			);
 		},
-		[hosts],
+		[addTarget],
 	);
 	const removeHost = useCallback(
 		(id: string): void => {
-			const next = hosts.filter(h => h.id !== id);
-			setHosts(next);
-			saveHosts(next);
+			removeConnTarget(id);
 		},
-		[hosts],
+		[removeConnTarget],
 	);
 	/** Permanently delete a session (journal + index) and refresh the tree;
 	 *  resets the UI when the deleted session was the active one. The
@@ -4328,51 +4530,51 @@ function AppInner(): ReactNode {
 		);
 	}
 	if (!rpc) {
+		// The gate used to be exactly this boolean: any reason for "no client"
+		// produced 无法连接本地守护进程. The state below is what separates them —
+		// a deliberate disconnect renders the manager, a failed attempt renders
+		// the failure page, and only the latter carries 导出诊断 / 重启应用.
+		const connectionState = deriveConnectionState({
+			connected: false,
+			attempting: attempting,
+			disconnectedByUser,
+			lastAttemptFailed,
+			hasTargets: configured,
+		});
+		const busyTarget = connTargets.find(target => target.id === attemptTargetId) ?? null;
 		return (
 			<div className="gui-shell">
-				<div className="gui-connect-wrap">
-					<div className="gui-brand">
-						<span className="gui-brand-mark">π</span> MusePi
-					</div>
-					<p className="gui-connect-sub">{t("settings.cannotReachLocalDaemon")}</p>
-					<button
-						className="gui-btn gui-btn-primary"
-						type="button"
-						disabled={status === "connecting"}
-						onClick={() => void boot()}
-					>
-						{t("settings.retry")}
-					</button>
-					{status === "connecting" && <p className="gui-note">{t("settings.connecting2")}</p>}
-					{connectError && <p className="gui-error">{connectError}</p>}
-					{error && <p className="gui-error">{error}</p>}
-					<BootRecoveryActions />
-					<details className="gui-connect-advanced">
-						<summary>{t("settings.manualConnection")}</summary>
-						<form
-							className="gui-connect-form"
-							onSubmit={e => {
-								e.preventDefault();
-								void connect(url.trim()).catch(() => {
-									// error already surfaced via connectError
-								});
-							}}
-						>
-							<input
-								className="gui-input"
-								type="text"
-								value={url}
-								onChange={e => setUrl(e.target.value)}
-								placeholder="ws://127.0.0.1:8300"
-								spellCheck={false}
-								autoComplete="off"
-							/>
-							<button className="gui-btn" type="submit" disabled={status === "connecting"}>
-								{t("settings.connect")}
-							</button>
-						</form>
-					</details>
-				</div>
+				<ConnectionManager
+					state={connectionState}
+					targets={connTargets}
+					statuses={targetStatuses}
+					daemonUrl={url}
+					activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
+					busyId={attempting ? (busyTarget?.id ?? null) : null}
+					lastError={connectError}
+					detect={defaultWslRunner}
+					platform={
+						isElectron()
+							? (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform
+							: undefined
+					}
+					onConnect={target => void connectToTarget(target)}
+					onAdd={addTarget}
+					onRemove={removeConnTarget}
+					onCopy={text => void copyToClipboard(text)}
+				>
+					{connectionState === "unreachable" ? (
+						<>
+							{connectError && <p className="gui-error">{connectError}</p>}
+							{error && <p className="gui-error">{error}</p>}
+							<BootRecoveryActions />
+						</>
+					) : (
+						connectionState === "unconfigured" && (
+							<p className="gui-note">{t("settings.connectionUnconfigured")}</p>
+						)
+					)}
+				</ConnectionManager>
 				{/* Boot hand-off: the splash fades over whatever the boot settled
 				 * on, instead of the shell mounting only after the hold and
 				 * cutting in. */}
@@ -4746,6 +4948,7 @@ function AppInner(): ReactNode {
 			onOpenRemoteAccess={() => openRemoteAccess("workspace")}
 			onSwitchHost={switchHost}
 			onDisconnect={disconnect}
+			onOpenConnectionManager={() => setConnectionManagerOpen(true)}
 		/>
 	);
 	/** The old sidebar footer lived INSIDE the collapsible panel, so folding
@@ -4905,6 +5108,7 @@ function AppInner(): ReactNode {
 							onOpenSettings={openSettings}
 							onOpenCollab={() => openRemoteAccess("session")}
 							onOpenInstanceManager={requestRemoteAccess}
+							onOpenConnectionManager={() => setConnectionManagerOpen(true)}
 							onOpenRemoteDisclaimer={viewRemoteDisclaimer}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
 							onRenameSession={renameSession}
@@ -5317,6 +5521,47 @@ function AppInner(): ReactNode {
 				rpc={rpc}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
+			{/* Avatar-menu entrance: the SAME manager the disconnected and
+			 * failure surfaces render. It never shows 无法连接 copy itself —
+			 * opening it is not an attempt, and closing it changes nothing. */}
+			<DialogFrame
+				open={connectionManagerOpen}
+				onClose={() => setConnectionManagerOpen(false)}
+				label={t("settings.connectionManager")}
+				className="gui-dialog--connection-manager"
+			>
+				<div className="gui-conn-overlay">
+					<ConnectionManager
+						state={rpc ? "connected" : "disconnected-by-user"}
+						targets={connTargets}
+						statuses={targetStatuses}
+						daemonUrl={url}
+						activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
+						busyId={attempting ? attemptTargetId : null}
+						lastError={connectError}
+						detect={defaultWslRunner}
+						platform={
+							isElectron()
+								? (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform
+								: undefined
+						}
+						onConnect={target => {
+							// A connect from the overlay decides the surface: the
+							// dialog closes as soon as the attempt starts, so the
+							// user sees the splash or the failure page rather than a
+							// spinner inside a calm list.
+							if (rpc) rpcRef.current?.close();
+							rpcRef.current = null;
+							setRpc(null);
+							setConnectionManagerOpen(false);
+							void connectToTarget(target);
+						}}
+						onAdd={addTarget}
+						onRemove={removeConnTarget}
+						onCopy={text => void copyToClipboard(text)}
+					/>
+				</div>
+			</DialogFrame>
 			<CreationSavedToast saved={creationSaved} rpc={rpc} onDone={() => setCreationSaved(null)} />
 			<RemoteAccessDialog
 				rpc={rpc}

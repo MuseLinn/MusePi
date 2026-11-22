@@ -149,6 +149,7 @@ export function SessionSidebar({
 	onAddProject,
 	onOpenCollab,
 	onOpenInstanceManager,
+	onOpenConnectionManager,
 	onOpenRemoteDisclaimer,
 	onOpenShortcuts,
 	onRenameSession,
@@ -208,6 +209,10 @@ export function SessionSidebar({
 	/** Open the collab remote-control dialog. */
 	onOpenCollab?(): void;
 	onOpenInstanceManager(open: () => void): void;
+	/** The shared connection manager. Distinct from the instance menu: the
+	 *  host routes it to the one manager component, so this footer never grows
+	 *  a second implementation of the endpoint list. */
+	onOpenConnectionManager(): void;
 	onOpenRemoteDisclaimer(): void;
 	/** Open the keyboard-shortcuts reference. */
 	onOpenShortcuts?(): void;
@@ -2044,6 +2049,7 @@ export function SessionSidebar({
 							onOpenCollab={onOpenCollab}
 							onSwitchHost={onSwitchHost}
 							onDisconnect={onDisconnect}
+							onOpenConnectionManager={onOpenConnectionManager}
 							compact={false}
 						/>
 					</div>

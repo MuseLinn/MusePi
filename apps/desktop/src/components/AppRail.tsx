@@ -181,6 +181,7 @@ export function UserAccountButton({
 	onOpenRemoteAccess,
 	onSwitchHost,
 	onDisconnect,
+	onOpenConnectionManager,
 	compact = true,
 }: {
 	rpc: RpcClient | null;
@@ -199,6 +200,9 @@ export function UserAccountButton({
 	onOpenRemoteAccess?(): void;
 	onSwitchHost(host: RemoteHost | null): void;
 	onDisconnect(): void;
+	/** The connection manager, same component the disconnected and failure
+	 *  surfaces render — this is the third entrance, not a second dialog. */
+	onOpenConnectionManager(): void;
 	/** Rail geometry (36px square) vs the sidebar footer's inline control. */
 	compact?: boolean;
 }): ReactNode {
@@ -326,6 +330,17 @@ export function UserAccountButton({
 					);
 				})}
 				<div className="gui-account-divider" />
+				<button
+					type="button"
+					className="gui-menu-item"
+					onClick={() => {
+						close();
+						onOpenConnectionManager();
+					}}
+				>
+					<Icon name="server" className="h-3.5 w-3.5" />
+					<span>{t("settings.connectionManager")}</span>
+				</button>
 				<button
 					type="button"
 					className={`gui-menu-item${connected ? "" : " gui-menu-item--disabled"}`}
