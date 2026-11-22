@@ -23,24 +23,30 @@
  *   // @guard: revert apps/desktop/src/styles/gui-chrome.css:869 | color: inherit;
  *   // @guard: test both cards' rows take the recipe's muted tone
  *
- * `revert` names `<path>:<line> | <replacement>` — the line as it stands, and
- * what the defect looked like. The replacement may be empty (`... |`) to delete
- * the line. `test` narrows the run to one test by name; without it the whole
- * file runs, which is the honest default.
+ * `revert` names `<path>:<line> | <defect>`: the line to rewrite, and what it
+ * reads in the broken build. An empty defect (`... |`) deletes the line, which
+ * is how a guard proves a *removed* line is load-bearing. `test` narrows the run
+ * to one test by name; without it the whole file runs, which is the honest
+ * default.
+ *
+ * Drift is caught by the run, not by a stored copy of the source: if the named
+ * line moved, the defect lands somewhere harmless, the guard stays green, and
+ * the result is **unproven** — the honest answer. A marker that already matches
+ * the line is an **error**, since there is nothing to revert.
  *
  * Three outcomes, and the distinction is the entire point:
  *
  *   - **caught**     the suite failed, and the failure names a test (a real
  *                    assertion diff) rather than a harness error;
- *   - **unproven**   the run timed out, produced no per-test result, or failed
- *                    to even build. A timeout is NOT a catch: a guard that
+ *   - **unproven**   the run timed out, produced no per-test result, or the
+ *                    suite still passed. A timeout is NOT a catch: a guard that
  *                    hangs has told us nothing about whether it discriminates.
  *                    `expect(<DOM node>).toBeNull()` reddens exactly this way —
  *                    Bun's reporter serialises the node and stalls, so the
  *                    suite reports "timed out" and the defect is unproven, not
  *                    caught;
- *   - **error**      the marker could not be applied (line moved, file missing,
- *                    replacement already present). The guard is untested.
+ *   - **error**      the revert could not be applied, or the guard already fails
+ *                    unmodified. The guard is untested.
  *
  * Every guard is run twice: once unmodified, where it must pass (otherwise the
  * tree is already red and nothing can be concluded), and once reverted, where
@@ -77,10 +83,8 @@ export interface GuardMarker {
 	target: string;
 	/** 1-based line in `target`. */
 	line: number;
-	/** Text the line must currently read (trimmed). */
-	expected: string;
-	/** What the defect looked like; empty deletes the line. */
-	replacement: string;
+	/** What the line reads in the broken build; empty deletes the line. */
+	defect: string;
 	/** Test name to run, or null for the whole file. */
 	testName: string | null;
 }
@@ -129,8 +133,7 @@ export function parseMarkers(file: string, source: string): GuardMarker[] {
 				markerLine: index + 1,
 				target: revert[1] as string,
 				line: Number(revert[2]),
-				expected: (revert[3] ?? "").trim(),
-				replacement: "",
+				defect: (revert[3] ?? "").trim(),
 				testName: null,
 			};
 			continue;
@@ -147,41 +150,36 @@ export function parseMarkers(file: string, source: string): GuardMarker[] {
 /**
  * Apply one revert to a source text, or explain why it cannot be applied.
  *
- * Applying is checked, never assumed: the line must exist and must still read
- * what the marker says. If it does not, the guard is untested — reporting
- * "caught" because the suite happened to be red for an unrelated reason is the
- * failure mode this whole script exists to prevent.
+ * The marker names only what the defect is, never what the line currently says:
+ * a stored copy of the good text is a second fact that goes stale the moment
+ * someone reformats the declaration, and a stale copy either blocks an honest
+ * revert or — worse — rewrites the wrong line. Drift is caught downstream
+ * instead: a defect that lands somewhere harmless leaves the guard green, which
+ * the runner reports as **unproven** rather than caught.
  */
 export function applyRevert(
 	source: string,
 	line: number,
-	expected: string,
-	replacement: string,
-): { ok: true; text: string } | { ok: false; reason: string } {
+	defect: string,
+): { ok: true; text: string; current: string } | { ok: false; reason: string } {
 	const lines = source.split("\n");
 	const index = line - 1;
 	if (index < 0 || index >= lines.length) {
 		return { ok: false, reason: `line ${line} is outside the file (${lines.length} lines)` };
 	}
-	const actual = (lines[index] as string).trim();
-	if (actual !== expected) {
-		return {
-			ok: false,
-			reason: `line ${line} reads ${JSON.stringify(actual)}, marker expects ${JSON.stringify(expected)}`,
-		};
+	const current = (lines[index] as string).trim();
+	if (current === defect) {
+		return { ok: false, reason: `line ${line} already reads the defect ${JSON.stringify(defect)}` };
 	}
-	if (replacement === expected) {
-		return { ok: false, reason: `line ${line} already reads the reverted value` };
-	}
-	if (replacement === "") lines.splice(index, 1);
+	if (defect === "") lines.splice(index, 1);
 	else {
 		// Keep the line's own indentation: a marker names the code, not the
 		// whitespace, and a reverted CSS declaration that lost its indent is
 		// noise in a scratch diff someone may inspect with --keep.
 		const indent = (lines[index] as string).match(/^\s*/)?.[0] ?? "";
-		lines[index] = `${indent}${replacement}`;
+		lines[index] = `${indent}${defect}`;
 	}
-	return { ok: true, text: lines.join("\n") };
+	return { ok: true, text: lines.join("\n"), current };
 }
 
 /**
@@ -354,7 +352,7 @@ export function runMarker(marker: GuardMarker, scratch: string, options: RunOpti
 		};
 	}
 	const original = fs.readFileSync(targetPath, "utf8");
-	const reverted = applyRevert(original, marker.line, marker.expected, marker.replacement);
+	const reverted = applyRevert(original, marker.line, marker.defect);
 	if (!reverted.ok) {
 		return { marker, outcome: "error", detail: reverted.reason, failedTests: [], durationMs: 0 };
 	}
@@ -364,11 +362,18 @@ export function runMarker(marker: GuardMarker, scratch: string, options: RunOpti
 	try {
 		const mutated = run(args, cwd, timeoutMs);
 		const result = classifyRun(mutated.output, mutated.exitCode, mutated.timedOut);
+		// An unproven run is usually a marker whose line drifted, so the detail
+		// carries what was actually rewritten: the reader can see at once that
+		// the defect landed on the wrong text.
+		const detail =
+			result.outcome === "unproven"
+				? `${result.detail} — rewrote ${JSON.stringify(reverted.current)} to ${JSON.stringify(marker.defect || "<deleted>")}`
+				: result.detail;
 		log(`    reverted ${marker.target}:${marker.line} → ${result.outcome}`);
 		return {
 			marker,
 			outcome: result.outcome,
-			detail: result.detail,
+			detail,
 			failedTests: result.failedTests,
 			durationMs: Date.now() - started,
 		};
@@ -430,7 +435,7 @@ async function main(): Promise<void> {
 	}
 	if (listOnly) {
 		for (const marker of markers) {
-			console.log(`${marker.file}:${marker.markerLine}  ${marker.target}:${marker.line}  ${marker.expected}`);
+			console.log(`${marker.file}:${marker.markerLine}  ${marker.target}:${marker.line}  ${marker.defect || "<deleted>"}`);
 		}
 		return;
 	}

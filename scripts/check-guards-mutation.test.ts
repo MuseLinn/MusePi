@@ -4,14 +4,14 @@
  * The runner's whole value is the honesty of its classification, so these cases
  * pin the distinction it exists to draw: a real assertion failure is a catch, a
  * timeout is UNPROVEN (the `expect(<DOM node>).toBeNull()` failure mode that
- * motivated the script), and a revert that no longer applies is an error rather
- * than a silent pass.
+ * motivated the script), and a revert that no longer restores the defect is
+ * unproven rather than a silent pass.
  */
 import { describe, expect, test } from "bun:test";
 import { applyRevert, classifyRun, parseMarkers } from "./check-guards-mutation";
 
 describe("parseMarkers", () => {
-	test("reads the revert target, line and replacement from a guard test", () => {
+	test("reads the revert target, line and defect from a guard test", () => {
 		const source = [
 			'import { test } from "bun:test";',
 			"",
@@ -26,19 +26,16 @@ describe("parseMarkers", () => {
 			markerLine: 3,
 			target: "apps/desktop/src/styles/gui-chrome.css",
 			line: 869,
-			expected: "color: inherit;",
-			replacement: "",
+			defect: "color: inherit;",
 			testName: "both cards' rows take the recipe's muted tone",
 		});
 	});
 
-	test("accepts an empty replacement as a line deletion", () => {
+	test("accepts an empty defect as a line deletion", () => {
 		// The catalog cache guard's defect IS the missing line, so the marker has
 		// to be able to say "delete this" without inventing a replacement.
-		const source = "// @guard: revert apps/desktop/src/components/ModelSelector.tsx:399 |";
-		const markers = parseMarkers("x.test.tsx", source);
-		expect(markers[0]?.replacement).toBe("");
-		expect(markers[0]?.expected).toBe("");
+		const markers = parseMarkers("x.test.tsx", "// @guard: revert apps/desktop/src/components/ModelSelector.tsx:399 |");
+		expect(markers[0]?.defect).toBe("");
 	});
 
 	test("carries several reverts in one file, each its own case", () => {
@@ -48,10 +45,10 @@ describe("parseMarkers", () => {
 
 	test("does not read the convention's own prose as a marker", () => {
 		// `.agents/rules/testing.md` and this script's doc block both describe the
-		// syntax. A block-comment line without a real target must not match, or
-		// the runner would try to revert documentation.
+		// syntax. A comment line without a real target must not match, or the
+		// runner would try to revert documentation.
 		const source = [
-			" * Marker convention: `@guard: revert <path>:<line> | <replacement>`",
+			" * Marker convention: `@guard: revert <path>:<line> | <defect>`",
 			" * A guard names the one-line revert that restores its defect.",
 		].join("\n");
 		expect(parseMarkers("doc.test.ts", source)).toEqual([]);
@@ -65,38 +62,45 @@ describe("parseMarkers", () => {
 describe("applyRevert", () => {
 	const source = "a {\n\tcolor: var(--color-text-muted);\n}\n";
 
-	test("replaces the named line and keeps its indentation", () => {
-		const result = applyRevert(source, 2, "color: var(--color-text-muted);", "color: inherit;");
+	test("writes the defect onto the named line and keeps its indentation", () => {
+		const result = applyRevert(source, 2, "color: inherit;");
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.text).toBe("a {\n\tcolor: inherit;\n}\n");
+		expect(result.current).toBe("color: var(--color-text-muted);");
 	});
 
-	test("deletes the line when the replacement is empty", () => {
-		const result = applyRevert("one\ntwo\nthree\n", 2, "two", "");
+	test("deletes the line when the defect is empty", () => {
+		const result = applyRevert("one\ntwo\nthree\n", 2, "");
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.text).toBe("one\nthree\n");
 	});
 
-	test("refuses when the line moved, naming what it found", () => {
-		// The failure this prevents: a marker whose line drifted would revert a
-		// DIFFERENT line, the suite would fail for the wrong reason, and the guard
-		// would be reported caught while proving nothing.
-		const result = applyRevert(source, 1, "color: var(--color-text-muted);", "color: inherit;");
-		expect(result.ok).toBe(false);
-		if (result.ok) return;
-		expect(result.reason).toContain("marker expects");
-	});
-
 	test("refuses a line outside the file", () => {
-		const result = applyRevert(source, 99, "anything", "else");
+		const result = applyRevert(source, 99, "anything");
 		expect(result.ok).toBe(false);
 	});
 
 	test("refuses a revert that changes nothing", () => {
-		const result = applyRevert(source, 2, "color: var(--color-text-muted);", "color: var(--color-text-muted);");
+		// A marker that already matches the line has no defect to restore; running
+		// it would "catch" whatever happened to be red.
+		const result = applyRevert(source, 2, "color: var(--color-text-muted);");
 		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.reason).toContain("already reads the defect");
+	});
+
+	test("applies a defect whose line drifted, leaving the run to call it unproven", () => {
+		// The marker stores no copy of the good text, so a moved line still gets a
+		// well-formed revert. Whether it restored the defect is the SUITE's answer,
+		// and a revert that landed harmlessly shows up as unproven rather than as a
+		// false catch.
+		const result = applyRevert(source, 1, "color: inherit;");
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.current).toBe("a {");
+		expect(result.text).toContain("color: inherit;");
 	});
 });
 
