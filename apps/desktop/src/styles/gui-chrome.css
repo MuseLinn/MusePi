@@ -2745,121 +2745,228 @@
 	color: var(--color-text-faint);
 }
 
-/* Instance connections and remote workspaces share one wide dialog. Height
- * follows content (the embedded workspace wizard defines its own), so the
- * instances tab no longer floats in a fixed 620px void. */
+/* ── Connection locations: the two axes, one hierarchy ────────────────────
+ *
+ * The dialog answers "where does the daemon run, and where do the files
+ * live" — two independent axes, so both are visible at once. The tabs this
+ * replaced let the user see only half the model, which is precisely why the
+ * two concepts kept reading as each other's mode.
+ *
+ * Scrolling: the dialog body is the ONE scroller and it declares both axes
+ * (M80's overflow contract). Neither list inside it scrolls while embedded —
+ * a section that owns its own scroller inside the body scroller is the
+ * nested-scrollbar shape the contract forbids. The wizard's host list scrolls
+ * only in its standalone dialog, where it is the surface's only body.
+ */
 .gui-dialog.gui-dialog--instance-manager {
+	display: flex;
+	flex-direction: column;
 	width: min(1040px, 94vw);
 	height: auto;
 	min-height: min(46vh, 460px);
 	max-height: min(88vh, 880px);
 	overflow: hidden;
 }
-/* One sliding-thumb control instead of two half-width menu rows: the tab
- * switch is a choice, not a second toolbar. */
-.gui-instance-manager-tabs {
-	display: flex;
-	align-items: center;
-	padding: 12px 20px 0;
+
+/* The model in one sentence, above both axes. It is the whole answer to
+ * "are these the same thing at different places?", so it is not a subtitle
+ * under a heading — it is the first thing read. */
+.gui-loc-purpose {
+	margin: 0;
+	padding: 10px 20px 0;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	text-wrap: pretty;
 }
+
 .gui-instance-manager-body {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	align-content: start;
 	gap: 24px;
 	min-height: 0;
 	flex: 1 1 auto;
+	padding: 14px 20px 16px;
+	overflow-x: clip;
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	padding: 16px 20px 20px;
-	overflow-x: clip;
 }
-.gui-instance-manager-panel {
+
+.gui-loc-section {
 	display: flex;
 	min-width: 0;
 	flex-direction: column;
-	gap: 12px;
+	gap: 10px;
 }
-.gui-instance-manager-section-title {
+
+/* The manager's own axis line. Its row family lives in gui-connection.css;
+ * this one declaration is here because it belongs to the axis model this
+ * dialog introduced, and the gate's header is where the model is first met. */
+.gui-conn-axis {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-faint);
+	text-wrap: pretty;
+}
+
+.gui-loc-section-head {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.gui-loc-section-title {
 	margin: 0;
 	font-size: var(--ui-font-size-sm);
-	font-weight: 500;
+	font-weight: 600;
 	color: var(--color-text);
 }
-.gui-instance-manager-section-desc {
-	margin: 4px 0 0;
+
+/* One sentence per axis: what the axis decides, not how to use the widget. */
+.gui-loc-section-hint {
+	margin: 0;
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--color-text-muted);
+	text-wrap: pretty;
 }
-.gui-instance-manager-list {
+
+/* ── The shared row ────────────────────────────────────────────────────────
+ *
+ * One anatomy for both axes, rendered by `ConnectionLocationRow`: a dot OR a
+ * glyph in a fixed-width lead box, the name and where-it-runs on one line, and
+ * a status slot at the same offset from each row's trailing edge. The two
+ * lists differ in width, so the status slot cannot share an absolute x — what
+ * they share is where it sits inside the row. The row box IS the button
+ * (M86's honest hit area) — the wash and the hit area are one rectangle, and a
+ * destructive sibling (remove) is never nested inside it.
+ */
+.gui-loc-list {
+	display: flex;
+	flex-direction: column;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 	overflow: hidden;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface) 35%, transparent);
 }
-.gui-instance-manager-row {
+
+/* Standalone wizard only: there the list is the surface's own body. */
+.gui-loc-list--scroll {
+	max-height: 224px;
+	overflow-x: clip;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.gui-loc-row {
+	/* One name column width for both lists. A shared custom property is what
+	 * lets the two surfaces agree without either knowing the other's markup. */
+	--gui-loc-name-w: 140px;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding-right: 6px;
+	min-width: 0;
 	transition: background 120ms ease-out;
 }
-.gui-instance-manager-row + .gui-instance-manager-row {
+
+.gui-loc-row + .gui-loc-row {
 	border-top: 1px solid var(--border);
 }
-.gui-instance-manager-row:hover {
+
+.gui-loc-row:hover {
 	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
 }
-.gui-instance-manager-select {
+
+/* A current row is not a target: it is already where the shell is. */
+.gui-loc-row[data-current="true"] {
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
+.gui-loc-row-main {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 9px;
 	min-width: 0;
 	flex: 1 1 auto;
-	padding: 10px 12px;
+	padding: 9px 12px;
 	border: 0;
 	background: transparent;
 	color: var(--color-text);
 	text-align: left;
 }
-.gui-instance-manager-select:not(:disabled) {
+
+.gui-loc-row-main:not(:disabled) {
 	cursor: pointer;
 }
-.gui-instance-manager-dot {
+
+.gui-loc-row-main:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+	border-radius: var(--radius-md);
+}
+
+/* One fixed-width lead box for both marks: the name must start at the same
+ * offset whether the row leads with a 7px presence dot or a 24px kind glyph. */
+.gui-loc-lead {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 24px;
+	height: 24px;
+}
+
+.gui-loc-dot {
 	width: 7px;
 	height: 7px;
-	flex: none;
 	border-radius: 50%;
 	background: var(--color-text-faint);
 }
-.gui-instance-manager-dot--live {
+
+.gui-loc-row[data-status="connected"] .gui-loc-dot {
 	background: var(--color-success);
 	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-success) 18%, transparent);
 }
-.gui-instance-manager-copy {
-	display: flex;
-	min-width: 0;
-	flex: 1 1 auto;
-	flex-direction: column;
-	gap: 2px;
+
+.gui-loc-row[data-status="disconnected"] .gui-loc-dot {
+	background: var(--color-danger);
 }
-.gui-instance-manager-name {
+
+.gui-loc-glyph {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	background: var(--color-surface-sunken);
+}
+
+/* The name takes a FIXED share of the row, not a content-sized one. A
+ * content-sized name (the previous `flex: 0 0 auto`) pushed `where` right by
+ * whatever the name's own length happened to be, so the location column
+ * started at a different x in each list and the two axes never lined up. The
+ * fixed share is what makes the cells comparable across surfaces. */
+.gui-loc-name {
+	flex: 0 0 var(--gui-loc-name-w);
+	max-width: var(--gui-loc-name-w);
+	overflow: hidden;
 	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
-.gui-instance-manager-chip {
-	padding: 1px 7px;
-	border-radius: 999px;
-	font-size: 10.5px;
-	font-weight: 500;
-	color: var(--color-success);
-	background: color-mix(in oklab, var(--color-success) 16%, transparent);
-}
-.gui-instance-manager-url {
+
+/* Where it runs, not the endpoint it is reached at: a tunnel's loopback
+ * address says nothing about the machine behind it. */
+.gui-loc-where {
+	flex: 1 1 auto;
+	min-width: 0;
 	overflow: hidden;
 	font-family: var(--font-mono);
 	font-size: var(--ui-font-size-xs);
@@ -2867,49 +2974,132 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-/* Row removal is a destructive secondary action: hover/focus reveal keeps
- * the list calm without hiding it from the keyboard. */
-.gui-instance-manager-remove {
+
+/* The status slot is pinned to the row's trailing edge in both lists, so the
+ * same fact sits at the same offset from that edge wherever the row appears.
+ * The lists differ in width, so it is the offset that is shared, not an
+ * absolute x. */
+.gui-loc-status {
+	margin-left: auto;
+	flex: none;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-loc-check {
+	flex: none;
+	margin-right: 6px;
+	color: var(--color-accent);
+}
+
+/* The action slot is always present at a fixed width, so the status x does not
+ * depend on whether a row happens to carry a control. */
+.gui-loc-action {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex: none;
+	width: 30px;
+	padding-right: 6px;
+}
+
+/* Removal is a destructive secondary action: hover/focus reveal keeps the
+ * list calm without hiding it from the keyboard. */
+.gui-loc-remove {
 	opacity: 0;
 	transition: opacity 120ms ease-out;
 }
-.gui-instance-manager-row:hover .gui-instance-manager-remove,
-.gui-instance-manager-remove:focus-visible {
+
+.gui-loc-row:hover .gui-loc-remove,
+.gui-loc-remove:focus-visible {
 	opacity: 1;
 }
-.gui-instance-manager-panel-actions {
-	display: flex;
-	justify-content: flex-start;
+
+.gui-loc-empty {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	text-wrap: pretty;
 }
-.gui-instance-manager-add {
-	padding: 16px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-xl);
-	background: color-mix(in oklab, var(--color-surface) 55%, transparent);
-}
-.gui-instance-manager-fields {
+
+.gui-loc-fields {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: 10px;
 }
-.gui-instance-manager-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-	margin-top: 4px;
-}
-.gui-instance-manager-error {
+
+.gui-loc-error {
+	margin: 0;
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-danger);
 }
+
+.gui-loc-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-loc-add {
+	align-self: flex-start;
+}
+
+/* Dialog-level actions sit below both axes, apart from the sections' own
+ * single primary actions. */
+.gui-loc-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 0 20px 14px;
+}
+
+.gui-loc-foot .gui-remote-disclaimer-link {
+	padding: 0;
+	align-self: center;
+}
+
+/* ── The embedded wizard ───────────────────────────────────────────────────
+ *
+ * Inside the workspace section the wizard is a body, not a dialog: no card,
+ * no second scroller, and its rail is a quiet step list rather than a second
+ * navigation surface beside the section heading.
+ */
 .gui-connect-embedded {
 	display: flex;
+	min-width: 0;
 	min-height: 0;
 	flex: 1 1 auto;
 }
+
+/* Embedded, the wizard's step rail is a horizontal strip above the list
+ * rather than a second navigation column: the section heading already says
+ * which axis this is, and a 144px rail inside a ~490px column squeezed the
+ * host names into ellipses while leaving the names' own space empty. The
+ * standalone dialog (framed) keeps the vertical rail. */
+.gui-connect-embedded .gui-wizard-split {
+	width: 100%;
+	flex-direction: column;
+}
+
+.gui-connect-embedded .gui-wizard-rail {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 14px;
+	width: auto;
+	padding: 0 0 10px;
+	border-right: 0;
+}
+
+.gui-connect-embedded .gui-wizard-body {
+	padding: 0;
+}
+
 @media (max-width: 860px) {
 	.gui-instance-manager-body {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 	}
 }
 

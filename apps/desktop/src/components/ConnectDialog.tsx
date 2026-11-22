@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type CatalogHost, loadHostCatalog } from "../lib/connection/remote-lifecycle";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
+import { ConnectionLocationRow } from "./ConnectionLocationRow";
 import { DialogFrame } from "./DialogFrame";
 import { FadeScroll } from "./FadeScroll";
 
@@ -305,9 +306,9 @@ export function ConnectDialog({
 					</button>
 				</div>
 			)}
-			<div className="flex min-h-0 flex-1">
+			<div className="gui-wizard-split flex min-h-0 flex-1">
 				{/* Step rail. */}
-				<div className="w-36 flex-shrink-0 border-r border-[var(--border)] p-3">
+				<div className="gui-wizard-rail w-36 flex-shrink-0 border-r border-[var(--border)] p-3">
 					{steps.map((label, i) => (
 						<div key={label} className="mb-3 flex items-center gap-2">
 							<span
@@ -330,10 +331,15 @@ export function ConnectDialog({
 					))}
 				</div>
 				{/* Step content. */}
-				<div className="flex min-w-0 flex-1 flex-col p-4">
+				<div className="gui-wizard-body flex min-w-0 flex-1 flex-col p-4">
 					{step === 0 && (
 						<>
-							<h2 className="mb-1 text-[15px] font-semibold">{t("settings.selectConnectionMethod")}</h2>
+							{/* Embedded, the section names the axis and the step rail names this
+							 * step, so the heading only restated both. Standalone it is the
+							 * dialog's only title for the step, so it stays. */}
+							{framed && (
+								<h2 className="mb-1 text-[15px] font-semibold">{t("settings.selectConnectionMethod")}</h2>
+							)}
 							<p className="mb-4 text-[13px] text-[var(--color-text-muted)]">
 								{t("settings.chooseHowReachWorkspace")}
 							</p>
@@ -370,7 +376,9 @@ export function ConnectDialog({
 					)}
 					{step === 1 && (
 						<>
-							<h2 className="mb-1 text-[15px] font-semibold">{t("settings.remoteHost")}</h2>
+							{/* Embedded in the workspace section, that section already names the
+							 * axis; a second heading here would restate the container. */}
+							{framed && <h2 className="mb-1 text-[15px] font-semibold">{t("settings.remoteHost")}</h2>}
 							{hostsError && (
 								<div className="mb-3 rounded-lg border border-[var(--color-danger-bd)] bg-[var(--color-danger-soft)] px-3 py-2 text-[13px] text-[var(--color-danger)]">
 									{hostsError}
@@ -465,38 +473,45 @@ export function ConnectDialog({
 								</div>
 							) : (
 								<div className="flex min-h-0 flex-1 flex-col">
+									{/* Same row anatomy as the instance list beside it: name and the
+									 * machine it names on one line, status where the instance list
+									 * puts it, the row box itself the target. A host saved in
+									 * MusePi's store and one only ~/.ssh/config knows read the
+									 * same, with the provenance as the status word. */}
 									{mergedHosts.length === 0 ? (
 										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">
 											{t("settings.noSavedHosts")}
 										</p>
 									) : (
-										<FadeScroll className="max-h-56 min-h-0 overflow-y-auto pr-1">
-											{mergedHosts.map(h => (
-												<button
-													key={h.name}
-													type="button"
-													className={`mb-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-[13px] transition-colors ${
-														selectedHost === h.name
-															? "border-[var(--color-accent)] bg-[var(--color-accent-soft)]"
-															: "border-[var(--border)] bg-[var(--color-surface-raised)] hover:border-[var(--color-accent-bd)]"
-													}`}
-													onClick={() => setSelectedHost(h.name)}
-												>
-													<Icon
-														name="server"
-														className="h-4 w-4 flex-shrink-0 text-[var(--color-text-muted)]"
+										<ul className={framed ? "gui-loc-list gui-loc-list--scroll" : "gui-loc-list"}>
+											{mergedHosts.map(h => {
+												const saved = hosts?.some(host => host.name === h.name) ?? false;
+												const selected = selectedHost === h.name;
+												return (
+													<ConnectionLocationRow
+														key={h.name}
+														leading="glyph"
+														glyph="server"
+														name={h.name}
+														where={`${h.username ? `${h.username}@` : ""}${h.host}${h.port ? `:${h.port}` : ""}`}
+														status={
+															saved
+																? t("settings.connectionHostSaved")
+																: t("settings.connectionHostLocalOnly")
+														}
+														statusKind={selected ? "connected" : "idle"}
+														current={selected}
+														pressed={selected}
+														onActivate={() => setSelectedHost(h.name)}
+														action={
+															selected ? (
+																<Icon name="check" className="h-3.5 w-3.5 gui-loc-check" aria-hidden />
+															) : undefined
+														}
 													/>
-													<span className="min-w-0 flex-1 truncate">
-														<span className="font-medium text-[var(--color-text)]">{h.name}</span>
-														<span className="ml-2 text-[var(--color-text-muted)]">
-															{h.username ? `${h.username}@` : ""}
-															{h.host}
-															{h.port ? `:${h.port}` : ""}
-														</span>
-													</span>
-												</button>
-											))}
-										</FadeScroll>
+												);
+											})}
+										</ul>
 									)}
 									<button
 										type="button"
