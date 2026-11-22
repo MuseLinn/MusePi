@@ -1,40 +1,64 @@
 /**
- * 轮级会话地图布局(纯逻辑,无 DOM 依赖):把 buildTrajectoryTree 的
- * TrajectoryTurnGroup[164] 投影成画布节点 —— 主线一条时间轴,重答/分叉
- * 轮开列分支,边 = 主线直连 + 分支贝塞尔;分叉在父轮结束后的干线上形成
- * 独立交汇点(git 树式圆点),兄弟分支共享。TurnMapCanvas 与单元测试共用。
+ * 轮级会话地图布局(纯逻辑,无 DOM 依赖)。
  *
- * 方向(direction):"v" = 主线垂直、分支横向开列(默认);"h" = 主线水平、
- * 分支纵向开行。两个方向的几何互为转置(轴交换),裁剪/导航共用同一套
- * 世界坐标。
+ * 投影单位 = 轮:主线一条时间轴,分支轮进入自己的车道列。卡片尺寸固定
+ * (索引行,不随内容长高),边 = 正交折线 + 箭头,分叉 = 干线交汇点上的一次
+ * 分裂。TurnMapCanvas 与单元测试共用同一份几何。
  *
- * 投影单位从消息改为
- * 轮,164 轮 = 164 个节点,而不是 9985 张消息卡片);2026-10-01 实机诉求:
- * 每轮 = 可折叠框(展开 = 框内事件卡),分叉 = 父轮末端干线上的交汇点。
+ * 三条几何契约(对应 docs/gui-design.md § 会话地图信息模型):
+ *
+ *  1. **方向可见**:每条边的折线从父轮出发、在子轮处收尾,并带一个箭头
+ *     (`TurnMapEdge.arrow`)。箭头不是装饰——曲线连线说不出「谁生了谁」,
+ *     正交折线 + 箭头才说得出来。
+ *
+ *  2. **分叉是一处分裂,不是一团交叉**:同一父轮的兄弟分支**各占一条车道**
+ *     (同车道只留给嵌套分支:分支的父轮本身也是分支、且是紧邻的上一条)。
+ *     同一车道的兄弟会让第二条边从第一张卡身上穿过去,那正是用户说的
+ *     「乱连的曲线」。分裂点落在父轮之后的干线交汇圆点上,所有兄弟共享
+ *     同一个圆点,然后各自横出到自己的车道再垂直落进卡顶。
+ *
+ *  3. **卡片高度固定**:轮内事件不再长在卡里(那是检视器的活),所以布局
+ *     没有展开增量,后续节点也不会被推开。地图是索引,不是预览。
  */
 
-import type { TrajectoryEvent, TrajectoryTurnGroup } from "./trajectory-data";
+import { turnIsOffPath } from "../lib/turn-map-facts";
+import type { TrajectoryTurnGroup } from "./trajectory-data";
 
-/** 轮节点卡尺寸(px)——设计稿 §3.1 NODE 208×88。 */
+/** 轮节点卡尺寸(px):固定高度索引行。 */
 export const TURN_NODE_W = 208;
-export const TURN_NODE_H = 88;
-/** 折叠态紧凑卡高度:单行(徽章 + 摘要 + 计数 + 用时)。 */
-export const TURN_NODE_COMPACT_H = 40;
-/** 主线相邻节点间距(v = 垂直,h = 水平)。 */
-export const TURN_GAP_Y = 16;
-/** 分支车道相对主线的间距(v = 水平列距,h = 垂直行距)。 */
+export const TURN_NODE_H = 66;
+/** 主线相邻节点间距(v = 纵向,h = 横向)。留出箭头与折线的落点。 */
+export const TURN_GAP_Y = 20;
+/** 分支车道相对主线的间距(v = 列距,h = 行距)。 */
 export const TURN_LANE_GAP = 56;
+
+/** 交汇点向下(纵向)/向右(横向)伸出的一小段干线残端,折线从这里拐弯。 */
+export const TURN_BRANCH_STEM = 6;
+/**
+ * 分支车道起点相对「父轮下缘 + 间距」的额外让位:保证折线在落进分支卡之前
+ * 有一段可见的垂直(横向模式下为水平)行程,而不是贴着卡边拐弯。
+ */
+export const TURN_BRANCH_LANE_OFFSET = 18;
+
+/** 箭头长度与半宽(px):画在子轮一侧,指向子轮。 */
+export const TURN_ARROW_LEN = 7;
+export const TURN_ARROW_HALF = 3.5;
 
 /** 地图方向:"v" = 主线垂直(默认),"h" = 主线水平。 */
 export type TurnMapDirection = "v" | "h";
 
+export interface TurnMapPoint {
+	x: number;
+	y: number;
+}
+
 export interface TurnMapNode {
 	group: TrajectoryTurnGroup;
-	/** 0 = 主线;≥1 = 分支车道(连续分支轮共用车道)。 */
+	/** 0 = 主线;≥1 = 分支车道。 */
 	lane: number;
 	x: number;
 	y: number;
-	/** 当前有效高度(折叠 = 紧凑卡高;展开 = 基础卡高 + 泳道增量)。 */
+	/** 卡片高度(恒为 TURN_NODE_H;保留字段以免调用方改读常量)。 */
 	h: number;
 	/** 分支轮(lane ≥ 1)。 */
 	branch: boolean;
@@ -42,34 +66,40 @@ export interface TurnMapNode {
 	sourceTurn: number | null;
 	/** 该轮是否顾问轮(events[0].kind === "advisor",徽章薄荷青)。 */
 	advisor: boolean;
-	/** 轮内展开后的增量高度(px;展开高度 = TURN_NODE_H + expandedExtra)。 */
-	expandedExtra: number;
+	/** 该轮是否在活跃路径之外(撤回落下的旁支)。路径未知时为 false。 */
+	offPath: boolean;
 }
 
 export interface TurnMapEdge {
-	/** 主线直连(main[i] → main[i+1])或分支贝塞尔(source → branch)。 */
 	from: TurnMapNode;
 	to: TurnMapNode;
 	branch: boolean;
-	/** 分支边:交汇点世界坐标(渲染层从交汇点而非源轮卡片发线)。 */
-	junction?: { x: number; y: number };
+	/** 正交折线(世界坐标),父端 → 子端。 */
+	points: TurnMapPoint[];
+	/** 箭头:尖端落在子轮边缘,dx/dy 为单位方向(指向子轮内部)。 */
+	arrow: { x: number; y: number; dx: number; dy: number };
+	/** 分支边:干线交汇点(渲染层画圆点,兄弟共享)。 */
+	junction?: TurnMapPoint;
+	/** 子轮离路径:边随之淡出(仍在,不消失)。 */
+	offPath: boolean;
 }
 
 /**
- * 车道头分段:同一车道内连续、同来源的分支轮共用一段;来源一变就另起
- * 一段(车道号不变)。车道头文案属于段,不属于车道——一个车道可以先后
- * 从两个不同父轮分叉,整条车道只记首个来源会把后段错标成前段的来源。
+ * 一处分叉:同一父轮发出的所有兄弟分支共享的干线交汇点。
+ *
+ * 标签挂在分叉处而不是每条车道头上——兄弟各占一列后,「自 Turn N」在每列
+ * 重复一遍既占地方又不说更多;分裂点上写一次「自 Turn N · 2 支」就够。
  */
-interface TurnMapLaneSegment {
-	lane: number;
-	/** 该段首个分支轮(车道头挂在它上方)。 */
-	first: TurnMapNode;
-	/** 分叉来源轮节点;未解析出主线轮时为 null。 */
-	source: TurnMapNode | null;
-	/** 分叉来源主线轮号;来源未解析时为 null(= source 为 null)。 */
-	sourceTurn: number | null;
-	/** 车道头展示编号(来源轮的兄弟序标签 → 树深度 → 轮号);无来源时 null。 */
-	sourceLabel: string | number | null;
+interface TurnMapSplit {
+	/** 分叉来源主线轮节点。 */
+	source: TurnMapNode;
+	/** 来源轮展示编号(兄弟序标签 → 树深度 → 轮号)。 */
+	sourceLabel: string | number;
+	/** 交汇点世界坐标(正落在干线上)。 */
+	x: number;
+	y: number;
+	/** 该分叉发出的分支轮数。 */
+	count: number;
 }
 
 export interface TurnMapLayout {
@@ -77,10 +107,8 @@ export interface TurnMapLayout {
 	edges: TurnMapEdge[];
 	/** 主线轮(按序)。 */
 	main: TurnMapNode[];
-	/** 分支车道头分段(按车道号、出现顺序)。 */
-	lanes: TurnMapLaneSegment[];
-	/** 干线交汇点(兄弟分支按 sourceTurn 去重)。 */
-	junctions: TurnMapJunction[];
+	/** 干线分叉点(按出现顺序)。 */
+	splits: TurnMapSplit[];
 	width: number;
 	height: number;
 }
@@ -90,105 +118,50 @@ export function turnDisplayLabel(group: TrajectoryTurnGroup): string | number {
 	return group.displayTurnLabel ?? group.displayTurn ?? group.turn;
 }
 
-/** 轮内泳道可视上限(px):事件卡超过即轮内滚动,卡片不再长高
- *  (与 CSS .tm-lane max-height 同步,实机回归:Turn 6 事件多,展开卡
- *  按事件数撑到数千 px 高而内容只有顶部一截)。 */
-export const TURN_LANE_MAX_H = 240;
-/** 单行事件卡高(px)——与 CSS .tm-lane-row(主行 only)同步。 */
-export const TURN_EVENT_CARD_H = 28;
-/** 双行事件卡高(px)——工具行(名称主行 + 参数摘要副行);与 CSS 同步。 */
-export const TURN_EVENT_CARD_DETAIL_H = 44;
-/** 轮内事件卡间距(px)——与 CSS .tm-lane gap 同步。 */
-export const TURN_EVENT_CARD_GAP = 4;
-/** 泳道容器上下留白合计(px)——与 CSS .tm-lane padding 同步。 */
-export const TURN_LANE_PAD = 8;
-
-/** 事件卡高计算的最小输入(布局层不依赖完整 TrajectoryEvent)。 */
-interface TurnEventCardShape {
-	kind: TrajectoryEvent["kind"];
-	body?: string;
+export interface TurnMapLayoutOptions {
+	direction?: TurnMapDirection;
+	/** 对话在视条目 id 集(见 lib/turn-map-path);给了就以它判定离路径。 */
+	pathIds?: ReadonlySet<string>;
 }
 
 /**
- * 单张事件卡高度:工具事件带参数摘要 = 双行卡(44px),其余单行(28px)。
- *  卡片形态与 TurnMapCanvas 的渲染分支(tm-lane-detail 是否存在)同源,
- *  布局增量按真实渲染高度计,展开卡不再截断或留白。
- */
-export function turnEventCardH(ev: TurnEventCardShape): number {
-	return ev.kind === "tool" && ev.body ? TURN_EVENT_CARD_DETAIL_H : TURN_EVENT_CARD_H;
-}
-
-/**
- * 轮内展开高度:Σ 各事件卡高(单/双行) + 间距 4px × (N-1) + 泳道留白 8,
- *  封顶 TURN_LANE_MAX_H + 8(泳道滚动,高度与可视内容一致)。
- */
-export function turnExpandedExtra(events: readonly TurnEventCardShape[]): number {
-	const cardsH = events.reduce((acc, ev) => acc + turnEventCardH(ev), 0);
-	const gapsH = Math.max(0, events.length - 1) * TURN_EVENT_CARD_GAP;
-	return Math.min(cardsH + gapsH + TURN_LANE_PAD, TURN_LANE_MAX_H + TURN_LANE_PAD);
-}
-
-/**
- * 干线交汇点(git 树式分叉节点):分支不从父轮卡片中部拉线,而是在
- * 父轮结束之后的主干线上形成一个独立圆点,兄弟分支轮都从这个点
- * 发出(实机设计诉求 2026-10-01:分叉 = 从上一个轮的末端开始,不是
- * 从轮的内部)。同一父轮的多个兄弟分支共享一个交汇点。
- */
-export interface TurnMapJunction {
-	/** 交汇点世界坐标:v = 主线卡水平中心 × 父轮下缘间距中点;
-	 *  h = 父轮右缘间距中点 × 父轮垂直中心(正好落在干线连线上)。 */
-	x: number;
-	y: number;
-	/** 分叉源主线轮号(兄弟分支共享同一交汇点)。 */
-	sourceTurn: number;
-}
-
-/**
- * 布局:主线轮沿主轴按序堆叠(坐标含展开增量),分支轮进入分支车道
- * (从分叉源的坐标起排);主线 v 模式 x=0 / h 模式 y=0,分支车道 v 模式
- * x = lane × (NODE_W + LANE_GAP) / h 模式 y = lane × (NODE_H + LANE_GAP)。
- * 分支判定 = 轮首事件带 branch 标记(buildTrajectory 的树判定),整轮
- * 归支线;连续分支轮共用车道。
+ * 布局:主线轮沿主轴按序堆叠,分支轮进入车道(列 / 行)。
+ *
+ * 车道分配:嵌套分支(父轮就是紧邻的上一条分支轮)留在父轮的车道里向下排;
+ * 其余每个分支轮各开一条新车道。兄弟共享一条车道会让后一条边从先一张卡
+ * 身上穿过——分叉于是读成打结,而不是分裂。
  */
 export function layoutTurnMap(
 	turns: readonly TrajectoryTurnGroup[],
-	expanded: ReadonlySet<number | string> = new Set(),
-	direction: TurnMapDirection = "v",
+	options: TurnMapLayoutOptions = {},
 ): TurnMapLayout {
-	const horizontal = direction === "h";
+	const horizontal = options.direction === "h";
+	const pathIds = options.pathIds;
 	const nodes: TurnMapNode[] = [];
 	const main: TurnMapNode[] = [];
 	// 轮前元事件(model_change / 会话开始等,turn = 0 且没有 user 事件)
 	// 不构成一轮,地图不为其发节点(轨迹视图仍保留该组)。
 	const rounds = turns.filter(g => g.turn > 0 || g.events.some(e => e.kind === "user"));
-	// 分支车道分配:连续分支轮同车道;遇主线轮重置。lane 序号按出现顺序递增。
-	let lane = 0;
-	let lastWasBranch = false;
+	let laneCount = 0;
+	/** 紧邻的上一条分支轮(判定嵌套续车道用);遇主线轮清空。 */
+	let prevBranch: TurnMapNode | null = null;
 	// 主线游标:v = 下一主线轮的 y;h = 下一主线轮的 x。
 	let mainPos = 0;
-	// 每车道的当前游标(分支轮从分叉源坐标起排)。
+	// 每车道的当前游标(分支轮从分叉源之后起排)。
 	const lanePos = new Map<number, number>();
-	// 每车道当前车道头段(来源变了就另起一段)。
-	const laneSegment = new Map<number, TurnMapLaneSegment>();
-	const laneSegments: TurnMapLaneSegment[] = [];
-	// 分支轮 → 解析出的来源轮节点(交汇点与边共用,避免按可重复轮号回查)。
-	const branchSourceOf = new Map<TurnMapNode, TurnMapNode>();
 	// h 模式车道行:行顶 y(同行节点共享)与行底水位(新行不得压上一行)。
 	const laneRowY = new Map<number, number>();
 	let laneRowBottom = 0;
-	const edges: TurnMapEdge[] = [];
+	// 分支轮 → 解析出的来源轮节点(交汇点与边共用,避免按可重复轮号回查)。
+	const branchSourceOf = new Map<TurnMapNode, TurnMapNode>();
 
 	for (const group of rounds) {
 		const branch = group.events[0]?.branch === true;
 		const advisor = group.events[0]?.kind === "advisor";
-		const extra = expanded.has(group.id ?? group.turn) ? turnExpandedExtra(group.events) : 0;
-		const h = extra > 0 ? TURN_NODE_H + extra : TURN_NODE_COMPACT_H;
-		// 主线 advance 步长:v = 卡高 + 展开增量 + 间距(展开占纵向);
-		// h = 卡宽 + 间距(展开增量向卡下方生长,不占横向)。
-		const step = horizontal ? TURN_NODE_W + TURN_GAP_Y : TURN_NODE_H + extra + TURN_GAP_Y;
+		const offPath = turnIsOffPath(group, pathIds);
+		const h = TURN_NODE_H;
+		const step = horizontal ? TURN_NODE_W + TURN_GAP_Y : TURN_NODE_H + TURN_GAP_Y;
 		let node: TurnMapNode;
-		// 分支轮的解析来源(段头与边共用);主线轮为 undefined。
-		let branchSource: TurnMapNode | undefined;
 		if (!branch) {
 			node = {
 				group,
@@ -199,14 +172,12 @@ export function layoutTurnMap(
 				branch: false,
 				sourceTurn: null,
 				advisor,
-				expandedExtra: extra,
+				offPath,
 			};
 			mainPos += step;
 			main.push(node);
-			lastWasBranch = false;
+			prevBranch = null;
 		} else {
-			if (!lastWasBranch) lane += 1;
-			lastWasBranch = true;
 			// 优先使用派生层记录的真实父轮,父轮自身在支线时也不会错接。
 			// 旧快照没有 parentId 时才按深度回退到主线,再退回最近主线轮。
 			const branchDepth = group.events[0]?.pathTurn;
@@ -217,94 +188,72 @@ export function layoutTurnMap(
 					: undefined) ??
 				main[main.length - 1];
 			const sourceTurn = source?.group.turn ?? 0;
-			branchSource = source;
+			// 嵌套续车道:父轮就是紧邻的上一条分支轮 → 同车道向下排,
+			// 边是车道内的一条直线,不会跨过别的卡。
+			const continueLane = prevBranch !== null && source === prevBranch;
+			if (!continueLane) laneCount += 1;
+			const lane = continueLane && prevBranch ? prevBranch.lane : laneCount;
 			if (horizontal) {
-				// 车道行 y:新行 = 车道序基准与前一行底部(含展开)取大;同行
-				// 节点共享行顶。行内从分叉源右缘起向右排。
 				let y = laneRowY.get(lane);
 				if (y === undefined) {
 					y = Math.max(lane * (TURN_NODE_H + TURN_LANE_GAP), laneRowBottom);
 					laneRowY.set(lane, y);
 				}
-				const x = Math.max(lanePos.get(lane) ?? 0, (source?.x ?? 0) + TURN_NODE_W + TURN_GAP_Y);
-				node = {
-					group,
-					lane,
-					x,
-					y,
-					h,
-					branch: true,
-					sourceTurn,
-					advisor,
-					expandedExtra: extra,
-				};
+				const x = Math.max(
+					lanePos.get(lane) ?? 0,
+					(source?.x ?? 0) + TURN_NODE_W + TURN_GAP_Y + TURN_BRANCH_LANE_OFFSET,
+				);
+				node = { group, lane, x, y, h, branch: true, sourceTurn, advisor, offPath };
 				lanePos.set(lane, x + TURN_NODE_W + TURN_GAP_Y);
 				laneRowBottom = Math.max(laneRowBottom, y + h + TURN_GAP_Y);
 			} else {
-				// 车道列 x 固定按车道序;列内从分叉源下缘起向下排。
 				const x = lane * (TURN_NODE_W + TURN_LANE_GAP);
-				const y = Math.max(lanePos.get(lane) ?? 0, (source?.y ?? 0) + (source?.h ?? TURN_NODE_H) + TURN_GAP_Y);
-				node = {
-					group,
-					lane,
-					x,
-					y,
-					h,
-					branch: true,
-					sourceTurn,
-					advisor,
-					expandedExtra: extra,
-				};
-				lanePos.set(lane, y + TURN_NODE_H + extra + TURN_GAP_Y);
+				const y = Math.max(
+					lanePos.get(lane) ?? 0,
+					(source?.y ?? 0) + (source?.h ?? TURN_NODE_H) + TURN_GAP_Y + TURN_BRANCH_LANE_OFFSET,
+				);
+				node = { group, lane, x, y, h, branch: true, sourceTurn, advisor, offPath };
+				lanePos.set(lane, y + TURN_NODE_H + TURN_GAP_Y);
 			}
+			if (source) branchSourceOf.set(node, source);
+			prevBranch = node;
 		}
 		nodes.push(node);
-		if (node.branch) {
-			if (branchSource) branchSourceOf.set(node, branchSource);
-			// 车道头分段:同车道内来源不变 = 同段;来源变了另起一段。
-			const segment = laneSegment.get(node.lane);
-			if (!segment || segment.sourceTurn !== node.sourceTurn) {
-				const next: TurnMapLaneSegment = {
-					lane: node.lane,
-					first: node,
-					source: branchSource ?? null,
-					sourceTurn: node.sourceTurn,
-					sourceLabel: branchSource ? turnDisplayLabel(branchSource.group) : node.sourceTurn,
-				};
-				laneSegment.set(node.lane, next);
-				laneSegments.push(next);
-			}
-		}
 	}
-	// 主线直连边。
-	for (let i = 0; i + 1 < main.length; i++) edges.push({ from: main[i]!, to: main[i + 1]!, branch: false });
-	// 分支边:源轮 → 分支轮(贝塞尔由渲染层画);交汇点落在父轮结束之后
-	// 的干线间距中点(v:主线卡中心 × 父轮下缘+GAP/2;h:父轮右缘+GAP/2 ×
-	// 父轮垂直中心),兄弟分支共享一个交汇点。
-	// 源轮按节点身份而非轮号定位:journal 轮号在历史前插/重答后可重复,
-	// 按轮号回查会接错线并把不同父轮的交汇点合并成一个。
-	const junctions: TurnMapJunction[] = [];
-	const junctionBySource = new Map<TurnMapNode, TurnMapJunction>();
+
+	const edges: TurnMapEdge[] = [];
+	// 主线直连:两卡中心对中心,正交(同一 x / 同一 y),箭头落在子轮边缘。
+	for (let i = 0; i + 1 < main.length; i++) {
+		edges.push(mainEdge(main[i]!, main[i + 1]!, horizontal));
+	}
+	// 分支边:源轮 → 分支轮。交汇点落在父轮之后的干线间距中点,兄弟共享。
+	const splitBySource = new Map<TurnMapNode, TurnMapSplit>();
+	const splits: TurnMapSplit[] = [];
 	for (const n of nodes) {
 		if (!n.branch) continue;
 		const source = branchSourceOf.get(n);
 		if (!source) continue;
 		const jx = horizontal ? source.x + TURN_NODE_W + TURN_GAP_Y / 2 : source.x + TURN_NODE_W / 2;
 		const jy = horizontal ? source.y + source.h / 2 : source.y + source.h + TURN_GAP_Y / 2;
-		let junction = junctionBySource.get(source);
-		if (!junction) {
-			junction = { x: jx, y: jy, sourceTurn: source.group.turn };
-			junctionBySource.set(source, junction);
-			junctions.push(junction);
+		let split = splitBySource.get(source);
+		if (!split) {
+			split = {
+				source,
+				sourceLabel: turnDisplayLabel(source.group),
+				x: jx,
+				y: jy,
+				count: 0,
+			};
+			splitBySource.set(source, split);
+			splits.push(split);
 		}
-		edges.push({ from: source, to: n, branch: true, junction: { x: junction.x, y: junction.y } });
+		split.count += 1;
+		edges.push(branchEdge(source, n, { x: jx, y: jy }, horizontal));
 	}
-	// 车道头分段:按车道号排序,同车道内保持出现顺序(sort 稳定)。
-	const lanes = laneSegments.sort((a, b) => a.lane - b.lane);
-	const laneCount = Math.max(1, lane + 1);
-	// 车道跨度(横向开列的总宽 / 纵向开行的总高)与主线跨度。
-	const laneSpan = laneCount * TURN_NODE_W + (laneCount - 1) * TURN_LANE_GAP;
-	const laneSpanH = laneCount * TURN_NODE_H + (laneCount - 1) * TURN_LANE_GAP;
+
+	const laneCountUsed = Math.max(1, laneCount + 1);
+	const laneSpan = laneCountUsed * TURN_NODE_W + (laneCountUsed - 1) * TURN_LANE_GAP;
+	const laneSpanH = laneCountUsed * TURN_NODE_H + (laneCountUsed - 1) * TURN_LANE_GAP;
 	const chainSpan = Math.max(mainPos - TURN_GAP_Y, ...nodes.map(n => n.y + n.h + TURN_GAP_Y), TURN_NODE_H * 2);
 	const chainSpanW = Math.max(
 		mainPos - TURN_GAP_Y,
@@ -313,7 +262,123 @@ export function layoutTurnMap(
 	);
 	const width = horizontal ? chainSpanW : laneSpan;
 	const height = horizontal ? Math.max(laneSpanH, laneRowBottom, TURN_NODE_H * 2) : chainSpan;
-	return { nodes, edges, main, lanes, junctions, width, height };
+	return { nodes, edges, main, splits, width, height };
+}
+
+/** 主线边:同轴直线,箭头贴着子轮。 */
+function mainEdge(from: TurnMapNode, to: TurnMapNode, horizontal: boolean): TurnMapEdge {
+	if (horizontal) {
+		const y = from.y + from.h / 2;
+		const start = { x: from.x + TURN_NODE_W, y };
+		const end = { x: to.x, y };
+		return {
+			from,
+			to,
+			branch: false,
+			points: [start, end],
+			arrow: { x: end.x - 1, y, dx: 1, dy: 0 },
+			offPath: to.offPath,
+		};
+	}
+	const x = from.x + TURN_NODE_W / 2;
+	const start = { x, y: from.y + from.h };
+	const end = { x, y: to.y };
+	return {
+		from,
+		to,
+		branch: false,
+		points: [start, end],
+		arrow: { x, y: end.y - 1, dx: 0, dy: 1 },
+		offPath: to.offPath,
+	};
+}
+
+/**
+ * 分支边:交汇点 → 干线残端 → 车道 → 子轮。
+ *
+ * 落点是子轮「朝向父轮的那条边」的中点:纵向 = 卡顶中心,横向 = 卡左缘中心。
+ * 同一父轮的兄弟共享交汇点与残端,从残端末梢横出到各自车道——这一步就是
+ * 可见的「分裂」。嵌套分支(父轮与子轮同车道)退化为一条直线。
+ */
+function branchEdge(from: TurnMapNode, to: TurnMapNode, junction: TurnMapPoint, horizontal: boolean): TurnMapEdge {
+	if (horizontal) {
+		const by = to.y + to.h / 2;
+		const stemX = junction.x + TURN_BRANCH_STEM;
+		const points: TurnMapPoint[] =
+			Math.abs(by - junction.y) < 1
+				? [junction, { x: to.x, y: by }]
+				: [junction, { x: stemX, y: junction.y }, { x: stemX, y: by }, { x: to.x, y: by }];
+		return {
+			from,
+			to,
+			branch: true,
+			points,
+			arrow: { x: to.x - 1, y: by, dx: 1, dy: 0 },
+			junction,
+			offPath: to.offPath,
+		};
+	}
+	const bx = to.x + TURN_NODE_W / 2;
+	const stemY = junction.y + TURN_BRANCH_STEM;
+	const points: TurnMapPoint[] =
+		Math.abs(bx - junction.x) < 1
+			? [junction, { x: bx, y: to.y }]
+			: [junction, { x: junction.x, y: stemY }, { x: bx, y: stemY }, { x: bx, y: to.y }];
+	return {
+		from,
+		to,
+		branch: true,
+		points,
+		arrow: { x: bx, y: to.y - 1, dx: 0, dy: 1 },
+		junction,
+		offPath: to.offPath,
+	};
+}
+
+/** 折线的 SVG path(d):折点处留 4px 圆角,方向与落点不变。 */
+export function edgePathD(points: readonly TurnMapPoint[], radius = 4): string {
+	if (points.length === 0) return "";
+	const first = points[0]!;
+	if (points.length === 1) return `M ${first.x} ${first.y}`;
+	let d = `M ${first.x} ${first.y}`;
+	for (let i = 1; i < points.length; i++) {
+		const prev = points[i - 1]!;
+		const cur = points[i]!;
+		const next = points[i + 1];
+		if (!next) {
+			d += ` L ${cur.x} ${cur.y}`;
+			continue;
+		}
+		// 入段方向与出段方向的单位向量;折点处各退 radius。
+		const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+		const outLen = Math.hypot(next.x - cur.x, next.y - cur.y);
+		const r = Math.min(radius, inLen / 2, outLen / 2);
+		if (r <= 0.01) {
+			d += ` L ${cur.x} ${cur.y}`;
+			continue;
+		}
+		const inX = cur.x - ((cur.x - prev.x) / inLen) * r;
+		const inY = cur.y - ((cur.y - prev.y) / inLen) * r;
+		const outX = cur.x + ((next.x - cur.x) / outLen) * r;
+		const outY = cur.y + ((next.y - cur.y) / outLen) * r;
+		d += ` L ${inX} ${inY} Q ${cur.x} ${cur.y} ${outX} ${outY}`;
+	}
+	return d;
+}
+
+/** 箭头三角形的三个顶点(尖端 + 两翼),由 TurnMapEdge.arrow 展开。 */
+export function arrowTriangle(arrow: TurnMapEdge["arrow"]): [TurnMapPoint, TurnMapPoint, TurnMapPoint] {
+	const tip = { x: arrow.x, y: arrow.y };
+	// 垂直于方向的两个翼。
+	const nx = -arrow.dy;
+	const ny = arrow.dx;
+	const backX = tip.x - arrow.dx * TURN_ARROW_LEN;
+	const backY = tip.y - arrow.dy * TURN_ARROW_LEN;
+	return [
+		tip,
+		{ x: backX + nx * TURN_ARROW_HALF, y: backY + ny * TURN_ARROW_HALF },
+		{ x: backX - nx * TURN_ARROW_HALF, y: backY - ny * TURN_ARROW_HALF },
+	];
 }
 
 /** 视口裁剪矩形(世界坐标)。 */
@@ -327,8 +392,7 @@ export interface TurnMapViewport {
 /**
  * 视口裁剪:只保留与可见世界矩形相交(外扩 pad)的节点——画布版的
  * 「渐进挂载」。164 轮全量节点卡 ≈ 1600+ DOM,而任何时刻视口内只有
- * 十几张;filter O(n) 每帧一次可忽略。节点高 = 折叠紧凑卡或展开全卡,
- * 用 node.h 命中判定。纯逻辑,组件与测试共用。
+ * 十几张;filter O(n) 每帧一次可忽略。
  */
 export function visibleTurnMapNodes(nodes: readonly TurnMapNode[], vp: TurnMapViewport, pad = 260): TurnMapNode[] {
 	return nodes.filter(

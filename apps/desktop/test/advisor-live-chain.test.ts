@@ -151,7 +151,7 @@ describe("顾问卡 live 父链修复(会话 01a1a5a1)", () => {
 
 		expect(layout.nodes.every(n => !n.branch)).toBe(true);
 		expect(layout.main).toHaveLength(stats.turns);
-		expect(layout.lanes).toHaveLength(0);
+		expect(layout.splits).toHaveLength(0);
 	});
 
 	test("control: the unrepaired splice reproduces the drop and the fake branch", () => {
