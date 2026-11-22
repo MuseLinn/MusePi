@@ -818,7 +818,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-reveal.is-in { opacity: 1; transform: none; }
 
 /* ===== 移动端 ===== */
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .mp-nav-toggle { display: flex; }
   .mp-topbar-gh { padding: 8px; }
   .mp-topbar-gh-word { display: none; }
@@ -864,6 +864,7 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   .mp-footer-bottom { flex-direction: column; gap: 6px; }
   .mp-release-layout { grid-template-columns: 1fr; }
   .mp-release-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .mp-release-tabs .mp-release-tab:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .mp-release-tab { min-height: 64px; grid-template-columns: 26px minmax(0, 1fr); padding: 12px 10px; border-bottom: 0; font-size: 13px; }
   .mp-release-panel { min-height: 0; }
   .mp-release-panel h3 { max-width: none; }

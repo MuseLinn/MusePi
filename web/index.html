@@ -43,6 +43,7 @@
       <nav class="mp-nav" id="mp-nav" aria-label="主导航" data-i18n-aria="nav.aria">
         <a href="#preview" class="mp-nav-link" data-i18n="nav.preview">界面预览</a>
         <a href="#release" class="mp-nav-link" data-i18n="nav.release">工作台能力</a>
+        <a href="#features" class="mp-nav-link" data-i18n="nav.features">为什么选</a>
         <a href="#momentum" class="mp-nav-link" data-i18n="nav.momentum">迭代进行时</a>
         <a href="#pricing" class="mp-nav-link" data-i18n="nav.pricing">价格</a>
         <a href="#faq" class="mp-nav-link" data-i18n="nav.faq">常见问题</a>
@@ -200,27 +201,42 @@
             <p class="mp-kicker" data-i18n="release.kicker">工作台 · 已落地能力</p>
             <h2 class="mp-h2" data-i18n="release.h2">从会做事，到也能一起审阅和改造</h2>
           </div>
-          <p class="mp-section-desc" data-i18n="release.desc">Agent 负责推进任务，你保留直接查看、修改和精确引用的能力。四组新能力都已经进入产品，而不是远期路线图。</p>
+          <p class="mp-section-desc" data-i18n="release.desc">Agent 负责推进任务，你保留直接查看、修改和精确引用的能力。这些能力都已经进入产品，而不是远期路线图。</p>
         </header>
 
         <div class="mp-release-layout mp-reveal">
           <div class="mp-release-tabs" role="tablist" aria-label="浏览工作台能力" data-i18n-aria="release.tabs.aria">
-            <button class="mp-release-tab is-active" type="button" role="tab" id="release-tab-files" aria-selected="true" aria-controls="release-panel-files" tabindex="0">
-              <span class="mp-release-tab-index">01</span><span data-i18n="release.tab.files">文件工作区</span>
+            <button class="mp-release-tab is-active" type="button" role="tab" id="release-tab-agent" aria-selected="true" aria-controls="release-panel-agent" tabindex="0">
+              <span class="mp-release-tab-index">01</span><span data-i18n="release.tab.agent">Agent 面板与密钥</span>
+            </button>
+            <button class="mp-release-tab" type="button" role="tab" id="release-tab-files" aria-selected="false" aria-controls="release-panel-files" tabindex="-1">
+              <span class="mp-release-tab-index">02</span><span data-i18n="release.tab.files">文件工作区</span>
             </button>
             <button class="mp-release-tab" type="button" role="tab" id="release-tab-office" aria-selected="false" aria-controls="release-panel-office" tabindex="-1">
-              <span class="mp-release-tab-index">02</span><span data-i18n="release.tab.office">Office 编辑与引用</span>
+              <span class="mp-release-tab-index">03</span><span data-i18n="release.tab.office">Office 编辑与引用</span>
             </button>
             <button class="mp-release-tab" type="button" role="tab" id="release-tab-plugins" aria-selected="false" aria-controls="release-panel-plugins" tabindex="-1">
-              <span class="mp-release-tab-index">03</span><span data-i18n="release.tab.plugins">插件与预设</span>
+              <span class="mp-release-tab-index">04</span><span data-i18n="release.tab.plugins">插件与预设</span>
             </button>
             <button class="mp-release-tab" type="button" role="tab" id="release-tab-agents" aria-selected="false" aria-controls="release-panel-agents" tabindex="-1">
-              <span class="mp-release-tab-index">04</span><span data-i18n="release.tab.agents">外部子智能体</span>
+              <span class="mp-release-tab-index">05</span><span data-i18n="release.tab.agents">外部子智能体</span>
             </button>
           </div>
 
           <div class="mp-release-stage">
-            <article class="mp-release-panel" role="tabpanel" id="release-panel-files" aria-labelledby="release-tab-files" tabindex="0">
+            <article class="mp-release-panel" role="tabpanel" id="release-panel-agent" aria-labelledby="release-tab-agent" tabindex="0">
+              <p class="mp-release-eyebrow" data-i18n="release.agent.eyebrow">会话的身份证与遥控器，就在会话上方</p>
+              <h3 data-i18n="release.agent.title">点开胶囊，模型、档位与密钥都在手里</h3>
+              <p class="mp-release-body" data-i18n="release.agent.body">会话顶部的胶囊点开就是 Agent 标签页：当前模型收成一张可展开的卡片，思考强度按模型真实档位排列，Auto 另起一行显示本轮实际采用的档位。工作目录、上下文用量与花费、待批准跳转、子代理与后台任务入口都在同一页。智能体还能向你索取密钥——它只提交名字与用途，值以本机主密钥加密落盘，只能在 <code>bash</code> 里以 <code>$MUSEPI_SECRET_&lt;NAME&gt;</code> 使用。</p>
+              <ul class="mp-release-points">
+                <li data-i18n="release.agent.p1">模型卡片展开即搜索，Esc 收起并把焦点还回去</li>
+                <li data-i18n="release.agent.p2">思考滑块内嵌一行：拖动只移动滑块、松手才写入，箭头逐档</li>
+                <li data-i18n="release.agent.p3">值只经 bash 以 $MUSEPI_SECRET_&lt;NAME&gt; 使用，不进日志与模型请求</li>
+              </ul>
+              <p class="mp-release-proof"><span>Agent tab</span><span>AES-256-GCM</span><span data-i18n="release.agent.proof">恒加密</span><span>request_secret</span></p>
+            </article>
+
+            <article class="mp-release-panel" role="tabpanel" id="release-panel-files" aria-labelledby="release-tab-files" tabindex="0" hidden>
               <p class="mp-release-eyebrow" data-i18n="release.files.eyebrow">阅读、修改、定位，不离开工作台</p>
               <h3 data-i18n="release.files.title">代码和文档，都能直接审阅</h3>
               <p class="mp-release-body" data-i18n="release.files.body">文件树、Monaco、Markdown、PDF 与 PR 评审共用同一套文件标签和草稿生命周期。定义跳转、跨文件重命名、差异对比与历史定位都围绕真实工作区展开。</p>
@@ -330,16 +346,16 @@
 
         <ul class="mp-log">
           <li class="mp-log-item mp-reveal">
-            <span class="mp-log-tag" data-i18n="mom.log1.tag">协作</span>
-            <p data-i18n="mom.log1.body">给页面画标注，和智能体说「就这里」：内置浏览器和对话里的界面共用同一套标注工具——选元素、框区域、随手画，圈注连同注释自动附进输入框，智能体看到的就是你圈出的画面。</p>
+            <span class="mp-log-tag" data-i18n="mom.log1.tag">界面</span>
+            <p data-i18n="mom.log1.body">思考强度滑块收成内嵌的一行：名称与档位不再分两行占高度，轨道下方没有标签行，Auto 在下方另起一行写清本轮实际采用的档位；窄面板里数值不再折行。</p>
           </li>
           <li class="mp-log-item mp-reveal">
-            <span class="mp-log-tag" data-i18n="mom.log2.tag">界面</span>
-            <p data-i18n="mom.log2.body">窗口顶栏可以开多会话标签页了（设置→外观→聊天）：固定宽度、悬停出菜单和关闭钮、还没发过消息的草稿显示斜体——像浏览器标签一样管理并行的会话。</p>
+            <span class="mp-log-tag" data-i18n="mom.log2.tag">导航</span>
+            <p data-i18n="mom.log2.body">会话地图重新设计：每一轮从一张会展开的大卡变成 66px 索引行，连线用正交路径和箭头说明父子方向，点选只更新右侧检视器；键盘可遍历，离路径的分支压暗但仍可读。</p>
           </li>
           <li class="mp-log-item mp-reveal">
-            <span class="mp-log-tag" data-i18n="mom.log3.tag">Git</span>
-            <p data-i18n="mom.log3.body">侧栏新增「问题与拉取请求」入口，打开就是一整页中心：当前分支的 PR、仓库里所有打开的问题，详情里能直接合并、关闭、重开、加标签——不必跳回浏览器。</p>
+            <span class="mp-log-tag" data-i18n="mom.log3.tag">远程</span>
+            <p data-i18n="mom.log3.body">实例与远程工作区说清两件事：守护进程在哪台机器、文件在哪台机器。端点分成本机 / WSL / SSH / Docker / 手填，SSH 托管隧道与 docker、WSL 的进程生命周期都归 MusePi 所有。</p>
           </li>
         </ul>
         <a class="mp-arrow-link mp-reveal" href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md" target="_blank" rel="noopener"><span data-i18n="mom.changelog">阅读完整更新日志</span>
@@ -499,7 +515,7 @@
           <div class="mp-footer-col">
             <span class="mp-footer-col-title" data-i18n="footer.colProduct">产品</span>
             <a href="#preview" data-i18n="nav.preview">界面预览</a>
-            <a href="#features" data-i18n="nav.features">核心功能</a>
+            <a href="#features" data-i18n="nav.features">为什么选</a>
             <a href="#pricing" data-i18n="nav.pricing">价格</a>
             <a href="#download" data-i18n="footer.dl">下载</a>
           </div>

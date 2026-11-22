@@ -11,7 +11,7 @@
     "brand.aria": "MusePi",
     "nav.aria": "Main navigation",
     "nav.preview": "Preview",
-    "nav.features": "Features",
+    "nav.features": "Why MusePi",
     "nav.momentum": "Momentum",
     "nav.pricing": "Pricing",
     "nav.faq": "FAQ",
@@ -68,12 +68,22 @@
     "release.kicker": "Workspace · Shipped capabilities",
     "release.h2": "From doing the work to reviewing and reshaping it together",
     "release.desc":
-      "The agent moves tasks forward while you retain direct viewing, editing and precise referencing. These four capability groups are in the product now, not on a distant roadmap.",
+      "The agent moves tasks forward while you retain direct viewing, editing and precise referencing. These capabilities are in the product now, not on a distant roadmap.",
     "release.tabs.aria": "Explore workspace capabilities",
+    "release.tab.agent": "Agent panel & secrets",
     "release.tab.files": "File workspace",
     "release.tab.office": "Office editing & quotes",
     "release.tab.plugins": "Plugins & presets",
     "release.tab.agents": "External subagents",
+    "release.agent.eyebrow": "The session's identity card and remote control, right above it",
+    "release.agent.title": "The capsule opens your model, rungs and secrets in one place",
+    "release.agent.body":
+      "Clicking the capsule above a conversation opens that session's Agent tab. The current model folds into one expandable card, the thinking slider follows the model's real rungs, and Auto adds a second line with the level this turn actually resolved to. Working directory, context usage and cost, a jump to pending approvals, and entries for subagents and background jobs sit on the same page. The agent can also ask you for a secret: it submits only a name and purpose, the value is stored encrypted under this machine's master key, and it can only be used inside <code>bash</code> as <code>$MUSEPI_SECRET_&lt;NAME&gt;</code>.",
+    "release.agent.p1": "The model card searches in place; Escape folds it and returns focus",
+    "release.agent.p2": "One embedded row for thinking: a drag moves only the knob, arrows step one rung",
+    "release.agent.p3":
+      "The value is only used in bash as $MUSEPI_SECRET_&lt;NAME&gt;; logs and provider requests never see it",
+    "release.agent.proof": "Always encrypted",
     "release.files.eyebrow": "Read, edit and reveal without leaving the workspace",
     "release.files.title": "Review code and documents directly",
     "release.files.body":
@@ -132,15 +142,15 @@
     "mom.stat2": "Supported platforms",
     "mom.stat3": "Extension hubs",
     "mom.stat4": "Shared background service",
-    "mom.log1.tag": "Collaboration",
+    "mom.log1.tag": "Interface",
     "mom.log1.body":
-      'Annotate a page and tell the agent "right here": the built-in browser and in-conversation interfaces share one annotation tool — pick an element, box a region, draw freely — and the circled screenshot with your notes lands in the composer automatically, so the agent sees exactly what you circled.',
-    "mom.log2.tag": "Interface",
+      "The thinking slider is now one embedded row: the label and the current rung no longer take a second line above the track, Auto names the level this turn actually resolved to on the line below, and the value stops wrapping in a narrow panel.",
+    "mom.log2.tag": "Navigation",
     "mom.log2.body":
-      "The window header can now show session tabs (Settings → Appearance → Chat): fixed width, a hover menu and close button, and drafts that haven't sent their first message show in italics — manage parallel sessions like browser tabs.",
-    "mom.log3.tag": "Git",
+      "The session map is redesigned: each turn is a 66px index row instead of an expanding card, connections use orthogonal paths with arrowheads to show parent/child direction, and a selection only updates the inspector on the right. It is keyboard-traversable, and branches off the active path stay dimmed but readable.",
+    "mom.log3.tag": "Remote",
     "mom.log3.body":
-      "The sidebar gains an Issues & PRs entry that opens a full-page center: the current branch's PR and every open issue in the repo, with merge, close, reopen and label actions right in the detail — no trip back to the browser.",
+      "Instances and remote workspaces now say two different things: which machine runs the daemon, and which machine holds the files. Endpoints are local / WSL / SSH / Docker / manual; SSH-managed tunnels and docker and WSL process lifecycles are owned by MusePi.",
     "mom.changelog": "Read the full changelog",
 
     /* 价格 */
