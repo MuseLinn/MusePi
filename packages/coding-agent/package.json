@@ -92,6 +92,7 @@
 		"sherpa-onnx-node": "1.13.2"
 	},
 	"devDependencies": {
+		"@happy-dom/global-registrator": "^20.12.0",
 		"@larksuiteoapi/node-sdk": "^1.73.0",
 		"@types/bun": "catalog:",
 		"react": "19.2.7"

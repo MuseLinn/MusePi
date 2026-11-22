@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import * as React from "react";
 import { act } from "react";
-import { GlobalRegistrator } from "../../client-core/node_modules/@happy-dom/global-registrator";
 import ActivityDockPill from "../src/bundled-plugins/stats-pills/ui/activity-pill";
 import UsageDockPill from "../src/bundled-plugins/stats-pills/ui/usage-pill";
 
