@@ -170,13 +170,17 @@ function pushRecentModel(id: string, provider?: string): void {
  * Catalog snapshot cache — keyed by the read a selector makes (the session's
  * `models.list` or the registry's `models.listAvailable`).
  *
- * The agent tab's catalogue is unmounted while its disclosure is folded, so
- * without this every re-mount rebuilt the list from an empty state: the tab's
- * own `Reveal` and the panel's fold both re-mount it, and each mount painted
- * no rows until a full catalog round-trip answered. The cache is SEEDED only —
- * the mount still re-reads, so an external `models.yml` edit and a
- * `models.changed` broadcast keep working exactly as before; the difference is
- * that a re-mount paints its rows on the first frame instead of waiting.
+ * A remounted catalogue rebuilt the list from an empty state: it painted no
+ * rows until a full catalog round-trip answered. The remount is NOT a fold —
+ * `Reveal` renders its children unconditionally and the panel's body stays
+ * mounted while it folds, so folding and reopening the card keeps the same
+ * instance (measured: 40 rows before and after, one `models.list`). The real
+ * trigger is the catalogue being destroyed and re-created: switching to
+ * another tab and back (`ContextPanel` swaps the body by `bodyView`), or a
+ * full app remount. This cache is SEEDED only — the mount still re-reads, so
+ * an external `models.yml` edit and a `models.changed` broadcast keep working
+ * exactly as before; the difference is that a re-mount paints its rows on the
+ * first frame instead of waiting.
  *
  * Two rules keep the seed honest:
  *  - a FAILED read deletes the key. Otherwise the stale rows outlive a real
