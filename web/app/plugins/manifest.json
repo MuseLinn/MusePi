@@ -8,6 +8,12 @@
 			"css": "chat-view.css"
 		},
 		{
+			"slot": "conversation.composer.bar",
+			"extensionId": "apps/desktop/src/plugins/chat-view/index.ts",
+			"label": "输入卡",
+			"code": "chat-view.conversation-composer-bar.js"
+		},
+		{
 			"slot": "panel.tab.files",
 			"extensionId": "apps/desktop/src/plugins/file-workspace/index.ts",
 			"label": "文件",

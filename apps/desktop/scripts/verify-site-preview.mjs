@@ -158,7 +158,7 @@ function demoSnapshot(page) {
 			welcome: count(".gui-welcome"),
 			welcomeInput: count(".gui-welcome-input"),
 			composer: count(".gui-composer"),
-			textareas: count("textarea"),
+			editorInputs: count(".gui-welcome-input .cm-content"),
 			transcript: count(".gui-transcript"),
 			entries: count(".tr-entry"),
 			filePane: count(".gui-filepane"),
@@ -440,9 +440,9 @@ try {
 		{
 			view: "welcome",
 			name: "tab welcome · composer",
-			matches: snapshot => snapshot.welcome > 0 && snapshot.welcomeInput > 0 && snapshot.textareas > 0,
+			matches: snapshot => snapshot.welcome > 0 && snapshot.welcomeInput > 0 && snapshot.editorInputs > 0,
 			detail: snapshot =>
-				`.gui-welcome=${snapshot.welcome} .gui-welcome-input=${snapshot.welcomeInput} textarea=${snapshot.textareas}`,
+				`.gui-welcome=${snapshot.welcome} .gui-welcome-input=${snapshot.welcomeInput} editor=${snapshot.editorInputs}`,
 		},
 	];
 

@@ -1,19 +1,21 @@
 {
-	"builtAt": "2026-11-05T16:29:12.584Z",
-	"distHash": "sha256:a2bcdb9909a5c33bf393adc5dec0ac1d0491933928a0f2f7c1f8f94c3f50e910",
+	"builtAt": "2026-11-22T16:57:01.248Z",
+	"distHash": "sha256:d2e5cd161c346f10551ccbe51bafed4d14d7b6f8df612186f15f1d1cb23551f0",
 	"distFiles": [
-		"3hadg47r.js",
-		"8dq02rsp.js",
-		"9yd0afy5.js",
+		"0ysfg765.js",
+		"4y2ceqf7.js",
+		"b3shd8d5.js",
+		"bv8pd8sf.js",
+		"c1jhc83g.js",
+		"c3xyr5wg.js",
 		"index.html",
-		"kh5cp4v1.css",
-		"mvbzgbdc.js",
+		"np63fbdg.js",
 		"pets/musepi.webp",
-		"tbagjynp.js",
+		"q09kyfsr.js",
+		"qh1kq09w.js",
 		"tjd6h3x3.js",
-		"vj956r34.js",
-		"vtmf2qa0.js"
+		"v1gjk9zh.css"
 	],
-	"fileCount": 20,
-	"totalBytes": 23492436
+	"fileCount": 23,
+	"totalBytes": 26409043
 }

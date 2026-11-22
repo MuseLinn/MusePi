@@ -408,7 +408,7 @@
         return;
       }
       if (view === "board") {
-        clickWhen('.gui-menu-item use[href="#oc-layout-column"]', token);
+        clickWhen('[data-rail-destination="board"]', token);
         return;
       }
       if (view !== "files") return;
