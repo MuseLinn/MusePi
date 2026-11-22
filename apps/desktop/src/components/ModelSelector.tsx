@@ -293,8 +293,9 @@ export function ModelSelector({
 	allowNone?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
-	// Seeded from the cache so a re-mount (the agent tab's disclosure, the
-	// panel's fold) paints its rows immediately; the mount still re-reads.
+	// Seeded from the cache so a RE-CREATED selector (a tab switch away and
+	// back, or an app remount — never a fold, which keeps this instance)
+	// paints its rows immediately; the mount still re-reads.
 	const [models, setModels] = useState<WireModel[]>(() => readCachedCatalog(catalogCacheKey(sessionId)) ?? []);
 	const [modelId, setModelId] = useState<string>("");
 	// Searchable list: filter by id/name/provider.
