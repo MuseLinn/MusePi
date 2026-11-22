@@ -4046,7 +4046,6 @@ export const settings = {
 	"Auto Resume": "自动恢复",
 	"Auto Thinking Ceiling": "自动思考上限",
 	"Auto Thinking Model": "自动思考模型",
-	"Auto-Compact": "自动压缩",
 	"Auto-Learn (experimental)": "自动学习（实验性）",
 	"Auto-Promote Context": "自动提升上下文",
 	"Auto-Resize Images": "自动调整图片大小",
@@ -4234,7 +4233,6 @@ export const settings = {
 	"Early maintenance": "早期维护",
 	"Early protection": "早期保护",
 	"Edit Mode": "编辑模式",
-	"Elide Uneventful Results": "省略无事件结果",
 	"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.":
 		"内嵌 Silver TrueType 字体（16px 网格），覆盖 CJK 等非拉丁文本。",
 	"Embedding variant": "嵌入模型变体",
@@ -4402,9 +4400,6 @@ export const settings = {
 	"How to process queued messages while agent is working": "代理工作时如何处理排队消息",
 	"IME-Safe Prompt Layout": "IME 安全提示布局",
 	"IRC Timeout": "IRC 超时",
-	"Idle Compaction": "空闲压缩",
-	"Idle Compaction Delay": "空闲压缩延迟",
-	"Idle Compaction Threshold": "空闲压缩阈值",
 	"Idle Recap": "空闲回顾",
 	"Idle Recap Delay": "空闲回顾延迟",
 	"Image Provider Order": "图片提供商顺序",
@@ -4544,7 +4539,6 @@ export const settings = {
 	"Memory Model": "记忆模型",
 	"Memory bank identifier (default: project name)": "记忆库标识（默认：项目名）",
 	"Messages before a rule can trigger again": "规则可再次触发前的消息数",
-	"Mid-Turn Compaction": "轮中压缩",
 	"Mild novelty": "轻度创新",
 	"Mild penalty": "轻度惩罚",
 	"Min P": "最小 P",
@@ -4773,7 +4767,6 @@ export const settings = {
 	"Relay used by /collab (wss://host[:port])": "远程访问使用的中继（wss://host[:port]）",
 	"Remind the agent to complete todos before stopping": "在停止前提醒 Agent 完成 todos",
 	Remote: "远程",
-	"Remote Compaction V2": "远程压缩 V2",
 	"Remove the 1-character horizontal padding from the left and right of the terminal output":
 		"去掉终端输出左右的 1 字符水平内边距",
 	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.":
@@ -4831,7 +4824,6 @@ export const settings = {
 	"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)":
 		"采样温度（0 = 确定性，1 = 创意，-1 = 供应商默认）",
 	"Sandbox Only": "仅沙箱环境",
-	"Save Handoff Docs": "保存交接文档",
 	"Save generated handoff documents to markdown files for the auto-handoff flow":
 		"自动交接流程把生成的交接文档存为 markdown 文件",
 	"Save project role models in .musepi/config.yml; missing project roles use global defaults":
@@ -4983,7 +4975,6 @@ export const settings = {
 		"从 `:name:` 短码推荐 emoji，并展开 `:D`、`:-)` 等文字颜文字",
 	"Suggests a todo list on the first message (reminder, not forced)": "在首条消息时建议 todo 列表（提醒，非强制）",
 	Summary: "摘要",
-	"Supersede Stale Reads": "替代过期读取",
 	"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones":
 		"抑制文件已显示过的编辑后 LSP 诊断；只出现新增或变化的",
 	"Surface the active model identifier in the system prompt so the agent knows which model it is":

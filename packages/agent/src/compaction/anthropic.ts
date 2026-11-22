@@ -40,19 +40,32 @@ export interface AnthropicCompactionPreserveData {
 }
 
 /**
+ * Whether a custom api (an extension's `registerProvider` stream) declares
+ * that it serves its model over Anthropic Messages (`remoteCompaction.api`)
+ * and opts that model into on-demand compaction (`remoteCompaction.enabled`).
+ * The request goes through the model's own api like any turn, so the custom
+ * stream shapes and authenticates it; whether the beta is actually sent is
+ * decided by the Anthropic provider it delegates to.
+ */
+function declaresAnthropicCompaction(model: Model): boolean {
+	return model.remoteCompaction?.api === "anthropic-messages" && model.remoteCompaction.enabled === true;
+}
+
+/**
  * Whether a model compacts through the Anthropic compaction beta. Eligibility
  * is catalog policy (`compat.supportsServerCompaction`); the provider rejects
- * the request on reroutes that do not opt in.
+ * the request on reroutes that do not opt in. A custom api qualifies through
+ * {@link declaresAnthropicCompaction}.
  */
-export function shouldUseAnthropicNativeCompaction(
-	model: Model,
-): model is Model<"anthropic-messages" | "bedrock-converse-stream"> {
-	if (model.api !== "anthropic-messages" && model.api !== "bedrock-converse-stream") return false;
-	return (
-		model.compat !== undefined &&
-		"supportsServerCompaction" in model.compat &&
-		model.compat.supportsServerCompaction === true
-	);
+export function shouldUseAnthropicNativeCompaction(model: Model): boolean {
+	if (model.api === "anthropic-messages" || model.api === "bedrock-converse-stream") {
+		return (
+			model.compat !== undefined &&
+			"supportsServerCompaction" in model.compat &&
+			model.compat.supportsServerCompaction === true
+		);
+	}
+	return declaresAnthropicCompaction(model);
 }
 
 export function getPreservedAnthropicCompactionData(
@@ -200,7 +213,7 @@ export interface AnthropicNativeCompactionOptions
  * configured method order can choose a fallback.
  */
 export async function requestAnthropicNativeCompaction(
-	model: Model<"anthropic-messages" | "bedrock-converse-stream">,
+	model: Model,
 	apiKey: ApiKey,
 	request: AnthropicNativeCompactionRequest,
 	signal: AbortSignal | undefined,

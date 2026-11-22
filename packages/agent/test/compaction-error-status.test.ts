@@ -141,6 +141,36 @@ describe("compaction error-status propagation", () => {
 		expect(e.message).toMatch(/Summarization failed|Short summary failed|Turn prefix summarization failed/);
 	});
 
+	test("generateHandoff rejects a length-truncated reply", async () => {
+		vi.spyOn(ai, "completeSimple").mockResolvedValue({
+			...makeAssistantStop([{ type: "text", text: "partial handoff" }]),
+			stopReason: "length",
+		});
+
+		const error = await generateHandoff(handoffMessages, getAnthropicModel(), "stale-key", {
+			systemPrompt: ["sp"],
+			tools: [],
+		}).catch(err => err);
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toContain("Handoff generation failed");
+		expect((error as Error).message).toContain("stopReason: length");
+	});
+
+	test("compact() rejects a length-truncated summary", async () => {
+		vi.spyOn(ai, "completeSimple").mockResolvedValue({
+			...makeAssistantStop([{ type: "text", text: "partial summary" }]),
+			stopReason: "length",
+		});
+
+		const error = await compact(makePreparation(), getAnthropicModel(), "stale-key").catch(err => err);
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toMatch(
+			/Summarization failed.*stopReason: length|Short summary failed.*stopReason: length|Turn prefix summarization failed.*stopReason: length/,
+		);
+	});
+
 	test("missing errorStatus does not attach .status (preserves auth_unavailable regex path)", async () => {
 		vi.spyOn(ai, "completeSimple").mockResolvedValue(
 			makeAssistantError(undefined, "503 auth_unavailable: no auth available (providers=codex, model=gpt-5.4-mini)"),

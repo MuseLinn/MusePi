@@ -255,7 +255,7 @@ LLM 看到的内容：
   - 自定义 musepi 摘要器端点接收 `{ systemPrompt, prompt }`，必须返回包含至少 `{ summary }` 的 JSON。
   - 路径以 `/chat/completions` 结尾的 OpenAI 兼容端点接收 `{ model, messages, stream: false }`，其中 `messages` 包含一个系统提示词和一个用户提示词。摘要从 `choices[0].message.content` 读取，这使得 llama.cpp 和 vLLM 等自托管服务器无需单独的摘要 shim 即可充当远程压缩器。
 - 对于 OpenAI/OpenAI Codex 模型，在启用远程压缩时，压缩首先尝试 provider 原生的 `/responses/compact` 端点。它在 `preserveData.openaiRemoteCompaction` 中保留 provider 替换历史，如果该原生请求失败则回退到本地摘要。
-- 对于 `compat.supportsServerCompaction` 为 true 的第一方 Anthropic 模型，压缩会发送一次 `compact-2026-09-04` on-demand 请求，只包含待摘要的前缀。返回的带签名 `compaction` 块存入 `preserveData.anthropicCompaction`，并在后续回合重放；没有签名块的响应会按配置的方法顺序回退。Bedrock 上的 Anthropic 模型通过 `InvokeModelWithResponseStream` 侧请求走同一条链，普通回合仍走 Converse。
+- 对于 `compat.supportsServerCompaction` 为 true 的第一方 Anthropic 模型，压缩会发送一次 `compact-2026-09-04` on-demand 请求，只包含待摘要的前缀。返回的带签名 `compaction` 块存入 `preserveData.anthropicCompaction`，并在后续回合重放；没有签名块的响应会按配置的方法顺序回退。Bedrock 上的 Anthropic 模型通过 `InvokeModelWithResponseStream` 侧请求走同一条链，普通回合仍走 Converse。自定义 api（扩展的 `registerProvider` 流）可声明 `remoteCompaction: { api: "anthropic-messages", enabled: true }` 选用原生压缩；改道到未知 URL 仍被排除。输出以 `stopReason: "length"` 结束时，摘要与交接文档会按不完整结果拒绝，不会提交半截内容，方法顺序可以继续回退。
 
 ### Handoff 生成
 

@@ -4271,7 +4271,6 @@ export const settings = {
 	"Auto Resume": "Auto Resume",
 	"Auto Thinking Ceiling": "Auto Thinking Ceiling",
 	"Auto Thinking Model": "Auto Thinking Model",
-	"Auto-Compact": "Auto-Compact",
 	"Auto-Learn (experimental)": "Auto-Learn (experimental)",
 	"Auto-Promote Context": "Auto-Promote Context",
 	"Auto-Resize Images": "Auto-Resize Images",
@@ -4469,7 +4468,6 @@ export const settings = {
 	"Early maintenance": "Early maintenance",
 	"Early protection": "Early protection",
 	"Edit Mode": "Edit Mode",
-	"Elide Uneventful Results": "Elide Uneventful Results",
 	"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.":
 		"Embedded Silver TrueType font on a 16px grid for CJK and other non-Latin text.",
 	"Embedding variant": "Embedding variant",
@@ -4649,9 +4647,6 @@ export const settings = {
 	"How to process queued messages while agent is working": "How to process queued messages while agent is working",
 	"IME-Safe Prompt Layout": "IME-Safe Prompt Layout",
 	"IRC Timeout": "IRC Timeout",
-	"Idle Compaction": "Idle Compaction",
-	"Idle Compaction Delay": "Idle Compaction Delay",
-	"Idle Compaction Threshold": "Idle Compaction Threshold",
 	"Idle Recap": "Idle Recap",
 	"Idle Recap Delay": "Idle Recap Delay",
 	"Image Provider Order": "Image Provider Order",
@@ -4799,7 +4794,6 @@ export const settings = {
 	"Memory Model": "Memory Model",
 	"Memory bank identifier (default: project name)": "Memory bank identifier (default: project name)",
 	"Messages before a rule can trigger again": "Messages before a rule can trigger again",
-	"Mid-Turn Compaction": "Mid-Turn Compaction",
 	"Mild novelty": "Mild novelty",
 	"Mild penalty": "Mild penalty",
 	"Min P": "Min P",
@@ -5041,7 +5035,6 @@ export const settings = {
 	"Relay used by /collab (wss://host[:port])": "Relay used by Remote Access (wss://host[:port])",
 	"Remind the agent to complete todos before stopping": "Remind the agent to complete todos before stopping",
 	Remote: "Remote",
-	"Remote Compaction V2": "Remote Compaction V2",
 	"Remove the 1-character horizontal padding from the left and right of the terminal output":
 		"Remove the 1-character horizontal padding from the left and right of the terminal output",
 	"Render Markdown H1 headings at 2x scale using Kitty's OSC 66 text-sizing protocol. Only takes effect on Kitty terminals; ignored everywhere else. Off by default.":
@@ -5106,7 +5099,6 @@ export const settings = {
 	"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)":
 		"Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
 	"Sandbox Only": "Sandbox Only",
-	"Save Handoff Docs": "Save Handoff Docs",
 	"Save generated handoff documents to markdown files for the auto-handoff flow":
 		"Save generated handoff documents to markdown files for the auto-handoff flow",
 	"Save project role models in .musepi/config.yml; missing project roles use global defaults":
@@ -5267,7 +5259,6 @@ export const settings = {
 	"Suggests a todo list on the first message (reminder, not forced)":
 		"Suggests a todo list on the first message (reminder, not forced)",
 	Summary: "Summary",
-	"Supersede Stale Reads": "Supersede Stale Reads",
 	"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones":
 		"Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones",
 	"Surface the active model identifier in the system prompt so the agent knows which model it is":

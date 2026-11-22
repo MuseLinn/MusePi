@@ -111,6 +111,27 @@ describe("anthropic native compaction through compact()", () => {
 		expect(shouldUseAnthropicNativeCompaction(bedrock)).toBe(true);
 	});
 
+	it("lets a custom api opt into Anthropic compaction", () => {
+		const custom = {
+			...model,
+			api: "custom-anthropic",
+			remoteCompaction: { api: "anthropic-messages", enabled: true },
+		} as unknown as Model;
+		expect(shouldUseAnthropicNativeCompaction(custom)).toBe(true);
+		expect(
+			shouldUseAnthropicNativeCompaction({
+				...custom,
+				remoteCompaction: { api: "anthropic-messages", enabled: false },
+			} as Model),
+		).toBe(false);
+		expect(
+			shouldUseAnthropicNativeCompaction({
+				...custom,
+				remoteCompaction: { api: "openai-responses", enabled: true },
+			} as Model),
+		).toBe(false);
+	});
+
 	it("persists the signed block and uses its content as the summary", async () => {
 		let captured: Record<string, unknown> | undefined;
 		vi.spyOn(AnthropicMessages.prototype, "create").mockImplementation((params: unknown) => {
