@@ -50,6 +50,8 @@
 		"apps/desktop/test/git-panel.test.tsx": 3,
 		"apps/desktop/test/header-session-copy.test.tsx": 1,
 		"apps/desktop/test/import-source-brand-icons.test.tsx": 1,
+		"apps/desktop/test/instance-manager-axes.test.tsx": 4,
+		"apps/desktop/test/instance-manager-keyboard.test.tsx": 3,
 		"apps/desktop/test/jobs-pane.test.tsx": 2,
 		"apps/desktop/test/managed-browser-extensions.test.tsx": 1,
 		"apps/desktop/test/managed-browser-host-dismiss.test.tsx": 1,
