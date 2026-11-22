@@ -5181,8 +5181,11 @@ body.gui-resizing .gui-pane-right {
  * compositor properties. The panel still folds, still animates, and
  * `aria-expanded` is untouched — it is the LAYOUT cost that is gone.
  *
- * The margin rides the same transition so the card gutter cannot snap 8px
- * wider at class-toggle time (user: 收起时面板会突然放大一点再收起).
+ * The margin rides the same delayed snap as the width: the closed state drops
+ * the card gutter, and letting that drop apply on frame 1 while the box is
+ * still full-width grew the panel 8px right into the freed gutter before the
+ * width snapped — the "收起时面板会突然放大一点再收起" report. Both box
+ * properties therefore move together at 220ms.
  *
  * The WIDTH itself is a delayed, zero-duration snap (`0s`), never an
  * interpolated length: the box jumps to its target, and the 220ms delay on the
@@ -5203,10 +5206,13 @@ body.gui-resizing .gui-pane-right {
 	border-left-width: 0;
 	opacity: 0;
 	pointer-events: none;
-	/* Hold the box at full width for the length of the fade, then snap. The
-	 * transcript reflows exactly once instead of once per frame. */
+	/* Hold the box — width AND the gutter margin — for the length of the fade,
+	 * then snap both together. The transcript reflows exactly once instead of
+	 * once per frame, and the panel's left edge cannot jump 8px while the panel
+	 * is still full width. */
 	transition:
 		width 0s 220ms,
+		margin 0s 220ms,
 		transform 220ms var(--spring),
 		opacity 160ms ease;
 	/* Folded states leave no trace: margins drop to 0 (the appended gutter
@@ -5216,15 +5222,22 @@ body.gui-resizing .gui-pane-right {
 
 /* The contents carry the motion: one composited translate + fade, so the
  * fold never re-measures a row. Reversing the class replays it from the
- * same origin, which is why open and fold share one curve. The seam band is
- * excluded: it is `position: fixed` with its own centring transform, and it
- * is hidden while the panel is folded anyway. */
-.gui-pane-right--inner > :not(.gui-pane-resize-x) {
+ * same origin, which is why open and fold share one curve.
+ *
+ * Two children are excluded, both for the same reason — they own their motion:
+ *  - `.gui-pane-resize-x` is `position: fixed` with its own centring transform
+ *    and is hidden while the panel is folded;
+ *  - `.gui-agent-dock` is an in-pane drawer that slides BOTH ways on its own
+ *    `transform`/`visibility` recipe (`gui-misc.css`). This rule is (0,2,0)
+ *    and would beat the dock's (0,1,0) class rule, replacing its
+ *    `visibility 0s linear 200ms` with a 160ms opacity fade — the drawer then
+ *    hid on the first exit frame and played its 200ms slide invisibly. */
+.gui-pane-right--inner > :not(.gui-pane-resize-x, .gui-agent-dock) {
 	transition:
 		transform 220ms var(--spring),
 		opacity 160ms ease;
 }
-.gui-pane-right--inner--closed > :not(.gui-pane-resize-x) {
+.gui-pane-right--inner--closed > :not(.gui-pane-resize-x, .gui-agent-dock) {
 	transform: translateX(18px);
 	opacity: 0;
 }
@@ -5232,18 +5245,18 @@ body.gui-resizing .gui-pane-right {
 /* Reduced motion / 动效关闭: land on the target state, no slide. */
 @media (prefers-reduced-motion: reduce) {
 	.gui-pane-right--inner,
-	.gui-pane-right--inner > :not(.gui-pane-resize-x) {
+	.gui-pane-right--inner > :not(.gui-pane-resize-x, .gui-agent-dock) {
 		transition: none;
 	}
-	.gui-pane-right--inner--closed > :not(.gui-pane-resize-x) {
+	.gui-pane-right--inner--closed > :not(.gui-pane-resize-x, .gui-agent-dock) {
 		transform: none;
 	}
 }
 .gui-motion-off .gui-pane-right--inner,
-.gui-motion-off .gui-pane-right--inner > :not(.gui-pane-resize-x) {
+.gui-motion-off .gui-pane-right--inner > :not(.gui-pane-resize-x, .gui-agent-dock) {
 	transition: none;
 }
-.gui-motion-off .gui-pane-right--inner--closed > :not(.gui-pane-resize-x) {
+.gui-motion-off .gui-pane-right--inner--closed > :not(.gui-pane-resize-x, .gui-agent-dock) {
 	transform: none;
 }
 

@@ -363,9 +363,8 @@ describe("agent capsule geometry", () => {
 	});
 
 	test("presses in place: the centre holds and the scale applies, in the chat and in the preview", async () => {
-		/** Read the capsule's box and the transform the `:active` rule composes
-		 *  to, in both surfaces. The pill is measured with its own transform
-		 *  neutralised so the assertion is about the RULE, not a paint order. */
+		/** Read each pill's box and its composed transform. `centre` is the
+		 *  painted centre, so it moves whenever the transform translates. */
 		const read = () =>
 			page.evaluate(() => {
 				const measure = (selector: string) => {
@@ -374,6 +373,7 @@ describe("agent capsule geometry", () => {
 					const box = capsule.getBoundingClientRect();
 					return {
 						centre: box.left + box.width / 2,
+						width: box.width,
 						shift: style.getPropertyValue("--gui-capsule-shift").trim(),
 						press: style.getPropertyValue("--gui-capsule-press").trim(),
 						transform: style.transform,
@@ -385,58 +385,77 @@ describe("agent capsule geometry", () => {
 				};
 			});
 
-		/** Force the pressed state on both pills. Chromium cannot be told to
-		 *  hold a real `:active` without a pointer, so the cascade is probed by
-		 *  re-declaring the same rule under a class the fixture carries. */
-		const press = (on: boolean) =>
-			page.evaluate(pressed => {
-				for (const selector of ["#shell .gui-agent-capsule", "#preview .gui-agent-capsule"]) {
-					document.querySelector<HTMLElement>(selector)!.classList.toggle("force-active", pressed);
-				}
-			}, on);
-
 		/** The press is a 120ms transform transition; read the settled value,
-		 *  never an intermediate frame (a mid-flight read once left the pill at
-		 *  0.97 for the tests after this one). */
+		 *  never an intermediate frame. */
 		const settle = () =>
 			page.evaluate(() =>
 				Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))).then(() => {}),
 			);
 
-		await page.addStyleTag({
-			content: `
-				#shell .gui-agent-capsule.force-active,
-				#preview .gui-agent-capsule.force-active {
-					--gui-capsule-press: scale(0.97);
-				}`,
-		});
-
-		const rest = await read();
-		// Rest: the chat pill is centred by its own shift, the preview by layout.
-		expect(rest.chat.shift).toBe("translateX(-50%)");
-		expect(rest.preview.shift).toBe("translateX(0)");
-		expect(rest.chat.press).toBe("scale(1)");
-		expect(rest.preview.press).toBe("scale(1)");
-
-		await press(true);
-		await settle();
-		const pressed = await read();
-
-		// THE regression: the centre must not move when the pill is pressed. The
-		// preview used to re-apply `translateX(-50%)` here and jumped half its
-		// width left.
-		expect(Math.abs(pressed.chat.centre - rest.chat.centre)).toBeLessThanOrEqual(0.5);
-		expect(Math.abs(pressed.preview.centre - rest.preview.centre)).toBeLessThanOrEqual(0.5);
-		// The press is still a press in BOTH surfaces (3% smaller, centred).
-		for (const surface of [pressed.chat, pressed.preview]) {
-			expect(surface.press).toBe("scale(0.97)");
-			expect(surface.transform).toContain("0.97");
+		/** Hold the REAL `:active` state on both pills through CDP's
+		 *  `CSS.forcePseudoState`, so the assertion is about the shipped
+		 *  `.gui-agent-capsule:active` rule — an injected `--gui-capsule-press`
+		 *  would only prove the variable works, and stayed green with the bug
+		 *  restored. */
+		const client = await page.createCDPSession();
+		await client.send("DOM.enable");
+		await client.send("CSS.enable");
+		const { root } = (await client.send("DOM.getDocument")) as { root: { nodeId: number } };
+		const nodeIds: Record<"chat" | "preview", number> = { chat: 0, preview: 0 };
+		for (const [surface, selector] of [
+			["chat", "#shell .gui-agent-capsule"],
+			["preview", "#preview .gui-agent-capsule"],
+		] as const) {
+			const { nodeId } = (await client.send("DOM.querySelector", {
+				nodeId: root.nodeId,
+				selector,
+			})) as { nodeId: number };
+			expect(nodeId).toBeGreaterThan(0);
+			nodeIds[surface] = nodeId;
 		}
-		// And the preview's transform carries no horizontal translation.
-		expect(pressed.preview.transform).not.toContain("-");
-		expect(pressed.chat.transform.startsWith("matrix(0.97")).toBe(true);
-		await press(false);
-		await settle();
+		const setPressed = async (pressed: boolean): Promise<void> => {
+			for (const nodeId of Object.values(nodeIds)) {
+				await client.send("CSS.forcePseudoState", {
+					nodeId,
+					forcedPseudoClasses: pressed ? ["active"] : [],
+				});
+			}
+			await settle();
+		};
+
+		try {
+			const rest = await read();
+			// Rest: the chat pill is centred by its own shift, the preview by layout.
+			expect(rest.chat.shift).toBe("translateX(-50%)");
+			expect(rest.preview.shift).toBe("translateX(0)");
+			expect(rest.chat.press).toBe("scale(1)");
+			expect(rest.preview.press).toBe("scale(1)");
+
+			await setPressed(true);
+			const pressed = await read();
+
+			// THE regression: the centre must not move when the pill is pressed.
+			// With the old `:active { transform: translateX(-50%) scale(0.97) }`
+			// the preview moved half its width left (−25px at this width).
+			expect(Math.abs(pressed.chat.centre - rest.chat.centre)).toBeLessThanOrEqual(0.5);
+			expect(Math.abs(pressed.preview.centre - rest.preview.centre)).toBeLessThanOrEqual(0.5);
+			// The press is still a press in BOTH surfaces: the pill shrank and
+			// the shipped `:active` rule is what applied it.
+			for (const [surface, box] of [
+				[rest.chat, pressed.chat],
+				[rest.preview, pressed.preview],
+			] as const) {
+				expect(box.press).toBe("scale(0.97)");
+				expect(box.width).toBeLessThan(surface.width);
+				expect(box.transform).toContain("0.97");
+			}
+			// The preview's transform carries no horizontal translation at all.
+			expect(pressed.preview.transform.startsWith("matrix(0.97")).toBe(true);
+			expect(pressed.chat.transform.startsWith("matrix(0.97")).toBe(true);
+		} finally {
+			await setPressed(false);
+			await client.detach();
+		}
 	});
 
 	test("keeps a visible focus ring outside the pill, unclipped", async () => {

@@ -177,11 +177,40 @@ function pushRecentModel(id: string, provider?: string): void {
  * the mount still re-reads, so an external `models.yml` edit and a
  * `models.changed` broadcast keep working exactly as before; the difference is
  * that a re-mount paints its rows on the first frame instead of waiting.
+ *
+ * Two rules keep the seed honest:
+ *  - a FAILED read deletes the key. Otherwise the stale rows outlive a real
+ *    catalog change (a model removed from `models.yml` stayed listed and
+ *    selectable while the re-read was rejecting), which is worse than one
+ *    empty frame.
+ *  - the map is bounded and least-recently-used, because nothing tells this
+ *    module when a session closes — an unbounded per-session map would retain
+ *    a model array for every session the window ever opened.
  */
+const CATALOG_CACHE_LIMIT = 8;
 const catalogCache = new Map<string, WireModel[]>();
 
 function catalogCacheKey(sessionId: string | null | undefined): string {
 	return sessionId ? `session:${sessionId}` : "registry";
+}
+
+function readCachedCatalog(key: string): WireModel[] | undefined {
+	const hit = catalogCache.get(key);
+	if (hit === undefined) return undefined;
+	// Refresh the recency order: a re-mounted selector is the one being used.
+	catalogCache.delete(key);
+	catalogCache.set(key, hit);
+	return hit;
+}
+
+function writeCachedCatalog(key: string, rows: WireModel[]): void {
+	catalogCache.delete(key);
+	catalogCache.set(key, rows);
+	while (catalogCache.size > CATALOG_CACHE_LIMIT) {
+		const oldest = catalogCache.keys().next();
+		if (oldest.done) break;
+		catalogCache.delete(oldest.value);
+	}
 }
 
 /**
@@ -262,7 +291,7 @@ export function ModelSelector({
 	const [open, setOpen] = useState(false);
 	// Seeded from the cache so a re-mount (the agent tab's disclosure, the
 	// panel's fold) paints its rows immediately; the mount still re-reads.
-	const [models, setModels] = useState<WireModel[]>(() => catalogCache.get(catalogCacheKey(sessionId)) ?? []);
+	const [models, setModels] = useState<WireModel[]>(() => readCachedCatalog(catalogCacheKey(sessionId)) ?? []);
 	const [modelId, setModelId] = useState<string>("");
 	// Searchable list: filter by id/name/provider.
 	const [query, setQuery] = useState("");
@@ -353,11 +382,17 @@ export function ModelSelector({
 		void rpc
 			.request<WireModel[]>(method, params)
 			.then(list => {
-				catalogCache.set(key, list ?? []);
+				writeCachedCatalog(key, list ?? []);
 				if (!alive) return;
 				setModels(list ?? []);
 			})
 			.catch((err: unknown) => {
+				// The seed must not outlive a failed re-read: the rows on screen
+				// would be the previous snapshot with no error state, so a model
+				// the daemon no longer serves stays listed and selectable. Drop
+				// both the cache entry and the stale rows.
+				catalogCache.delete(key);
+				if (alive) setModels([]);
 				// An empty list here is indistinguishable from "no models", so
 				// keep the reason traceable instead of swallowing it.
 				console.error("[gui] model catalog request failed", method, err);

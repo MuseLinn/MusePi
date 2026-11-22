@@ -20,16 +20,19 @@ import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/too
  */
 
 const STYLES = path.resolve(import.meta.dir, "../src/styles");
-const CASCADE = ["gui-base.css", "gui-chat.css"]
+const CASCADE = ["gui-base.css", "gui-chat.css", "gui-misc.css"]
 	.map(file => fs.readFileSync(path.join(STYLES, file), "utf8"))
 	.join("\n");
 
+/** The panel's children mirror ContextPanel: the seam band, the flex column,
+ *  and the subagent detail dock (an in-pane drawer that slides both ways). */
 const FIXTURE = `
 	<div style="display: flex; height: 700px">
 		<div id="chat" style="flex: 1; min-width: 0; background: rgb(50, 50, 50)">chat</div>
 		<aside id="panel" class="gui-pane-right gui-pane-right--inner" style="width: 420px">
 			<div class="gui-pane-resize-x"></div>
 			<div id="body" style="height: 100%">panel body</div>
+			<div class="gui-agent-dock gui-agent-dock--open" id="dock"><div style="height: 100%">dock</div></div>
 		</aside>
 	</div>`;
 
@@ -66,16 +69,29 @@ afterAll(async () => {
 }, 60_000);
 
 describe("right panel fold", () => {
-	test("reflows the chat column once, not every frame", async () => {
+	test("the panel's box holds — width, left edge and gutter — until one snap", async () => {
 		const result = await page.evaluate(async () => {
 			const chat = document.querySelector<HTMLElement>("#chat")!;
 			const panel = document.querySelector<HTMLElement>("#panel")!;
-			const widths: number[] = [];
+			/** The RESTING box, read BEFORE the toggle: the closed state drops the
+			 *  card gutter, and a baseline taken after it would already contain
+			 *  the 8px pop this test exists to catch. */
+			const readBox = (): { width: number; left: number; marginRight: number; chatWidth: number } => {
+				const box = panel.getBoundingClientRect();
+				return {
+					width: Math.round(box.width),
+					left: Math.round(box.left),
+					marginRight: Math.round(Number.parseFloat(getComputedStyle(panel).marginRight) * 100) / 100,
+					chatWidth: Math.round(chat.getBoundingClientRect().width),
+				};
+			};
+			const resting = readBox();
+			const frames: Array<{ width: number; left: number; marginRight: number; chatWidth: number }> = [];
 			panel.classList.add("gui-pane-right--inner--closed");
 			const start = performance.now();
 			await new Promise<void>(resolve => {
 				const tick = (): void => {
-					widths.push(Math.round(chat.getBoundingClientRect().width));
+					frames.push(readBox());
 					if (performance.now() - start < 400) requestAnimationFrame(tick);
 					else resolve();
 				};
@@ -84,17 +100,37 @@ describe("right panel fold", () => {
 			// The contents must have finished their composited exit…
 			const body = getComputedStyle(document.querySelector<HTMLElement>("#body")!);
 			return {
-				distinct: [...new Set(widths)],
-				frames: widths.length,
+				resting,
+				frames,
 				panelWidth: panel.getBoundingClientRect().width,
 				bodyOpacity: Number(body.opacity),
 			};
 		});
 
+		const distinct = (values: number[]): number[] => [...new Set(values)];
+		const { resting, frames } = result;
+
 		// A per-frame width animation yields one width per frame (15 distinct in
 		// the 220ms build this replaced); a snap yields the before/after pair.
-		expect(result.frames).toBeGreaterThan(5);
-		expect(result.distinct.length).toBeLessThanOrEqual(2);
+		expect(frames.length).toBeGreaterThan(5);
+		expect(distinct(frames.map(frame => frame.width)).length).toBeLessThanOrEqual(2);
+
+		// THE margin regression: the closed state drops the card gutter. If that
+		// drop applies on frame 1 while the box is still full width, the panel's
+		// left edge jumps 8px right into the freed gutter — the box visibly grows
+		// before it folds. Every full-width frame must therefore keep the resting
+		// gutter and left edge, which is what a reverted `margin` transition
+		// breaks (measured: `left 764 → 772` at frame 1, margin `8px → 0px`).
+		expect(resting.marginRight).toBeGreaterThan(0);
+		const fullWidth = frames.filter(frame => frame.width === resting.width);
+		expect(fullWidth.length).toBeGreaterThan(3);
+		for (const frame of fullWidth) {
+			expect(frame.marginRight).toBe(resting.marginRight);
+			expect(frame.left).toBe(resting.left);
+		}
+		// Nothing but the final snap may move the column, either.
+		expect(distinct(frames.map(frame => frame.chatWidth)).length).toBeLessThanOrEqual(2);
+
 		// The panel really folded and its contents really left.
 		expect(result.panelWidth).toBe(0);
 		expect(result.bodyOpacity).toBe(0);
@@ -120,5 +156,51 @@ describe("right panel fold", () => {
 		});
 		expect(result.distinct.length).toBeLessThanOrEqual(2);
 		expect(result.panelWidth).toBe(420);
+	});
+
+	test("the subagent dock keeps its own exit: visible while it slides, hidden after", async () => {
+		/** The dock is a direct child of the panel, so the panel's fold rule
+		 *  would match it too. At (0,2,0) it beats the dock's own (0,1,0)
+		 *  recipe and replaces `visibility 0s linear 200ms` with a 160ms
+		 *  opacity fade — the drawer then hides on the FIRST exit frame and
+		 *  plays its 200ms slide invisibly. */
+		const result = await page.evaluate(async () => {
+			const dock = document.querySelector<HTMLElement>("#dock")!;
+			const panel = document.querySelector<HTMLElement>("#panel")!;
+			const read = () => ({
+				visibility: getComputedStyle(dock).visibility,
+				transform: getComputedStyle(dock).transform,
+			});
+			const resting = read();
+			dock.classList.remove("gui-agent-dock--open");
+			const frames: Array<{ at: number; visibility: string; transform: string }> = [];
+			const start = performance.now();
+			await new Promise<void>(resolve => {
+				const tick = (): void => {
+					const now = performance.now() - start;
+					const state = read();
+					frames.push({ at: Math.round(now), ...state });
+					if (now < 400) requestAnimationFrame(tick);
+					else resolve();
+				};
+				requestAnimationFrame(tick);
+			});
+			return { resting, frames, panelClosed: panel.classList.contains("gui-pane-right--inner--closed") };
+		});
+
+		// It starts open (visible, at rest)…
+		expect(result.resting.visibility).toBe("visible");
+		// …and while it slides out it must STILL be visible, so the motion is
+		// seen. Frame 1 must not already be `hidden`.
+		expect(result.frames.length).toBeGreaterThan(5);
+		const early = result.frames.filter(frame => frame.at <= 150);
+		expect(early.length).toBeGreaterThan(1);
+		for (const frame of early) {
+			expect(frame.visibility).toBe("visible");
+		}
+		// It actually moved during the exit (the slide is real, not a snap)…
+		expect(new Set(result.frames.map(frame => frame.transform)).size).toBeGreaterThan(2);
+		// …and it is hidden only once the exit finished.
+		expect(result.frames.at(-1)!.visibility).toBe("hidden");
 	});
 });

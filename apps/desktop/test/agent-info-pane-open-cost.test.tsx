@@ -33,7 +33,7 @@ const models = Array.from({ length: CATALOG_SIZE }, (_, i) => ({
 	reasoning: true,
 }));
 
-function makeRpc() {
+function makeRpc(options: { failCatalog?: { current: boolean } } = {}) {
 	const calls: string[] = [];
 	const rpc = {
 		request: async (method: string) => {
@@ -49,7 +49,10 @@ function makeRpc() {
 				};
 			if (method === "session.contextUsage")
 				return { model: "prov/m1", tokens: 1000, contextWindow: 10_000, percent: 10, usage: { cost: 0.25 } };
-			if (method === "models.list") return models;
+			if (method === "models.list") {
+				if (options.failCatalog?.current) throw new Error("daemon unreachable");
+				return models;
+			}
 			return {};
 		},
 		addEventListener: () => () => {},
@@ -188,5 +191,49 @@ describe("agent tab open cost", () => {
 			await new Promise(resolve => setTimeout(resolve, 5));
 		});
 		expect(second.calls).toContain("models.list");
+	});
+
+	it("drops the seeded rows when the re-read fails instead of leaving them selectable", async () => {
+		// Warm the cache with a successful read.
+		const first = makeRpc();
+		const host = mountFirstFrame(first.rpc);
+		await settle();
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>(".gui-agent-model-card")!.click();
+			await new Promise(resolve => setTimeout(resolve, 5));
+		});
+		expect(host.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		for (const root of roots) await act(async () => root.unmount());
+		roots.clear();
+
+		// Re-mount against a daemon that now rejects `models.list`. The seed
+		// paints first (that is the point of the cache), but the failure must
+		// clear it: a model the daemon no longer serves must not stay listed and
+		// selectable with no error state.
+		const failing = { current: true };
+		const second = makeRpc({ failCatalog: failing });
+		const reopened = mountFirstFrame(second.rpc);
+		await settle();
+		await act(async () => {
+			reopened.querySelector<HTMLButtonElement>(".gui-agent-model-card")!.click();
+			await new Promise(resolve => setTimeout(resolve, 5));
+		});
+		expect(second.calls).toContain("models.list");
+		expect(reopened.querySelectorAll(".gui-model-opt").length).toBe(0);
+
+		// And the poisoned seed is gone for the NEXT mount too: a fresh tab
+		// against a healthy daemon reads its rows from the daemon, not from the
+		// stale snapshot.
+		for (const root of roots) await act(async () => root.unmount());
+		roots.clear();
+		failing.current = false;
+		const third = makeRpc();
+		const again = mountFirstFrame(third.rpc);
+		await settle();
+		await act(async () => {
+			again.querySelector<HTMLButtonElement>(".gui-agent-model-card")!.click();
+			await new Promise(resolve => setTimeout(resolve, 5));
+		});
+		expect(again.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
 	});
 });
