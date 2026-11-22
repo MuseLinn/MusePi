@@ -21,16 +21,19 @@ import { COMPANION_STATE_DIRECTION, companionStateDirection } from "../src/lib/c
 import { COMPANION_MOOD_MOTION, COMPANION_STATE_MOTION } from "../src/lib/companion-motion";
 
 /**
- * The 31-state axis is four tables that must stay in lockstep — a state added
+ * The 39-state axis is four tables that must stay in lockstep — a state added
  * to COMPANION_STATES but missing from the motion or face table silently falls back
  * to `idle` and looks like a bug in the renderer rather than a hole in the
  * data. These tests are the lockstep check.
  */
 
 describe("CompanionState — table coverage", () => {
-	test("the vocabulary is 31 states with no duplicates", () => {
-		expect(COMPANION_STATES.length).toBe(31);
-		expect(new Set(COMPANION_STATES).size).toBe(31);
+	test("the vocabulary is 39 states with no duplicates", () => {
+		expect(COMPANION_STATES.length).toBe(39);
+		expect(new Set(COMPANION_STATES).size).toBe(39);
+		for (const added of ["waiting", "reading", "composing", "refusing", "sad", "bored", "sleeping", "waking"]) {
+			expect(COMPANION_STATES).toContain(added);
+		}
 	});
 
 	test("every state has a body motion", () => {
@@ -56,9 +59,27 @@ describe("CompanionState — table coverage", () => {
 	});
 
 	test("a state that needs concentration does not blink", () => {
-		for (const s of ["thinking", "working", "searching", "radar", "alerting"] as CompanionState[]) {
+		for (const s of ["thinking", "working", "searching", "reading", "radar", "alerting"] as CompanionState[]) {
 			expect(COMPANION_STATE_DIRECTION[s].blinkMs).toBe(0);
 		}
+	});
+
+	test("expression rules stay on the approved shapes", () => {
+		expect(COMPANION_STATE_DIRECTION.thinking.eyes).toBe("half");
+		expect(COMPANION_STATE_DIRECTION.happy.eyes).toBe("happy");
+		expect(COMPANION_STATE_DIRECTION.waiting.eyes).toBe("half");
+		expect(COMPANION_STATE_DIRECTION.idle.eyes).toBe("open");
+		expect(COMPANION_STATE_MOTION.waiting.tilt).toBe(1.6);
+		expect(COMPANION_STATE_MOTION.idle.pulse).toEqual([0.018, 4200]);
+		expect(COMPANION_STATE_DIRECTION.confused.eyes).toBe("squint");
+		expect(COMPANION_STATE_DIRECTION.confused.drift).toBe("dizzy");
+		expect(COMPANION_STATE_DIRECTION.celebrate.eyes).toBe("star");
+		expect(COMPANION_STATE_DIRECTION.celebrate.drift).toBe("happy");
+		expect(COMPANION_STATE_DIRECTION.sad.eyes).toBe("sad");
+		const cross = COMPANION_STATES.filter(
+			s => COMPANION_STATE_DIRECTION[s].eyes === "cross" || COMPANION_STATE_DIRECTION[s].drift === "cross",
+		);
+		expect(cross).toEqual(["alerting"]);
 	});
 });
 
@@ -72,9 +93,11 @@ describe("companionStateFromSignals — priority chain", () => {
 		expect(companionStateFromSignals({ toolFailed: true, ambiguous: true })).toBe("alerting");
 	});
 
-	test("streaming is writing, silent work is working", () => {
-		expect(companionStateFromSignals({ working: true, streaming: true })).toBe("writing");
+	test("streaming is composing, silent work is working, a write tool stays writing", () => {
+		expect(companionStateFromSignals({ working: true, streaming: true })).toBe("composing");
 		expect(companionStateFromSignals({ working: true })).toBe("working");
+		expect(companionStateFromSignals({ phase: "tool", activity: "writing" })).toBe("writing");
+		expect(companionStateFromSignals({ phase: "tool", activity: "reading" })).toBe("reading");
 	});
 
 	test("a pending approval is the loudest thing waiting on the user", () => {
@@ -87,13 +110,14 @@ describe("companionStateFromSignals — priority chain", () => {
 		expect(companionStateFromSignals({ spawning: true, working: true })).toBe("spawning");
 	});
 
-	test("idleness decays to drowsy only after the threshold", () => {
-		expect(companionStateFromSignals({ idleMs: DROWSY_AFTER_MS - 1 })).toBe("idle");
+	test("idleness walks bored, then drowsy, then sleeping", () => {
+		expect(companionStateFromSignals({ idleMs: DROWSY_AFTER_MS - 1 })).toBe("bored");
 		expect(companionStateFromSignals({ idleMs: DROWSY_AFTER_MS })).toBe("drowsy");
 	});
 
 	test("emotions are gated on a result, never on nothing happening", () => {
 		expect(companionStateFromSignals({ justFinished: true })).toBe("celebrate");
+		expect(companionStateFromSignals({ outcome: { kind: "success", at: 0 } })).toBe("happy");
 		expect(companionStateFromSignals({})).toBe("idle");
 		expect(companionStateFromSignals()).toBe("idle");
 	});

@@ -66,6 +66,7 @@ import {
 	companionGestureTransform,
 	createCompanionGestureMotion,
 } from "../lib/companion-gesture";
+import { HEADPHONE_SCALE, type HeadphoneDisc, headphoneFront, headphonePadding } from "../lib/companion-headphones";
 import {
 	COMPANION_INTERACTION_MOTION,
 	COMPANION_MOOD_MOTION,
@@ -426,9 +427,11 @@ function mixSpec(a: number[], b: number[], t: number): number[] {
  *  (FACE_BOX/2, matching the engine's own SPHERE_C); the rig itself is
  *  shifted by (SIDE, TOP) once, in the frame loop, so the padding never
  *  leaks into the art. */
-const TOP = 24;
-const SIDE = 20;
-const BOTTOM = 22;
+/** Padding follows the scaled cans so the ears stay inside the stage. */
+const HEADPHONE_PAD = headphonePadding(FACE_BOX);
+const TOP = HEADPHONE_PAD.top;
+const SIDE = HEADPHONE_PAD.side;
+const BOTTOM = HEADPHONE_PAD.bottom;
 const VIEW_W = FACE_BOX + SIDE * 2;
 const VIEW_H = FACE_BOX + TOP + BOTTOM;
 
@@ -450,67 +453,12 @@ const ORB_R = FACE_BOX / 2;
  *  see the shell transform in the frame loop. */
 const GAZE_ROLL = 0.05;
 
-/** Uniform headset enlargement about the sphere centre (2026-09-21, user:
- *  「耳机稍微大一点」). 1.08 is the largest factor that keeps EVERY authored
- *  extreme inside the rig padding (TOP 24 / SIDE 20): the canopy mesh's
- *  14px round caps are the binding constraint — the apex clears easily, but
- *  the chord endpoints sit ±116.3 from centre and their caps reach −20.6 at
- *  1.10, past SIDE 20, so the svg would shave the cap. Applied in the frame
- *  loop's accessory transform, NOT as a static group attribute — the engine
- *  owns that attribute and rewrites it every frame. */
-const HEADPHONE_SCALE = 1.08;
+const HEADPHONE_ART = headphoneFront(ORB_R, ORB_C);
 
-/** One ear cup, authored in its OWN centred frame (the caller owns the
- *  translate + tilt, so all layers move as one rigid object): anodized-white
- *  plate → white mesh cushion → dark seam, plus the rim highlight that gives
- *  the plate curvature and — on the right cup — the rose-gold Digital Crown.
- *  AirPods Max styling per the user (2026-09-20): the white must stay CLEAR
- *  of the gold shell, which is what the warm-grey outline is for. */
-function HeadphoneCup({ crown = false }: { crown?: boolean }): ReactNode {
-	return (
-		<>
-			<ellipse
-				rx="12.6"
-				ry="25"
-				fill="url(#gui-pet-grad-wear)"
-				stroke="var(--gui-pet-wear-edge, oklch(72% 0.012 90))"
-				strokeWidth="2.2"
-			/>
-			{/* Ear cushion: same white family as the plate, a HAIR darker —
-			 * AirPods Max's mesh pad reads as one material with the cup until
-			 * the seam. The dark cavity does the separating, not a colour
-			 * change. */}
-			<ellipse rx="9" ry="20.5" fill="var(--gui-pet-wear-pad, oklch(94% 0.005 95))" />
-			<ellipse rx="4.8" ry="12.5" fill="var(--gui-pet-wear-c, oklch(45% 0.012 80))" />
-			{/* Rim highlight on the lit shoulder (−130°…−70° of the plate's
-			 * ellipse) — the arc that turns a flat ellipse into a surface
-			 * catching the same upper-left light as the shell. */}
-			<path
-				d="M -7.2 -17.8 A 11.2 23.2 0 0 1 3.8 -21.9"
-				fill="none"
-				stroke="var(--gui-pet-wear-hi, oklch(100% 0 0))"
-				strokeWidth="1.8"
-				strokeLinecap="round"
-				opacity="0.85"
-			/>
-			{crown && (
-				/* Digital Crown — the rose-gold control knob on the upper edge
-				 * of the right cup. THE AirPods Max signature: a tiny cylinder
-				 * breaking the cup's silhouette. Half-tucked so it reads as
-				 * mounted hardware, not a floating pill. */
-				<rect
-					x={2}
-					y={-31}
-					width={7}
-					height={10}
-					rx={2.4}
-					fill="url(#gui-pet-grad-rose)"
-					stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
-					strokeWidth="1.2"
-				/>
-			)}
-		</>
-	);
+function discFill(role: HeadphoneDisc["role"]): string {
+	if (role === "pad") return "var(--gui-pet-wear-b, oklch(90% 0.006 95))";
+	if (role === "plate") return "var(--gui-pet-wear-a, oklch(97% 0.004 95))";
+	return "url(#gui-pet-grad-wear)";
 }
 
 function Mascot({
@@ -641,30 +589,12 @@ function Silhouette({
 						stopColor="color-mix(in oklab, var(--gui-pet-gold-c, oklch(45.04% 0.0777 79.85deg)) 70%, var(--gui-pet-gold-b, oklch(81.07% 0.1101 79.85deg)))"
 					/>
 				</linearGradient>
-				{/* Wearable (headphones): AirPods Max white + rose gold — a
-				 * FIXED identity, deliberately NOT derived from the accent.
-				 * History: a ring-gradient wear sat tone-on-tone on the accent
-				 * ball and read as a same-colour growth (2026-09-20 user:
-				 * 「耳机应该有单独的配色吧」), so the wear went neutral
-				 * charcoal; the charcoal then read as 「秃头」 and the user
-				 * pinned the target: 「耳机是白色的吧，不是现在这种灰黑色的，
-				 * 那种 AirPods Max 一样的白色和玫瑰金色」. Warm anodized-white
-				 * body, rose-gold hardware, fixed by construction (the palette
-				 * never emits these hooks — the fallback literals ARE the
-				 * values; 20% white-on-gold would dissolve, which is also why
-				 * the cup keeps a warm-grey OUTLINE). */}
+				{/* Wearable (headphones): warm white, fixed, not accent-derived.
+				 * A same-hue wear disappears into the gold shell, so the cans
+				 * keep their own cream ramp and a warm outline. */}
 				<linearGradient id="gui-pet-grad-wear" x1="0" y1="0" x2="0" y2="1">
 					<stop offset="0" stopColor="var(--gui-pet-wear-a, oklch(97% 0.004 95))" />
 					<stop offset="1" stopColor="var(--gui-pet-wear-b, oklch(90% 0.006 95))" />
-				</linearGradient>
-				{/* The rose-gold hardware ramp (arms, canopy frame, Digital
-				 * Crown): highlight → body → shade. Mirrors the gold ring's
-				 * metal logic at a pink-copper hue, but it is a fixed literal
-				 * ramp, not accent-derived. */}
-				<linearGradient id="gui-pet-grad-rose" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-rose-a, oklch(83% 0.05 40))" />
-					<stop offset="0.55" stopColor="var(--gui-pet-rose-b, oklch(72% 0.075 35))" />
-					<stop offset="1" stopColor="var(--gui-pet-rose-c, oklch(58% 0.07 32))" />
 				</linearGradient>
 				{/* Eye light: white with a hot core. A flat fill reads as paint;
 				 * a gradient reads as something emitting. The face is white in
@@ -700,7 +630,7 @@ function Silhouette({
 					 * into something orbiting a body. This mount point replaces
 					 * the old hardcoded three-dot CSS spinner (2026-09-20) —
 					 * three static lights on a spun circle could say "busy" and
-					 * nothing else, while the session has 31 things to say. */}
+					 * nothing else, while the session has 39 things to say. */}
 					<CompanionEffects state={state} layer="behind" tier={tier} clockRef={entryClockRef} bodyRef={bodyRef} />
 				</g>
 				<g ref={gestureTransformRef} className="gui-pet-svg__gesture">
@@ -764,81 +694,49 @@ function Silhouette({
 								<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
 								<path className="gui-pet-svg__mouth" ref={mouthRef} />
 							</g>
-							{/* ── Wearable accessories (companion-decor.ts CompanionAccessory) ──
-							 * Static art in orb-local coordinates: they scale with the
-							 * ball and ride the body motion for free. Both are authored
-							 * to stay inside the rig's TOP/SIDE padding — the note's
-							 * stem top and the band apex were checked against the
-							 * viewBox (TOP=24 / SIDE=20) so nothing clips. */}
+							{/* Wearables ride the body. Headphones are the coaxial cans
+							 * projected in companion-headphones.ts; the frame loop
+							 * owns the group's transform (gaze lean + HEADPHONE_SCALE). */}
 							{accessory === "headphones" && (
-								<g ref={accessoryRef} className="gui-pet-svg__accessory">
-									{/* ── Canopy (AirPods Max knit mesh) ── a wide white
-									 * arc held between TWO rose-gold frame rails. The old
-									 * single thin band read as a halo on a bald head
-									 * (2026-09-20 user: 「看着有点像秃头」) and then as
-									 * the wrong colour entirely (「耳机是白色的吧，不是
-									 * 现在这种灰黑色的，那种 AirPods Max 一样的白色和玫
-									 * 瑰金色」). The three radii are concentric about the
-									 * arc's own centre (114.27, 119.31 for the mesh), so
-									 * the frame rails hug the mesh edge for its whole
-									 * run — outer r 128 over endpoints y 74, inner r 118.5
-									 * over y 84, apexes −0.5 / −11.6, inside TOP 24. */}
-									<path
-										d={`M -2 ${ORB_C - 36} A 123.3 123.3 0 0 1 ${2 * ORB_C + 2} ${ORB_C - 36}`}
-										fill="none"
-										stroke="url(#gui-pet-grad-wear)"
-										strokeWidth="14"
-										strokeLinecap="round"
-									/>
-									<path
-										d="M -2 74 A 128 128 0 0 1 230.54 74"
-										fill="none"
-										stroke="url(#gui-pet-grad-rose)"
-										strokeWidth="2.6"
-										strokeLinecap="round"
-									/>
-									<path
-										d="M -2 84 A 118.5 118.5 0 0 1 230.54 84"
-										fill="none"
-										stroke="url(#gui-pet-grad-rose)"
-										strokeWidth="2.6"
-										strokeLinecap="round"
-									/>
-									{/* ── Telescoping arms ── rose-gold, the extension
-									 * joint between canopy rail and cup. Un-tilted in orb
-									 * coordinates: the rails end vertically here, and a
-									 * tilt would pull the arm's foot off the rail it has
-									 * to meet. */}
-									<rect
-										x={-6.5}
-										y={74}
-										width={9}
-										height={30}
-										rx={4.5}
-										fill="url(#gui-pet-grad-rose)"
-										stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
-										strokeWidth="1.2"
-									/>
-									<rect
-										x={2 * ORB_C - 2.5}
-										y={74}
-										width={9}
-										height={30}
-										rx={4.5}
-										fill="url(#gui-pet-grad-rose)"
-										stroke="var(--gui-pet-rose-c, oklch(58% 0.07 32))"
-										strokeWidth="1.2"
-									/>
-									{/* ── Cups ── each authored in its own centred frame so
-									 * the layers stay concentric while the tilt reads as
-									 * one rigid object. The right cup carries the Digital
-									 * Crown. */}
-									<g transform={`translate(${ORB_C - ORB_R - 2} ${ORB_C - 10}) rotate(-14)`}>
-										<HeadphoneCup />
-									</g>
-									<g transform={`translate(${ORB_C + ORB_R + 2} ${ORB_C - 10}) rotate(14)`}>
-										<HeadphoneCup crown />
-									</g>
+								<g
+									ref={accessoryRef}
+									className="gui-pet-svg__accessory"
+									transform={`translate(${ORB_C} ${ORB_C}) scale(${HEADPHONE_SCALE}) translate(${-ORB_C} ${-ORB_C})`}
+								>
+									{HEADPHONE_ART.arches.map(arch => (
+										<path
+											key={arch.role}
+											d={arch.d}
+											fill="none"
+											stroke={arch.role === "lining" ? "#b6ada4" : "url(#gui-pet-grad-wear)"}
+											strokeWidth={arch.width}
+											strokeLinecap="round"
+										/>
+									))}
+									{HEADPHONE_ART.joins.map(join => (
+										<line
+											key={join.side}
+											x1={join.x1}
+											y1={join.y1}
+											x2={join.x2}
+											y2={join.y2}
+											stroke="url(#gui-pet-grad-wear)"
+											strokeWidth={join.width}
+											strokeLinecap="round"
+										/>
+									))}
+									{HEADPHONE_ART.discs.map(disc => (
+										<ellipse
+											key={`${disc.side}-${disc.role}`}
+											cx={disc.cx}
+											cy={disc.cy}
+											rx={disc.rx}
+											ry={disc.ry}
+											fill={discFill(disc.role)}
+											stroke="var(--gui-pet-wear-edge, oklch(72% 0.012 90))"
+											strokeWidth={disc.role === "plate" ? 1.4 : 0.8}
+										/>
+									))}
 								</g>
 							)}
 							{accessory === "note" && (

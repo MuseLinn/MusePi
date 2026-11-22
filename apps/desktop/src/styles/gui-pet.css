@@ -34,13 +34,13 @@
 	flex-shrink: 0;
 	width: var(--gui-pet-width, var(--gui-pet-fallback, 48px));
 	height: auto;
-	aspect-ratio: var(--gui-pet-ratio, 1.037);
+	aspect-ratio: var(--gui-pet-ratio, 1.115);
 }
 
 .gui-pet--h {
 	width: auto;
 	height: var(--gui-pet-height);
-	aspect-ratio: var(--gui-pet-ratio, 1.037);
+	aspect-ratio: var(--gui-pet-ratio, 1.115);
 }
 
 .gui-pet svg {

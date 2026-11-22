@@ -5,6 +5,7 @@ import {
 	agentSignalsFromSnapshot,
 	BORED_AFTER_MS,
 	DROWSY_AFTER_MS,
+	SLEEPING_AFTER_MS,
 } from "../src/lib/agent-signals";
 import { companionStateFromSignals } from "../src/lib/companion";
 
@@ -96,24 +97,31 @@ describe("agentSignalsFromSnapshot", () => {
 
 describe("companionStateFromSignals — richer facts", () => {
 	test("activity splits reading from writing and generic work", () => {
-		expect(companionStateFromSignals({ phase: "tool", activity: "reading" })).toBe("searching");
+		expect(companionStateFromSignals({ phase: "tool", activity: "reading" })).toBe("reading");
 		expect(companionStateFromSignals({ phase: "tool", activity: "writing" })).toBe("writing");
 		expect(companionStateFromSignals({ phase: "tool", activity: "working" })).toBe("working");
 	});
 
 	test("outcome and goal drive the result states", () => {
-		expect(companionStateFromSignals({ outcome: { kind: "success", at: 0 } })).toBe("celebrate");
+		expect(companionStateFromSignals({ outcome: { kind: "success", at: 0 } })).toBe("happy");
+		expect(companionStateFromSignals({ justFinished: true, outcome: { kind: "success", at: 0 } })).toBe("celebrate");
 		expect(companionStateFromSignals({ goal: { enabled: true, done: 1, total: 1 } })).toBe("proud");
 		expect(companionStateFromSignals({ outcome: { kind: "failure", at: 0 } })).toBe("alerting");
-		expect(companionStateFromSignals({ interaction: "deny" })).toBe("confused");
+		expect(companionStateFromSignals({ interaction: "deny" })).toBe("refusing");
+		expect(companionStateFromSignals({ outcome: { kind: "refused", at: 0 } })).toBe("refusing");
+		expect(companionStateFromSignals({ ambiguous: true })).toBe("confused");
+		expect(companionStateFromSignals({ personaMood: "sad" })).toBe("sad");
+		expect(companionStateFromSignals({ personaMood: "sad", toolFailed: true })).toBe("alerting");
 	});
 
-	test("presence and interactions keep the legacy lifecycle states", () => {
+	test("presence and interactions keep the lifecycle states", () => {
 		expect(companionStateFromSignals({ presence: "starting" })).toBe("spawning");
+		expect(companionStateFromSignals({ presence: "waking" })).toBe("waking");
 		expect(companionStateFromSignals({ presence: "closing" })).toBe("powering-down");
-		expect(companionStateFromSignals({ presence: "hidden" })).toBe("drowsy");
+		expect(companionStateFromSignals({ presence: "hidden" })).toBe("sleeping");
 		expect(companionStateFromSignals({ interaction: "bounce" })).toBe("bouncing");
 		expect(companionStateFromSignals({ interaction: "hum" })).toBe("humming");
+		expect(companionStateFromSignals({ phase: "paused" })).toBe("waiting");
 	});
 
 	test("questions are curious; approvals are notifying", () => {
@@ -122,7 +130,9 @@ describe("companionStateFromSignals — richer facts", () => {
 	});
 
 	test("idle thresholds are distinct", () => {
-		expect(companionStateFromSignals({ idleMs: BORED_AFTER_MS })).toBe("idle");
+		expect(companionStateFromSignals({ idleMs: BORED_AFTER_MS - 1 })).toBe("idle");
+		expect(companionStateFromSignals({ idleMs: BORED_AFTER_MS })).toBe("bored");
 		expect(companionStateFromSignals({ idleMs: DROWSY_AFTER_MS })).toBe("drowsy");
+		expect(companionStateFromSignals({ idleMs: SLEEPING_AFTER_MS })).toBe("sleeping");
 	});
 });

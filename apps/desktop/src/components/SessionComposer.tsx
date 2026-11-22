@@ -148,7 +148,7 @@ export interface SessionComposerProps {
 	/** Agent companion mood (伙伴) — derived by ChatView from the session
 	 *  snapshot; the pet renders only when enabled + input mode. */
 	companionMood?: CompanionMood;
-	/** The 31-state session reading (companion.ts CompanionState). Carried alongside
+	/** The 39-state session reading (companion.ts CompanionState). Carried alongside
 	 *  `companionMood` rather than replacing it: the mood still selects the
 	 *  spritesheet row and the CSS material class, the state selects the
 	 *  face, the body motion and the effects layer. */
