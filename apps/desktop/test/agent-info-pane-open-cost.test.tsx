@@ -214,6 +214,8 @@ describe("agent tab open cost", () => {
 		expect(second.calls).toContain("models.list");
 	});
 
+	// @guard: revert apps/desktop/src/components/ModelSelector.tsx:399 |
+	// @guard: test drops the seeded rows when the re-read fails
 	it("drops the seeded rows when the re-read fails instead of leaving them selectable", async () => {
 		// Warm the cache with a successful read.
 		const first = makeRpc();

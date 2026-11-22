@@ -362,6 +362,8 @@ describe("agent capsule geometry", () => {
 		await page.evaluate(() => document.querySelector<HTMLElement>(".gui-agent-capsule")!.blur());
 	});
 
+	// @guard: revert apps/desktop/src/styles/gui-chat.css:7060 | --gui-capsule-press: scale(1);
+	// @guard: test presses in place: the centre holds and the scale applies
 	test("presses in place: the centre holds and the scale applies, in the chat and in the preview", async () => {
 		/** Read each pill's box and its composed transform. `centre` is the
 		 *  painted centre, so it moves whenever the transform translates. */
