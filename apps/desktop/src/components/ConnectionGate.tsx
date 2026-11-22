@@ -19,7 +19,7 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { type ConnectionFacts, deriveConnectionState } from "../lib/connection/state";
 import type { TargetStatusMap } from "../lib/connection/target-store";
-import type { ConnectionTarget } from "../lib/connection/targets";
+import { type ConnectionTarget, stripToken } from "../lib/connection/targets";
 import type { WslRunner } from "../lib/connection/wsl";
 import { ConnectionManager } from "./ConnectionManager";
 import { BootRecoveryActions } from "./StartupSplash";
@@ -84,7 +84,9 @@ export function ConnectionGate({
 				 * the manager: a deliberate disconnect must not look like an error. */}
 				{connectionState === "unreachable" ? (
 					<>
-						{connectError && <p className="gui-error">{connectError}</p>}
+						{/* A slot written by an older build may still carry the token;
+						 * the failure text is scrubbed on the way out too. */}
+						{connectError && <p className="gui-error">{stripToken(connectError)}</p>}
 						{error && <p className="gui-error">{error}</p>}
 						<BootRecoveryActions />
 					</>

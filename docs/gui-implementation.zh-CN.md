@@ -112,7 +112,7 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 
 启动的起点是 `initialBootUrl`(纯函数,为测试导出):本机类型返回本机守护进程地址——在那里用存下来的端点等于重新去拨 `bootTargetFor` 刚刚拒绝的那个转发行;其余类型返回 `buildWsUrl(row)`。行本身不保存 token,所以只从 `row.url` 启动会丢掉这个密钥,带 `--remote-token` 的实例下次启动就会 401。
 
-连接错误在存储或显示之前先做脱敏:`RpcClient` 的拒绝信息是 `cannot connect to <url>`,而那个 URL 带着 token,所以 `connectToTarget` 存进状态槽的是 `stripToken(message)`。存下来的错误描述的是产生它的那份凭据,因此 `addTarget` 在行的 token 变化或被移除时用 `withoutTargetStatus` 丢掉该行条目——否则一条关于「行上已不存在的 token」的错误会在编辑之后继续留着。
+连接错误在存储或显示之前先做脱敏,而且在**每一个写入方**都做,不只是其中一处:`RpcClient` 的拒绝信息是 `cannot connect to <url>`,而那个 URL 带着 token。`settledStatuses` 是「原因变成存储」的唯一位置(在其中抹掉 token),`connectToTarget` 与 `recordBootOutcome`——普通启动退出与 `runBootAttempt` 抛出的原因都一样——全部经过它。`loadTargetStatuses` 读取时脱敏,并在脱敏结果与原值不同时回写该槽位,于是旧构建写下的值会消失而不是一直留着;两个显示位置(`ConnectionGate` 的失败文案、`ConnectionManager` 的行错误)也在输出时脱敏。存下来的错误描述的是产生它的那份凭据,因此 `statusesAfterTargetEdit` 在行的 token 变化或被移除时丢掉该行条目——否则一条关于「行上已不存在的 token」的错误会在编辑之后继续留着。
 
 添加表单在保存前先校验:`normalizeRemoteHostUrl` 接受裸 `host:port`(与实例弹窗一致),拒绝一切非 ws/wss/http/https 的写法,并在表单里报 `settings.instanceUrlInvalid`——这里的端点会成为下次启动的目标,所以 boot 解析不了的值绝不能进存储。boot 的 `try` 也因此补上了 `catch`:每次退出要么记录成功、要么记录失败,抛错(存着一个无法解析的端点、或探测本身失败)再也不能跳过 `recordBootOutcome`、让门在「启动从未连上」之后仍推出 `disconnected-by-user`。`daemonPortOf` 从不抛错,并把非 ws/wss 的协议当作「没有守护进程端口」(`ftp://nope` 会被解析成 80 端口,所以真正的守卫是协议判断而不是解析)。不带端口的 `ws:`/`wss:` **回环**端点解析成守护进程自己的默认端口(`DEFAULT_DAEMON_PORT`)而不是 80:`normalizeRemoteHostUrl("localhost")` 得到的是 `ws://localhost`,若按裸解析走,Electron 的本机探测会去查 80 端口、跳过拨号、永远到不了 `startDaemonViaShell`——首次启动就此无法拉起守护进程。显式端口永远优先,远端主机保留 ws/wss 的 80/443 默认值,因为在那里它确实就是 HTTP(S) 端口。
 

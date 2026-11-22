@@ -81,13 +81,13 @@ import {
 	loadStoredTargets,
 	loadTargetStatuses,
 	loadTargets,
-	recordTargetStatus,
 	resolveActiveTargetId,
 	saveChosenTargetId,
 	saveTargetStatuses,
+	settledStatuses,
+	statusesAfterTargetEdit,
 	storeTarget,
 	type TargetStatusMap,
-	withoutTargetStatus,
 } from "./lib/connection/target-store";
 import {
 	type ConnectionTarget,
@@ -2175,7 +2175,9 @@ function AppInner(): ReactNode {
 				// sentinel is a last resort, not the normal answer: an ordinary
 				// cold start (closed port, no throw) passes the reason in.
 				const error = ok ? null : (reason ?? connectErrorRef.current ?? t("settings.cannotReachLocalDaemon"));
-				const next = recordTargetStatus(current, rowId, error);
+				// One scrub for every exit: this is the only place a boot result
+				// becomes storage, and the reason may quote the token-bearing URL.
+				const next = settledStatuses(current, rowId, ok, error);
 				saveTargetStatuses(next);
 				return next;
 			});
@@ -2530,7 +2532,7 @@ function AppInner(): ReactNode {
 						? target.id
 						: (connTargetsRef.current.find(row => stripToken(row.url) === reached)?.id ?? target.id);
 				setTargetStatuses(current => {
-					const next = recordTargetStatus(current, reachedId, error);
+					const next = settledStatuses(current, reachedId, error === null, error);
 					saveTargetStatuses(next);
 					return next;
 				});
@@ -2540,12 +2542,8 @@ function AppInner(): ReactNode {
 				await connect(targetUrl);
 				attribute(endpoint, null);
 			} catch (err) {
-				// The row keeps its error; the list is never replaced by it. The
-				// message is scrubbed first: `RpcClient` reports the URL it dialled,
-				// which carries the token, and this string is persisted into a
-				// second slot that would outlive removing the token from the row.
-				const raw = err instanceof Error ? err.message : String(err);
-				attribute(endpoint, stripToken(raw));
+				// The row keeps its error; the list is never replaced by it.
+				attribute(endpoint, err instanceof Error ? err.message : String(err));
 				setLastAttemptFailed(true);
 			} finally {
 				setAttempting(false);
@@ -2555,33 +2553,19 @@ function AppInner(): ReactNode {
 		[connect],
 	);
 
-	/**
-	 * Drop a row's stored status.
-	 *
-	 * A stored error describes the credential that produced it, so it must not
-	 * outlive a token change: `addTarget` calls this when the token differs, and
-	 * the same helper is what a removal would use.
-	 */
-	const clearTargetStatus = useCallback((id: string): void => {
+	const addTarget = useCallback((target: ConnectionTarget): void => {
+		const previous = connTargetsRef.current.find(row => row.id === target.id);
+		setConnTargets(current => storeTarget(current, target));
+		// A stored error describes the credential that produced it. Once the
+		// token changes (or is removed) that error is about a secret the row no
+		// longer has, so it is dropped rather than shown against the new one.
 		setTargetStatuses(current => {
-			const next = withoutTargetStatus(current, id);
+			const next = statusesAfterTargetEdit(current, previous, target);
 			if (next === current) return current;
 			saveTargetStatuses(next);
 			return next;
 		});
 	}, []);
-
-	const addTarget = useCallback(
-		(target: ConnectionTarget): void => {
-			const previous = connTargetsRef.current.find(row => row.id === target.id);
-			setConnTargets(current => storeTarget(current, target));
-			// A stored error describes the credential that produced it. Once the
-			// token changes (or is removed) that error is about a secret the row no
-			// longer has, so it is dropped rather than shown against the new one.
-			if (previous && previous.token !== target.token) clearTargetStatus(target.id);
-		},
-		[clearTargetStatus],
-	);
 	const removeConnTarget = useCallback((id: string): void => {
 		setConnTargets(current => dropTarget(current, id));
 	}, []);

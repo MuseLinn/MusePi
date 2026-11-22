@@ -155,9 +155,12 @@ export function loadTargetStatuses(): TargetStatusMap {
 			const row = value as Partial<TargetStatus>;
 			out[id] = {
 				lastAttemptAt: typeof row.lastAttemptAt === "number" ? row.lastAttemptAt : null,
-				lastError: typeof row.lastError === "string" ? row.lastError : null,
+				lastError: typeof row.lastError === "string" ? stripToken(row.lastError) : null,
 			};
 		}
+		// A slot written before the scrub existed still holds its token; rewrite
+		// the scrubbed copy so the old one does not linger on disk.
+		if (JSON.stringify(out) !== JSON.stringify(parsed)) writeStorage(STATUS_KEY, JSON.stringify(out));
 		return out;
 	} catch {
 		return {};
@@ -179,16 +182,40 @@ export function recordTargetStatus(
 }
 
 /**
- * The status map without one row's entry.
+ * The status map after one settled attempt.
  *
- * A stored error describes the credential that produced it, so it is dropped
- * when that credential changes: keeping it would show an error about a token
- * the row no longer has, and `recordTargetStatus` may have captured a URL that
- * carried it.
+ * The one place a failure reason becomes storage, so every writer gets the same
+ * treatment: the reason is scrubbed of any `?token=` first. `RpcClient` reports
+ * the URL it dialled (`cannot connect to <url>`), and the connection URL is the
+ * one that carries the token — storing that verbatim put the secret in a second
+ * slot that outlived removing the token from the row.
  */
-export function withoutTargetStatus(statuses: TargetStatusMap, id: string): TargetStatusMap {
-	if (!(id in statuses)) return statuses;
-	const { [id]: _dropped, ...rest } = statuses;
+export function settledStatuses(
+	statuses: TargetStatusMap,
+	id: string,
+	ok: boolean,
+	reason: string | null,
+	at: number = Date.now(),
+): TargetStatusMap {
+	return recordTargetStatus(statuses, id, ok || !reason ? null : stripToken(reason), at);
+}
+
+/**
+ * Status after a row is added or edited.
+ *
+ * A stored error describes the credential that produced it, so a token change
+ * (including removing it) drops that row's entry: keeping it would show an
+ * error about a secret the row no longer has, and the stored message may have
+ * captured the URL that carried it.
+ */
+export function statusesAfterTargetEdit(
+	statuses: TargetStatusMap,
+	previous: ConnectionTarget | undefined,
+	next: ConnectionTarget,
+): TargetStatusMap {
+	if (!previous || previous.token === next.token) return statuses;
+	if (!(next.id in statuses)) return statuses;
+	const { [next.id]: _dropped, ...rest } = statuses;
 	return rest;
 }
 

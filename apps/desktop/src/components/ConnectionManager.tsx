@@ -31,6 +31,7 @@ import {
 	createTarget,
 	DEFAULT_DAEMON_PORT,
 	isForwardedKind,
+	stripToken,
 	targetCommand,
 	targetPublishHint,
 } from "../lib/connection/targets";
@@ -266,7 +267,10 @@ export function ConnectionManager({
 
 	const renderRow = (target: ConnectionTarget): ReactNode => {
 		const status = rowStatus(target, activeTargetId, statuses, busyId, state === "connected");
-		const error = target.id === busyId ? lastError : (statuses[target.id]?.lastError ?? null);
+		// Scrubbed at the display too: a status slot written by an older build
+		// may still hold a message that quotes the token-bearing URL.
+		const error =
+			stripToken((target.id === busyId ? lastError : (statuses[target.id]?.lastError ?? null)) ?? "") || null;
 		const command = targetCommand(target);
 		const publish = targetPublishHint(target);
 		const isOpen = expanded === target.id;
