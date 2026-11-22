@@ -1,11 +1,14 @@
 /**
- * Remote daemon host registry for the GUI instance switcher (openchamber
+ * Remote daemon host shape for the GUI instance switcher (openchamber
  * DesktopHostSwitcher parity).
  *
  * A host is a ws:// endpoint plus an optional bearer token. Tokens ride the
  * WebSocket URL as `?token=` because browsers cannot set request headers
  * (the daemon's ws-transport accepts both Authorization and the query form).
- * Persisted in localStorage — the same store the app's daemon URL uses.
+ *
+ * This module no longer owns persistence: `lib/connection/target-store.ts`
+ * (which also carries the kind and its parameters) is the single owner of the
+ * host slot, and the switcher's host list is derived from it.
  */
 
 export interface RemoteHost {
@@ -17,37 +20,6 @@ export interface RemoteHost {
 	url: string;
 	/** Optional bearer token for remote daemons (musepi serve --remote-token). */
 	token?: string;
-}
-
-const STORAGE_KEY = "musepi-gui-hosts";
-
-export function loadHosts(): RemoteHost[] {
-	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return [];
-		const parsed = JSON.parse(raw) as unknown;
-		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.filter(
-				(h): h is RemoteHost =>
-					typeof h === "object" &&
-					h !== null &&
-					typeof (h as RemoteHost).id === "string" &&
-					typeof (h as RemoteHost).label === "string" &&
-					typeof (h as RemoteHost).url === "string",
-			)
-			.map(h => ({ ...h, token: typeof h.token === "string" && h.token.length > 0 ? h.token : undefined }));
-	} catch {
-		return [];
-	}
-}
-
-export function saveHosts(hosts: RemoteHost[]): void {
-	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts));
-	} catch {
-		// storage unavailable (private mode) — the switcher just won't persist
-	}
 }
 
 export function newHostId(): string {

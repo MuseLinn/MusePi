@@ -104,6 +104,28 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 - **服务端心跳**(`ws-transport.ts`):15s PING、3 次 PONG 超时 destroy 连接(清死连接订阅/缓冲区,`teardown` 同步清 interval)。
 - 验证:真实 Electron + CDP 杀 daemon 模拟掉线 → UI 恢复可交互、无 error bar、renderer 日志含恢复路径;暂停状态重连后一致。
 
+## 1d-bis. 连接状态与端点(2026-11-22)
+
+启动门不再是 `if (!rpc)`。事实(`connected`、`attempting`、`disconnectedByUser`、`lastAttemptFailed`、`hasTargets`)经 `lib/connection/state.ts` 的纯函数 `deriveConnectionState` 归约(顺序:已连接 → 连接中 → 用户断开 → 失败 → 未配置),于是每种原因渲染自己的界面。`components/ConnectionGate.tsx` 是唯一把这些事实变成界面的地方(失败文案与 `BootRecoveryActions` 只在 `unreachable` 下),所以应用层测试不必挂载整个壳层就能断言这个选择。`disconnect()` 置 `disconnectedByUser`;`boot()` 与 `connect()` 清除它并结算 `lastAttemptFailed`(`boot` 在每条退出路径结算,`connect()` 仅在非 boot 驱动时结算)。`showsFailureCopy(state)` 同时约束失败文案与 `BootRecoveryActions`,这正是「导出诊断」不会出现在平静界面的原因。
+
+行状态是派生的、从不存储,且只有活的客户端才产生 `connected`:上次成功读作「上次用过」(`settings.connectionStatusLastUsed`),所以列表绝不会与页头的「已断开」自相矛盾,两行都成功过时也不可能同时宣称那唯一一条连接。`unconfigured` 刻意只在「没有存过任何行、且没有尝试失败」时可达:`boot` 在每条失败路径都会结算 `lastAttemptFailed`,所以首次启动遇到一个死掉的守护进程会落在 `unreachable`——这是诚实的答案,因为确实尝试过。平静的首次启动界面因此只在尝试发生之前可达;这一点是刻意接受的,而不是把 boot 的失败特判成「什么都没发生」。
+
+启动的起点是 `initialBootUrl`(纯函数,为测试导出):本机类型返回本机守护进程地址——在那里用存下来的端点等于重新去拨 `bootTargetFor` 刚刚拒绝的那个转发行;其余类型返回 `buildWsUrl(row)`。行本身不保存 token,所以只从 `row.url` 启动会丢掉这个密钥,带 `--remote-token` 的实例下次启动就会 401。
+
+连接错误在存储或显示之前先做脱敏,而且在**每一个写入方**都做,不只是其中一处:`RpcClient` 的拒绝信息是 `cannot connect to <url>`,而那个 URL 带着 token。`settledStatuses` 是「原因变成存储」的唯一位置(在其中抹掉 token),`connectToTarget` 与 `recordBootOutcome`——普通启动退出与 `runBootAttempt` 抛出的原因都一样——全部经过它。`loadTargetStatuses` 读取时脱敏,并在脱敏结果与原值不同时回写该槽位,于是旧构建写下的值会消失而不是一直留着;两个显示位置(`ConnectionGate` 的失败文案、`ConnectionManager` 的行错误)也在输出时脱敏。存下来的错误描述的是产生它的那份凭据,因此 `statusesAfterTargetEdit` 在行的 token 变化或被移除时丢掉该行条目——否则一条关于「行上已不存在的 token」的错误会在编辑之后继续留着。
+
+添加表单在保存前先校验:`normalizeRemoteHostUrl` 接受裸 `host:port`(与实例弹窗一致),拒绝一切非 ws/wss/http/https 的写法,并在表单里报 `settings.instanceUrlInvalid`——这里的端点会成为下次启动的目标,所以 boot 解析不了的值绝不能进存储。boot 的 `try` 也因此补上了 `catch`:每次退出要么记录成功、要么记录失败,抛错(存着一个无法解析的端点、或探测本身失败)再也不能跳过 `recordBootOutcome`、让门在「启动从未连上」之后仍推出 `disconnected-by-user`。`daemonPortOf` 从不抛错,并把非 ws/wss 的协议当作「没有守护进程端口」(`ftp://nope` 会被解析成 80 端口,所以真正的守卫是协议判断而不是解析)。不带端口的 `ws:`/`wss:` **回环**端点解析成守护进程自己的默认端口(`DEFAULT_DAEMON_PORT`)而不是 80:`normalizeRemoteHostUrl("localhost")` 得到的是 `ws://localhost`,若按裸解析走,Electron 的本机探测会去查 80 端口、跳过拨号、永远到不了 `startDaemonViaShell`——首次启动就此无法拉起守护进程。显式端口永远优先,远端主机保留 ws/wss 的 80/443 默认值,因为在那里它确实就是 HTTP(S) 端口。
+
+每次启动尝试的退出都会结算一个结果:`lib/connection/boot-attempt.ts`(`runBootAttempt`)把抛错、或没有结算就返回,都转成一条已记录的失败,于是 `lastAttemptFailed` 绝不会在一次没有连上的启动之后仍为 false。失败总会存下一条行上能显示的原因——有捕获到的连接错误就用它,否则用 `settings.cannotReachLocalDaemon`。普通冷启动在 `connect()` 之前就于 `daemonPortOpen` 短路,没有这条兜底,行上就会在「无法连接」下面显示原始的哨兵字符串 `unreachable`。
+
+存储沿用既有槽位、不新增存储:`lib/connection/target-store.ts` 拥有 `musepi-gui-hosts`(行加宽出 `kind` 与参数;旧行读作 `manual`)、`musepi-gui-url`(上次成功的端点)、`musepi-gui-target-id`(上次尝试起始的行)与 `musepi-gui-target-status`(每行上次尝试与错误,放在列表旁,失败绝不改写行)。`loadTargets` 始终先返回本机行且能承受损坏的槽位;`app.tsx` 里的 `hosts` 由端点列表派生,实例切换器与管理器因此不会漂移。启动从选中行的端点进入,而 `bootTargetFor` 不让一个连不上的 `wsl`/`ssh`/`docker` 行成为下次启动的端点——这些行要靠本构建尚未托管的外部进程才能到达,于是行带着错误留在列表里,启动回退到可以探测和拉起本机守护进程的本机行;`manual` 行是用户自己的地址,绝不会被静默替换。一次尝试记在真正应答的那个端点上,而不是传进来的那一行:启动会逐个探测本机守护进程的端口,所以到达守护进程的那一行才是显示结果的那一行。`stripToken` 是这里唯一的去 token 端点比较,归属与当前行标记共用它。
+
+WSL:`lib/connection/wsl.ts` 解析 `wsl.exe -l -q` 输出(UTF-16 按 Latin-1 读出的 NUL 折叠、BOM/CRLF、`*` 与 `(Default)` 标记、`-v` 的列截到名称、拒绝表头行),并区分 `ok` / `unsupported` / `unavailable`。renderer 没有命令执行通道(沙箱化,preload 未暴露),所以默认 runner 读取文档化的 `window.musepiShell.listWslDistributions` 接缝,在 preload 桥存在之前返回 `unsupported`;界面于是说明「无法检测」,而不是显示空列表。
+
+本模块不托管隧道与容器:行上以可复制文本给出 `wsl.exe -d <发行版> -- musepi serve --port N`、`ssh -N -L <本地>:127.0.0.1:<远端> <user@host>`、`docker exec <容器> musepi serve --port N`(外加 `docker run -p` 发布提示),并说明生命周期托管后续再做。
+
+验证:`test/connection-targets.test.ts`(状态纯函数、目标命令、持久化往返、WSL 解析 + 三种 runner 结果)、`test/connection-manager.test.tsx`(每个状态的界面、主动断开不出现失败文案、失败尝试带诊断、从已存端点连接、上次成功读作「上次用过」而非「已连接」、两行都成功过时不会同时显示已连接、WSL 两/零/失败/无桥/非 Windows、无嵌套滚动条)与 `test/connection-gate.test.tsx`(门本身对每个状态的选择——也就是这起报告出问题的那一层)。
+
 ## 1e. 自定义供应商模型发现(models.discover,2026-08-22)
 
 「获取可用模型」按钮的 daemon 契约:配置期对**草稿**端点的一次性询问,不写任何配置、不入缓存。
