@@ -142,7 +142,11 @@
 			"include": "release/installer-branding.nsh",
 			"uninstallDisplayName": "MusePi ${version}",
 			"deleteAppDataOnUninstall": false,
-			"installerLanguages": ["zh_CN", "zh_TW", "en_US"],
+			"installerLanguages": [
+				"zh_CN",
+				"zh_TW",
+				"en_US"
+			],
 			"language": "2052"
 		},
 		"linux": {
@@ -199,7 +203,9 @@
 		"konva": "^10.5.0",
 		"monaco-editor": "^0.57.0",
 		"perfect-freehand": "^1.2.3",
-		"react-konva": "19.2.7"
+		"react-konva": "19.2.7",
+		"@musepi/ui-slots": "workspace:*",
+		"@musepi/ui-conversation": "workspace:*"
 	},
 	"optionalDependencies": {
 		"@koromix/koffi-darwin-arm64": "3.3.1",

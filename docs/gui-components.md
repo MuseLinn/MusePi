@@ -59,6 +59,21 @@ The floating pane is one primitive. `gui-base.css` paints it, `tokens.css` owns 
 - **Contract.** `apps/desktop/test/glass-pane.test.ts` reads the real cascade in Chromium: single tint, lit bands and dark sides, spill above the warp layer, light polarity, one offset-free shadow.
 - **Decision record.** `docs/adr/0005-floating-glass-pane.md` holds the rationale and the rejected alternatives; this section states the current contract.
 
+## UI capability packages
+
+A UI capability owns one `@musepi/ui-*` package. Its `src/contract/slots.ts` names the seats; the desktop host registers a component for each seat, and Cordis contributions arrive by slot id. A package declares a seat only when a real consumer exists, and components move into the package once their seats and tests do.
+
+| Package | Owns | Status |
+| --- | --- | --- |
+| `@musepi/ui-slots` | `defineSlot` and the declaration authority re-export | landed |
+| `@musepi/ui-conversation` | composer, input, hero, chat-node and session-info seats | contract landed; components still in `apps/desktop` |
+| `@musepi/ui-shell` | main, panel, rail, shell-overlay and browser-host seats | pending |
+| `@musepi/ui-settings` | settings extension, section and item seats | pending |
+| `@musepi/ui-sidebar` | sidebar-panel seats | pending |
+| `@musepi/ui-chat`, `ui-panel`, `ui-marketplace`, `ui-agents` | their components and CSS | pending |
+
+The desktop host re-exports the moved seat constants from `slot-host.tsx` during migration, so existing imports keep working; new code imports the capability package directly.
+
 ## Desktop shell (`apps/desktop/src/components/`)
 
 | Component | Purpose | When to use |

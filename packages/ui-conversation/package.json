@@ -1,0 +1,15 @@
+{
+	"type": "module",
+	"name": "@musepi/ui-conversation",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "Conversation seats: composer, input, hero and session-info contracts.",
+	"exports": {
+		".": "./src/index.ts",
+		"./contract/slots": "./src/contract/slots.ts"
+	},
+	"dependencies": {
+		"@musepi/ui-slots": "workspace:*"
+	}
+}

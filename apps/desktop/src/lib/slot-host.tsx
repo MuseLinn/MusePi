@@ -24,6 +24,31 @@ import type {
 	SessionEntry,
 } from "@musepi/pi-wire";
 import { resolveLocalizedText } from "@musepi/pi-wire";
+import {
+	COMPOSER_ACTIVITY_SLOT,
+	COMPOSER_ATTACHMENTS_SLOT,
+	COMPOSER_BAR_SLOT,
+	COMPOSER_DOCK_SLOT,
+	COMPOSER_FOR_SLOT,
+	COMPOSER_INPUT_DOCK_SLOT,
+	COMPOSER_LEFT_SLOT,
+	COMPOSER_MODEL_SLOT,
+	COMPOSER_OVERLAY_SLOT,
+	COMPOSER_PERMISSION_SLOT,
+	COMPOSER_PLAN_SLOT,
+	COMPOSER_REQUEST_DRAFT_SLOT,
+	COMPOSER_RIGHT_SLOT,
+	CONVERSATION_CHAT_NODE_SLOT,
+	HERO_AGENT_PRESET_SLOT,
+	HERO_BRAND_MARK_SLOT,
+	HERO_FRAME_SLOT,
+	HERO_OPTIONS_SLOT,
+	HERO_WORKSPACE_SLOT,
+	SESSION_INFO_AGENTS_SLOT,
+	SESSION_INFO_SLOT,
+	SESSION_INFO_SLOT_PREFIX,
+} from "@musepi/ui-conversation/contract/slots";
+import { defineSlot } from "@musepi/ui-slots/contract/slots";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import * as React from "react";
 import {
@@ -196,10 +221,7 @@ function exposeHostReact(): void {
  * `!` is safe: every name below is declared in EXTENSION_SLOT_DECLARATION.
  */
 function slot(name: string): string {
-	if (!Object.hasOwn(EXTENSION_SLOT_DECLARATION.exact, name)) {
-		throw new Error(`Unknown extension slot: ${name}`);
-	}
-	return name;
+	return defineSlot(name);
 }
 
 /** First slot id — the settings page's extension-contributed section. */
@@ -225,46 +247,31 @@ export const SETTINGS_SECTION_SLOT_PREFIX = "settings.section.";
 export const RAIL_SLOT_PREFIX = "rail.";
 /** Keyed settings card slot. */
 export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
-/** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
-export const COMPOSER_BAR_SLOT = slot("conversation.composer.bar");
-export const COMPOSER_DOCK_SLOT = slot("conversation.composer.dock");
-export const COMPOSER_INPUT_DOCK_SLOT = slot("conversation.input.dock");
-export const COMPOSER_LEFT_SLOT = slot("conversation.input.left");
-export const COMPOSER_RIGHT_SLOT = slot("conversation.input.right");
-export const COMPOSER_MODEL_SLOT = slot("conversation.input.model");
-export const COMPOSER_ATTACHMENTS_SLOT = slot("conversation.input.attachments");
-export const COMPOSER_PERMISSION_SLOT = slot("conversation.input.permission");
-export const COMPOSER_PLAN_SLOT = slot("conversation.input.plan");
-export const COMPOSER_ACTIVITY_SLOT = slot("conversation.input.activity");
-export const COMPOSER_OVERLAY_SLOT = slot("conversation.input.overlay");
-export const COMPOSER_REQUEST_DRAFT_SLOT = slot("conversation.input.requestDraft");
-export const COMPOSER_FOR_SLOT = slot("conversation.input.for");
-/** 空态（hero）席位：整页外框、品牌标记、工作区、工作模式与快捷选项。 */
-export const HERO_FRAME_SLOT = slot("conversation.hero.frame");
-export const HERO_BRAND_MARK_SLOT = slot("conversation.hero.brand.mark");
-export const HERO_WORKSPACE_SLOT = slot("conversation.hero.workspace");
-export const HERO_AGENT_PRESET_SLOT = slot("conversation.hero.agentPreset");
-export const HERO_OPTIONS_SLOT = slot("conversation.hero.options");
-/** conversation.chat.node seat slot —— 单一
- *  聊天节点 seat,按节点 kind(entryKey)分发;turn-tail/tool/user/assistant
- *  都是该 seat 的节点 kind,而非独立槽。 */
-export const CONVERSATION_CHAT_NODE_SLOT = slot("conversation.chat.node");
+export {
+	COMPOSER_ACTIVITY_SLOT,
+	COMPOSER_ATTACHMENTS_SLOT,
+	COMPOSER_BAR_SLOT,
+	COMPOSER_DOCK_SLOT,
+	COMPOSER_FOR_SLOT,
+	COMPOSER_INPUT_DOCK_SLOT,
+	COMPOSER_LEFT_SLOT,
+	COMPOSER_MODEL_SLOT,
+	COMPOSER_OVERLAY_SLOT,
+	COMPOSER_PERMISSION_SLOT,
+	COMPOSER_PLAN_SLOT,
+	COMPOSER_REQUEST_DRAFT_SLOT,
+	COMPOSER_RIGHT_SLOT,
+	CONVERSATION_CHAT_NODE_SLOT,
+	HERO_AGENT_PRESET_SLOT,
+	HERO_BRAND_MARK_SLOT,
+	HERO_FRAME_SLOT,
+	HERO_OPTIONS_SLOT,
+	HERO_WORKSPACE_SLOT,
+	SESSION_INFO_AGENTS_SLOT,
+	SESSION_INFO_SLOT,
+	SESSION_INFO_SLOT_PREFIX,
+};
 
-/**
- * 会话信息卡的分区席位命名空间(`chat.session-info.<id>`)。
- *
- * 声明在 collab-proto 的 `EXTENSION_SLOT_DECLARATION.prefixes`(daemon 校验
- * 权威);这里只是桌面端取用的名字,前缀值必须与那边一致。
- *
- * 信息卡在面板收起时代替右面板展示会话元数据,右侧每个分区都是可替换的贡献
- * 点:宿主按前缀发现组件,组件从 `sessionInfo` 拿到卡片已读好的只读数据。
- * 分区因此不需要各自再拉一遍 `extensions.list`,也不会与内置回退产生两份判定。
- */
-export const SESSION_INFO_SLOT_PREFIX = "chat.session-info.";
-/** 内置「插件」分区占用的席位(`session-info-plugins` 插件注册到这里)。 */
-export const SESSION_INFO_SLOT = `${SESSION_INFO_SLOT_PREFIX}plugins`;
-/** 子代理进度分区(`session-info-agents` 插件注册到这里)。 */
-export const SESSION_INFO_AGENTS_SLOT = `${SESSION_INFO_SLOT_PREFIX}agents`;
 /**
  * 二级左栏面板席位命名空间(`sidebar.panel.<destination id>`)。一个 rail
  * 目的地最多挂载一个面板;宿主按当前目的地/悬停目的地取用,未注册的仍保留

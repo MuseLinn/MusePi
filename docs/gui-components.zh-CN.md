@@ -57,6 +57,21 @@ scope:
 - **消费者。** 输入框与欢迎页输入框、顶栏的项目胶囊与 open-in 胶囊、设置页“半透明面板”预览、会话 recap 行。只需要 warp 的表面（能力页工具条）保留类名，在自己的作用域里清零填充、阴影与 `::after`。
 - **契约。** `apps/desktop/test/glass-pane.test.ts` 在真实 Chromium 中读取级联：单层 tint、亮带与暗线、光溢在 warp 层之上、浅色极性、以及唯一的无偏移阴影。
 
+## UI 能力包
+
+每个 UI 能力拥有一个 `@musepi/ui-*` 包。包内 `src/contract/slots.ts` 声明座位；桌面宿主按座位注册组件，Cordis 贡献按槽位 id 进入。只有存在真实消费者时才声明座位；组件在座位与测试迁入时一起迁入。
+
+| 包 | 负责 | 状态 |
+| --- | --- | --- |
+| `@musepi/ui-slots` | `defineSlot` 与声明权威的再导出 | 已落地 |
+| `@musepi/ui-conversation` | composer、input、hero、chat-node 与 session-info 座位 | 契约已落地；组件仍在 `apps/desktop` |
+| `@musepi/ui-shell` | main、panel、rail、shell-overlay 与 browser-host 座位 | 待迁 |
+| `@musepi/ui-settings` | settings extension、section 与 item 座位 | 待迁 |
+| `@musepi/ui-sidebar` | sidebar-panel 座位 | 待迁 |
+| `@musepi/ui-chat`、`ui-panel`、`ui-marketplace`、`ui-agents` | 各自的组件与 CSS | 待迁 |
+
+迁移期间桌面宿主在 `slot-host.tsx` 里再导出已搬走的座位常量，现有 import 不变；新代码直接引用能力包。
+
 ## 桌面壳（`apps/desktop/src/components/`）
 
 | 组件 | 用途 | 何时该用 |
