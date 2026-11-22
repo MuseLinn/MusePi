@@ -2878,17 +2878,19 @@ export const SETTINGS_SCHEMA = {
 	},
 
 	// Premium long-context tiers (OpenAI GPT-5.6 bills 2x input / 1.5x output
-	// above 272K input tokens). Off caps affected models at the threshold so
-	// compaction kicks in before any request crosses into premium billing.
+	// above 272K input tokens). Off keeps the standard-pricing window so
+	// compaction fires before a request crosses into premium billing; a model
+	// whose own `compaction.modelThresholds` entry needs more room, or whose
+	// user override sets the window, still gets it.
 	extendedContext: {
 		type: "boolean",
-		default: true,
+		default: false,
 		ui: {
 			tab: "context",
 			group: "General",
 			label: "Extended Context",
 			description:
-				"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window",
+				"Use larger context windows where supported; may incur premium pricing. Off keeps default or standard-pricing windows.",
 		},
 	},
 

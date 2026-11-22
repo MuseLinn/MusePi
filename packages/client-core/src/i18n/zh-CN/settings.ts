@@ -7186,6 +7186,8 @@ export const settings = {
 	"settings.connectionContainerPick": "选择容器",
 	"settings.connectionDockerListFailed": "无法读取容器列表",
 	"settings.connectionLoopbackPlaceholder": "ws://127.0.0.1:{port}",
+	"Use larger context windows where supported; may incur premium pricing. Off keeps default or standard-pricing windows.":
+		"在支持的地方使用更大的上下文窗口；可能产生溢价。关闭时保持默认或标准计费窗口。",
 } as const;
 
 /** Key union for the settings domain (source of truth). */

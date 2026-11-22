@@ -4182,6 +4182,8 @@ export const settings = {
 	"Hindsight Global Scope": "Hindsight 全局作用域",
 	"Let retain and learn take scope: global, which stores a memory without the project tag so every project recalls it. Needs global or per-project-tagged scoping":
 		"允许 retain 和 learn 使用 scope: global，写入不带项目标签的记忆，使每个项目都能 recall。需要 global 或 per-project-tagged 作用域",
+	"Use larger context windows where supported; may incur premium pricing. Off keeps default or standard-pricing windows.":
+		"在支持的地方使用更大的上下文窗口；可能产生溢价。关闭时保持默认或标准计费窗口。",
 } as const;
 
 /** Key union for the settings domain (mirrors the guest-client locale split). */

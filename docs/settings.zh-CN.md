@@ -626,6 +626,7 @@ memory:
 | 键 | 类型 | 默认值 | 备注 |
 |---|---|---|---|
 | `contextPromotion.enabled` | boolean | `false` | Context 溢出时提升到活跃 model 显式的 `contextPromotionTarget`。 |
+| `extendedContext` | boolean | `false` | 在支持的地方使用更大的上下文窗口（溢价长上下文档位）。关闭时保持标准计费窗口，让压缩在跨档前触发；按模型阈值条目若需要更大空间，或显式设置过 `contextWindow`，仍会得到完整窗口。 |
 | `compaction.enabled` | boolean | `true` | 自动对话 compaction。 |
 | `compaction.midTurnEnabled` | boolean | `true` | 在工具步骤之间、下次 provider 请求前检查阈值；子智能体始终检查。 |
 | `compaction.methodOrder` | array | `remote, snapcompact, handoff, shake, soft` | 首选回退顺序；不可用或失败时自动换下一种。 |

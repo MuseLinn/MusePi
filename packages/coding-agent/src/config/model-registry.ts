@@ -41,6 +41,7 @@ import { clearExtensionDesignSystems } from "../presets/design-systems";
 import type { AuthStorage } from "../session/auth-storage";
 import { clearExtensionMediaProviders } from "../tools/image-providers";
 import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";
+import { matchModelCompactionThreshold } from "./compaction-threshold";
 import type { ConfigError, ConfigFile } from "./config-file";
 import {
 	buildCustomModelOverlay,
@@ -146,15 +147,39 @@ function getDisabledProviderIdsFromSettings(settingsInstance?: Settings): Set<st
 }
 
 /**
- * Whether premium long-context windows are enabled. Defaults to true when no
- * settings source is available (SDK embedding, early boot).
+ * Whether premium long-context windows are enabled. Defaults to the schema
+ * value when no settings source is available (SDK embedding, early boot).
  */
 function isExtendedContextEnabledFromSettings(settingsInstance?: Settings): boolean {
 	try {
 		return (settingsInstance ?? settings).get("extendedContext");
 	} catch {
-		return true;
+		return false;
 	}
+}
+
+/** `compaction.modelThresholds` in force, or undefined when the feature is off. */
+function getModelCompactionPointsFromSettings(settingsInstance?: Settings): unknown {
+	try {
+		const scope = settingsInstance ?? settings;
+		return scope.get("compaction.modelThresholdsEnabled") === false
+			? undefined
+			: scope.get("compaction.modelThresholds");
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Whether `model`'s per-model compaction point needs more room than `window`.
+ * A token base stands in for the window, so it needs a larger one once it
+ * exceeds `window`; a fixed trigger (`f90000`) needs room above it, so it does
+ * at `window` already. Such an entry opts that model into its extended window.
+ */
+function compactionPointReaches(points: unknown, model: Model<Api>, window: number): boolean {
+	const threshold = matchModelCompactionThreshold(points, model)?.threshold;
+	if (!threshold || threshold.thresholdTokens <= 0) return false;
+	return threshold.fixed ? threshold.thresholdTokens >= window : threshold.thresholdTokens > window;
 }
 
 /** Authentication material returned to legacy extensions for one model request. */
@@ -1776,8 +1801,14 @@ export class ModelRegistry {
 	}
 	#applyHardcodedModelPolicies(models: Model<Api>[]): Model<Api>[] {
 		const extendedContext = isExtendedContextEnabledFromSettings(this.#settings);
+		const compactionPoints = getModelCompactionPointsFromSettings(this.#settings);
 		return models.map(model => {
-			if (extendedContext) {
+			// A model opts into its maximum window on its own when the configured
+			// per-model compaction point needs more room than the standard window
+			// (a `fN` trigger at/above it, or a token base above it). Percentage
+			// entries scale with the window and never opt in.
+			const optedIn = extendedContext || compactionPointReaches(compactionPoints, model, model.contextWindow ?? 0);
+			if (optedIn) {
 				const maximum = model.maxContextWindow;
 				if (maximum !== undefined && model.contextWindow !== null && maximum > model.contextWindow) {
 					model = applyModelOverride(model, { contextWindow: maximum });
@@ -1788,7 +1819,7 @@ export class ModelRegistry {
 			// threshold so compaction fires before a request crosses into the tier.
 			// Explicit per-model `contextWindow` overrides reapply later in
 			// composition and win over this cap.
-			if (!extendedContext) {
+			if (!optedIn) {
 				const threshold = model.cost.longContext?.inputThreshold;
 				if (threshold !== undefined && model.contextWindow !== null && model.contextWindow > threshold) {
 					model = applyModelOverride(model, { contextWindow: threshold });

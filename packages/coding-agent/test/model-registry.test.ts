@@ -2403,6 +2403,32 @@ describe("ModelRegistry", () => {
 			expect(registry.find("openai-codex", "gpt-5.6-terra")?.contextWindow).toBe(1_000_000);
 		});
 
+		test("defaults to the standard window and lets a per-model trigger opt back in", async () => {
+			// The setting is off unless configured: a premium long-context model
+			// keeps its standard-pricing window so compaction fires before the tier.
+			await Settings.init({ inMemory: true });
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+			expect(settings.get("extendedContext")).toBe(false);
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
+
+			// A per-model trigger that needs more room than the standard window is
+			// the user's own statement of intent, so that model gets its maximum.
+			settings.override("compaction.modelThresholds", { "openai-codex/gpt-6-astra": "f500000" } as never);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(1_050_000);
+
+			// A percentage entry scales with the window and never opts in.
+			settings.override("compaction.modelThresholds", { "openai-codex/gpt-6-astra": "80%" } as never);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
+
+			// The per-model editor switch still gates the whole map.
+			settings.override("compaction.modelThresholds", { "openai-codex/gpt-6-astra": "f500000" } as never);
+			settings.override("compaction.modelThresholdsEnabled", false);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
+		});
+
 		test("toggles bundled Codex gpt-6-astra between its default and maximum windows", async () => {
 			await Settings.init({ inMemory: true, overrides: { extendedContext: false } });
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);

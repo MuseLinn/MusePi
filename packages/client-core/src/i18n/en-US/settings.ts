@@ -7509,4 +7509,6 @@ export const settings = {
 	"settings.connectionContainerPick": "Pick a container",
 	"settings.connectionDockerListFailed": "Could not read the container list",
 	"settings.connectionLoopbackPlaceholder": "ws://127.0.0.1:{port}",
+	"Use larger context windows where supported; may incur premium pricing. Off keeps default or standard-pricing windows.":
+		"Use larger context windows where supported; may incur premium pricing. Off keeps default or standard-pricing windows.",
 } as const satisfies Record<SettingsKey, string>;

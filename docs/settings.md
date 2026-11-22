@@ -624,6 +624,7 @@ memory:
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `contextPromotion.enabled` | boolean | `false` | Promote to the active model's explicit `contextPromotionTarget` on context overflow. |
+| `extendedContext` | boolean | `false` | Use larger context windows where supported (premium long-context tiers). Off keeps the standard-pricing window so compaction fires before the tier; a per-model `compaction.modelThresholds` entry that needs more room, or an explicit per-model `contextWindow` override, still gets it. |
 | `compaction.enabled` | boolean | `true` | Automatic conversation compaction. |
 | `compaction.midTurnEnabled` | boolean | `true` | Check thresholds between tool steps, before the next provider request; subagents always check. |
 | `compaction.methodOrder` | array | `remote, snapcompact, handoff, shake, soft` | Preferred fallback order; an unavailable or failed method advances to the next. |
