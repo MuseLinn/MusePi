@@ -1,4 +1,4 @@
-# `@musepi/ui-conversation`
+# `@musepi/client-ui-conversation`
 
 会话能力的座位契约。`src/client/contract/slots.ts` 声明 composer、input、hero 与 session-info 的座位；桌面宿主按座位注册组件，Cordis 贡献按槽位 id 进入。
 

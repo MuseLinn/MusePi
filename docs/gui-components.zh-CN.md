@@ -63,12 +63,12 @@ scope:
 
 | 包 | 负责 | 状态 |
 | --- | --- | --- |
-| `@musepi/ui-slots` | `defineSlot` 与声明权威的再导出 | 已落地 |
-| `@musepi/ui-conversation` | composer、input、hero、chat-node 与 session-info 座位 | 契约已落地；组件仍在 `apps/desktop` |
-| `@musepi/ui-shell` | main、panel、rail、shell-overlay 与 browser-host 座位 | 待迁 |
-| `@musepi/ui-settings` | settings extension、section 与 item 座位 | 待迁 |
-| `@musepi/ui-sidebar` | sidebar-panel 座位 | 待迁 |
-| `@musepi/ui-chat`、`ui-panel`、`ui-marketplace`、`ui-agents` | 各自的组件与 CSS | 待迁 |
+| `@musepi/client-ui-slots` | `defineSlot` 与声明权威的再导出 | 已落地 |
+| `@musepi/client-ui-conversation` | composer、input、hero、chat-node 与 session-info 座位 | 契约已落地；组件仍在 `apps/desktop` |
+| `@musepi/client-ui-shell` | main、panel、rail、shell-overlay 与 browser-host 座位 | 契约已落地 |
+| `@musepi/client-ui-settings` | settings extension、section 与 item 座位 | 契约已落地 |
+| `@musepi/client-ui-sidebar` | sidebar-panel 座位 | 契约已落地 |
+| `@musepi/client-ui-chat`、`client-ui-panel`、`client-ui-marketplace`、`client-ui-agents` | 各自的组件与 CSS | 待迁 |
 
 迁移期间桌面宿主在 `slot-host.tsx` 里再导出已搬走的座位常量，现有 import 不变；新代码直接引用能力包。
 

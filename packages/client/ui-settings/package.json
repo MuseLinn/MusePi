@@ -1,0 +1,16 @@
+{
+	"type": "module",
+	"name": "@musepi/client-ui-settings",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "UI seat contract for the ui-settings capability.",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client/index.ts",
+		"./src/*": "./src/*"
+	},
+	"dependencies": {
+		"@musepi/client-ui-slots": "workspace:*"
+	}
+}

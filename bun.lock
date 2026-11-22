@@ -56,9 +56,12 @@
         "@lobehub/icons": "^6.16.0",
         "@milkdown/crepe": "7.21.3",
         "@milkdown/kit": "7.21.3",
+        "@musepi/client-ui-conversation": "workspace:*",
+        "@musepi/client-ui-settings": "workspace:*",
+        "@musepi/client-ui-shell": "workspace:*",
+        "@musepi/client-ui-sidebar": "workspace:*",
+        "@musepi/client-ui-slots": "workspace:*",
         "@musepi/pi-utils": "workspace:*",
-        "@musepi/ui-conversation": "workspace:*",
-        "@musepi/ui-slots": "workspace:*",
         "chroma-js": "^3.2.0",
         "docx": "^9.15.0",
         "electron-updater": "6.4.1",
@@ -218,14 +221,35 @@
       },
     },
     "packages/client/ui-conversation": {
-      "name": "@musepi/ui-conversation",
+      "name": "@musepi/client-ui-conversation",
       "version": "0.7.7",
       "dependencies": {
-        "@musepi/ui-slots": "workspace:*",
+        "@musepi/client-ui-slots": "workspace:*",
+      },
+    },
+    "packages/client/ui-settings": {
+      "name": "@musepi/client-ui-settings",
+      "version": "0.7.7",
+      "dependencies": {
+        "@musepi/client-ui-slots": "workspace:*",
+      },
+    },
+    "packages/client/ui-shell": {
+      "name": "@musepi/client-ui-shell",
+      "version": "0.7.7",
+      "dependencies": {
+        "@musepi/client-ui-slots": "workspace:*",
+      },
+    },
+    "packages/client/ui-sidebar": {
+      "name": "@musepi/client-ui-sidebar",
+      "version": "0.7.7",
+      "dependencies": {
+        "@musepi/client-ui-slots": "workspace:*",
       },
     },
     "packages/client/ui-slots": {
-      "name": "@musepi/ui-slots",
+      "name": "@musepi/client-ui-slots",
       "version": "0.7.7",
       "dependencies": {
         "@musepi/collab-proto": "workspace:*",
@@ -1149,6 +1173,16 @@
 
     "@musepi/client-core": ["@musepi/client-core@workspace:packages/client-core"],
 
+    "@musepi/client-ui-conversation": ["@musepi/client-ui-conversation@workspace:packages/client/ui-conversation"],
+
+    "@musepi/client-ui-settings": ["@musepi/client-ui-settings@workspace:packages/client/ui-settings"],
+
+    "@musepi/client-ui-shell": ["@musepi/client-ui-shell@workspace:packages/client/ui-shell"],
+
+    "@musepi/client-ui-sidebar": ["@musepi/client-ui-sidebar@workspace:packages/client/ui-sidebar"],
+
+    "@musepi/client-ui-slots": ["@musepi/client-ui-slots@workspace:packages/client/ui-slots"],
+
     "@musepi/collab-proto": ["@musepi/collab-proto@workspace:packages/collab-proto"],
 
     "@musepi/desktop-app": ["@musepi/desktop-app@workspace:apps/desktop"],
@@ -1190,10 +1224,6 @@
     "@musepi/snapcompact": ["@musepi/snapcompact@workspace:packages/snapcompact"],
 
     "@musepi/typescript-edit-benchmark": ["@musepi/typescript-edit-benchmark@workspace:tools/typescript-edit-benchmark"],
-
-    "@musepi/ui-conversation": ["@musepi/ui-conversation@workspace:packages/client/ui-conversation"],
-
-    "@musepi/ui-slots": ["@musepi/ui-slots@workspace:packages/client/ui-slots"],
 
     "@napi-rs/cli": ["@napi-rs/cli@3.7.2", "", { "dependencies": { "@inquirer/prompts": "^8.5.2", "@napi-rs/cross-toolchain": "^1.0.3", "@napi-rs/wasm-tools": "^1.0.1", "@octokit/rest": "^22.0.1", "clipanion": "^4.0.0-rc.4", "colorette": "^2.0.20", "emnapi": "^1.11.1", "es-toolkit": "^1.47.0", "js-yaml": "^4.2.0", "obug": "^2.1.2", "semver": "^7.8.2", "typanion": "^3.14.0" }, "peerDependencies": { "@emnapi/runtime": "^1.7.1" }, "optionalPeers": ["@emnapi/runtime"], "bin": { "napi": "dist/cli.js", "napi-raw": "cli.mjs" } }, "sha512-shDW0Td/XZQpP04Yy+OsMt1ILMKGGkoLcy1zVAsSAK0fLfWm0Upgkmfs/NOV2ZhMQwkgpR3ZEdyHmTwgrUDQuA=="],
 

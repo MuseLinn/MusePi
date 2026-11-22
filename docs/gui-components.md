@@ -65,12 +65,12 @@ A UI capability owns one `@musepi/ui-*` package. Its `src/contract/slots.ts` nam
 
 | Package | Owns | Status |
 | --- | --- | --- |
-| `@musepi/ui-slots` | `defineSlot` and the declaration authority re-export | landed |
-| `@musepi/ui-conversation` | composer, input, hero, chat-node and session-info seats | contract landed; components still in `apps/desktop` |
-| `@musepi/ui-shell` | main, panel, rail, shell-overlay and browser-host seats | pending |
-| `@musepi/ui-settings` | settings extension, section and item seats | pending |
-| `@musepi/ui-sidebar` | sidebar-panel seats | pending |
-| `@musepi/ui-chat`, `ui-panel`, `ui-marketplace`, `ui-agents` | their components and CSS | pending |
+| `@musepi/client-ui-slots` | `defineSlot` and the declaration authority re-export | landed |
+| `@musepi/client-ui-conversation` | composer, input, hero, chat-node and session-info seats | contract landed; components still in `apps/desktop` |
+| `@musepi/client-ui-shell` | main, panel, rail, shell-overlay and browser-host seats | contract landed |
+| `@musepi/client-ui-settings` | settings extension, section and item seats | contract landed |
+| `@musepi/client-ui-sidebar` | sidebar-panel seats | contract landed |
+| `@musepi/client-ui-chat`, `client-ui-panel`, `client-ui-marketplace`, `client-ui-agents` | their components and CSS | pending |
 
 The desktop host re-exports the moved seat constants from `slot-host.tsx` during migration, so existing imports keep working; new code imports the capability package directly.
 

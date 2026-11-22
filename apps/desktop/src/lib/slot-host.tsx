@@ -12,18 +12,6 @@ import {
 	unregisterTranslationNamespace,
 } from "@musepi/client-core";
 import type { ExtensionWidgetArtifact } from "@musepi/client-core/src/widgets/extension-widgets";
-import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
-import type {
-	ConfigFieldDesc,
-	ConfigFieldError,
-	LocalizedPluginText,
-	PluginCompatibility,
-	PluginComponentDesc,
-	PluginConfigValues,
-	PluginResources,
-	SessionEntry,
-} from "@musepi/pi-wire";
-import { resolveLocalizedText } from "@musepi/pi-wire";
 import {
 	COMPOSER_ACTIVITY_SLOT,
 	COMPOSER_ATTACHMENTS_SLOT,
@@ -47,8 +35,40 @@ import {
 	SESSION_INFO_AGENTS_SLOT,
 	SESSION_INFO_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
-} from "@musepi/ui-conversation/client/contract/slots";
-import { defineSlot } from "@musepi/ui-slots";
+} from "@musepi/client-ui-conversation/client";
+import {
+	SETTINGS_EXTENSION_SLOT,
+	SETTINGS_ITEM_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT_PREFIX,
+} from "@musepi/client-ui-settings/client";
+import {
+	BROWSER_HOST_SLOT,
+	CAPABILITY_CENTER_SLOT,
+	CONVERSATION_SLOT,
+	PANEL_SHELL_SLOT,
+	PANEL_TAB_SLOT_PREFIX,
+	RAIL_SLOT_PREFIX,
+	RIGHT_PANEL_SLOT,
+	RIGHT_RAIL_SLOT,
+	SHELL_OVERLAY_SLOT,
+} from "@musepi/client-ui-shell/client";
+import {
+	CAPABILITY_PANEL_SLOT,
+	SCHEDULED_PANEL_SLOT,
+	SIDEBAR_PANEL_SLOT_PREFIX,
+} from "@musepi/client-ui-sidebar/client";
+import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
+import type {
+	ConfigFieldDesc,
+	ConfigFieldError,
+	LocalizedPluginText,
+	PluginCompatibility,
+	PluginComponentDesc,
+	PluginConfigValues,
+	PluginResources,
+	SessionEntry,
+} from "@musepi/pi-wire";
+import { resolveLocalizedText } from "@musepi/pi-wire";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import * as React from "react";
 import {
@@ -213,40 +233,27 @@ function exposeHostReact(): void {
  * shows up in the extension center instead of silently missing.
  */
 
-/**
- * Look a slot id up by name.
- *
- * The exact list is ordered by UI position, so an index would silently point at
- * the wrong slot the moment a seat is added — a name lookup cannot. The
- * `!` is safe: every name below is declared in EXTENSION_SLOT_DECLARATION.
- */
-function slot(name: string): string {
-	return defineSlot(name);
-}
-
-/** First slot id — the settings page's extension-contributed section. */
-export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
-/** Full welcome and session surface slot (root `main` key `conversation`). */
-export const CONVERSATION_SLOT = slot("main.conversation");
-/** Full capability-center page slot (root `main` key `capability`). */
-export const CAPABILITY_CENTER_SLOT = slot("main.capability");
-/** Window-level overlay layer (floating scroll rail); host keeps a fallback. */
-export const SHELL_OVERLAY_SLOT = slot("shell.overlay");
-/** Full right-panel shell, independently replaceable from main.conversation. */
-export const PANEL_SHELL_SLOT = slot("panel.shell");
-/** Always-mounted managed browser guest host. */
-export const BROWSER_HOST_SLOT = slot("browser.host");
-/** Right-side workspace panel slot. */
-export const RIGHT_PANEL_SLOT = slot("panel.right");
-/** Right-edge 44px icon rail slot. */
-export const RIGHT_RAIL_SLOT = slot("rail.right");
-/** 内核级 slot 命名空间(P1 架构开放):slot 名是开放命名空间,前缀决定挂载位置。 */
-export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
-/** Settings page namespace (dsh `settings.section.<id>`; the only spelling). */
-export const SETTINGS_SECTION_SLOT_PREFIX = "settings.section.";
-export const RAIL_SLOT_PREFIX = "rail.";
-/** Keyed settings card slot. */
-export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
+export {
+	SETTINGS_EXTENSION_SLOT,
+	SETTINGS_ITEM_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT_PREFIX,
+} from "@musepi/client-ui-settings/client";
+export {
+	BROWSER_HOST_SLOT,
+	CAPABILITY_CENTER_SLOT,
+	CONVERSATION_SLOT,
+	PANEL_SHELL_SLOT,
+	PANEL_TAB_SLOT_PREFIX,
+	RAIL_SLOT_PREFIX,
+	RIGHT_PANEL_SLOT,
+	RIGHT_RAIL_SLOT,
+	SHELL_OVERLAY_SLOT,
+} from "@musepi/client-ui-shell/client";
+export {
+	CAPABILITY_PANEL_SLOT,
+	SCHEDULED_PANEL_SLOT,
+	SIDEBAR_PANEL_SLOT_PREFIX,
+} from "@musepi/client-ui-sidebar/client";
 export {
 	COMPOSER_ACTIVITY_SLOT,
 	COMPOSER_ATTACHMENTS_SLOT,
@@ -271,17 +278,6 @@ export {
 	SESSION_INFO_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
 };
-
-/**
- * 二级左栏面板席位命名空间(`sidebar.panel.<destination id>`)。一个 rail
- * 目的地最多挂载一个面板;宿主按当前目的地/悬停目的地取用,未注册的仍保留
- * 内置回退。前缀值声明在 collab-proto 的单一权威表。
- */
-export const SIDEBAR_PANEL_SLOT_PREFIX = "sidebar.panel.";
-/** 任务中心 destination 的面板席位。 */
-export const SCHEDULED_PANEL_SLOT = `${SIDEBAR_PANEL_SLOT_PREFIX}scheduled`;
-/** 能力中心 destination 的面板席位（技能 / 插件 / 插件市场二级左栏）。 */
-export const CAPABILITY_PANEL_SLOT = `${SIDEBAR_PANEL_SLOT_PREFIX}capability`;
 
 /** 一条插件读数(卡片从扩展注册表筛出的 plugin-module / extension-module)。 */
 export interface SessionInfoPluginRow {

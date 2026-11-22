@@ -1,4 +1,4 @@
-import { defineSlot } from "@musepi/ui-slots";
+import { defineSlot } from "@musepi/client-ui-slots";
 
 /** Composer seats. */
 export const COMPOSER_BAR_SLOT = defineSlot("conversation.composer.bar");

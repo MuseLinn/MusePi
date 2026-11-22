@@ -204,8 +204,11 @@
 		"monaco-editor": "^0.57.0",
 		"perfect-freehand": "^1.2.3",
 		"react-konva": "19.2.7",
-		"@musepi/ui-slots": "workspace:*",
-		"@musepi/ui-conversation": "workspace:*"
+		"@musepi/client-ui-slots": "workspace:*",
+		"@musepi/client-ui-conversation": "workspace:*",
+		"@musepi/client-ui-shell": "workspace:*",
+		"@musepi/client-ui-settings": "workspace:*",
+		"@musepi/client-ui-sidebar": "workspace:*"
 	},
 	"optionalDependencies": {
 		"@koromix/koffi-darwin-arm64": "3.3.1",
