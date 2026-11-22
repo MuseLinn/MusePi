@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
 
 /**
@@ -161,6 +161,14 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
  * arrow keys step through the same rungs, so assistive tech hears every level
  * without a caption strip. A press that starts on a dot still belongs to the
  * track: the handler sits on the track and the event bubbles.
+ *
+ * The key handler gates on `disabled` alone, deliberately. A ladder whose
+ * model caps some rungs still has reachable rungs (`off`, `auto`, everything
+ * at or below the ceiling), so refusing keys whenever any rung is capped would
+ * make the whole control keyboard-dead on exactly the models that need the
+ * cap explained. The cap is enforced where it belongs instead — `step()` and
+ * the release path both go through the caller's `reachable`, so a key that
+ * asks for a capped rung settles on the ceiling. Both paths, one rule.
  */
 export interface SliderTrackProps {
 	slider: SliderDrag;
@@ -176,6 +184,10 @@ export interface SliderTrackProps {
 	ariaLabel?: string;
 	/** The rung a release would land on, named for the screen reader. */
 	valueText: string;
+	/** Id of a note the control explains itself with — the thinking ladder's
+	 *  ceiling note, so the cap is part of the slider's accessible description
+	 *  and not only a paragraph that happens to sit under it. */
+	describedBy?: string;
 }
 
 export function SliderTrack({
@@ -187,6 +199,7 @@ export function SliderTrack({
 	disabled = false,
 	ariaLabel,
 	valueText,
+	describedBy,
 }: SliderTrackProps): ReactNode {
 	return (
 		<div
@@ -195,6 +208,7 @@ export function SliderTrack({
 			tabIndex={disabled ? -1 : 0}
 			aria-label={ariaLabel}
 			aria-disabled={disabled || undefined}
+			aria-describedby={describedBy}
 			aria-valuemin={0}
 			aria-valuemax={last}
 			aria-valuenow={slider.target}
@@ -375,7 +389,11 @@ export function LadderSlider({
 		if (next !== (value ?? null)) onCommit(next);
 	};
 	const slider = useSliderDrag({ last, value: committed, reachable: clampIndex, onSettle: commit, disabled });
-
+	// Declared before the empty-ladder return so the hook order cannot depend on
+	// the model's ladder.
+	const noteId = useId();
+	// A ladder with no efforts has no track; the note takes the place of the
+	// control rather than sitting under a dead slider.
 	if (efforts.length === 0) {
 		return (
 			<div className="gui-slider">
@@ -392,6 +410,10 @@ export function LadderSlider({
 	// effort replaces the bare `Auto`, so the visible value and the screen
 	// reader's `aria-valuetext` are the same string.
 	const readout = rung.auto && resolved ? `${t("transcript.thinkingAuto")} · ${thinkingLabel(resolved)}` : rung.label;
+	// The ceiling note explains why some rungs are hollow; pointing the slider's
+	// description at it keeps the cap inside the control's accessible name and
+	// description instead of leaving it as a paragraph a screen reader may skip.
+	const ceilingNote = rungs.some(item => item.capped) && ceiling;
 
 	return (
 		<div className="gui-slider" data-disabled={disabled ? "true" : undefined}>
@@ -407,9 +429,10 @@ export function LadderSlider({
 				disabled={disabled}
 				ariaLabel={t("general.agentInfoThinking")}
 				valueText={readout}
+				describedBy={ceilingNote ? noteId : undefined}
 			/>
-			{rungs.some(item => item.capped) && ceiling ? (
-				<p className="gui-agent-info-note">
+			{ceilingNote ? (
+				<p className="gui-agent-info-note" id={noteId}>
 					{`${t("transcript.thinkingCappedModel")} · ${t("transcript.modelCap")} ${thinkingLabel(ceiling)}`}
 				</p>
 			) : null}

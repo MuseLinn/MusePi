@@ -38,8 +38,12 @@
 	--gui-slider-dot: color-mix(in oklab, var(--color-text) 42%, transparent);
 	/* Filled detents always sit ON the accent fill (the fill runs from the box
 	 * edge to the handle, so even rung 0's dot is inside it), so they take the
-	 * on-accent ink: the accent itself would disappear into the fill. */
-	--gui-slider-dot-on: color-mix(in oklab, var(--color-accent-fg) 62%, transparent);
+	 * on-accent ink: the accent itself would disappear into the fill. Opaque,
+	 * not a mix: at 62% the light scheme's near-white ink composited onto the
+	 * amber fill to 1.26:1 — the dots were invisible exactly where the ladder
+	 * reads as "selected up to here". Opaque measures 3.7:1 there and 7.9:1 in
+	 * the dark scheme, above the 3:1 floor for graphical objects. */
+	--gui-slider-dot-on: var(--color-accent-fg);
 	/* The handle sits on the accent fill, so it takes the page's text ink: the
 	 * accent is mid-luminance in both schemes, which makes text ink the colour
 	 * that always contrasts with it. An accent disc needed a rim to separate it

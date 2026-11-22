@@ -10,11 +10,13 @@ import * as path from "node:path";
  * unrelated 3px rail, and both roots shared the class name `.gui-ladder` — the
  * later rule silently gave the agent slider the settings ladder's 210px width.
  * They now share ONE token family (`--gui-slider-*`) and one visual
- * vocabulary: thick rail, gradient fill, detent dots, a knob that lifts on
- * hover/drag, the same focus halo and disabled opacity. The two native
- * `.gui-range` opt-ins (notification master volume, companion size) consume
- * the same colours through `accent-color`; the sliders listed under "Slider
- * scope" in `docs/gui-components.md` stay outside the family.
+ * vocabulary: a 28px hit pill around a 22px inset groove with a hairline, a
+ * gradient fill from the pill's edge, 4px detent dots on the groove, a
+ * text-ink handle that lifts on hover/drag, the same focus halo and disabled
+ * opacity. The two native `.gui-range` opt-ins (notification master volume,
+ * companion size) consume the same colours through `accent-color`; the sliders
+ * listed under "Slider scope" in `docs/gui-components.md` stay outside the
+ * family.
  */
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
@@ -69,8 +71,10 @@ describe("shared slider tokens", () => {
 		// mid-luminance, so text always contrasts with it while an accent disc
 		// would need a rim that reads as a ring at 18px.
 		expect(css).toMatch(/--gui-slider-knob:\s*var\(--color-text\)/);
-		// Filled detents sit on that same fill, so they share the ink.
-		expect(css).toMatch(/--gui-slider-dot-on:\s*color-mix\(in oklab, var\(--color-accent-fg\)/);
+		// Filled detents sit on that same fill, so they share the ink — opaque,
+		// because the accent-fg mix at 62% composited onto the light scheme's
+		// amber fill measured 1.26:1 and the detents disappeared there.
+		expect(css).toMatch(/--gui-slider-dot-on:\s*var\(--color-accent-fg\)/);
 	});
 
 	test("one track markup draws both ladders from the family", () => {
@@ -137,6 +141,33 @@ describe("shared slider tokens", () => {
 		expect(chat).not.toContain(".gui-slider-ticks");
 		expect(chat).not.toContain(".gui-slider-tick");
 		expect(component).not.toContain("gui-slider-tick");
+	});
+
+	test("the ceiling note is part of the slider's accessible description", () => {
+		const component = read(COMPONENT);
+		// The track owns `aria-describedby`; the thinking ladder points it at the
+		// note it renders, so a screen reader hears why the top rungs are hollow
+		// instead of meeting a paragraph it may never reach.
+		expect(component).toContain("aria-describedby={describedBy}");
+		expect(component).toContain("describedBy?: string");
+		expect(component).toMatch(/describedBy=\{ceilingNote \? noteId : undefined\}/);
+		expect(component).toMatch(/<p className="gui-agent-info-note" id=\{noteId\}>/);
+	});
+
+	test("a capped ladder keeps its keyboard alive and clamps through the same rule", () => {
+		const component = read(COMPONENT);
+		// Deliberate: the key handler gates on `disabled` only. A ladder whose
+		// model caps the top rungs still has legal rungs (`off`, everything at or
+		// below the ceiling, `auto`), so refusing every key while any rung is
+		// capped would make the control keyboard-dead on exactly the models whose
+		// cap needs explaining. The cap is enforced by `reachable`, which `step()`
+		// and the release path both go through.
+		const keydown = component.slice(component.indexOf("onKeyDown={event =>"), component.indexOf("slider.step(next)"));
+		expect(keydown).toContain("if (disabled) return;");
+		expect(keydown).not.toContain("capped");
+		// Both paths settle through the caller's clamp.
+		expect(component).toMatch(/const step = \(index: number\): void => \{\s*onSettle\(settle\(index\)\)/);
+		expect(component).toContain("reachable: clampIndex");
 	});
 
 	test("the model disclosure keeps the keyboard contract without :focus-within", () => {

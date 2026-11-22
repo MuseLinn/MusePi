@@ -549,6 +549,11 @@ describe("agent info pane", () => {
 		expect(dots[5]?.hasAttribute("data-capped")).toBe(true);
 		// A capped rung is still discoverable: its dot keeps the name.
 		expect(dots[5]?.getAttribute("title")).toBeTruthy();
+		// And the cap is part of the control's description, not only a paragraph
+		// under it: the track points at the note it renders.
+		const describedBy = track.getAttribute("aria-describedby");
+		expect(describedBy).toBeTruthy();
+		expect(host.querySelector(`#${describedBy}`)?.className).toBe("gui-agent-info-note");
 		await unmount();
 	});
 
