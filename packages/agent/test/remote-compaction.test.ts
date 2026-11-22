@@ -1754,6 +1754,34 @@ describe("requestRemoteCompaction wire formats", () => {
 		});
 	});
 
+	test("a resolved authorization header replaces the default bearer case-insensitively", async () => {
+		const seen: Record<string, string | null> = {};
+		const fetchMock: FetchImpl = async (_input, init) => {
+			const headers = new Headers(init?.headers);
+			seen.authorization = headers.get("authorization");
+			seen.routing = headers.get("x-gateway-route");
+			return new Response(JSON.stringify({ choices: [{ message: { content: "remote summary" } }] }), {
+				headers: { "content-type": "application/json" },
+			});
+		};
+
+		const result = await requestRemoteCompaction(
+			"https://gateway.example.test/v1/chat/completions",
+			{ systemPrompt: "summarize", prompt: "<conversation>hello</conversation>", maxTokens: 1024 },
+			undefined,
+			{
+				fetch: fetchMock,
+				apiKey: "default-key",
+				headers: { authorization: "Bearer gateway-key", "x-gateway-route": "eu" },
+			},
+		);
+
+		expect(result).toEqual({ summary: "remote summary" });
+		// Joined, not replaced, read as two credentials and the gateway rejected both.
+		expect(seen.authorization).toBe("Bearer gateway-key");
+		expect(seen.routing).toBe("eu");
+	});
+
 	test("keeps the generic omp summarizer format for other endpoints", async () => {
 		let sentBody: unknown;
 		const fetchMock: FetchImpl = async (_input, init) => {
@@ -1811,6 +1839,51 @@ describe("compact() remote compaction failure handling", () => {
 			settings: { ...DEFAULT_COMPACTION_SETTINGS, remoteStreamingV2Enabled: false },
 		};
 	}
+
+	test.each(["v1", "v2"])("reports the billed usage of each remote compaction request (%s)", async protocol => {
+		const streaming = protocol === "v2";
+		const preparation = makePreparation();
+		preparation.settings = { ...preparation.settings, remoteStreamingV2Enabled: streaming };
+		const model = makeOpenAiModel({
+			cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+			remoteCompaction: { enabled: true, v2StreamingEnabled: streaming },
+		});
+		const usage = {
+			input_tokens: 1_000,
+			input_tokens_details: { cached_tokens: 800 },
+			output_tokens: 40,
+			output_tokens_details: { reasoning_tokens: 30 },
+			total_tokens: 1_040,
+		};
+		const item = { type: "compaction", encrypted_content: "history" };
+		const fetchMock: FetchImpl = async () =>
+			streaming
+				? sseResponse([
+						{ type: "response.output_item.done", output_index: 0, item },
+						{ type: "response.completed", response: { usage } },
+					])
+				: Response.json({ output: [item], usage });
+		const reported: AssistantMessage[] = [];
+
+		await compact(preparation, model, "test-key", undefined, undefined, {
+			fetch: fetchMock,
+			onRemoteUsage: (message: AssistantMessage) => reported.push(message),
+		});
+
+		expect(reported).toHaveLength(1);
+		const [message] = reported;
+		expect([message.api, message.provider, message.model]).toEqual(["openai-responses", "openai", "gpt-5"]);
+		const { cost, ...tokens } = message.usage;
+		// Cached input is billed apart from fresh input; the transport's spend lands outside the transcript.
+		expect(tokens).toMatchObject({
+			input: 200,
+			output: 40,
+			cacheRead: 800,
+			totalTokens: 1_040,
+			reasoningTokens: 30,
+		});
+		expect(cost.total).toBeCloseTo((200 * 2 + 800 * 0.2 + 40 * 10) / 1_000_000, 12);
+	});
 
 	test("streams V2 compaction before V1 when both settings and model opt in", async () => {
 		const completeSpy = vi.spyOn(ai, "completeSimple").mockResolvedValue(localSummaryMessage("local summary"));

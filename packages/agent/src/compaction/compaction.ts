@@ -27,12 +27,18 @@ import type { Dialect } from "@musepi/pi-ai/dialect";
 import * as AIError from "@musepi/pi-ai/error";
 import { createOpenAICodexCompactionRequestContext } from "@musepi/pi-ai/providers/openai-codex-responses";
 import { convertTools } from "@musepi/pi-ai/providers/openai-responses";
-import { buildResponsesInput, resolveOpenAICompatPolicy } from "@musepi/pi-ai/providers/openai-shared";
+import {
+	buildResponsesInput,
+	calculateOpenAIUsageAccounting,
+	resolveOpenAICompatPolicy,
+} from "@musepi/pi-ai/providers/openai-shared";
 import { stripOpenAIResponsesOutputOnlyStatusesForReplay } from "@musepi/pi-ai/utils";
 import { preferredDialect } from "@musepi/pi-catalog/identity";
 import { clampThinkingLevelForModel } from "@musepi/pi-catalog/model-thinking";
+import { calculateCost } from "@musepi/pi-catalog/models";
 import { isRecord, logger, prompt } from "@musepi/pi-utils";
 import * as snapcompact from "@musepi/snapcompact";
+import { countContextOverrun } from "../output-budget";
 import { type AgentTelemetry, instrumentedCompleteSimple } from "../telemetry";
 import { ThinkingLevel } from "../thinking";
 import { Tokenizer } from "../tokenizer";
@@ -44,6 +50,7 @@ import {
 	shouldUseAnthropicNativeCompaction,
 	withAnthropicCompactionPreserveData,
 } from "./anthropic";
+import type { ResponsesCompactionUsage } from "./compaction-v2-streaming";
 import {
 	buildCompactionV2Request,
 	getCompactionV2PreserveData,
@@ -709,6 +716,20 @@ export interface SummaryOptions {
 	extraContext?: string[];
 	remoteEndpoint?: string;
 	remoteInstructions?: string;
+	/**
+	 * Request headers for the `compaction.remoteEndpoint` POST, resolved once
+	 * per call by the caller (gateway auth/routing). A configured `authorization`
+	 * replaces the default bearer instead of being sent alongside it.
+	 */
+	remoteHeaders?: Record<string, string>;
+	/**
+	 * Receives each OpenAI remote compaction request (V1 `/responses/compact`,
+	 * V2 streaming) whose response reported usage. Those transports bypass
+	 * `completeImpl`, so this is the only record of their spend: a content-less
+	 * assistant message carrying the priced usage and duration. Never called
+	 * for a response without usage.
+	 */
+	onRemoteUsage?: (message: AssistantMessage) => void;
 	initiatorOverride?: MessageAttribution;
 	metadata?: Record<string, unknown>;
 	convertToLlm?: ConvertToLlm;
@@ -769,6 +790,40 @@ export interface SummaryOptions {
 	 * stacks on top of the inner backoff.
 	 */
 	oneshotRetry?: OneshotRetryOptions | false;
+}
+
+/**
+ * The record {@link SummaryOptions.onRemoteUsage} receives for one OpenAI
+ * remote compaction request, priced at `model`'s catalog rates.
+ */
+function remoteCompactionUsageMessage(
+	model: Model,
+	usage: ResponsesCompactionUsage,
+	startedAt: number,
+): AssistantMessage {
+	const tokens = calculateOpenAIUsageAccounting({
+		promptTokens: usage.inputTokens,
+		outputTokens: usage.outputTokens,
+		cachedTokens: usage.cachedInputTokens ?? 0,
+		reasoningTokens: usage.reasoningOutputTokens ?? 0,
+		cacheWriteOpenRouter: undefined,
+		cacheWriteDeepSeek: undefined,
+		hasDeepSeekCacheHitAndMiss: false,
+	});
+	const billed: Usage = { ...tokens, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+	billed.cost = calculateCost(model, billed);
+	const now = Date.now();
+	return {
+		role: "assistant",
+		content: [],
+		api: model.api,
+		provider: model.provider,
+		model: model.id,
+		usage: billed,
+		stopReason: "stop",
+		timestamp: now,
+		duration: now - startedAt,
+	};
 }
 
 /**
@@ -1020,7 +1075,7 @@ async function summarizeConversationWindow(
 					endpoint,
 					{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, prompt: promptText, maxTokens },
 					signal,
-					{ fetch: options.fetch, model, apiKey: key },
+					{ fetch: options.fetch, model, apiKey: key, headers: options.remoteHeaders },
 				),
 			{ signal, missingKeyMessage: "Remote compaction credentials unavailable" },
 		);
@@ -1141,6 +1196,13 @@ export async function generateHandoffFromContext(
 	model: Model,
 	options: HandoffFromContextOptions,
 ): Promise<string> {
+	const overrun = countContextOverrun(context, model, new Tokenizer(model));
+	if (overrun !== undefined) {
+		throw new Error(
+			`Handoff input does not fit ${model.provider}/${model.id}: at least ${overrun} prompt tokens ` +
+				`leave no room for output in its ${model.contextWindow}-token window`,
+		);
+	}
 	const requestOptions = {
 		...options.streamOptions,
 		reasoning: resolveCompactionEffort(model, options.thinkingLevel),
@@ -1237,7 +1299,7 @@ async function generateShortSummary(
 					endpoint,
 					{ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, prompt: promptText, maxTokens },
 					signal,
-					{ fetch: options?.fetch, model, apiKey: key },
+					{ fetch: options?.fetch, model, apiKey: key, headers: options?.remoteHeaders },
 				),
 			{ signal, missingKeyMessage: "Remote compaction credentials unavailable" },
 		);
@@ -1595,6 +1657,8 @@ export async function compact(
 		extraContext: options?.extraContext,
 		remoteEndpoint: settings.remoteEnabled === false ? undefined : settings.remoteEndpoint,
 		remoteInstructions: options?.remoteInstructions,
+		remoteHeaders: options?.remoteHeaders,
+		onRemoteUsage: options?.onRemoteUsage,
 		initiatorOverride: options?.initiatorOverride,
 		metadata: options?.metadata,
 		convertToLlm: options?.convertToLlm,
@@ -1634,6 +1698,12 @@ export async function compact(
 		...turnPrefixMessages,
 		...recentMessages,
 	];
+	/** Record a remote compaction request's spend; the transports bypass `completeImpl`. */
+	const reportRemoteUsage = (usage: ResponsesCompactionUsage | undefined, startedAt: number): void => {
+		if (usage && summaryOptions.onRemoteUsage) {
+			summaryOptions.onRemoteUsage(remoteCompactionUsageMessage(model, usage, startedAt));
+		}
+	};
 	let usedRemoteCompaction = false;
 	let nativeCompactionError: unknown;
 	if (
@@ -1681,6 +1751,7 @@ export async function compact(
 					promptCacheKey: summaryOptions.promptCacheKey,
 					retainedMessageBudget: settings.v2RetainedMessageBudget,
 				});
+				const startedAt = Date.now();
 				const remote = await withAuth(
 					apiKey,
 					key =>
@@ -1692,6 +1763,7 @@ export async function compact(
 						}),
 					{ signal },
 				);
+				reportRemoteUsage(remote.usage, startedAt);
 				preserveData = { ...(preserveData ?? {}), ...storeCompactionV2PreserveData(remote, model) };
 				usedRemoteCompaction = true;
 			} catch (err) {
@@ -1725,7 +1797,8 @@ export async function compact(
 		);
 		if (remoteHistory.length > 0) {
 			try {
-				const remote = await withAuth(
+				const startedAt = Date.now();
+				const { usage, ...remote } = await withAuth(
 					apiKey,
 					key =>
 						requestOpenAiRemoteCompaction(
@@ -1743,6 +1816,7 @@ export async function compact(
 						),
 					{ signal },
 				);
+				reportRemoteUsage(usage, startedAt);
 				preserveData = withOpenAiRemoteCompactionPreserveData(previousPreserveData, remote);
 				usedRemoteCompaction = true;
 			} catch (err) {

@@ -62,7 +62,7 @@ const CONTEXTUAL_USER_PREFIXES = [
 ];
 
 /** Token usage reported by the streamed V2 Responses completion. */
-export interface CompactionV2Usage {
+export interface ResponsesCompactionUsage {
 	inputTokens: number;
 	outputTokens: number;
 	totalTokens: number;
@@ -88,7 +88,7 @@ export interface CompactionV2Response {
 	compactionItem: Record<string, unknown>;
 	replacementHistory: Array<Record<string, unknown>>;
 	usedTokens: number;
-	usage?: CompactionV2Usage;
+	usage?: ResponsesCompactionUsage;
 	retainedImageCount: number;
 }
 
@@ -439,7 +439,7 @@ interface CompactionV2CollectionState {
 	outputItemCount: number;
 	compactionItems: Array<Record<string, unknown>>;
 	sawCompleted: boolean;
-	usage: CompactionV2Usage | undefined;
+	usage: ResponsesCompactionUsage | undefined;
 }
 
 function createCompactionV2CollectionState(): CompactionV2CollectionState {
@@ -581,7 +581,8 @@ function handleCompactionV2Event(
 
 	if (type === "response.completed" || type === "response.done") {
 		state.sawCompleted = true;
-		state.usage = parseCompactionV2Usage(event);
+		const response = isRecord(event.response) ? event.response : undefined;
+		state.usage = parseResponsesCompactionUsage(response?.usage);
 		return;
 	}
 
@@ -590,10 +591,9 @@ function handleCompactionV2Event(
 	}
 }
 
-function parseCompactionV2Usage(event: Record<string, unknown>): CompactionV2Usage | undefined {
-	const response = isRecord(event.response) ? event.response : undefined;
-	const usage = response && isRecord(response.usage) ? response.usage : undefined;
-	if (!usage) return undefined;
+/** A Responses `usage` object; undefined when it is missing or lacks the token totals. */
+export function parseResponsesCompactionUsage(usage: unknown): ResponsesCompactionUsage | undefined {
+	if (!isRecord(usage)) return undefined;
 
 	const inputTokens = numberField(usage, "input_tokens");
 	const outputTokens = numberField(usage, "output_tokens");
