@@ -4231,6 +4231,9 @@ function readMusepiSshHosts() {
 			if (typeof raw.username === "string" && raw.username) row.username = raw.username;
 			if (Number.isInteger(raw.port) && raw.port > 0) row.port = raw.port;
 			if (typeof raw.keyPath === "string" && raw.keyPath) row.keyPath = raw.keyPath;
+			// `remote.hostAdd` writes this field, so a reader that skipped it made
+			// a MusePi-registered bastion-only host dial its destination directly.
+			if (typeof raw.proxyJump === "string" && raw.proxyJump) row.proxyJump = raw.proxyJump;
 			rows.push(row);
 		}
 		return rows;

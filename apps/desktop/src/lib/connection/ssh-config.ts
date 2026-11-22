@@ -185,20 +185,35 @@ export interface HostCatalogEntry {
 /**
  * Merge the two catalogs into the one list both surfaces show.
  *
- * A MusePi (`ssh.json`) entry wins a name collision and keeps its own fields;
- * ssh-config hosts fill the remaining names in their file order. Duplicate
- * names are dropped so a row can never appear twice with different addresses.
+ * A MusePi (`ssh.json`) entry wins a name collision — its host, user and port
+ * are the row's identity. But "wins" must not mean its *absent* fields zero out
+ * the other source: a host recorded in MusePi without a jump chain, and in
+ * `~/.ssh/config` with one, was previously downgraded to a direct dial by
+ * discarding the shadowed entry whole. The winner therefore keeps its own
+ * values and only borrows `proxyJump`/`keyPath` when it has none, which is
+ * strictly more information than either source alone.
+ *
+ * Duplicate names are dropped so a row can never appear twice.
  */
 export function mergeHostCatalog(
 	musepi: readonly SshConfigHost[],
 	sshConfig: readonly SshConfigHost[],
 ): HostCatalogEntry[] {
+	const shadowed = new Map<string, SshConfigHost>();
+	for (const host of sshConfig) if (!shadowed.has(host.name)) shadowed.set(host.name, host);
+
 	const entries: HostCatalogEntry[] = [];
 	const seen = new Set<string>();
 	for (const host of musepi) {
 		if (seen.has(host.name)) continue;
 		seen.add(host.name);
-		entries.push({ ...host, source: "musepi" });
+		const fallback = shadowed.get(host.name);
+		entries.push({
+			...host,
+			...(host.proxyJump ? {} : fallback?.proxyJump ? { proxyJump: fallback.proxyJump } : {}),
+			...(host.keyPath ? {} : fallback?.keyPath ? { keyPath: fallback.keyPath } : {}),
+			source: "musepi",
+		});
 	}
 	for (const host of sshConfig) {
 		if (seen.has(host.name)) continue;

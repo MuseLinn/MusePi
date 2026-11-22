@@ -568,6 +568,10 @@ describe("connection manager catalog", () => {
 		{ name: "managed-box", host: "managed.example.com", source: "musepi" },
 		{ name: "from-ssh-config", host: "cfg.example.com", username: "me", port: 2222, source: "ssh-config" },
 		{ name: "jump-chain", host: "10.0.0.5", proxyJump: "bastion", source: "ssh-config" },
+		// A chain that comes from MusePi's own store. The only chain fixture used
+		// to be ssh-config-sourced, which is why a MusePi entry losing its chain
+		// passed every test while dialling the destination directly.
+		{ name: "musepi-jump", host: "10.0.0.9", username: "me", proxyJump: "musepi-bastion", source: "musepi" },
 	];
 
 	async function openSshForm(host: HTMLElement): Promise<void> {
@@ -626,6 +630,26 @@ describe("connection manager catalog", () => {
 		);
 		await act(async () => submit?.click());
 		expect(added[0]).toMatchObject({ proxyJump: "bastion" });
+	});
+
+	test("a MusePi-sourced chain survives into the added target", async () => {
+		// The instance form's half of the merge: a host recorded in ssh.json with
+		// its chain must produce a row that dials through it, not the destination.
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
+		await openSshForm(host);
+		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
+		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(select, "musepi-jump");
+			select?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		expect(added).toHaveLength(1);
+		expect(added[0]).toMatchObject({ kind: "ssh", sshHost: "me@10.0.0.9", proxyJump: "musepi-bastion" });
 	});
 
 	test("no catalog leaves the manual form exactly as it was", async () => {

@@ -64,7 +64,14 @@ export interface ShellBridge {
 	sshConfig?(): Promise<{
 		ok: boolean;
 		documents: Array<{ path: string; text: string }>;
-		musepi?: Array<{ name: string; host: string; username?: string; port?: number; keyPath?: string }>;
+		musepi?: Array<{
+			name: string;
+			host: string;
+			username?: string;
+			port?: number;
+			keyPath?: string;
+			proxyJump?: string;
+		}>;
 		error?: string;
 	}>;
 	startSshTunnel?(input: {
@@ -250,6 +257,7 @@ export async function loadHostCatalog(bridge: ShellBridge | null = shellBridge()
 		...(row.username ? { username: row.username } : {}),
 		...(row.port ? { port: row.port } : {}),
 		...(row.keyPath ? { keyPath: row.keyPath } : {}),
+		...(row.proxyJump ? { proxyJump: row.proxyJump } : {}),
 	}));
 	return mergeHostCatalog(fromMusepi, fromSshConfig);
 }

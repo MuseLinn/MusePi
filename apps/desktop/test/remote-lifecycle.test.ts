@@ -174,6 +174,43 @@ describe("catalog merge precedence", () => {
 		expect(merged.find(entry => entry.name === "nas")).toMatchObject({ source: "ssh-config", host: "nas.local" });
 	});
 
+	test("the winning MusePi entry borrows a chain it lacks from the shadowed entry", () => {
+		// "MusePi wins" is about the row's identity, not about its absent fields
+		// erasing the other source. Before this, a host recorded in both with the
+		// chain only in ~/.ssh/config was downgraded to a direct dial.
+		const merged = mergeHostCatalog(
+			[{ name: "internal", host: "10.0.0.5", username: "me" }],
+			[{ name: "internal", host: "10.0.0.5", proxyJump: "bastion", keyPath: "~/.ssh/id_ed25519" }],
+		);
+		expect(merged).toHaveLength(1);
+		expect(merged[0]).toMatchObject({
+			source: "musepi",
+			username: "me",
+			proxyJump: "bastion",
+			keyPath: "~/.ssh/id_ed25519",
+		});
+	});
+
+	test("a MusePi entry with its own chain keeps it, not the shadowed one", () => {
+		const merged = mergeHostCatalog(
+			[{ name: "h", host: "a", proxyJump: "mine", keyPath: "~/.ssh/mine" }],
+			[{ name: "h", host: "a", proxyJump: "theirs", keyPath: "~/.ssh/theirs" }],
+		);
+		expect(merged[0]).toMatchObject({ proxyJump: "mine", keyPath: "~/.ssh/mine" });
+	});
+
+	test("the MusePi host and user still win the collision", () => {
+		const merged = mergeHostCatalog(
+			[{ name: "h", host: "musepi.example.com", username: "musepi-user" }],
+			[{ name: "h", host: "config.example.com", username: "config-user", proxyJump: "bastion" }],
+		);
+		expect(merged[0]).toMatchObject({
+			host: "musepi.example.com",
+			username: "musepi-user",
+			proxyJump: "bastion",
+		});
+	});
+
 	test("no name appears twice, whatever the inputs", () => {
 		const merged = mergeHostCatalog(
 			[
