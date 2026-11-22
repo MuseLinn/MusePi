@@ -1046,7 +1046,7 @@
  * only the layout of the row inside the popover and the /context card. */
 .gui-context-threshold {
 	margin-top: 8px;
-	padding-top: 7px;
+	padding-top: 6px;
 	border-top: 1px solid var(--border);
 }
 
@@ -1055,13 +1055,11 @@
 	margin: 5px 0 1px;
 }
 
-.gui-context-threshold-scale {
-	display: flex;
-	justify-content: space-between;
-	gap: 8px;
-	font-size: 10.5px;
-	font-variant-numeric: tabular-nums;
+/* The concrete trigger count rides the percentage readout as a muted suffix:
+ * one line instead of a separate scale row, percent still primary. */
+.gui-context-threshold-tokens {
 	color: var(--color-muted, var(--color-text-dim));
+	font-variant-numeric: tabular-nums;
 }
 
 .gui-context-threshold-actions {

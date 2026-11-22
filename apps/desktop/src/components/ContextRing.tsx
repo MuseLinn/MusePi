@@ -247,16 +247,6 @@ export function ContextRing({
 							<SlidingNumber value={Math.round(effPct)} />%
 						</span>
 					</div>
-					{threshold && onThresholdChange && (
-						<AutoCompactThresholdControl
-							view={threshold}
-							busy={thresholdBusy}
-							error={thresholdError}
-							onChange={onThresholdChange}
-							onReset={onThresholdReset ?? (() => {})}
-							onSwitchToPercent={onThresholdSwitchToPercent ?? (() => {})}
-						/>
-					)}
 					{/* Prompt-cache hit rate + session spend (issue #8, TUI
 					 *  `cache_hit` status-line parity). A silent cache miss
 					 *  otherwise just reads as "the model got slower and more
@@ -282,6 +272,19 @@ export function ContextRing({
 						<div className="gui-context-pop-note" style={{ color: "var(--color-danger)" }}>
 							{t("general.contextOverWindow")} — {t("general.overWindowCompact.info")}
 						</div>
+					)}
+					{/* Adjustment follows the readings: the slider is a control, not
+					 * another usage row, and the section hairline keeps it apart
+					 * from the snapcompact/quota diagnostics below. */}
+					{threshold && onThresholdChange && (
+						<AutoCompactThresholdControl
+							view={threshold}
+							busy={thresholdBusy}
+							error={thresholdError}
+							onChange={onThresholdChange}
+							onReset={onThresholdReset ?? (() => {})}
+							onSwitchToPercent={onThresholdSwitchToPercent ?? (() => {})}
+						/>
 					)}
 					{snapcompact && (
 						<div className="gui-context-pop-snap">

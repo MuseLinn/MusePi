@@ -117,7 +117,10 @@ export function AutoCompactThresholdControl({
 		<div className="gui-context-threshold">
 			<div className="gui-context-pop-row">
 				<span>{t("general.autoCompactThreshold")}</span>
-				<span className="gui-context-pop-val">{valueLabel}</span>
+				<span className="gui-context-pop-val">
+					{valueLabel}
+					<span className="gui-context-threshold-tokens"> · {formatTokenCount(view?.thresholdTokens)}</span>
+				</span>
 			</div>
 			<input
 				type="range"
@@ -136,11 +139,6 @@ export function AutoCompactThresholdControl({
 				onKeyUp={commit}
 				onBlur={commit}
 			/>
-			<div className="gui-context-threshold-scale" aria-hidden="true">
-				<span>{MIN_PERCENT}%</span>
-				<span>{t("general.autoCompactTokensValue", { tokens: formatTokenCount(view?.thresholdTokens) })}</span>
-				<span>{MAX_PERCENT}%</span>
-			</div>
 			<div className="gui-context-pop-note">{t("general.autoCompactHint")}</div>
 			{canReset && (
 				<div className="gui-context-threshold-actions">

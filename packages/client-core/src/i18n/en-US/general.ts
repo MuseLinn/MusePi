@@ -315,9 +315,7 @@ export const general = {
 	"general.autoCompactSwitchToPercent": "Use a percentage",
 	"general.autoCompactResetAuto": "Reset to auto",
 	"general.autoCompactFollowGlobal": "Follow global setting",
-	"general.autoCompactHint":
-		"Compaction fires at this share of the window; the percentage scales with each model's context window.",
-	"general.autoCompactTokensValue": "{tokens} tokens",
+	"general.autoCompactHint": "Compacts at this share and scales with the model window.",
 	"general.cacheHit": "Cache hit",
 	"general.sessionSpend": "Session spend",
 	"general.cacheReadTokens": "Cache read",

@@ -7,6 +7,7 @@ import {
 	AutoCompactThresholdControl,
 	type CompactionThresholdView,
 } from "../src/components/composer/auto-compact-threshold";
+import { ContextUsageCard } from "../src/components/composer/context-dialog";
 
 const mounted = new Set<Root>();
 
@@ -167,8 +168,43 @@ describe("AutoCompactThresholdControl", () => {
 			/>,
 		);
 		fire(host.querySelector("button")!, "onClick", {});
-		const slider = document.querySelector<HTMLInputElement>(".gui-context-pop input[type=range]");
+		const pop = document.querySelector<HTMLElement>(".gui-context-pop")!;
+		const slider = pop.querySelector<HTMLInputElement>("input[type=range]");
 		expect(slider).not.toBeNull();
 		expect(slider?.value).toBe("85");
+		// Hierarchy contract: the control closes the card, after every usage
+		// reading, rather than splitting the readout rows.
+		const threshold = pop.querySelector<HTMLElement>(".gui-context-threshold")!;
+		expect(threshold.parentElement?.lastElementChild).toBe(threshold);
+	});
+
+	it("keeps the /context card a report first and the trigger last", async () => {
+		await mount(
+			<ContextUsageCard
+				loading={false}
+				onClose={() => {}}
+				onThresholdChange={() => {}}
+				onThresholdReset={() => {}}
+				onThresholdSwitchToPercent={() => {}}
+				data={{
+					...base,
+					tokens: 80_000,
+					contextWindow: 200_000,
+					percent: 40,
+					breakdown: {
+						contextWindow: 200_000,
+						usedTokens: 80_000,
+						systemPromptTokens: 10_000,
+						systemToolsTokens: 5_000,
+						systemContextTokens: 0,
+						skillsTokens: 0,
+						messagesTokens: 65_000,
+					},
+				}}
+			/>,
+		);
+		const panel = document.querySelector<HTMLElement>(".gui-quota-panel")!;
+		const threshold = panel.querySelector<HTMLElement>(".gui-context-threshold")!;
+		expect(threshold.parentElement?.lastElementChild).toBe(threshold);
 	});
 });

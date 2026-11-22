@@ -217,16 +217,6 @@ export function ContextUsageCard({
 							})}
 						</span>
 					</div>
-					{onThresholdChange && (
-						<AutoCompactThresholdControl
-							view={data}
-							busy={thresholdBusy}
-							error={thresholdError}
-							onChange={onThresholdChange}
-							onReset={onThresholdReset ?? (() => {})}
-							onSwitchToPercent={onThresholdSwitchToPercent ?? (() => {})}
-						/>
-					)}
 					{data.breakdown && renderContextGrid(data.breakdown, data.autoCompactBufferTokens ?? 0)}
 					{data.usage && (data.usage.cacheHitRate != null || data.usage.cost > 0) && (
 						<div className="gui-context-snap">
@@ -312,6 +302,18 @@ export function ContextUsageCard({
 						</div>
 					) : (
 						<div className="gui-quota-note">{t("general.contextUsageUnavailable")}</div>
+					)}
+					{/* The card is a report first; the trigger control closes it,
+					 * mirroring the ring popover's readings-then-adjust order. */}
+					{onThresholdChange && (
+						<AutoCompactThresholdControl
+							view={data}
+							busy={thresholdBusy}
+							error={thresholdError}
+							onChange={onThresholdChange}
+							onReset={onThresholdReset ?? (() => {})}
+							onSwitchToPercent={onThresholdSwitchToPercent ?? (() => {})}
+						/>
 					)}
 				</>
 			) : (
