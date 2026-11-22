@@ -73,6 +73,7 @@ import {
 	companionStateFromSignals,
 } from "./lib/companion";
 import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
+import { type BootOutcome, runBootAttempt } from "./lib/connection/boot-attempt";
 import {
 	bootTargetFor,
 	dropTarget,
@@ -2147,7 +2148,10 @@ function AppInner(): ReactNode {
 			chosenTargetIdRef.current = rowId;
 			saveChosenTargetId(rowId);
 			setTargetStatuses(current => {
-				const error = ok ? null : (reason ?? connectErrorRef.current ?? "unreachable");
+				// A failure always stores a sentence the row can show. The
+				// sentinel is a last resort, not the normal answer: an ordinary
+				// cold start (closed port, no throw) passes the reason in.
+				const error = ok ? null : (reason ?? connectErrorRef.current ?? t("settings.cannotReachLocalDaemon"));
 				const next = recordTargetStatus(current, rowId, error);
 				saveTargetStatuses(next);
 				return next;
@@ -2329,61 +2333,63 @@ function AppInner(): ReactNode {
 				return false;
 			}
 		};
+		// The attempt itself never has to be right about "nothing happened":
+		// `runBootAttempt` turns a throw, or a return without a settlement, into
+		// a recorded failure. Without that, a launch that never connected could
+		// leave `lastAttemptFailed` false and render the calm manager.
+		let outcome: BootOutcome;
 		try {
-			// A closed port cannot answer a handshake: skip the attempt instead of
-			// waiting out its timeout (measured ~2 s on the boot path).
-			setDisconnectedByUser(false);
-			setLastAttemptFailed(false);
-			const initialPort = daemonPortOf(url, DEFAULT_PORT);
-			const reachable = !(isElectron() && isLocalUrl(url)) || (await daemonPortOpen(initialPort));
-			if (reachable && (await tryUrl(url)) === true) {
-				recordBootOutcome(true, url);
-				return;
-			}
-			// Electron shell: discover a running daemon, else spawn one.
-			if (isElectron() && isLocalUrl(url)) {
-				setBootPhase("probe");
-				const probeAt = performance.now();
-				const port = await probeDaemonPort();
-				markStartup(`daemon.probed ${Math.round(performance.now() - probeAt)}ms :${port ?? 0}`);
-				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) {
-					recordBootOutcome(true, `ws://127.0.0.1:${port}`);
-					return;
-				}
-				try {
-					setBootPhase("spawn");
-					const spawned = await startDaemonViaShell(DEFAULT_PORT);
-					markStartup("daemon.spawned");
-					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) {
-						recordBootOutcome(true, `ws://127.0.0.1:${spawned}`);
+			outcome = await runBootAttempt(
+				async settle => {
+					// A closed port cannot answer a handshake: skip the attempt instead of
+					// waiting out its timeout (measured ~2 s on the boot path).
+					setDisconnectedByUser(false);
+					setLastAttemptFailed(false);
+					const initialPort = daemonPortOf(url, DEFAULT_PORT);
+					const reachable = !(isElectron() && isLocalUrl(url)) || (await daemonPortOpen(initialPort));
+					if (reachable && (await tryUrl(url)) === true) {
+						settle(true, url);
 						return;
 					}
-					// The spawn returned a port but the first WebSocket handshake
-					// raced the listener; retry once before giving up.
-					await new Promise(resolve => setTimeout(resolve, 400));
-					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) {
-						recordBootOutcome(true, `ws://127.0.0.1:${spawned}`);
-						return;
+					// Electron shell: discover a running daemon, else spawn one.
+					if (isElectron() && isLocalUrl(url)) {
+						setBootPhase("probe");
+						const probeAt = performance.now();
+						const port = await probeDaemonPort();
+						markStartup(`daemon.probed ${Math.round(performance.now() - probeAt)}ms :${port ?? 0}`);
+						if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) {
+							settle(true, `ws://127.0.0.1:${port}`);
+							return;
+						}
+						try {
+							setBootPhase("spawn");
+							const spawned = await startDaemonViaShell(DEFAULT_PORT);
+							markStartup("daemon.spawned");
+							if (await tryUrl(`ws://127.0.0.1:${spawned}`)) {
+								settle(true, `ws://127.0.0.1:${spawned}`);
+								return;
+							}
+							// The spawn returned a port but the first WebSocket handshake
+							// raced the listener; retry once before giving up.
+							await new Promise(resolve => setTimeout(resolve, 400));
+							if (await tryUrl(`ws://127.0.0.1:${spawned}`)) {
+								settle(true, `ws://127.0.0.1:${spawned}`);
+								return;
+							}
+						} catch (err) {
+							setConnectError(err instanceof Error ? err.message : String(err));
+						}
 					}
-				} catch (err) {
-					setConnectError(err instanceof Error ? err.message : String(err));
-				}
-			}
-			// Every path above returned on success: getting here means the boot
-			// tried and failed, which is exactly the `unreachable` fact.
-			recordBootOutcome(false, url);
-		} catch (err) {
-			// The invariant: every exit from boot records success or failure.
-			// A throw here (an unparseable stored endpoint, a failing probe) used
-			// to skip `recordBootOutcome` entirely, leaving `lastAttemptFailed`
-			// false — so the gate derived `disconnected-by-user` and showed a calm
-			// manager with a row reading 尚未尝试 after a launch that never
-			// connected. Settle the failure before the `finally` runs.
-			const message = err instanceof Error ? err.message : String(err);
-			setConnectError(message);
-			// Passed explicitly: the ref above still holds the previous render's
-			// error, so the row would otherwise show an unrelated message.
-			recordBootOutcome(false, url, message);
+					// Every path above settled on success: getting here means the boot
+					// tried and failed. The reason is the captured connect error when one
+					// exists; a closed port never calls `connect()`, so an ordinary cold
+					// start falls back to the translated sentence instead of a sentinel.
+					settle(false, url, connectErrorRef.current ?? t("settings.cannotReachLocalDaemon"));
+				},
+				{ at: url, reason: t("settings.cannotReachLocalDaemon") },
+			);
+			if (outcome.threw) setConnectError(outcome.reason);
+			recordBootOutcome(outcome.ok, outcome.at, outcome.reason ?? undefined);
 		} finally {
 			// 650ms covers the splash's orb-in intro (620ms) without adding a
 			// second of wait on warm boots; the shell itself mounts immediately

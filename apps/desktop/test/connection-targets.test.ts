@@ -209,6 +209,21 @@ describe("connection targets", () => {
 		expect(daemonPortOf("not a url at all")).toBe(DEFAULT_DAEMON_PORT);
 		expect(daemonPortOf("ftp://nope", 9999)).toBe(9999);
 	});
+
+	test("a portless loopback endpoint resolves to the daemon default, not port 80", () => {
+		// `normalizeRemoteHostUrl("localhost")` yields `ws://localhost`, and a
+		// bare `new URL` port would be 80 — the Electron local probe would then
+		// check a port nothing listens on, skip the dial and never spawn.
+		expect(daemonPortOf("ws://localhost")).toBe(DEFAULT_DAEMON_PORT);
+		expect(daemonPortOf("ws://127.0.0.1")).toBe(DEFAULT_DAEMON_PORT);
+		expect(daemonPortOf("ws://[::1]")).toBe(DEFAULT_DAEMON_PORT);
+		expect(daemonPortOf("wss://localhost")).toBe(DEFAULT_DAEMON_PORT);
+		// An explicit port always wins over the loopback default.
+		expect(daemonPortOf("ws://localhost:9411")).toBe(9411);
+		// Remote hosts keep the HTTP(S) default: there, 80/443 is the real answer.
+		expect(daemonPortOf("ws://h.example.com")).toBe(80);
+		expect(daemonPortOf("wss://h.example.com")).toBe(443);
+	});
 });
 
 describe("target persistence", () => {

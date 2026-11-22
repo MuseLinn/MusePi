@@ -142,6 +142,13 @@ export function daemonPortOf(url: string, fallback: number = DEFAULT_DAEMON_PORT
 		if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") return fallback;
 		const port = Number.parseInt(parsed.port, 10);
 		if (Number.isInteger(port) && port > 0) return port;
+		// A portless loopback endpoint means "the daemon on this machine", which
+		// is the serve default — not port 80. `ws://localhost` resolves to 80
+		// otherwise, so the local probe would check a port nothing listens on,
+		// skip the dial and never reach the spawn: a first launch whose stored
+		// endpoint is portless could never start the daemon. Remote hosts keep
+		// the ws/wss 80/443 default, because there the default really is HTTP(S).
+		if (isLoopbackUrl(url)) return fallback;
 		return parsed.protocol === "wss:" ? 443 : 80;
 	} catch {
 		return fallback;
