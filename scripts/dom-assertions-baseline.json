@@ -35,6 +35,8 @@
 		"apps/desktop/test/getting-started-card.test.tsx": 2,
 		"apps/desktop/test/git-panel.test.tsx": 2,
 		"apps/desktop/test/import-source-brand-icons.test.tsx": 1,
+		"apps/desktop/test/instance-manager-axes.test.tsx": 4,
+		"apps/desktop/test/instance-manager-keyboard.test.tsx": 1,
 		"apps/desktop/test/managed-browser-host-dismiss.test.tsx": 1,
 		"apps/desktop/test/managed-browser-pane-menu.test.tsx": 2,
 		"apps/desktop/test/markdown-html-render.test.ts": 3,
