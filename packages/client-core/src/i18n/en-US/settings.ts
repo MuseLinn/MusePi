@@ -7494,6 +7494,7 @@ export const settings = {
 	"settings.connectionWslFailed": "Could not list WSL distributions: {error}",
 	"settings.connectionConnectedHint": "Connected. Switching endpoint disconnects the current instance first.",
 	"settings.connectionEditTarget": "Edit endpoint",
+	"settings.connectionAddTarget": "Add",
 	"settings.connectionSshHostPlaceholder": "user@host",
 	"settings.connectionLoopbackPlaceholder": "ws://127.0.0.1:{port}",
 } as const satisfies Record<SettingsKey, string>;

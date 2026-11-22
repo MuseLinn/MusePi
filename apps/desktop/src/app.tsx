@@ -90,6 +90,8 @@ import {
 import {
 	type ConnectionTarget,
 	createTarget,
+	daemonPortOf,
+	isLoopbackUrl,
 	LOCAL_TARGET_ID,
 	localTargetUrl,
 	stripToken,
@@ -636,8 +638,15 @@ function AppInner(): ReactNode {
 	 * "Configured" means the user has stored at least one row of their own.
 	 * The built-in local row is always present, so counting `connTargets`
 	 * would make every install configured and `unconfigured` unreachable.
+	 * Read once: this is a render-body read of storage otherwise, which would
+	 * parse the slot on every paint for a value that cannot change under it.
 	 */
-	const configured = loadStoredTargets().some(target => target.id !== LOCAL_TARGET_ID);
+	const [configured, setConfigured] = useState(() =>
+		loadStoredTargets().some(target => target.id !== LOCAL_TARGET_ID),
+	);
+	useEffect(() => {
+		setConfigured(loadStoredTargets().some(target => target.id !== LOCAL_TARGET_ID));
+	}, [connTargets]);
 	/** The target the last attempt started from — the row the manager is
 	 *  pointed at and the row whose error belongs to the attempt. */
 	const chosenTargetIdRef = useRef<string | null>(loadChosenTargetId());
@@ -2130,7 +2139,7 @@ function AppInner(): ReactNode {
 		// `unreachable`, a success is `connected` — never "the user disconnected".
 		// The row is settled the same way, so a stale error from an earlier launch
 		// does not outlive the attempt that replaced it.
-		const recordBootOutcome = (ok: boolean, at: string): void => {
+		const recordBootOutcome = (ok: boolean, at: string, reason?: string): void => {
 			setLastAttemptFailed(!ok);
 			setDisconnectedByUser(false);
 			const rowId = resolveActiveTargetId(connTargetsRef.current, at, bootFrom);
@@ -2138,7 +2147,8 @@ function AppInner(): ReactNode {
 			chosenTargetIdRef.current = rowId;
 			saveChosenTargetId(rowId);
 			setTargetStatuses(current => {
-				const next = recordTargetStatus(current, rowId, ok ? null : (connectErrorRef.current ?? "unreachable"));
+				const error = ok ? null : (reason ?? connectErrorRef.current ?? "unreachable");
+				const next = recordTargetStatus(current, rowId, error);
 				saveTargetStatuses(next);
 				return next;
 			});
@@ -2146,10 +2156,10 @@ function AppInner(): ReactNode {
 		// Remote hosts (instance switcher) skip the Electron version gate and
 		// the local probe/spawn fallback — those only make sense for the
 		// machine's own daemon.
-		const isLocalUrl = (u: string): boolean => {
-			const h = new URL(u).hostname;
-			return h === "127.0.0.1" || h === "localhost" || h === "::1";
-		};
+		// A stored endpoint that does not parse must not throw its way out of
+		// boot: it is a value the user or an older build wrote, not a bug here.
+		// Anything unparseable is simply not local.
+		const isLocalUrl = isLoopbackUrl;
 		// Capability-restart guard: one restart attempt per URL per boot. The
 		// probe path below recurses through connect → tryUrl, so without this
 		// a daemon that STILL lacks the methods after a restart (spawn fell
@@ -2306,7 +2316,7 @@ function AppInner(): ReactNode {
 						markStartup("version.gate");
 						if (stale) {
 							capabilityRestarted.add(u);
-							const port = Number.parseInt(new URL(u).port, 10) || DEFAULT_PORT;
+							const port = daemonPortOf(u, DEFAULT_PORT);
 							expectedDisconnectsRef.current.expect(rpc);
 							await api.restartDaemon(port);
 							await connect(u);
@@ -2324,7 +2334,7 @@ function AppInner(): ReactNode {
 			// waiting out its timeout (measured ~2 s on the boot path).
 			setDisconnectedByUser(false);
 			setLastAttemptFailed(false);
-			const initialPort = Number.parseInt(new URL(url).port || String(DEFAULT_PORT), 10);
+			const initialPort = daemonPortOf(url, DEFAULT_PORT);
 			const reachable = !(isElectron() && isLocalUrl(url)) || (await daemonPortOpen(initialPort));
 			if (reachable && (await tryUrl(url)) === true) {
 				recordBootOutcome(true, url);
@@ -2362,6 +2372,18 @@ function AppInner(): ReactNode {
 			// Every path above returned on success: getting here means the boot
 			// tried and failed, which is exactly the `unreachable` fact.
 			recordBootOutcome(false, url);
+		} catch (err) {
+			// The invariant: every exit from boot records success or failure.
+			// A throw here (an unparseable stored endpoint, a failing probe) used
+			// to skip `recordBootOutcome` entirely, leaving `lastAttemptFailed`
+			// false — so the gate derived `disconnected-by-user` and showed a calm
+			// manager with a row reading 尚未尝试 after a launch that never
+			// connected. Settle the failure before the `finally` runs.
+			const message = err instanceof Error ? err.message : String(err);
+			setConnectError(message);
+			// Passed explicitly: the ref above still holds the previous render's
+			// error, so the row would otherwise show an unrelated message.
+			recordBootOutcome(false, url, message);
 		} finally {
 			// 650ms covers the splash's orb-in intro (620ms) without adding a
 			// second of wait on warm boots; the shell itself mounts immediately
@@ -4538,7 +4560,6 @@ function AppInner(): ReactNode {
 				}}
 				targets={connTargets}
 				statuses={targetStatuses}
-				daemonUrl={url}
 				activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
 				busyId={attempting ? attemptTargetId : null}
 				lastError={connectError}
@@ -5516,7 +5537,6 @@ function AppInner(): ReactNode {
 						state={rpc ? "connected" : "disconnected-by-user"}
 						targets={connTargets}
 						statuses={targetStatuses}
-						daemonUrl={url}
 						activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
 						busyId={attempting ? attemptTargetId : null}
 						lastError={connectError}

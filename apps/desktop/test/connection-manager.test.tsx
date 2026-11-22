@@ -37,7 +37,6 @@ function render(overrides: Partial<Parameters<typeof ConnectionManager>[0]> = {}
 		state: "disconnected-by-user" as ConnectionState,
 		targets: [localTarget()],
 		statuses: {} as TargetStatusMap,
-		daemonUrl: "ws://127.0.0.1:8300",
 		activeTargetId: "local",
 		busyId: null,
 		lastError: null,
@@ -151,8 +150,8 @@ describe("connection manager rows", () => {
 			statuses: { s1: { lastAttemptAt: 1_700_000_000_000, lastError: null } },
 			activeTargetId: "s1",
 		});
-		expect(q(host, '.gui-conn-row[data-status="connected"]')).toBeNull();
-		expect(q(host, '.gui-conn-status[data-status="connected"]')).toBeNull();
+		expect(!!q(host, '.gui-conn-row[data-status="connected"]')).toBe(false);
+		expect(!!q(host, '.gui-conn-status[data-status="connected"]')).toBe(false);
 		expect(text(host)).not.toContain(t("settings.connectionStatusConnected"));
 		expect(q(host, '.gui-conn-row[data-status="last-used"]')).not.toBeNull();
 		expect(text(host)).toContain(t("settings.connectionDisconnected"));
@@ -247,7 +246,7 @@ describe("connection manager rows", () => {
 		const label = host.querySelector<HTMLInputElement>(".gui-conn-form input.gui-input");
 		expect(label?.value).toBe("Build box");
 		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
-			button => (button.textContent ?? "").includes(t("settings.testAndAddInstance")),
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
 		);
 		act(() => submit?.click());
 		expect(added).toHaveLength(1);
@@ -263,7 +262,7 @@ describe("connection manager rows", () => {
 		const kinds = Array.from(host.querySelectorAll('[role="tab"]')).map(tab => tab.textContent ?? "");
 		expect(kinds.some(label => label.includes(t("settings.connectionKindManual")))).toBe(true);
 		expect(kinds.some(label => label.includes(t("settings.connectionKindWsl")))).toBe(true);
-		expect(host.querySelector("details")).toBeNull();
+		expect(!!host.querySelector("details")).toBe(false);
 	});
 
 	test("adding a manual target emits the normalized endpoint", () => {
@@ -278,7 +277,7 @@ describe("connection manager rows", () => {
 		setInput(label!, "Home");
 		setInput(url!, "wss://daemon.example.com");
 		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
-			button => (button.textContent ?? "").includes(t("settings.testAndAddInstance")),
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
 		);
 		act(() => submit?.click());
 		expect(added).toHaveLength(1);
@@ -293,11 +292,54 @@ describe("connection manager rows", () => {
 		);
 		act(() => add?.click());
 		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
-			button => (button.textContent ?? "").includes(t("settings.testAndAddInstance")),
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
 		);
 		act(() => submit?.click());
 		expect(added).toHaveLength(0);
 		expect(host.querySelector('[role="alert"]')?.textContent).toContain(t("settings.connectionLabelRequired"));
+	});
+
+	test("a bare host:port is accepted and normalized, the way the instance dialog takes it", () => {
+		const added: ConnectionTarget[] = [];
+		const host = render({ onAdd: target => added.push(target) });
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		act(() => add?.click());
+		const inputs = host.querySelectorAll<HTMLInputElement>(".gui-conn-form input.gui-input");
+		const [label, url] = Array.from(inputs);
+		setInput(label!, "Dev box");
+		setInput(url!, "127.0.0.1:9000");
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		act(() => submit?.click());
+		expect(added).toHaveLength(1);
+		expect(added[0]).toMatchObject({ kind: "manual", url: "ws://127.0.0.1:9000" });
+	});
+
+	test("a URL that is not a daemon endpoint is rejected in the form, not stored", () => {
+		// This value becomes the next launch's boot endpoint. Storing `ftp://nope`
+		// used to reach boot, where `new URL` threw past every failure record and
+		// the gate derived a calm manager after a launch that never connected.
+		const added: ConnectionTarget[] = [];
+		const host = render({ onAdd: target => added.push(target) });
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		act(() => add?.click());
+		const inputs = host.querySelectorAll<HTMLInputElement>(".gui-conn-form input.gui-input");
+		const [label, url] = Array.from(inputs);
+		setInput(label!, "Nope");
+		setInput(url!, "ftp://nope");
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		act(() => submit?.click());
+		expect(added).toHaveLength(0);
+		expect(host.querySelector('[role="alert"]')?.textContent).toContain(t("settings.instanceUrlInvalid"));
+		// The form stays open with the bad value, so it can be corrected.
+		expect(!!host.querySelector(".gui-conn-form")).toBe(true);
 	});
 });
 
@@ -331,7 +373,7 @@ describe("connection manager WSL detection", () => {
 		const host = render({ detect: async () => "" });
 		await openWsl(host);
 		expect(text(host)).toContain(t("settings.connectionWslNone"));
-		expect(host.querySelector("select")).toBeNull();
+		expect(!!host.querySelector("select")).toBe(false);
 	});
 
 	test("a failed probe says so and points at the manual form", async () => {

@@ -102,10 +102,11 @@ export function targetCommand(target: ConnectionTarget): string | null {
 		}
 		case "ssh": {
 			if (!target.sshHost) return null;
+			// The local listener and the remote daemon port differ whenever the
+			// user typed a custom local endpoint; the forward maps one to the other.
 			const local = portOf(target.url) ?? DEFAULT_DAEMON_PORT;
 			const remote = target.remotePort ?? DEFAULT_DAEMON_PORT;
-			const forward = local === remote ? `${local}:127.0.0.1:${remote}` : `${local}:127.0.0.1:${remote}`;
-			return `ssh -N -L ${forward} ${shellWord(target.sshHost)}`;
+			return `ssh -N -L ${local}:127.0.0.1:${remote} ${shellWord(target.sshHost)}`;
 		}
 		case "docker": {
 			if (!target.container) return null;
@@ -122,6 +123,29 @@ export function targetPublishHint(target: ConnectionTarget): string | null {
 	if (target.kind !== "docker") return null;
 	const port = portOf(target.url) ?? DEFAULT_DAEMON_PORT;
 	return `docker run -d -p 127.0.0.1:${port}:${port} --name ${shellWord(target.container ?? "<name>")} musepi`;
+}
+
+/**
+ * The daemon port a stored endpoint names, or `fallback` when it names none.
+ *
+ * Boot resolves its first port from a persisted URL, which a user or an older
+ * build may have written in a shape `new URL` refuses. That is a value, not a
+ * bug here, so this never throws: an unparseable endpoint falls back to the
+ * default port and the attempt fails normally, instead of stranding boot before
+ * it can record that anything was tried.
+ */
+export function daemonPortOf(url: string, fallback: number = DEFAULT_DAEMON_PORT): number {
+	try {
+		const parsed = new URL(url);
+		// A scheme the daemon does not speak names no daemon port, even though
+		// `new URL` happily parses it (`ftp://nope` resolves to port 80).
+		if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") return fallback;
+		const port = Number.parseInt(parsed.port, 10);
+		if (Number.isInteger(port) && port > 0) return port;
+		return parsed.protocol === "wss:" ? 443 : 80;
+	} catch {
+		return fallback;
+	}
 }
 
 function portOf(url: string): number | null {

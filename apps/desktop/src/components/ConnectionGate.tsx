@@ -28,7 +28,6 @@ export function ConnectionGate({
 	facts,
 	targets,
 	statuses,
-	daemonUrl,
 	activeTargetId,
 	busyId,
 	lastError,
@@ -46,7 +45,6 @@ export function ConnectionGate({
 	facts: ConnectionFacts;
 	targets: readonly ConnectionTarget[];
 	statuses: TargetStatusMap;
-	daemonUrl: string;
 	activeTargetId: string | null;
 	busyId: string | null;
 	/** Error of the attempt in flight. */
@@ -72,7 +70,6 @@ export function ConnectionGate({
 				state={connectionState}
 				targets={targets}
 				statuses={statuses}
-				daemonUrl={daemonUrl}
 				activeTargetId={activeTargetId}
 				busyId={busyTarget?.id ?? null}
 				lastError={lastError}

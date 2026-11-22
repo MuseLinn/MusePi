@@ -25,6 +25,7 @@ import {
 	bootTarget,
 	createTarget,
 	DEFAULT_DAEMON_PORT,
+	daemonPortOf,
 	isLoopbackUrl,
 	LOCAL_TARGET_ID,
 	localTarget,
@@ -196,6 +197,17 @@ describe("connection targets", () => {
 		expect(stripToken("wss://h.example.com:1/?token=s3cret&x=1")).toBe("wss://h.example.com:1/?x=1");
 		expect(stripToken("wss://h.example.com:1/?token=s3cret")).toBe("wss://h.example.com:1/");
 		expect(stripToken("ws://127.0.0.1:8300")).toBe("ws://127.0.0.1:8300");
+	});
+
+	test("a stored endpoint that cannot be parsed names no port, so boot falls back", () => {
+		// Boot resolves its first port from a persisted URL. `ftp://nope` has no
+		// port and `new URL` refuses the shape outright; neither may throw, or the
+		// attempt dies before it can record that it was made.
+		expect(daemonPortOf("ws://127.0.0.1:9411")).toBe(9411);
+		expect(daemonPortOf("wss://h.example.com")).toBe(443);
+		expect(daemonPortOf("ftp://nope")).toBe(DEFAULT_DAEMON_PORT);
+		expect(daemonPortOf("not a url at all")).toBe(DEFAULT_DAEMON_PORT);
+		expect(daemonPortOf("ftp://nope", 9999)).toBe(9999);
 	});
 });
 

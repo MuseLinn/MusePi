@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ConnectionGate } from "../src/components/ConnectionGate";
 import type { ConnectionFacts } from "../src/lib/connection/state";
-import { localTarget } from "../src/lib/connection/targets";
+import { createTarget, localTarget } from "../src/lib/connection/targets";
 
 /**
  * The app-layer gate.
@@ -44,7 +44,6 @@ function render(overrides: Partial<Parameters<typeof ConnectionGate>[0]> = {}): 
 		facts: facts({ disconnectedByUser: true }),
 		targets: [localTarget()],
 		statuses: {},
-		daemonUrl: "ws://127.0.0.1:8300",
 		activeTargetId: "local",
 		busyId: null,
 		lastError: null,
@@ -114,5 +113,27 @@ describe("connection gate", () => {
 		expect(host.querySelector('[data-connection-state="connected"]')).not.toBeNull();
 		expect(host.querySelector('.gui-conn-status[data-status="connected"]')).not.toBeNull();
 		expect(text(host)).not.toContain(t("settings.cannotReachLocalDaemon"));
+	});
+
+	test("a launch that failed on an unparseable stored endpoint lands on the failure surface", () => {
+		// End to end for the reported crash path: a stored `ftp://nope` used to
+		// throw inside boot's `try`, skip `recordBootOutcome`, and leave the gate
+		// deriving `disconnected-by-user` — a calm manager whose row said
+		// 尚未尝试 after a launch that never connected. Boot now settles the
+		// failure, and this is the surface that follows.
+		const bad = createTarget({ id: "bad", label: "Nope", url: "ftp://nope", kind: "manual" });
+		const host = render({
+			facts: facts({ lastAttemptFailed: true }),
+			targets: [localTarget(), bad],
+			activeTargetId: "bad",
+			connectError: "Invalid URL",
+			statuses: { bad: { lastAttemptAt: 1_700_000_000_000, lastError: "Invalid URL" } },
+		});
+		expect(host.querySelector('[data-connection-state="unreachable"]')).not.toBeNull();
+		expect(text(host)).toContain(t("settings.cannotReachLocalDaemon"));
+		expect(text(host)).toContain("Invalid URL");
+		expect(text(host)).toContain(t("general.bootExportDiagnostics"));
+		// The attempted row carries its own error instead of claiming 尚未尝试.
+		expect(host.querySelector('.gui-conn-row[data-status="failed"]')).not.toBeNull();
 	});
 });

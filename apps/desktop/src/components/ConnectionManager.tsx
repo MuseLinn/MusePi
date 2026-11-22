@@ -35,6 +35,7 @@ import {
 	targetPublishHint,
 } from "../lib/connection/targets";
 import { defaultWslRunner, detectWsl, isWindowsShell, type WslDetection, type WslRunner } from "../lib/connection/wsl";
+import { normalizeRemoteHostUrl } from "../lib/remote-hosts";
 import type { IconName } from "../vendor/oc-icons";
 import { Icon } from "../vendor/oc-icons";
 
@@ -145,7 +146,6 @@ export function ConnectionManager({
 	state,
 	targets,
 	statuses,
-	daemonUrl,
 	activeTargetId,
 	busyId,
 	lastError,
@@ -162,8 +162,6 @@ export function ConnectionManager({
 	targets: readonly ConnectionTarget[];
 	/** Status beside the list — a failed attempt never rewrites a row. */
 	statuses: TargetStatusMap;
-	/** Endpoint the shell is currently pointed at. */
-	daemonUrl: string;
 	/** Row selected as the current target (token-insensitive), if any. */
 	activeTargetId: string | null;
 	/** Id of the target with an attempt in flight, if any. */
@@ -233,6 +231,17 @@ export function ConnectionManager({
 		}
 		if (!url) {
 			setFormError(t("settings.connectionUrlRequired"));
+			return;
+		}
+		// This endpoint becomes the next launch's boot target, so it must parse.
+		// The sibling instance dialog accepts a bare `host:port`, and users type
+		// that here too; `normalizeRemoteHostUrl` adds the scheme and refuses
+		// anything that is not ws/wss/http/https — a stored `ftp://nope` would
+		// otherwise strand boot on a URL it cannot parse.
+		try {
+			url = normalizeRemoteHostUrl(url);
+		} catch {
+			setFormError(t("settings.instanceUrlInvalid"));
 			return;
 		}
 		onAdd(
@@ -569,7 +578,7 @@ export function ConnectionManager({
 							{t("settings.dismiss")}
 						</button>
 						<button type="button" className="gui-btn gui-btn-primary" onClick={submit}>
-							{t("settings.testAndAddInstance")}
+							{t("settings.connectionAddTarget")}
 						</button>
 					</div>
 				</section>

@@ -7173,6 +7173,7 @@ export const settings = {
 	"settings.connectionWslFailed": "无法列出 WSL 发行版：{error}",
 	"settings.connectionConnectedHint": "已连接。切换端点会先断开当前实例。",
 	"settings.connectionEditTarget": "编辑端点",
+	"settings.connectionAddTarget": "添加",
 	"settings.connectionSshHostPlaceholder": "user@host",
 	"settings.connectionLoopbackPlaceholder": "ws://127.0.0.1:{port}",
 } as const;
