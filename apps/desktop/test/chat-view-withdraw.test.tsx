@@ -315,6 +315,47 @@ describe("ChatView withdraw", () => {
 		expect(transcriptText(host)).not.toContain("second answer");
 	}, 20000);
 
+	it("keeps history older than the daemon's 200-row window when a long session withdraws", async () => {
+		// The daemon answers `branchAt` with `pathEntries.slice(-200)`
+		// (`daemon/server.ts`), while the client keeps every page it loaded.
+		// Treating that window as the whole path deleted real history the moment
+		// a withdraw pinned it — the reviewer's 260-row probe showed 260 → 200.
+		const turns = 130;
+		const rows: SessionEntry[] = [];
+		let parent: string | null = null;
+		for (let i = 1; i <= turns; i += 1) {
+			const user = `u${i}`;
+			const assistant = `a${i}`;
+			rows.push(entry(user, parent, "user", `question ${i}`, T0 + i * 2000));
+			rows.push(entry(assistant, user, "assistant", `answer ${i}`, T0 + i * 2000 + 1000));
+			parent = assistant;
+		}
+		const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+		// Withdraw turn 130: the target is turn 129's answer, so the daemon's
+		// window covers rows 61..260 of the loaded transcript.
+		const path = rows.map(row => row.id as string).slice(0, 258);
+		const rpc = fakeRpc(calls, () => ({
+			leafId: "a129",
+			path: path.slice(-200),
+			pathEntries: [],
+		}));
+		const store = new GuiSessionStore("withdraw-long", { entries: rows, cursor: 0 }, "C:/workspace");
+		stores.add(store);
+		const host = await mount(rpc, store);
+
+		await act(async () => withdrawButton(host, "u130").click());
+		await act(async () => Bun.sleep(90));
+		await act(async () => document.querySelector<HTMLElement>(".gui-dialog--confirm .gui-btn-primary")!.click());
+		await act(async () => Bun.sleep(240));
+
+		// The rows older than the daemon window are still in the transcript's
+		// input — the virtualizer's rendered set is the loaded transcript, not
+		// the 200-row projection.
+		const rendered = host.querySelectorAll("[data-entry-id]").length;
+		expect(rendered).toBeGreaterThan(200);
+		expect(transcriptText(host)).not.toContain("question 130");
+	}, 20000);
+
 	it("asks before moving the leaf, and cancel leaves the transcript intact", async () => {
 		const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
 		const rpc = fakeRpc(calls, () => ({ leafId: "a1", path: ["u1", "a1"], pathEntries: TURNS.slice(0, 2) }));
@@ -367,9 +408,10 @@ describe("ChatView withdraw", () => {
 	it("asks once when a run is in flight — and names the interruption in the same question", async () => {
 		// Two stacked dialogs (interrupt? then withdraw?) was the old shape: the
 		// second one read as a generic "are you sure" on top of a decision the
-		// user had already made. One question has to carry both facts.
+		// user had already made. One question has to carry both facts, and
+		// answering it must be the end of the asking — not the start of a second.
 		const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
-		const rpc = fakeRpc(calls, () => ({ leafId: "a1", path: ["u1", "a1"], pathEntries: [] }));
+		const rpc = fakeRpc(calls, () => ({ leafId: "a1", path: ["u1", "a1"], pathEntries: TURNS.slice(0, 2) }));
 		const store = new GuiSessionStore(
 			"withdraw-busy",
 			{ entries: TURNS, cursor: 0, state: { isStreaming: true } },
@@ -377,12 +419,13 @@ describe("ChatView withdraw", () => {
 		);
 		stores.add(store);
 		let stops = 0;
-		const host = await mount(
-			rpc,
-			store,
-			() => {},
-			() => (stops += 1),
-		);
+		// Stop is a request to the daemon; the run ends when its state frame
+		// says so. Modelling that here is what lets the op actually run.
+		const onStop = () => {
+			stops += 1;
+			store.apply({ kind: "state", seq: 0, payload: { isStreaming: false } } as never);
+		};
+		const host = await mount(rpc, store, () => {}, onStop);
 		expect(store.getSnapshot().working).toBe(true);
 
 		await act(async () => withdrawButton(host, "u2").click());
@@ -397,13 +440,17 @@ describe("ChatView withdraw", () => {
 		// the run, so nothing is interrupted while the user is still deciding.
 		expect(stops).toBe(0);
 
-		// Answering hands over to the guard ("stop, wait, then move"), which the
-		// settled-run cases above exercise end to end. What this case owns is
-		// the question: one dialog, naming the turn and the interruption, asked
-		// BEFORE anything is stopped.
 		await act(async () => dialogs[0]!.querySelector<HTMLElement>(".gui-btn-primary")!.click());
-		await act(async () => Bun.sleep(120));
-		expect(document.querySelectorAll(".gui-dialog--interrupt").length).toBe(0);
+		await act(async () => Bun.sleep(240));
+
+		// The named question was the only question: no dialog is left standing,
+		// the run was stopped once, and the leaf actually moved. A second,
+		// generic interrupt dialog would still be open here and branchAt would
+		// not have been called.
+		expect(document.querySelectorAll(".gui-dialog--confirm").length).toBe(0);
+		expect(stops).toBe(1);
+		expect(calls.filter(c => c.method === "session.branchAt").map(c => c.params.messageId)).toEqual(["u2"]);
+		expect(transcriptText(host)).not.toContain("second question");
 	}, 20000);
 
 	it("asks before re-answering a turn from the map (same leaf move as withdraw)", async () => {

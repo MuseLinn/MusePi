@@ -92,6 +92,17 @@ export function walkLeafPath<T>(entries: readonly T[], leafId: string | null): L
  * 连同刚撤回的回合一起渲染出来(用户报告:撤回后这回合消息还在)。
  * daemon 按真实会话树算出的路径(`session.branchAt` / `session_leaf_moved`
  * 的 `path`)不受打标影响,存在时压过 walk。
+ *
+ * 但那个路径是一段**窗口**,不是全路径:daemon 只回 `TAIL_ENTRIES`
+ * (200)条(`daemon/server.ts` 的 `pathEntries.slice(-TAIL_ENTRIES)`),
+ * 而客户端保留它翻页加载的每一页。所以权威只在窗口内成立:窗口起点之前
+ * 的行(加载序早于 daemon 路径的首个 id)仍由 walk 决定 —— 否则任何加载
+ * 超过 200 行的会话,一撤回就把窗口外的真实历史整段删掉(评审实测:
+ * 260 行 → 200 行)。
+ *
+ * 同一原因还有第二类行:daemon 的 path 只收 message(`server.ts` 的
+ * `if (!m) continue`),压在活跃路径上的 compaction 分隔等非 message 行
+ * 不在集合里。它们若被 walk 放上活跃路径就保留,不能因为"不在集合"而消失。
  */
 export function filterVisibleEntries<T>(
 	entries: readonly T[],
@@ -101,16 +112,16 @@ export function filterVisibleEntries<T>(
 		pinnedPathIds?: ReadonlySet<string>;
 		/** 权威活跃路径:daemon 按真实会话树算出的路径(`session.branchAt` /
 		 *  `session_leaf_moved` 的 `path`)。与 pinnedPathIds 的区别是语义上
-		 *  的——pin 是"拓扑不可信时的兜底",authoritative 是"本路径就是
+		 *  的——pin 是"拓扑不可信时的兜底",authoritative 是"窗口内就是
 		 *  答案":walk 报告 complete 也可能是错的(live 消息漏打 parentId
-		 *  时整段尾部与根部连续段无法区分),所以 authoritative 无条件压过
-		 *  walk。 */
+		 *  时整段尾部与根部连续段无法区分),所以窗口内 authoritative 压过
+		 *  walk;窗口外(daemon 只发最后 200 条)仍按 walk。 */
 		authoritativePathIds?: ReadonlySet<string>;
 		pinnedToRoot: boolean;
 	},
 ): T[] {
 	const authoritative = opts.authoritativePathIds;
-	if (authoritative) return filteredBy(entries, authoritative, opts.pinnedToRoot);
+	if (authoritative) return authoritativeVisible(entries, walk, activePathIds, authoritative, opts.pinnedToRoot);
 	if (!walk.complete) {
 		const pinned = opts.pinnedPathIds;
 		if (!pinned) return [...entries];
@@ -124,6 +135,58 @@ export function filterVisibleEntries<T>(
 			return true;
 		}
 		return activePathIds.has(e.id);
+	});
+}
+
+/** 权威路径的窗口边界 = 加载序上第一个属于 daemon 路径的条目。它之前的
+ *  行比 daemon 窗口更老,集合里没有它们不代表不在活跃路径上。
+ *  边界不存在(daemon 路径与加载窗完全不相交,或路径为空)时无法定位
+ *  窗口,此时交给 walk:把"没交集"当成"全在窗口内"会把转录整段清空。 */
+function authoritativeVisible<T>(
+	entries: readonly T[],
+	walk: LeafWalk,
+	activePathIds: ReadonlySet<string>,
+	pathIds: ReadonlySet<string>,
+	pinnedToRoot: boolean,
+): T[] {
+	const boundary = entries.findIndex(entry => {
+		const id = (entry as { id?: unknown }).id;
+		return typeof id === "string" && pathIds.has(id);
+	});
+	if (boundary < 0 && pathIds.size > 0) {
+		if (!walk.complete) return [...entries];
+		return entries.filter(entry => {
+			const e = entry as { id?: unknown; parentId?: unknown; type?: string };
+			if (typeof e.id !== "string") return true;
+			if (typeof e.parentId !== "string") {
+				if (pinnedToRoot && e.type === "message") return false;
+				return true;
+			}
+			return activePathIds.has(e.id);
+		});
+	}
+	return entries.filter((entry, index) => {
+		const e = entry as { id?: unknown; parentId?: unknown; type?: string };
+		if (typeof e.id !== "string") return true;
+		if (boundary >= 0 && index < boundary) {
+			// Older than the daemon window: the walk decides, and an untrustworthy
+			// walk hides nothing (the module's standing rule).
+			if (!walk.complete) return true;
+			if (typeof e.parentId !== "string") {
+				if (pinnedToRoot && e.type === "message") return false;
+				return true;
+			}
+			return activePathIds.has(e.id);
+		}
+		if (pathIds.has(e.id)) return true;
+		if (typeof e.parentId !== "string") {
+			// Root-level rows hang off the session root, not a branch point.
+			if (e.type !== "message") return true;
+			return pinnedToRoot ? false : pathIds.has(e.id);
+		}
+		// The daemon path carries messages only; a non-message row the walk puts
+		// on the active path (compaction divider) is still on it.
+		return e.type !== "message" && activePathIds.has(e.id);
 	});
 }
 

@@ -1729,8 +1729,11 @@ export function ChatView({
 	// 会把回复挂错节点,2026-09-16 用户报告)。纯导航(jump)不走此守卫。
 	// 返回 false = 用户取消了确认(操作未执行)。
 	const runTreeOp = useCallback(
-		async (op: () => unknown): Promise<boolean> => {
-			if (!(await confirmTreeOpWhileWorking())) return false;
+		async (op: () => unknown, opts?: { confirmed?: boolean }): Promise<boolean> => {
+			// `confirmed`: the caller already asked its own question, which named
+			// this very operation (withdrawSettled). Asking again here stacked a
+			// generic "interrupt the run?" under the named one.
+			if (!opts?.confirmed && !(await confirmTreeOpWhileWorking())) return false;
 			if (snapRef.current?.working) onStop();
 			await waitWorkingCleared();
 			await op();
@@ -1797,10 +1800,15 @@ export function ChatView({
 	/** Order matters: name the turn WHILE the run still stands, then stop it. The
 	 *  interrupt guard used to fire first, so a working-run withdraw asked twice
 	 *  (interrupt? then withdraw?) and, read backwards, told the user the run
-	 *  was being interrupted before they had decided to interrupt it. */
+	 *  was being interrupted before they had decided to interrupt it.
+	 *
+	 *  `confirmed: true` is what makes the named question the ONLY one: the
+	 *  guard would otherwise ask its own generic "interrupt the run?" right
+	 *  after the user answered this one. The stop itself still happens here,
+	 *  after the answer — the confirmation only owns the question. */
 	const withdrawSettled = async (quote: string, op: () => Promise<unknown>): Promise<boolean> => {
 		if (!(await confirmWithdraw(quote, snapRef.current?.working === true))) return false;
-		await runTreeOp(op);
+		await runTreeOp(op, { confirmed: true });
 		return true;
 	};
 	// Rewind (撤回, the ⤺ action under a USER message): branch to the user
