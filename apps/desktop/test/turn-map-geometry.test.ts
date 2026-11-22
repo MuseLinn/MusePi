@@ -195,6 +195,12 @@ async function measure(html: string, opts: { seatHeight?: number } = {}) {
 				})(),
 			})),
 			junctions: all("circle.tm-junction").length,
+			// 底部轮次条:旁支条目也要后退,缩略图不能把旁支画得和活轮一样。
+			navBands: all(".tm-nav-band").map(el => ({
+				off: el.classList.contains("tm-nav-band--off"),
+				opacity: Number(getComputedStyle(el).opacity),
+				width: el.getBoundingClientRect().width,
+			})),
 			splitLabels: all(".tm-split-label").map(el => el.textContent ?? ""),
 			preview: all(".tm-card-preview").map(el => ({
 				whiteSpace: getComputedStyle(el).whiteSpace,
@@ -397,6 +403,30 @@ describe("离路径的轮在页面上真的后退(真实级联)", () => {
 		expect(offEdge).toBeDefined();
 		expect(liveEdge).toBeDefined();
 		expect(offEdge!.opacity).toBeLessThan(liveEdge!.opacity);
+	});
+});
+
+describe("底部轮次条仍然诚实(真实级联)", () => {
+	test("旁支条目在剪影里后退,条目宽度与数量不变", async () => {
+		const m = await measure(
+			vertical(
+				renderToStaticMarkup(
+					React.createElement(TurnMapCanvas, {
+						entries: branchedEntries(),
+						pathIds: new Set(["u1", "a1", "u3", "a3"]),
+						leafId: "a3",
+					}),
+				),
+			),
+		);
+		// 剪影仍是「一轮一条」:分支轮没有被并掉。
+		expect(m.navBands.length).toBe(3);
+		const off = m.navBands.filter(b => b.off);
+		expect(off).toHaveLength(1);
+		const live = m.navBands.filter(b => !b.off);
+		expect(off[0]!.opacity).toBeLessThan(live[0]!.opacity);
+		// 每条宽度一致(视口指示窗的映射依赖等宽条目)。
+		expect(new Set(m.navBands.map(b => Math.round(b.width))).size).toBe(1);
 	});
 });
 
