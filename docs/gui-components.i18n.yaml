@@ -1,5 +1,5 @@
 # Consistency record for gui-components.md / gui-components.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-components
-gui-components.md: dc273068ffe84f7a4cbb5fc8ec60daedec087e80
-gui-components.zh-CN.md: 907b00abbfe641c9a972f735eb265a9a57e42859
+gui-components.md: a201da34093e346c8fb9abffaca3d1da39967ee5
+gui-components.zh-CN.md: 8259e4a975a3129939baa6483494ce0cc2f2de33
