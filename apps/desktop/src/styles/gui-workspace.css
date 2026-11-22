@@ -3106,15 +3106,14 @@
 .traj-ov-segment:focus-visible,
 .traj-trow-badge:focus-visible,
 .tm-node:focus-visible,
-.tm-lane-row--link:focus-visible {
+.tm-inspector-row--link:focus-visible {
 	outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
 	outline-offset: 2px;
 }
 
 .traj-row:focus-visible .traj-event-jump,
 .traj-trow:focus-within .traj-trow-actions,
-.traj-turn-group:focus-within .traj-turn-actions,
-.tm-lane-row--link:focus-visible .tm-lane-actions {
+.traj-turn-group:focus-within .traj-turn-actions {
 	opacity: 1;
 }
 
@@ -5948,6 +5947,13 @@
 	touch-action: none;
 }
 
+/* 画布是键盘遍历的焦点目标(方向键/Home/End)。焦点环必须可见:没有它的
+ * tabIndex 等于把焦点藏起来——键盘用户看不到自己已经在画布上。 */
+.tm-wrap:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+	outline-offset: -2px;
+}
+
 .tm-wrap[data-dragging] {
 	cursor: grabbing;
 }
@@ -6153,6 +6159,11 @@ button.traj-error-note:hover {
 	transition: left 120ms ease-out, width 120ms ease-out;
 }
 
+/* 离路径的剪影条目:同一个「旁支后退」语义,缩略图也要说实话。 */
+.tm-nav-band--off {
+	opacity: 0.35;
+}
+
 /* 事件构成条颜色(与轨迹 KIND_COLOR 同源)。 */
 .tm-comp--user { background: var(--color-accent); }
 .tm-comp--assistant { background: #b39ddb; }
@@ -6174,22 +6185,54 @@ button.traj-error-note:hover {
 	overflow: visible;
 }
 
-.tm-edge--main {
-	stroke: url(#tm-main-line);
+/* ── 边:父子方向 + 分裂 ───────────────────────────────────────────────
+ * 正交折线 + 箭头。箭头是「谁生了谁」的唯一可靠说法:曲线说不出方向,
+ * 而一条带箭头的折线在任何缩放下都能读。主线金、支线金→紫。
+ * 离路径的边整体后退(淡显、仍在),不读成另一条活的主线。 */
+.tm-edge-group {
+	transition: opacity 160ms ease;
+}
+
+.tm-edge {
+	fill: none;
 	stroke-width: 2;
 	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.tm-edge--main {
+	stroke: url(#tm-main-line);
 	opacity: 0.85;
 }
 
 .tm-edge--branch {
 	stroke: url(#tm-branch-line);
-	stroke-width: 2;
-	stroke-linecap: round;
-	fill: none;
 	opacity: 0.8;
 }
 
-/* 干线交汇点(git 树式分叉圆点):金核 + 光晕,压在主线连线上。 */
+/* 箭头:实心三角,与所在一侧连线同色。 */
+.tm-arrow {
+	fill: url(#tm-main-line);
+	opacity: 0.9;
+}
+
+.tm-arrow--branch {
+	fill: url(#tm-branch-line);
+	opacity: 0.85;
+}
+
+/* 离路径:整条边退到背景(仍在,可读作"这里有条走过的路")。 */
+.tm-edge-group--off {
+	opacity: 0.32;
+}
+
+.tm-edge-group--off .tm-edge,
+.tm-edge-group--off .tm-arrow {
+	stroke-dasharray: none;
+	filter: saturate(0.4);
+}
+
+/* 干线交汇点:兄弟分支共享的分叉圆点,压在连线上。 */
 .tm-junction {
 	fill: #d4a35c;
 	stroke: color-mix(in oklab, var(--color-bg) 85%, transparent);
@@ -6201,25 +6244,27 @@ button.traj-error-note:hover {
 .tm-edge-gold-2 { stop-color: color-mix(in oklab, #d4a35c 55%, var(--color-accent)); }
 .tm-edge-purple { stop-color: #b39ddb; }
 
-/* 分支列头:自 Turn N · 重答。 */
-.tm-lane-head {
+/* 分裂标签:写在交汇点旁一次(「自 Turn N · k 支」),不在每条车道头重复。 */
+.tm-split-label {
 	position: absolute;
 	font-size: 10px;
 	line-height: 1;
 	color: var(--color-text-muted);
 	white-space: nowrap;
-	padding-left: 2px;
+	pointer-events: none;
 }
 
-/* 轮节点卡:液态玻璃(backdrop blur + 1px border + 圆角 12)。
- * height 参与过渡(--gui-motion-height):折叠 ⇄ 展开卡高平滑形变;
- * overflow hidden 让过渡期内溢出内容被圆角边界裁剪。 */
+/* ── 轮卡:固定高度的索引行 ───────────────────────────────────────────
+ * 三行:头部(轮号 + 离路径标 + 用时)/ 一行预览 / 计数。高度由布局常量
+ * TURN_NODE_H 决定,卡内没有可长高的内容——正文属于对话与检视器。 */
 .tm-node {
 	position: absolute;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	padding: 8px 10px;
+	justify-content: center;
+	gap: 3px;
+	padding: 6px 10px;
+	box-sizing: border-box;
 	border-radius: var(--radius-xl);
 	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 12%, transparent));
 	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 78%, transparent));
@@ -6230,7 +6275,6 @@ button.traj-error-note:hover {
 	transition:
 		top var(--gui-motion-height, 240ms) var(--spring),
 		left var(--gui-motion-height, 240ms) var(--spring),
-		height var(--gui-motion-height, 240ms) var(--spring),
 		border-color 160ms var(--spring),
 		box-shadow 160ms var(--spring),
 		opacity 200ms ease;
@@ -6238,8 +6282,6 @@ button.traj-error-note:hover {
 	user-select: none;
 }
 
-/* 动效关闭:高度形变直接跳变(prefers-reduced-motion 由 gui-base
- * 的全局 0.01ms 规则覆盖)。 */
 .gui-motion-off .tm-node {
 	transition: none;
 }
@@ -6249,9 +6291,8 @@ button.traj-error-note:hover {
 	box-shadow: 0 8px 26px color-mix(in oklab, var(--color-bg) 55%, transparent);
 }
 
-/* 支线卡:降低不透明度 + 金→紫渐变左缘。 */
+/* 支线卡:金→紫渐变左缘,标明"这一轮是重答/分叉出来的"。 */
 .tm-node--branch {
-	opacity: 0.82;
 	border-left: 2px solid transparent;
 	border-image: linear-gradient(180deg, #d4a35c, #b39ddb) 1;
 }
@@ -6262,7 +6303,7 @@ button.traj-error-note:hover {
 	box-shadow: 0 0 0 1px color-mix(in oklab, #d4a35c 35%, transparent), 0 6px 22px color-mix(in oklab, #d4a35c 18%, transparent);
 }
 
-/* 当前轮:高亮描边 + 呼吸动画。 */
+/* 当前轮:高亮描边 + 呼吸动画——「我在哪」的唯一答案。 */
 .tm-node--current {
 	border-color: color-mix(in oklab, var(--color-accent) 70%, transparent);
 	animation: tm-breathe 2.4s ease-in-out infinite;
@@ -6271,6 +6312,42 @@ button.traj-error-note:hover {
 @keyframes tm-breathe {
 	0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 30%, transparent), 0 6px 20px color-mix(in oklab, var(--color-bg) 50%, transparent); }
 	50% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent), 0 6px 24px color-mix(in oklab, var(--color-accent) 16%, transparent); }
+}
+
+/* 选中轮(检视器的输入):实线描边,与"当前轮"的呼吸区分开。 */
+.tm-node--selected {
+	border-color: color-mix(in oklab, var(--color-accent) 85%, transparent);
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent);
+}
+
+/* 离路径:整体后退。仍在、仍可点,但永远不读成活的轮。
+ *
+ * dim 施加在卡的**内容**上,不是卡本身:opacity 会建立一个组,组内任何元素
+ * 都无法用 opacity:1 逃出来——「旁支」标记正是因此被压到 1.45:1 而读不出
+ * 来,而它存在的意义恰恰是不靠颜色也能读。卡面本身靠背景与描边后退。 */
+.tm-node--off {
+	border-color: color-mix(in oklab, var(--color-text) 7%, transparent);
+	background: color-mix(in oklab, var(--color-bg) 58%, transparent);
+	box-shadow: 0 4px 14px color-mix(in oklab, var(--color-bg) 40%, transparent);
+}
+
+.tm-node--off .tm-turn-badge,
+.tm-node--off .tm-card-preview,
+.tm-node--off .tm-card-facts,
+.tm-node--off .tm-node-dur {
+	opacity: 0.42;
+	filter: saturate(0.55);
+}
+
+.tm-node--off:hover .tm-turn-badge,
+.tm-node--off:hover .tm-card-preview,
+.tm-node--off:hover .tm-card-facts,
+.tm-node--off:hover .tm-node-dur,
+.tm-node--off.tm-node--selected .tm-turn-badge,
+.tm-node--off.tm-node--selected .tm-card-preview,
+.tm-node--off.tm-node--selected .tm-card-facts,
+.tm-node--off.tm-node--selected .tm-node-dur {
+	opacity: 0.75;
 }
 
 /* 搜索:命中高亮 / 未命中淡显。 */
@@ -6282,23 +6359,23 @@ button.traj-error-note:hover {
 	opacity: 0.35;
 }
 
-.tm-node-head {
+.tm-card-head {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: 6px;
+	min-width: 0;
 }
 
 .tm-turn-badge {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
+	flex: none;
 	font-size: 10px;
 	font-weight: 700;
 	letter-spacing: 0.04em;
 	font-family: var(--font-mono, ui-monospace, monospace);
 	color: var(--color-text);
-	/* 轮次角标:框上的标识药丸( accent 淡底 + 描边)。 */
 	padding: 2px 8px;
 	border-radius: 99px;
 	border: 1px solid color-mix(in oklab, var(--color-accent) 32%, transparent);
@@ -6334,95 +6411,96 @@ button.traj-error-note:hover {
 	background: color-mix(in oklab, #6fc3b8 14%, transparent);
 }
 
+/* 离路径标:文字而不是只靠透明度——色弱与低对比环境下透明度不够。
+ * 它不受 `.tm-node--off` 的内容淡显影响(那条规则只覆盖徽章/预览/计数/用时),
+ * 所以正文用 --color-text 而不是 muted,并以自身底色兜住对比度:
+ * 12px 以下的小字要 ≥4.5:1 才算读得出来。 */
+.tm-card-off {
+	flex: none;
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 1;
+	padding: 2px 5px;
+	border-radius: 99px;
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-bg) 88%, transparent);
+	border: 1px dashed color-mix(in oklab, var(--color-text) 45%, transparent);
+}
+
 .tm-node-dur {
+	margin-left: auto;
+	flex: none;
 	font-size: 9px;
 	font-family: var(--font-mono, ui-monospace, monospace);
 	color: var(--color-text-faint);
 }
 
-.tm-node-summary {
+/* 一行预览:索引文本,不是正文。省略号是契约的一部分。 */
+.tm-card-preview {
 	font-size: 11px;
 	line-height: 1.35;
 	color: var(--color-text);
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
+	white-space: nowrap;
 	overflow: hidden;
-	word-break: break-all;
+	text-overflow: ellipsis;
 }
 
-/* 构成条:轮内事件 kind 分段。 */
-.tm-comp {
+.tm-card-facts {
 	display: flex;
-	height: 4px;
-	border-radius: var(--radius-xs);
-	overflow: hidden;
-	background: color-mix(in oklab, var(--color-text) 7%, transparent);
-}
-
-.tm-comp-seg {
-	display: block;
-	height: 100%;
-	min-width: 2px;
-}
-
-.tm-node-stats {
-	font-size: 9px;
-	color: var(--color-text-muted);
-	font-family: var(--font-mono, ui-monospace, monospace);
-}
-
-/* 轮内泳道(单击展开):事件卡单行 28px / 工具双行 44px + 卡间距 4px。
- * 可视上限与布局常量 turnExpandedExtra 同步(TURN_LANE_MAX_H + 留白 8):
- * 超过即轮内滚动,卡片高度不再增长。 */
-.tm-lane {
-	margin-top: 4px;
-	padding: 6px 2px;
-	border-top: 1px dashed color-mix(in oklab, var(--color-text) 12%, transparent);
-	overflow-y: auto;
-	max-height: 248px;
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: column;
+	align-items: center;
 	gap: 4px;
-	overflow-x: clip;
-}
-
-/* 折叠态紧凑卡:单行(徽章 + 摘要 + 计数 + 用时),与展开态共用玻璃底。 */
-.tm-node--compact {
-	flex-direction: row;
-	align-items: center;
-	padding: 4px 10px;
-	gap: 6px;
-}
-
-.tm-compact {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex: 1;
-	min-width: 0;
-}
-
-/* 折叠态摘要与展开态同规则(两行 clamp):收起时不丢内容,只收高度。 */
-.tm-compact-summary {
-	flex: 1;
-	min-width: 0;
-	font-size: 11px;
-	line-height: 1.35;
-	color: var(--color-text);
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
-	word-break: break-all;
-}
-
-.tm-compact-count {
-	flex: none;
 	font-size: 9px;
 	font-family: var(--font-mono, ui-monospace, monospace);
 	color: var(--color-text-muted);
+}
+
+.tm-card-dot {
+	color: var(--color-text-faint);
+}
+
+/* 悬停/焦点浮出的轮操作:盖在计数行上,不改变卡高。
+ *
+ * 透明 ≠ 可点:opacity 为 0 时按钮仍会吃掉指针,一次点击同时触发看不见的
+ * 操作和卡片本身(实机:90 个采样点里 12 个命中看不见的按钮)。透明态必须
+ * `pointer-events: none`,露出时才 `auto`——与 gui-chat.css 的
+ * .gui-project-actions / .gui-suggest-row-actions 同一份契约。
+ *
+ * 露出条件是 hover 加 :focus-visible(不是 :focus-within):后者在鼠标点击
+ * 后仍然成立,指针离开后操作条会一直开着。 */
+.tm-card-actions {
+	position: absolute;
+	right: 6px;
+	bottom: 5px;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease;
+}
+
+.tm-node:hover .tm-card-actions,
+.tm-node:has(.tm-card-act:focus-visible) .tm-card-actions,
+.tm-node--selected .tm-card-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.tm-card-act {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: var(--radius-sm);
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-bg) 72%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.tm-card-act:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
 }
 
 /* 空态(消息级画布下线后并入 tm 命名)。 */
@@ -6432,65 +6510,146 @@ button.traj-error-note:hover {
 	color: var(--color-text-faint);
 }
 
-.tm-lane-usage,
-.tm-lane-meta {
-	flex: none;
-	font-size: 9px;
-	font-family: var(--font-mono, ui-monospace, monospace);
-	color: var(--color-text-faint);
-}
-
-/* 事件卡(框内卡片):微玻璃面,主行(kind 药丸 + 图标 + 摘要 + 元信息)+
- * 工具行副行(参数摘要);带 entryId 的单击跳对话定位,悬停浮操作按钮。 */
-.tm-lane-row {
+/* ── 检视器:选中轮的明细 ─────────────────────────────────────────────
+ * 头部(轮号/时间范围/计数/查看对话)+ 逐事件行(kind · 标签 · 耗时)。
+ * 正文不进来:它属于对话,「查看对话」把用户送过去。
+ *
+ * 溢出:只有事件行纵向滚动,横向显式 clip(M80 溢出契约——单轴声明会把
+ * 另一轴算成 auto,长工具名于是长出横向滚动条)。 */
+.tm-inspector-seat {
+	position: absolute;
+	right: 14px;
+	z-index: 7;
 	display: flex;
 	flex-direction: column;
-	justify-content: center;
-	gap: 2px;
-	position: relative;
-	min-height: 28px;
-	padding: 3px 8px;
-	font-size: 10px;
-	color: var(--color-text-muted);
-	border-radius: var(--radius-sm);
-	border: 1px solid color-mix(in oklab, var(--color-text) 9%, transparent);
-	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	width: 320px;
+	max-width: calc(100% - 90px);
+	min-height: 0;
+	pointer-events: none;
 }
 
-/* 主行:图标 + kind 药丸 + 摘要 + 元信息 + 悬停操作(同一 flex 行)。 */
-.tm-lane-main {
+.tm-inspector {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	max-height: 100%;
+	padding: 10px 12px;
+	border-radius: var(--radius-xl);
+	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 12%, transparent));
+	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 84%, transparent));
+	backdrop-filter: blur(18px) saturate(1.45);
+	-webkit-backdrop-filter: blur(18px) saturate(1.45);
+	box-shadow: 0 10px 32px color-mix(in oklab, var(--color-bg) 60%, transparent);
+	pointer-events: auto;
+}
+
+.tm-inspector-head {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	min-width: 0;
+	flex: none;
+	margin-bottom: 6px;
 }
 
-/* 带 entryId 的事件卡可交互(单击/双击跳对话;悬停浮操作)。 */
-.tm-lane-row--link {
-	cursor: pointer;
-	transition: background 120ms var(--spring), color 120ms var(--spring), border-color 120ms var(--spring);
+.tm-inspector-range {
+	font-size: 10px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
+	white-space: nowrap;
 }
 
-.tm-lane-row--link:hover {
+.tm-inspector-jump {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: none;
+	padding: 3px 8px;
+	border-radius: var(--radius-full);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-	border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+	color: var(--color-text);
+	font-size: 10px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.tm-inspector-jump:hover {
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+.tm-inspector-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	border-radius: var(--radius-sm);
+	color: var(--color-text-muted);
+}
+
+.tm-inspector-close:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.tm-inspector-facts {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+	flex: none;
+	margin-bottom: 8px;
+	font-size: 10px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-muted);
+}
+
+/* 事件行容器:唯一滚动轴 = 纵向;横向显式 clip。 */
+.tm-inspector-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: clip;
+}
+
+.tm-inspector-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 24px;
+	padding: 2px 6px;
+	font-size: 10px;
+	color: var(--color-text-muted);
+	border-radius: var(--radius-sm);
+}
+
+.tm-inspector-row--link {
+	cursor: pointer;
+	transition: background 120ms var(--spring), color 120ms var(--spring);
+}
+
+.tm-inspector-row--link:hover {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 	color: var(--color-text);
 }
 
-/* kind 图标(替代旧色点):user 灰 / assistant 紫 / tool 金 / advisor 青。 */
-.tm-lane-icon {
+.tm-inspector-icon {
 	width: 12px;
 	height: 12px;
 	flex: none;
 	color: var(--color-text-faint);
 }
 
-.tm-lane-row--user .tm-lane-icon { color: var(--color-text-muted); }
-.tm-lane-row--assistant .tm-lane-icon { color: #b39ddb; }
-.tm-lane-row--tool .tm-lane-icon { color: #d4a35c; }
-.tm-lane-row--advisor .tm-lane-icon { color: #6fc3b8; }
+.tm-inspector-row--user .tm-inspector-icon { color: var(--color-text-muted); }
+.tm-inspector-row--assistant .tm-inspector-icon { color: #b39ddb; }
+.tm-inspector-row--tool .tm-inspector-icon { color: #d4a35c; }
+.tm-inspector-row--advisor .tm-inspector-icon { color: #6fc3b8; }
 
-/* kind 药丸:主行的一眼分类标识(与图标同色系)。 */
+/* kind 药丸:行的一眼分类标识(与图标同色系)。 */
 .tm-kind {
 	flex: none;
 	font-size: 8.5px;
@@ -6508,7 +6667,7 @@ button.traj-error-note:hover {
 .tm-kind--tool { color: #d4a35c; background: color-mix(in oklab, #d4a35c 12%, transparent); }
 .tm-kind--advisor { color: #6fc3b8; background: color-mix(in oklab, #6fc3b8 12%, transparent); }
 
-.tm-lane-title {
+.tm-inspector-label {
 	flex: 1;
 	min-width: 0;
 	white-space: nowrap;
@@ -6516,60 +6675,18 @@ button.traj-error-note:hover {
 	text-overflow: ellipsis;
 }
 
-/* 工具行副行:参数摘要(mono,单行截断)。 */
-.tm-lane-detail {
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-	font-size: 9.5px;
-	font-family: var(--font-mono, ui-monospace, monospace);
-	color: var(--color-text-faint);
-}
-
-/* 元信息组(usage/duration/ttft/time):悬停时让位给操作按钮。 */
-.tm-lane-metas {
+.tm-inspector-meta {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
 	flex: none;
-	transition: opacity 120ms ease;
 }
 
-.tm-lane-row--link:hover .tm-lane-metas {
-	opacity: 0;
-}
-
-/* 悬停操作组:切换到此分支 / 重答(user 行),覆盖元信息位。 */
-.tm-lane-actions {
-	position: absolute;
-	right: 4px;
-	display: inline-flex;
-	align-items: center;
-	gap: 2px;
-	opacity: 0;
-	transition: opacity 120ms ease;
-}
-
-.tm-lane-row--link:hover .tm-lane-actions {
-	opacity: 1;
-}
-
-.tm-lane-act {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	border-radius: var(--radius-sm);
-	color: var(--color-text-muted);
-	background: color-mix(in oklab, var(--color-bg) 72%, transparent);
-	border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-
-.tm-lane-act:hover {
-	color: var(--color-text);
-	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+.tm-lane-meta {
+	flex: none;
+	font-size: 9px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
 }
 
 .tm-lane-time {
@@ -6577,52 +6694,6 @@ button.traj-error-note:hover {
 	font-size: 9px;
 	font-family: var(--font-mono, ui-monospace, monospace);
 	color: var(--color-text-faint);
-}
-
-/* 悬停浮卡:轮首消息全文 + 首末时刻。 */
-.tm-hover {
-	position: absolute;
-	right: 14px;
-	top: 64px;
-	z-index: 7;
-	width: 300px;
-	max-width: calc(100% - 90px);
-	padding: 10px 12px;
-	border-radius: var(--radius-xl);
-	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 12%, transparent));
-	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 82%, transparent));
-	backdrop-filter: blur(18px) saturate(1.45);
-	-webkit-backdrop-filter: blur(18px) saturate(1.45);
-	box-shadow: 0 10px 32px color-mix(in oklab, var(--color-bg) 60%, transparent);
-	pointer-events: none;
-}
-
-.tm-hover-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	font-size: 10px;
-	font-weight: 700;
-	font-family: var(--font-mono, ui-monospace, monospace);
-	color: var(--color-text);
-	margin-bottom: 6px;
-}
-
-.tm-hover-time {
-	font-weight: 500;
-	color: var(--color-text-faint);
-}
-
-.tm-hover-body {
-	font-size: 11px;
-	line-height: 1.5;
-	color: var(--color-text-muted);
-	word-break: break-all;
-	display: -webkit-box;
-	-webkit-line-clamp: 6;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
 }
 
 /* 右下缩放控件(玻璃质感)。 */

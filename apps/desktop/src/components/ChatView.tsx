@@ -95,6 +95,7 @@ import {
 	surfaceRequiresSession,
 } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
+import { transcriptPathIds } from "../lib/turn-map-path";
 import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -2046,6 +2047,20 @@ export function ChatView({
 			}),
 		[snap?.entries, activePathIds, leafWalk, currentLeafKey, pinnedPathIds],
 	);
+	// 「对话在视」id 集,交给地图/轨迹/消息树判离路径。
+	//
+	// 这是 M82 遗留 P2 的修法:此前交给地图的是 `trustedPathIds`——walk/pin 的
+	// 原始 id 集,不知道 daemon 只回 200 条的窗口边界。于是同一份会话,转录按
+	// `filterVisibleEntries` 说「这是历史」,地图按原始集说「这是旁支」:
+	// 尾部 parentId 全 null 时整条 live 会话被画成支线,截断 walk + 260 行时
+	// 第 1-30 轮(转录照常显示)被涂成离路径。
+	//
+	// 现在只从**转录自己的输出**投影:转录显示什么,地图就认什么为主线。窗口
+	// 规则仍只有一处(`filterVisibleEntries`),地图不再独立理解它。
+	const onPathIds = useMemo(
+		() => transcriptPathIds(snap?.entries ?? [], visibleEntries),
+		[snap?.entries, visibleEntries],
+	);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -3500,7 +3515,7 @@ export function ChatView({
 														onLoadOlder={onLoadOlderStable}
 														roundDurations={snap?.roundDurations}
 														leafId={effectiveLeaf}
-														activePathIds={trustedPathIds}
+														pathIds={onPathIds}
 														onJumpToEntry={handleCanvasJumpToEntry}
 														onSwitchToBranch={handleCanvasSwitchToBranch}
 														onBranchTo={handleCanvasBranchTo}

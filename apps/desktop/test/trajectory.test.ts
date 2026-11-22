@@ -153,7 +153,9 @@ describe("buildTrajectory", () => {
 		const { turns } = buildTrajectoryTree(entries, undefined, new Set(["u1", "a1"]));
 		const layout = layoutTurnMap(turns);
 		expect(layout.main.map(n => n.group.turn)).toEqual([1]);
-		expect(layout.lanes.map(l => l.first.group.turn)).toEqual([2]);
+		// 分叉点从第 1 轮发出,顾问轮进分支车道(不在主线列)。
+		expect(layout.splits.map(s => s.source.group.turn)).toEqual([1]);
+		expect(layout.nodes.filter(n => n.branch).map(n => n.group.turn)).toEqual([2]);
 	});
 
 	it("提取工具调用为 TOOL 事件并回填结果", () => {
