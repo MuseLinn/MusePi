@@ -2325,7 +2325,8 @@ html.gui-vt-surface-only::view-transition-new(root),
 	 * removing the scrolling — a crowded row keeps `overflow-x: auto` and every
 	 * tab keeps its width; the strip slides under the pointer instead of
 	 * squeezing titles. `.gui-surface-tabs` (right panel) is the same contract
-	 * with a narrower width and lives next to it in this file. */
+	 * with a narrower width; its declarations live in gui-settings.css beside
+	 * the enter/exit keyframes that animate them. */
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	overscroll-behavior-x: contain;

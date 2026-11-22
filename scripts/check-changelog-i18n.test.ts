@@ -10,7 +10,7 @@ describe("checkChangelogI18n", () => {
 		const content = `${HEADER}## [1.2.3] - 2026-01-01\n\n### Added\n\n- 中文条目。\n  - EN: The entry in English.\n`;
 		const result = checkChangelogI18n(content);
 		expect(result.problems).toEqual([]);
-		expect(result.checked).toBe(1);
+		expect(result.released).toBe(1);
 	});
 
 	test("flags a bullet with no EN child", () => {
@@ -37,8 +37,9 @@ describe("checkChangelogI18n", () => {
 		const content = `${HEADER}## [Unreleased]\n\n### Added\n\n- 未发布条目，无需英文。\n`;
 		const result = checkChangelogI18n(content);
 		expect(result.problems).toEqual([]);
-		// Still counted, because its line structure is judged.
-		expect(result.checked).toBe(1);
+		// Counted on the structure side, because a translation is not required.
+		expect(result.unreleased).toBe(1);
+		expect(result.released).toBe(0);
 	});
 
 	test("does not let an EN child satisfy the NEXT bullet", () => {
@@ -54,7 +55,7 @@ describe("checkChangelogI18n", () => {
 		const content = `${HEADER}## [1.2.4] - 2026-02-01\n\n### Fixed\n\n- 甲。\n  - EN: A.\n\n## [1.2.3] - 2026-01-01\n\n### Fixed\n\n- 乙。\n  - EN: B.\n`;
 		const result = checkChangelogI18n(content);
 		expect(result.problems).toEqual([]);
-		expect(result.checked).toBe(2);
+		expect(result.released).toBe(2);
 	});
 
 	test("reports a file with content but no version heading", () => {
@@ -90,6 +91,30 @@ describe("checkChangelogI18n — [Unreleased] line structure", () => {
 		expect(result.problems[0]?.message).toContain("orphan");
 	});
 
+	/** The majority shape in the live section: bullets pack consecutively with no
+	 *  blank line between them, so deleting a title leaves its `- EN:` inside the
+	 *  PREVIOUS entry's block. The previous bullet is still open, so a rule that
+	 *  only checks "is this line indented" reads the orphan as a second child of
+	 *  it — the page then prints one card carrying two translations of two
+	 *  different features while the count drops by one. */
+	test("flags a title deleted mid-block, as a second EN child of the entry above", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 改进\n\n` + "- 甲。\n  - EN: A.\n- 乙。\n  - EN: B.\n";
+		// Delete 乙's title line; its EN child now sits directly under 甲's child.
+		const mutated = content.replace("- 乙。\n", "");
+		const result = checkChangelogI18n(mutated);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(9);
+		expect(result.problems[0]?.version).toBe("Unreleased");
+		expect(result.problems[0]?.message).toContain("2 `- EN:` children");
+	});
+
+	test("accepts one EN child plus wrapped body lines in the same entry", () => {
+		// The cap is on EN children, not on indented lines: a wrapped body after
+		// the translation is the normal shape and must not be mistaken for one.
+		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- 甲。\n  正文续行。\n  - EN: A.\n    and its wrap.\n  再一段续行。\n`;
+		expect(checkChangelogI18n(content).problems).toEqual([]);
+	});
+
 	test("flags a paragraph that opens a block without a bullet", () => {
 		const content = `${HEADER}## [Unreleased]\n\n### 新功能\n\n- 甲。\n  - EN: A.\n\n一段没有条目的正文。\n`;
 		const result = checkChangelogI18n(content);
@@ -111,7 +136,10 @@ describe("checkChangelogI18n — [Unreleased] line structure", () => {
 		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- 甲。\n\n## [1.2.3] - 2026-01-01\n\n- 乙。\n  - EN: B.\n`;
 		const result = checkChangelogI18n(content);
 		expect(result.problems).toEqual([]);
-		expect(result.checked).toBe(2);
+		// The two counts are separate facts: one bullet had its translation
+		// checked, the other only its structure.
+		expect(result.released).toBe(1);
+		expect(result.unreleased).toBe(1);
 	});
 
 	test("stops judging structure at the next released heading", () => {

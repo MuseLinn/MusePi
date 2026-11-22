@@ -51,8 +51,18 @@ interface Problem {
 }
 
 export interface CheckResult {
-	/** Bullets that were checked: released bullets, plus every `[Unreleased]` bullet. */
-	checked: number;
+	/**
+	 * Released bullets whose `- EN:` translation was checked. These are the only
+	 * bullets a translation is required on.
+	 */
+	released: number;
+	/**
+	 * `[Unreleased]` bullets whose line structure was checked. Their translation
+	 * is not required — a mid-cycle entry may carry none — so they are counted
+	 * separately rather than reported as bullets that "carry a nested EN
+	 * translation".
+	 */
+	unreleased: number;
 	problems: Problem[];
 }
 
@@ -86,6 +96,12 @@ function unreleasedLines(lines: readonly string[]): { firstLine: number; lines: 
  * Judge `[Unreleased]` by the release renderer's own rule: a blank-line-
  * separated block is either a category heading or an entry, and inside an entry
  * every line is the bullet, a heading, or an indented continuation of it.
+ *
+ * An entry carries at most ONE `- EN:` child — the same invariant the released
+ * sections already enforce. Without that cap a deleted *mid-block* title is
+ * invisible: the previous bullet is still open, so the orphaned translation is
+ * read as a second child of it, the block renders as one card carrying two
+ * translations of two different features, and the entry count drops by one.
  */
 function checkUnreleasedStructure(section: { firstLine: number; lines: string[] }, problems: Problem[]): number {
 	let bullets = 0;
@@ -103,9 +119,11 @@ function checkUnreleasedStructure(section: { firstLine: number; lines: string[] 
 			continue;
 		}
 		let inBullet = false;
+		let enChildren = 0;
 		for (const [offset, text] of block.lines.entries()) {
 			if (TOP_BULLET.test(text)) {
 				inBullet = true;
+				enChildren = 0;
 				bullets++;
 				continue;
 			}
@@ -113,7 +131,21 @@ function checkUnreleasedStructure(section: { firstLine: number; lines: string[] 
 				inBullet = false;
 				continue;
 			}
-			if (inBullet && INDENTED.test(text)) continue;
+			if (inBullet && INDENTED.test(text)) {
+				if (EN_CHILD.test(text)) {
+					enChildren++;
+					if (enChildren > 1) {
+						problems.push({
+							line: line + offset,
+							version: "Unreleased",
+							message:
+								`${enChildren} \`- EN:\` children in one entry — a title deleted mid-block leaves its ` +
+								`translation here, where it renders as a second translation of the entry above`,
+						});
+					}
+				}
+				continue;
+			}
 			problems.push({
 				line: line + offset,
 				version: "Unreleased",
@@ -127,7 +159,7 @@ function checkUnreleasedStructure(section: { firstLine: number; lines: string[] 
 export function checkChangelogI18n(content: string): CheckResult {
 	const lines = content.split(/\r?\n/);
 	const problems: Problem[] = [];
-	let checked = 0;
+	let released = 0;
 
 	let version: string | null = null;
 	let sawVersion = false;
@@ -147,7 +179,7 @@ export function checkChangelogI18n(content: string): CheckResult {
 
 		// Top-level bullet: scan its indented continuation lines (a bullet may
 		// wrap, and so may its EN child) for the translation marker.
-		checked++;
+		released++;
 		const enHits: number[] = [];
 		for (let j = i + 1; j < lines.length; j++) {
 			const next = lines[j] ?? "";
@@ -163,15 +195,15 @@ export function checkChangelogI18n(content: string): CheckResult {
 		}
 	}
 
-	const unreleased = unreleasedLines(lines);
-	if (unreleased) checked += checkUnreleasedStructure(unreleased, problems);
+	const unreleasedSection = unreleasedLines(lines);
+	const unreleased = unreleasedSection ? checkUnreleasedStructure(unreleasedSection, problems) : 0;
 
 	if (!sawVersion && hasReleasedHeading(content)) {
 		// A version heading exists but carried no parseable x.y.z prefix.
 		problems.push({ line: 1, version: "-", message: "no parseable `## [x.y.z]` version section found" });
 	}
 
-	return { checked, problems };
+	return { released, unreleased, problems };
 }
 
 function main(): number {
@@ -189,7 +221,10 @@ function main(): number {
 
 	if (result.problems.length === 0) {
 		if (!quiet) {
-			console.log(`check-changelog-i18n: OK — ${result.checked} bullet(s) carry a nested EN translation.`);
+			console.log(
+				`check-changelog-i18n: OK — ${result.released} released bullet(s) carry their nested EN translation; ` +
+					`${result.unreleased} [Unreleased] bullet(s) have a valid line structure.`,
+			);
 		}
 		return 0;
 	}
