@@ -11,7 +11,7 @@ Use progressive disclosure:
 - Root `AGENTS.md`: only always-loaded execution boundaries, project routing, and cross-cutting constraints.
 - `.agents/rules/`: detailed English-only engineering rules loaded by task domain.
 - `.agents/skills/*/SKILL.md`: reusable procedures with trigger-focused frontmatter; large task-specific references live beside the skill.
-- `docs/`: current product/implementation documentation. Planning and audit records belong in `docs/review/`; closed plans are deleted, with git history as the record, and never kept as a second tree of docs.
+- `docs/`: current product/implementation documentation. Planning and audit records belong in `docs/review/`; Superpowers design and execution records live under `docs/superpowers/` only while their change is open and are deleted when it lands. Closed plans are deleted, with git history as the record, and never kept as a second tree of living docs.
 - Package-local README/`DOCUMENTATION.md`: module ownership and invariants that do not belong in the root guide.
 
 Do not create summary/handoff documents as repository deliverables unless requested. Scratch plans and reports stay in ignored work areas.
@@ -22,9 +22,15 @@ Do not create summary/handoff documents as repository deliverables unless reques
 
 Run `bun run check:docs`. Moving a document out of legacy debt requires valid frontmatter, not a weaker checker. The opening body gives a reader map and omits historical narration.
 
+## Living docs and the diary ratchet
+
+A current-state doc states behavior in the present tense; a dated decision belongs in one `docs/adr/` file, and a user-visible change belongs in the changelog. `scripts/check-doc-hygiene.ts` freezes each living doc's dated-marker count and `scripts/check-doc-budgets.ts` freezes hot-doc word ceilings; both only fall. Touching a topic means migrating its history to an ADR and lowering the baseline, not appending a dated entry.
+
+The second consumer of a hand-written surface converges; the third extracts one primitive before a fourth copy. Extraction ships one owner, tokens for every value, a documented API, a contract test, and deletion of the call-site copies. Call-site tests that re-prove the primitive are deleted; a real-browser check proves only the cascade and pixels it measures.
+
 ## Bilingual pairs
 
-A paired document consists of `X.md`, `X.zh-CN.md`, and `X.i18n.yaml`. Both languages have equal authority and mirrored structure. Agent-only instructions under `.agents/` and explicit exclusions in `scripts/verify-translation-pairing.ts` stay English-only.
+A paired document consists of `X.md`, `X.zh-CN.md`, and `X.i18n.yaml`. Both languages have equal authority and mirrored structure. Paired documents live under `docs/` and in package READMEs. `.agents/rules/` are English-only; `.agents/skills/*/SKILL.md` are Chinese procedures with English frontmatter. Both trees stay outside `scripts/verify-translation-pairing.ts`.
 
 - Update both languages in the same change whenever the final state retains a pair.
 - Keep language switchers immediately after the H1.

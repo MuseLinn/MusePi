@@ -20,4 +20,6 @@ A request to change the repository authorizes local commits for that change; do 
 - A handoff or cleanup requires the worktree's scoped work to be committed and its tree clean, including untracked files. Before removing it, confirm its content is in the target branch by comparing files/blobs — ancestry alone is not evidence when the history is squashed — and confirm no other session owns it. Never delete a branch or worktree another session owns; report it instead.
 - After the work is merged, remove its worktree. Keep the audit record the mission tooling owns (for example `.tower/comms/`).
 
+These are the session's own git commands. Product code that spawns git or jj keeps using the central utilities named in `.agents/rules/code-quality.md`.
+
 Closed execution plans and specs under `docs/superpowers/` are historical records. Where one disagrees with this rule, this rule wins.

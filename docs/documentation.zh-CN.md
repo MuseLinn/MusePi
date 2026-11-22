@@ -28,9 +28,49 @@ lang: zh-CN
 | 产品与实现契约 | `docs/` |
 | 模块所有权与局部不变量 | 包 README 或 `DOCUMENTATION.md` |
 | 计划、审计与验证记录 | `docs/review/` |
+| Superpowers 设计与执行记录 | `docs/superpowers/specs`、`docs/superpowers/plans`；只服务进行中的改动 |
 | 已完结或被取代的计划 | 删除；历史由 git 记录 |
 
 代码、脚本、配置、目录结构和 `--help` 已能回答许多查询。文档应记录非显然契约、理由、副作用和工作流，不要缓存可以低成本查询的事实。
+
+## 文档类型
+
+| 类型 | 位置 | 可以写什么 |
+| --- | --- | --- |
+| 现行规范 / 参考 | `docs/*.md`，`status: living` 或 `reference` | 系统现在如何工作、契约，以及解释当前行为的原因。不写日期，不写变更叙述。 |
+| 决策记录 | `docs/adr/NNNN-topic.md`，一个决策一份 | 背景、决定、理由、影响、被否决的方案、证据。不可改写；后续决策另起 ADR 取代。 |
+| 变更日志 | `packages/coding-agent/CHANGELOG.musepi.md` | 用户可见的变化，中英各一份。 |
+| 计划 / 审计 | `docs/review/` | 进行中的工作与验证记录；结束即删除。 |
+| Superpowers 记录 | `docs/superpowers/specs`、`docs/superpowers/plans` | 单个进行中改动的设计与执行说明；落地即删除，不当作活文档。 |
+| 生成参考 | 由生成器拥有的文件 | 重新生成，不手改。 |
+| 索引 | `docs/index.md` | 只做路由。 |
+
+决策记录不是规范：它保存“为什么这样选、否决了什么”；living 文档用现在时陈述最终契约。时间线由 git 记录，不写“最后更新”。
+
+## living 文档不写变更史
+
+- living 文档里的日期决策标记是债务。`scripts/check-doc-hygiene.ts` 在 `docs/doc-hygiene-baseline.json` 冻结每个文件的当前数量；新增标记会失败。改动某个主题时，把它的日期条目逐条迁进 ADR，写出现行契约，再降低基线。
+- living 文档不写“此前 / 曾经 / 现在改为 / 不再”、PR 号或 commit SHA。仍然解释当前行为的原因可以保留，历史删掉。
+- `scripts/check-doc-budgets.ts` 用 `docs/doc-budgets.json` 冻结核心文档的词数上限。上限只降不升；要升必须在改动说明里给出理由。
+
+## 手写组件何时收成 primitive
+
+收敛规则同时适用于材质与交互：
+
+1. 第二个消费者出现时，收敛到两者中更好的那个，不保留两套皮肤。
+2. 第三个消费者出现时，在第四份拷贝之前抽出唯一 primitive。
+3. 抽取必须同时交付：唯一所有者（类、组件或模块）、所有数值进 `tokens.css` 或该 primitive、一份有文档的 API、一个契约测试，并在同一次改动里删掉各调用点的拷贝。
+4. 把 primitive 写进 `docs/gui-components.md`（或其归属文档），说明消费者可以覆盖什么；有争议的选择链接决策记录。
+5. 少于两个真实消费者时，不要抽占位 abstraction。
+
+## 测试文档
+
+测试是契约，不是文档；测试计划属于 review 记录，结束即删。
+
+- 只为尚未覆盖的行为契约新增测试。一个 primitive 一个契约测试；在调用点重复证明同一材质的测试是拷贝，primitive 接管时删除。
+- 契约变化时，同一次改动更新契约测试与归属规范。行为或契约删除时删掉测试；不要为已移除的 UI 路径保留测试。
+- 测试名写清契约；由规范链接测试，不要反过来在规范里罗列测试。
+- 真实浏览器检查只证明它测到的级联与像素，不证明原生渲染、其他引擎或其他平台；引用测试时写明这个边界。
 
 ## 渐进披露
 
@@ -88,7 +128,7 @@ bun run verify-translation-pairing --write docs/example
 
 写入命令只记录指定配对的 hash。不要为了清理旧债务执行全量写入，把无关文件混入当前改动。临时或已闭合文档直接删除，不作为活文档继续翻译。
 
-`.agents/` 下的 agent 专用规则以及 `scripts/verify-translation-pairing.ts` 明确排除的文件保持英文。每个包都有中英文 README，既有例外由 `scripts/verify-package-readmes.ts` 记录。
+`.agents/rules/` 保持英文；`.agents/skills/*/SKILL.md` 是中文流程文档、frontmatter 用英文；两者都不参与 `scripts/verify-translation-pairing.ts`。每个包都有中英文 README，既有例外由 `scripts/verify-package-readmes.ts` 记录。
 
 ## 改动检查
 

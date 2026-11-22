@@ -1,5 +1,5 @@
 # Consistency record for documentation.md / documentation.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/documentation
-documentation.md: 56d7b6e49d679206c154cf7c1b9373298211eb9a
-documentation.zh-CN.md: b19755fd81f2855bc1d948cfed498244cc659364
+documentation.md: 8e73b50bd70b9cfba069f81d24add669fb527d33
+documentation.zh-CN.md: 8ff0dc675cef69971d30f5c5acc6d228ece78427

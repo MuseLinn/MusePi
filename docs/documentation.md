@@ -27,9 +27,49 @@ Every rule has one authoritative home. Other documents link to it and keep only 
 | Product and implementation contracts | `docs/` |
 | Module ownership and local invariants | Package README or `DOCUMENTATION.md` |
 | Plans, audits, and verification records | `docs/review/` |
+| Superpowers design and execution records | `docs/superpowers/specs`, `docs/superpowers/plans`; working records for an open change only |
 | Closed or superseded plans | Deleted; git history is the record |
 
 Code, scripts, configuration, directory layout, and `--help` already answer many lookups. Document non-obvious contracts, reasons, side effects, and workflows instead of caching facts that can be queried cheaply.
+
+## Document types
+
+| Kind | Home | May contain |
+| --- | --- | --- |
+| Current-state spec or reference | `docs/*.md` with `status: living` or `reference` | How the system works now, its contracts, and reasons that explain current behavior. No dates, no change narration. |
+| Decision record | `docs/adr/NNNN-topic.md`, one per decision | Context, decision, why, consequences, rejected alternatives, evidence. Immutable; a later ADR supersedes it. |
+| Change log | `packages/coding-agent/CHANGELOG.musepi.md` | User-visible changes in both languages. |
+| Plan or audit | `docs/review/` | Open work and verification records; deleted when closed. |
+| Superpowers record | `docs/superpowers/specs`, `docs/superpowers/plans` | Design and execution notes for one open change; deleted when it lands, never treated as living docs. |
+| Generated reference | generator-owned files | Regenerated; never hand-edited. |
+| Index | `docs/index.md` | Routing only. |
+
+A decision record is not a spec: it holds why a choice was made and what was rejected; the living doc states the resulting contract in the present tense. Git owns chronology; no `Last updated` line.
+
+## Keep living docs free of change history
+
+- A dated decision marker in a living doc is debt. `scripts/check-doc-hygiene.ts` freezes each file's current count in `docs/doc-hygiene-baseline.json`; a new marker fails the check. When you touch a topic, move its dated bullets to one ADR each, state the resulting contract, then lower the baseline.
+- No "previously / used to / we now / no longer" narration, PR numbers or commit SHAs in living docs. Keep a reason that still explains current behavior; drop the history.
+- `scripts/check-doc-budgets.ts` holds the hot-doc ceilings in `docs/doc-budgets.json`. Ceilings only fall; raising one needs a stated reason in the change.
+
+## Promote a component to a primitive
+
+The convergence rule covers material as well as interaction:
+
+1. A second consumer converges on the better of the two; do not keep two skins.
+2. A third consumer extracts one primitive before a fourth copy.
+3. Extraction ships one owner (class, component or module), every value in `tokens.css` or the owning primitive, one documented API, and a contract test — and deletes the per-call-site copies in the same change.
+4. Add the primitive to `docs/gui-components.md` (or its owning doc), state what a consumer may override, and link the decision record when the choice was contested.
+5. Do not extract a placeholder with fewer than two real consumers.
+
+## Test documents
+
+Tests are contracts, not documentation; a test plan is a review record and is deleted when closed.
+
+- Add a test only for a behavior contract not already covered. One contract test per primitive; call-site tests that re-prove the same material are copies and are deleted when the primitive takes over.
+- Update the contract test and the owning spec in the same change. Delete a test when its behavior or contract is removed; never keep a test for a removed UI path.
+- Name the contract in the test and link the test from the spec, never the reverse.
+- A real-browser check proves the cascade and pixels it measures, not native rendering, another engine, or another platform. State that limit where the test is cited.
 
 ## Use progressive disclosure
 
@@ -87,7 +127,7 @@ bun run verify-translation-pairing --write docs/example
 
 The write command records hashes only for the named pair. Do not run an unscoped write merely to clean old debt; it mixes unrelated files into the current change. Temporary or closed documents are deleted rather than maintained as living translations.
 
-Agent-only rules under `.agents/` and the explicit exclusions in `scripts/verify-translation-pairing.ts` remain English-only. Every package has an English and Chinese README; legacy exceptions are tracked by `scripts/verify-package-readmes.ts`.
+`.agents/rules/` remain English-only, and `.agents/skills/*/SKILL.md` are Chinese procedures with English frontmatter; both stay outside `scripts/verify-translation-pairing.ts`. Every package has an English and Chinese README; legacy exceptions are tracked by `scripts/verify-package-readmes.ts`.
 
 ## Change checklist
 
