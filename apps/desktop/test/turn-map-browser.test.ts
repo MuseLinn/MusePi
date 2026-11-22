@@ -63,8 +63,14 @@ const build = await Bun.build({
 if (!build.success) throw new AggregateError(build.logs, "Turn map browser fixture did not build");
 const fixtureSource = await build.outputs[0]!.text();
 
+// `--bg` is set at runtime by the theme system, so a fixture that omits it
+// leaves `:root[data-platform="win32"] body { background: var(--bg) }` resolving
+// to nothing — and Chromium's WHITE page becomes the backdrop. A paint claim
+// measured against that backdrop is worse than blind: deleting the gradients
+// then *raises* the measured contrast, because the sample is the white page.
+// Pin both the platform and the surface so the backdrop is the production one.
 const ROOT_STYLE = `:root{
-	--color-bg:rgb(24,24,26);--color-surface:rgb(32,32,34);
+	--bg:rgb(24,24,26);--color-bg:rgb(24,24,26);--color-surface:rgb(32,32,34);
 	--color-text:rgb(235,235,235);--color-text-muted:rgb(160,160,160);--color-text-faint:rgb(120,120,120);
 	--color-accent:rgb(90,150,240);--color-warning:rgb(230,180,90);--border:rgb(70,70,70);
 	--radius-xs:3px;--radius-sm:4px;--radius-md:8px;--radius-lg:12px;--radius-xl:14px;--radius-full:999px;
@@ -96,7 +102,7 @@ async function open(shape: "linear" | "nested", turns = 3): Promise<void> {
 	pageErrors = [];
 	page.on("pageerror", (error: unknown) => pageErrors.push(String(error)));
 	await page.setContent(
-		`<!doctype html><html data-turn-map-shape="${shape}" data-turn-map-turns="${turns}"><head><style>${ROOT_STYLE}${CASCADE}
+		`<!doctype html><html data-platform="win32" data-turn-map-shape="${shape}" data-turn-map-turns="${turns}"><head><style>${ROOT_STYLE}${CASCADE}
 		body{margin:0}#stage{position:relative;width:1040px;height:720px}
 		/* Deterministic coordinates: the entrance animation shifts the world by
 		 * 8px and tm-breathe never finishes. Motion is not under test. */
@@ -202,26 +208,50 @@ describe("P1-1 — the connector paints", () => {
 		expect(warmest[0] - warmest[2]).toBeGreaterThan(15);
 	});
 
-	test("an arrowhead paints, not just the line", async () => {
+	test("an arrowhead paints: its own box holds warm pixels that vanish when hidden", async () => {
 		await open("linear", 5);
-		// Same reason as above: read the arrow's own client geometry. A filled
-		// triangle covers its centroid, so the centroid is the reliable sample.
-		const centroid = await page.evaluate(() => {
+		// The claim is "this triangle paints", so it must be measured against the
+		// same triangle absent — not against some other surface at a fixed
+		// coordinate. A fixed reference can never carry a paint claim: it is a
+		// different surface, and on a white page it even rises when the paint is
+		// removed.
+		const box = await page.evaluate(() => {
 			const poly = document.querySelector<SVGPolygonElement>("polygon.tm-arrow")!;
-			const points = poly
-				.getAttribute("points")!
-				.split(" ")
-				.map(pair => pair.split(",").map(Number) as [number, number]);
-			const matrix = poly.getScreenCTM()!;
-			const x = points.reduce((sum, p) => sum + p[0], 0) / points.length;
-			const y = points.reduce((sum, p) => sum + p[1], 0) / points.length;
-			const client = new DOMPoint(x, y).matrixTransform(matrix);
-			return { x: Math.round(client.x), y: Math.round(client.y) };
+			const r = poly.getBoundingClientRect();
+			return {
+				left: Math.floor(r.left),
+				top: Math.floor(r.top),
+				width: Math.max(1, Math.ceil(r.width)),
+				height: Math.max(1, Math.ceil(r.height)),
+			};
 		});
-		const px = await pixels();
-		const arrow = at(px, centroid.x, centroid.y);
-		const background = at(px, 900, 700);
-		expect(contrast(arrow, background)).toBeGreaterThan(1.15);
+
+		/** Warm pixels (gold family) inside the arrow's own client box. */
+		const warmInside = async (): Promise<number> => {
+			const px = await pixels();
+			let warm = 0;
+			for (let y = box.top; y < box.top + box.height; y++) {
+				for (let x = box.left; x < box.left + box.width; x++) {
+					const [r, g, b] = at(px, x, y);
+					if (r > g && g > b && r - b > 20) warm += 1;
+				}
+			}
+			return warm;
+		};
+
+		const shown = await warmInside();
+		expect(shown).toBeGreaterThan(0);
+
+		// Hide the arrow the way a missing paint hides it (no fill resolves), and
+		// count the same box again. The box also contains the last few pixels of
+		// the edge line, so the residual is not zero — the arrow's contribution is
+		// the DIFFERENCE, and it must be substantial.
+		await page.evaluate(() => {
+			const poly = document.querySelector<SVGPolygonElement>("polygon.tm-arrow")!;
+			poly.style.display = "none";
+		});
+		const hidden = await warmInside();
+		expect(shown - hidden).toBeGreaterThanOrEqual(10);
 	});
 });
 
@@ -269,19 +299,99 @@ describe("P1-2 — keyboard traversal is reachable and works", () => {
 		expect(await page.evaluate(() => document.querySelectorAll(".tm-inspector").length)).toBe(0);
 	});
 
-	test("Enter on a focused card jumps to that turn", async () => {
+	test("a real Enter on a focused card reaches onJumpToEntry", async () => {
 		await open("linear");
-		const jumped = await page.evaluate(() => {
+		// The fixture records jumps in the DOM, so this asserts the callback a
+		// user's Enter produces — not merely that the event was not swallowed.
+		const expected = await page.evaluate(() => {
 			const card = document.querySelector<HTMLElement>(".tm-node")!;
-			const fired: string | null = null;
-			// The fixture does not pass onJumpToEntry, so observe the DOM effect
-			// instead: Enter must not be swallowed by the canvas handler.
 			card.focus();
-			const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
-			card.dispatchEvent(event);
-			return { prevented: event.defaultPrevented, fired };
+			return card.getAttribute("data-turn");
 		});
-		expect(jumped.prevented).toBe(true);
+		expect(expected).toBe("1");
+		await page.keyboard.press("Enter");
+		const jumps = await page.evaluate(
+			() => document.querySelector<HTMLElement>("#turn-map-jumps")?.dataset.jumps ?? "",
+		);
+		expect(jumps).toBe("u1");
+	});
+
+	test("End on a long map keeps the selected turn inside the viewport", async () => {
+		// Mission task 5: "the selected turn stays visible when the map scrolls".
+		// `fitView` already centres the leaf on mount, so pressing End alone is
+		// satisfied by the initial viewport and would pass with centering removed.
+		// The map must therefore be PANNED AWAY first: then only `centerOnTurn`
+		// can put the selection back on screen.
+		await open("linear", 30);
+		const start = await page.evaluate(() => {
+			const world = document.querySelector<HTMLElement>(".tm-world")!;
+			return world.style.transform;
+		});
+		// Drag from blank canvas (right of the cards, below the topbar) far upward,
+		// so the tail of the map leaves the view.
+		const blank = await page.evaluate(() => {
+			const wrap = document.querySelector<HTMLElement>(".tm-wrap")!;
+			for (let y = 200; y < 640; y += 20) {
+				for (let x = 960; x > 660; x -= 20) {
+					const el = document.elementFromPoint(x, y) as HTMLElement | null;
+					if (el === wrap) return { x, y };
+				}
+			}
+			return null;
+		});
+		expect(blank).not.toBeNull();
+		// Drag DOWNWARD: the world moves down, so the tail leaves the viewport
+		// through the bottom edge. (Dragging up moves the tail further into view.)
+		await page.mouse.move(blank!.x, blank!.y);
+		await page.mouse.down();
+		await page.mouse.move(blank!.x, Math.min(700, blank!.y + 560), { steps: 12 });
+		await page.mouse.up();
+		const panned = await page.evaluate(() => ({
+			transform: document.querySelector<HTMLElement>(".tm-world")!.style.transform,
+			tailVisible: (() => {
+				const card = [...document.querySelectorAll<HTMLElement>(".tm-node")].find(
+					el => el.getAttribute("data-turn") === "30",
+				);
+				if (!card) return false;
+				const wrap = document.querySelector<HTMLElement>(".tm-wrap")!.getBoundingClientRect();
+				const rect = card.getBoundingClientRect();
+				return rect.bottom > wrap.top && rect.top < wrap.bottom;
+			})(),
+		}));
+		expect(panned.transform).not.toBe(start);
+		expect(panned.tailVisible).toBe(false);
+
+		await page.evaluate(() => document.querySelector<HTMLElement>(".tm-wrap")!.focus());
+		await page.keyboard.press("End");
+		const fit = await page.evaluate(() => {
+			const wrap = document.querySelector<HTMLElement>(".tm-wrap")!.getBoundingClientRect();
+			const card = document.querySelector<HTMLElement>(".tm-node--selected");
+			if (!card) return null;
+			const rect = card.getBoundingClientRect();
+			return {
+				turn: card.getAttribute("data-turn"),
+				inside:
+					rect.left >= wrap.left - 1 &&
+					rect.right <= wrap.right + 1 &&
+					rect.top >= wrap.top - 1 &&
+					rect.bottom <= wrap.bottom + 1,
+				rect: {
+					left: Math.round(rect.left),
+					top: Math.round(rect.top),
+					right: Math.round(rect.right),
+					bottom: Math.round(rect.bottom),
+				},
+				wrap: {
+					left: Math.round(wrap.left),
+					top: Math.round(wrap.top),
+					right: Math.round(wrap.right),
+					bottom: Math.round(wrap.bottom),
+				},
+			};
+		});
+		expect(fit).not.toBeNull();
+		expect(fit!.turn).toBe("30");
+		expect(fit!.inside).toBe(true);
 	});
 });
 
@@ -309,24 +419,77 @@ describe("P1-4 — hidden actions do not intercept clicks", () => {
 		expect(probe.hitIsCard).toBe(true);
 	});
 
-	test("a real click over the hidden strip selects the card, not the action", async () => {
+	test("a pointer press on a hidden action's centre reaches the card, not the button", async () => {
 		await open("linear");
-		const point = await page.evaluate(() => {
-			const actions = document.querySelector<HTMLElement>(".tm-node .tm-card-actions")!;
-			const rect = actions.getBoundingClientRect();
-			return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+		// Aim at a SPECIFIC button's centre. The strip's own centre is the 2px gap
+		// between buttons, so a click there resolves to the strip and lands on the
+		// card whether or not the buttons intercept — a guard that cannot fail.
+		const geometry = await page.evaluate(() => {
+			const acts = [...document.querySelectorAll<HTMLElement>(".tm-node .tm-card-act")];
+			const target = acts[2]!;
+			const rect = target.getBoundingClientRect();
+			const x = rect.left + rect.width / 2;
+			const y = rect.top + rect.height / 2;
+			return {
+				label: target.getAttribute("aria-label"),
+				x,
+				y,
+				hitIsAction: (document.elementFromPoint(x, y) as HTMLElement)?.closest(".tm-card-act") !== null,
+			};
 		});
-		// A real mouse click: React attaches its handlers at the root, so a
-		// synthetic `element.click()` on a detached subtree reaches none of them.
-		await page.mouse.click(point.x, point.y);
-		const result = await page.evaluate(() => ({
+		expect(geometry.label).toBeTruthy();
+		expect(geometry.hitIsAction).toBe(false);
+
+		// `page.mouse.click` MOVES the pointer first, which hovers the card and
+		// reveals the strip — so it can never exercise the hidden state. Press and
+		// release at the point without moving, which is what a tap/laptop click on
+		// an already-resting pointer does.
+		const client = await page.createCDPSession();
+		await client.send("Input.dispatchMouseEvent", {
+			type: "mousePressed",
+			x: geometry.x,
+			y: geometry.y,
+			button: "left",
+			clickCount: 1,
+		});
+		await client.send("Input.dispatchMouseEvent", {
+			type: "mouseReleased",
+			x: geometry.x,
+			y: geometry.y,
+			button: "left",
+			clickCount: 1,
+		});
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+		const pressed = await page.evaluate(() => ({
 			selected: document.querySelectorAll(".tm-node--selected").length,
 			// No action ran: switching branch / re-answer would move the leaf or
 			// open a dialog, neither of which happens on a plain selection.
 			confirmDialog: document.querySelectorAll(".gui-dialog--confirm").length,
 		}));
-		expect(result.selected).toBe(1);
-		expect(result.confirmDialog).toBe(0);
+		// The press reached the CARD. With the r1 defect (pointer-events auto on a
+		// transparent strip) the button swallows it and `selected` stays 0.
+		expect(pressed.selected).toBe(1);
+		expect(pressed.confirmDialog).toBe(0);
+
+		// Revealed, the same point must reach the button instead.
+		await page.mouse.move(geometry.x, geometry.y);
+		await page.evaluate(
+			() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+		);
+		const revealed = await page.evaluate(() => {
+			const acts = [...document.querySelectorAll<HTMLElement>(".tm-node .tm-card-act")];
+			const target = acts[2]!;
+			const rect = target.getBoundingClientRect();
+			return {
+				pointerEvents: getComputedStyle(target).pointerEvents,
+				hitIsAction:
+					(
+						document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2) as HTMLElement
+					)?.closest(".tm-card-act") !== null,
+			};
+		});
+		expect(revealed.pointerEvents).toBe("auto");
+		expect(revealed.hitIsAction).toBe(true);
 	});
 });
 

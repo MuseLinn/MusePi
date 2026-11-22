@@ -65,6 +65,18 @@ const liveIds =
 	shape === "nested"
 		? new Set(["u1", "a1", "u2", "a2", "u3", "a3"])
 		: new Set(entries.map(e => (e as { id: string }).id));
-createRoot(root).render(
-	<TurnMapCanvas entries={entries} pathIds={liveIds} leafId={shape === "nested" ? "a3" : "a3"} />,
-);
+
+// Jumps are observable so the harness can prove a real Enter reaches
+// `onJumpToEntry` — the map's own jump is a callback, not a DOM mutation.
+// The record rides in the DOM, not on `globalThis`: puppeteer's `evaluate`
+// runs in an isolated world, so a global set by an injected script is invisible
+// to the harness, while DOM attributes are shared.
+const jumpLog = document.createElement("div");
+jumpLog.id = "turn-map-jumps";
+jumpLog.dataset.jumps = "";
+document.body.appendChild(jumpLog);
+const recordJump = (entryId: string): void => {
+	const previous = jumpLog.dataset.jumps ?? "";
+	jumpLog.dataset.jumps = previous ? `${previous},${entryId}` : entryId;
+};
+createRoot(root).render(<TurnMapCanvas entries={entries} pathIds={liveIds} leafId="a3" onJumpToEntry={recordJump} />);

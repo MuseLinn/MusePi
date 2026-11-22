@@ -886,9 +886,8 @@ export function TurnMapCanvas({
 		<div
 			ref={wrapRef}
 			className="tm-wrap"
-			// 真实焦点目标:方向键遍历挂在画布上,而浏览器只能把键盘事件交给
-			// 可聚焦元素——没有 tabIndex 时 moveSelection / Home / End 在实机
-			// 永远不可达(测试直接往元素上派发 keydown 是假的)。
+			// 键盘遍历的焦点目标:浏览器只把键盘事件交给可聚焦元素,所以画布
+			// 本身必须可聚焦,方向键/Home/End 才可达。
 			tabIndex={0}
 			role="application"
 			aria-label={t("transcript.turnMapTitle")}
