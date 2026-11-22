@@ -9,6 +9,8 @@ export interface SSHConnectionTarget {
 	username?: string;
 	port?: number;
 	keyPath?: string;
+	/** `ProxyJump` chain, emitted as `-J` by the ssh and sshfs argv builders. */
+	proxyJump?: string;
 	compat?: boolean;
 }
 
@@ -110,6 +112,9 @@ function buildCommonArgs(host: SSHConnectionTarget, options?: SSHArgsOptions): s
 	}
 	if (host.keyPath) {
 		args.push("-i", host.keyPath);
+	}
+	if (host.proxyJump) {
+		args.push("-J", host.proxyJump);
 	}
 
 	return args;

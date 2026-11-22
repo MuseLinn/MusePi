@@ -307,7 +307,20 @@ let daemonQuitHandled = false;
 			// No timers may outlive the quit — a pending pet dissolve is moot.
 			clearPetHideTimer();
 			const { killOwnedDaemon } = require("./daemon.cjs");
-			killOwnedDaemon()
+			// Managed tunnels/containers die with the app that started them: a
+			// surviving `ssh -N` would hold the local port and make the next
+			// launch report it as somebody else's. `stopAll` only signals the
+			// handles this run recorded, so a tunnel the user started is untouched.
+			const tunnels = require("./remote-targets.cjs");
+			tunnels
+				.stopAll()
+				.then(ids => {
+					if (ids.length > 0) console.error(`[main] remote target teardown: ${ids.length} stopped`);
+				})
+				.catch(err => {
+					console.error("[main] remote target teardown failed:", err?.message ?? err);
+				})
+				.finally(() => killOwnedDaemon())
 				.then(killed => {
 					console.error(`[main] daemon teardown on quit: ${killed ? "killed" : "not owned"}`);
 				})
@@ -4040,6 +4053,195 @@ ipcMain.handle("daemon-orphaned", async () => (await findOrphanedDaemon()) !== n
 // the registry ownerPid so a graceful quit tears it down. Used when the
 // orphan still has working sessions and must not be restarted mid-turn.
 ipcMain.handle("daemon-adopt", async () => adoptDaemon());
+/**
+ * Managed remote targets — the tunnels and daemons this shell spawns.
+ *
+ * The renderer owns no process: every spawn, every signal and every read of a
+ * remote tool happens here, and `remote-targets.cjs` keeps the ownership
+ * records. Two facts are deliberately *not* derived from a port being busy:
+ * whether a process is ours (only a record we created says so) and whether a
+ * container may be removed (only `docker run` by this shell records one).
+ *
+ * `ssh-config` answers the other half of the question — the hosts the user
+ * already configured for ssh(1). It reads, never writes, and a missing or
+ * malformed file is an empty catalog rather than an error.
+ */
+const remoteTargets = require("./remote-targets.cjs");
+const { readSshConfig } = require("./ssh-config-read.cjs");
+
+// Status pushes: a tunnel that dies after its connect resolved still has to
+// reach the row, so the supervisor's own events are forwarded rather than
+// polled. The renderer may also ask for the current set (a reload loses the
+// listener but not the processes).
+remoteTargets.onStatus(status => {
+	if (!mainWindow || mainWindow.isDestroyed()) return;
+	mainWindow.webContents.send("remote-target-status", status);
+});
+
+/**
+ * A container or image name is passed to `docker` as an argv element, so a value
+ * beginning with "-" would be read as an option rather than a name. This is the
+ * same refusal `targetInput` and the WSL handler already apply to a destination
+ * and a distribution; docker's commands were the inconsistent pair.
+ */
+function cliName(value, max = 256) {
+	const name = typeof value === "string" ? value.trim() : "";
+	if (!name || name.startsWith("-") || name.length > max) return null;
+	return name;
+}
+
+/** Validate the renderer's target payload before any process sees it. */
+function targetInput(raw) {
+	const input = raw && typeof raw === "object" ? raw : {};
+	const id = typeof input.id === "string" ? input.id.trim() : "";
+	if (!id) return null;
+	const port = Number(input.localPort);
+	const remotePort = Number(input.remotePort);
+	if (!Number.isInteger(port) || port <= 0 || port > 65535) return null;
+	if (!Number.isInteger(remotePort) || remotePort <= 0 || remotePort > 65535) return null;
+	const destination = typeof input.destination === "string" ? input.destination.trim() : "";
+	// An ssh destination starting with "-" would be read as an option by ssh
+	// itself (`-oProxyCommand=…`), so it never reaches argv.
+	if (!destination || destination.startsWith("-")) return null;
+	return {
+		id,
+		localPort: port,
+		remotePort,
+		destination,
+		sshPort: Number.isInteger(Number(input.sshPort)) ? Number(input.sshPort) : undefined,
+		proxyJump: typeof input.proxyJump === "string" && input.proxyJump.trim() ? input.proxyJump.trim() : undefined,
+		keyPath: typeof input.keyPath === "string" && input.keyPath.trim() ? input.keyPath.trim() : undefined,
+	};
+}
+
+ipcMain.handle("remote-target-start", async (_event, raw) => {
+	const input = targetInput(raw);
+	if (!input) return { ok: false, reason: "invalid-input" };
+	return remoteTargets.startSshTunnel(input);
+});
+
+ipcMain.handle("remote-target-stop", async (_event, targetId) =>
+	remoteTargets.stopTarget(typeof targetId === "string" ? targetId : ""),
+);
+
+ipcMain.handle("remote-target-list", () => remoteTargets.listTargets());
+
+ipcMain.handle("remote-docker-detect", async () => remoteTargets.detectDocker());
+
+ipcMain.handle("remote-docker-containers", async (_event, daemonPort) => {
+	const list = await remoteTargets.listContainers();
+	if (!list.ok) return list;
+	const port = Number.isInteger(Number(daemonPort)) ? Number(daemonPort) : 8300;
+	return { ok: true, containers: remoteTargets.containersPublishing(list.containers, port), all: list.containers };
+});
+
+ipcMain.handle("remote-docker-run", async (_event, raw) => {
+	const input = raw && typeof raw === "object" ? raw : {};
+	const name = cliName(input.name);
+	const port = Number(input.port);
+	const image = input.image === undefined ? undefined : cliName(input.image);
+	if (!name || (input.image !== undefined && !image)) return { ok: false, reason: "invalid-input" };
+	if (!Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, reason: "invalid-input" };
+	return remoteTargets.runContainer({ name, port, image });
+});
+
+ipcMain.handle("remote-docker-exec", async (_event, raw) => {
+	const input = raw && typeof raw === "object" ? raw : {};
+	const container = cliName(input.container);
+	const targetId = typeof input.id === "string" ? input.id.trim() : "";
+	// Two ports: the daemon binds the container-side port, and the container
+	// publishes it on the host. `port` is the host side (what the endpoint dials).
+	const port = Number(input.port);
+	const containerPort = input.containerPort === undefined ? port : Number(input.containerPort);
+	if (!container || !targetId) return { ok: false, reason: "invalid-input" };
+	for (const value of [port, containerPort]) {
+		if (!Number.isInteger(value) || value <= 0 || value > 65535) return { ok: false, reason: "invalid-input" };
+	}
+	return remoteTargets.execContainer({ targetId, container, hostPort: port, containerPort });
+});
+
+ipcMain.handle("remote-wsl-start", async (_event, raw) => {
+	const input = raw && typeof raw === "object" ? raw : {};
+	const distro = typeof input.distro === "string" ? input.distro.trim() : "";
+	const targetId = typeof input.id === "string" ? input.id.trim() : "";
+	const port = Number(input.port);
+	// A distribution name is passed to wsl.exe as an argv element, so an empty
+	// or option-looking value is refused rather than forwarded.
+	if (!distro || distro.startsWith("-") || !targetId) return { ok: false, reason: "invalid-input" };
+	if (!Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, reason: "invalid-input" };
+	return remoteTargets.startWslDaemon({ targetId, distro, port });
+});
+
+/**
+ * `window.musepiShell.listWslDistributions` — the bridge `lib/connection/wsl.ts`
+ * has documented since the connection manager landed, and which did not exist,
+ * so detection answered `unsupported` forever in a packaged build.
+ *
+ * The three answers stay distinct: stdout for a successful probe (an empty
+ * string is a real "no distributions"), `null` when this host cannot run
+ * wsl.exe at all, and a rejection when the command ran and failed.
+ */
+ipcMain.handle("remote-wsl-distros", async () => {
+	if (process.platform !== "win32") return null;
+	const result = await remoteTargets.listWslDistros();
+	if (!result.ok) {
+		if (result.reason === "wsl-not-found") return null;
+		throw new Error(result.error);
+	}
+	return result.output;
+});
+
+/** The user's `~/.ssh/config`, expanded in ssh(1)'s order, read-only. */
+ipcMain.handle("remote-ssh-config", () => {
+	try {
+		return { ok: true, documents: readSshConfig(), musepi: readMusepiSshHosts() };
+	} catch (err) {
+		// Unreadable home directory: the catalog is the MusePi one, not a crash.
+		return { ok: false, documents: [], musepi: [], error: err instanceof Error ? err.message : String(err) };
+	}
+});
+
+/**
+ * MusePi's own host catalog — the file the daemon's `remote.hosts` and
+ * `remote.hostAdd` read.
+ *
+ * The path is the daemon's, not a sibling: `getSSHConfigPath("user")` resolves
+ * to `<agentDir>/ssh.json`, i.e. `~/.musepi/agent/ssh.json`, and `agentDir`
+ * follows `PI_CONFIG_DIR` (which `currentDataRoot()` also honours). Reading the
+ * data root's own `ssh.json` instead — as this first did — named a file nothing
+ * ever writes, so the two halves would have disagreed about which hosts exist.
+ *
+ * Read here as well because the connection manager is shown precisely when the
+ * daemon is *not* reachable: the ssh-config half of the catalog is a local file
+ * too, so both halves stay available while the wizard's RPC does not. Same
+ * file, not a second store; a malformed file is an empty list so one bad edit
+ * cannot take the form away.
+ */
+function readMusepiSshHosts() {
+	try {
+		const file = path.join(currentDataRoot(), "agent", "ssh.json");
+		const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+		const hosts = parsed && typeof parsed === "object" ? parsed.hosts : null;
+		if (!hosts || typeof hosts !== "object") return [];
+		const rows = [];
+		for (const [name, raw] of Object.entries(hosts)) {
+			if (!name.trim() || !raw || typeof raw !== "object") continue;
+			if (typeof raw.host !== "string" || !raw.host) continue;
+			const row = { name, host: raw.host };
+			if (typeof raw.username === "string" && raw.username) row.username = raw.username;
+			if (Number.isInteger(raw.port) && raw.port > 0) row.port = raw.port;
+			if (typeof raw.keyPath === "string" && raw.keyPath) row.keyPath = raw.keyPath;
+			// `remote.hostAdd` writes this field, so a reader that skipped it made
+			// a MusePi-registered bastion-only host dial its destination directly.
+			if (typeof raw.proxyJump === "string" && raw.proxyJump) row.proxyJump = raw.proxyJump;
+			rows.push(row);
+		}
+		return rows;
+	} catch {
+		return [];
+	}
+}
+
 ipcMain.handle("daemon-restart", async (_event, port) => {
 	// Explicit user action (instance menu / boot version gate): replacing the
 	// listener IS the request, so reap our own orphans and then kill the

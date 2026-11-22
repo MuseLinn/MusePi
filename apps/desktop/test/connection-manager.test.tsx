@@ -4,6 +4,7 @@ import { setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ConnectionManager } from "../src/components/ConnectionManager";
+import type { CatalogHost, ManagedTargetStatus } from "../src/lib/connection/remote-lifecycle";
 import type { ConnectionState } from "../src/lib/connection/state";
 import type { TargetStatusMap } from "../src/lib/connection/target-store";
 import { type ConnectionTarget, createTarget, localTarget } from "../src/lib/connection/targets";
@@ -434,5 +435,297 @@ describe("connection manager list scrolling", () => {
 		});
 		const connectButtons = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-connect"));
 		expect(connectButtons.every(button => button.disabled)).toBe(true);
+	});
+});
+
+/**
+ * Managed lifecycle in the row.
+ *
+ * The reported gap this closes: a tunnel that fails had nowhere to say why. The
+ * row now carries the supervisor's status and — the part that matters — the
+ * process's own stderr, so "Permission denied (publickey)" reaches the user
+ * instead of a generic 无法连接.
+ */
+describe("connection manager managed rows", () => {
+	const ssh: ConnectionTarget = createTarget({
+		id: "s1",
+		label: "Build box",
+		url: "ws://127.0.0.1:9400",
+		kind: "ssh",
+		sshHost: "me@build.example.com",
+		remotePort: 8300,
+	});
+
+	const status = (over: Partial<ManagedTargetStatus> = {}): ManagedTargetStatus => ({
+		targetId: "s1",
+		kind: "ssh",
+		status: "running",
+		pid: 4242,
+		startedAt: 1,
+		listeningPort: 9400,
+		error: null,
+		stderr: "",
+		command: "ssh -N …",
+		...over,
+	});
+
+	/** Open the row's detail disclosure. */
+	async function expandFirstRow(host: HTMLElement): Promise<void> {
+		const details = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-actions button")).find(
+			button => button.getAttribute("aria-label") === t("settings.connectionDetails"),
+		);
+		await act(async () => {
+			details?.click();
+		});
+	}
+
+	test("a failed tunnel shows ssh's own stderr in its row", async () => {
+		const host = render({
+			targets: [localTarget(), ssh],
+			managed: {
+				s1: status({
+					status: "failed",
+					stderr: "Permission denied (publickey).",
+					error: "ssh exited with code 255",
+				}),
+			},
+			onStartManaged: () => {},
+		});
+		await expandFirstRow(host);
+		const row = q(host, '.gui-conn-row[data-kind="ssh"]');
+		expect(row).not.toBeNull();
+		expect(row?.getAttribute("data-managed")).toBe("failed");
+		const detail = row?.querySelector(".gui-conn-managed-error");
+		expect(detail?.textContent).toContain("Permission denied (publickey).");
+		// The generic summary must not stand in front of the real reason.
+		expect(detail?.textContent).not.toContain("ssh exited with code 255");
+	});
+
+	test("a running tunnel is named as started by MusePi, not as connected", () => {
+		const host = render({ targets: [localTarget(), ssh], managed: { s1: status() }, onStartManaged: () => {} });
+		expect(text(host)).toContain(t("settings.connectionManagedRunning"));
+		// The process is running; the daemon connection is a separate fact.
+		expect(text(host)).not.toContain(t("settings.connectionStatusConnected"));
+	});
+
+	test("a stopped tunnel reads idle rather than failed", () => {
+		const host = render({
+			targets: [localTarget(), ssh],
+			managed: { s1: status({ status: "stopped" }) },
+			onStartManaged: () => {},
+		});
+		expect(q(host, '.gui-conn-row[data-managed="failed"]')).toBeNull();
+		expect(text(host)).not.toContain(t("settings.connectionManagedFailed"));
+	});
+
+	test("the start control offers start, then stop once it runs", async () => {
+		const started: string[] = [];
+		const stopped: string[] = [];
+		const host = render({
+			targets: [localTarget(), ssh],
+			onStartManaged: target => started.push(target.id),
+			onStopManaged: target => stopped.push(target.id),
+		});
+		const start = host.querySelector<HTMLButtonElement>(".gui-conn-manage");
+		expect(start?.getAttribute("aria-label")).toBe(t("settings.connectionStartManaged"));
+		await act(async () => start?.click());
+		expect(started).toEqual(["s1"]);
+
+		const running = render({
+			targets: [localTarget(), ssh],
+			managed: { s1: status() },
+			onStartManaged: () => {},
+			onStopManaged: target => stopped.push(target.id),
+		});
+		const stop = running.querySelector<HTMLButtonElement>(".gui-conn-manage");
+		expect(stop?.getAttribute("aria-label")).toBe(t("settings.connectionStopManaged"));
+		await act(async () => stop?.click());
+		expect(stopped).toEqual(["s1"]);
+	});
+
+	test("a row without a bridge keeps its copyable command and says so", async () => {
+		// No onStartManaged: the shell has no process bridge, so the row must not
+		// pretend it can start anything — it offers the command instead.
+		const host = render({ targets: [localTarget(), ssh] });
+		expect(q(host, ".gui-conn-manage")).toBeNull();
+		await expandFirstRow(host);
+		expect(text(host)).toContain(t("settings.connectionManagedNoBridge"));
+		expect(text(host)).toContain("ssh -N");
+	});
+});
+
+/**
+ * The catalog reaching the surface.
+ *
+ * The review's finding was exact: the parser and merge were correct and tested,
+ * and no surface ever read them — so a host the user configured for ssh(1) was
+ * still invisible, which is the gap this mission exists to close. These tests
+ * assert the surface, not the functions: a catalog-only host must be
+ * *selectable* here, and choosing it must carry its facts into the row.
+ */
+describe("connection manager catalog", () => {
+	const catalog: CatalogHost[] = [
+		{ name: "managed-box", host: "managed.example.com", source: "musepi" },
+		{ name: "from-ssh-config", host: "cfg.example.com", username: "me", port: 2222, source: "ssh-config" },
+		{ name: "jump-chain", host: "10.0.0.5", proxyJump: "bastion", source: "ssh-config" },
+		// A chain that comes from MusePi's own store. The only chain fixture used
+		// to be ssh-config-sourced, which is why a MusePi entry losing its chain
+		// passed every test while dialling the destination directly.
+		{ name: "musepi-jump", host: "10.0.0.9", username: "me", proxyJump: "musepi-bastion", source: "musepi" },
+	];
+
+	async function openSshForm(host: HTMLElement): Promise<void> {
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		const sshTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(tab =>
+			(tab.textContent ?? "").includes(t("settings.connectionKindSsh")),
+		);
+		await act(async () => sshTab?.click());
+	}
+
+	test("an ssh-config-only host is offered in the instance form", async () => {
+		const host = render({ targets: [localTarget()], catalog });
+		await openSshForm(host);
+		const options = Array.from(host.querySelectorAll("option")).map(option => option.textContent ?? "");
+		expect(options.some(option => option.includes("from-ssh-config"))).toBe(true);
+		// The provenance is visible: the user can tell this came from their own
+		// ssh config rather than from MusePi's store.
+		expect(options.some(option => option.includes(t("settings.connectionCatalogFromSshConfig")))).toBe(true);
+	});
+
+	test("choosing a catalog host fills its facts, and the added target carries them", async () => {
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
+		await openSshForm(host);
+		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
+		expect(select).not.toBeNull();
+		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(select, "from-ssh-config");
+			select?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		expect(added).toHaveLength(1);
+		// The facts the tunnel needs, not just the label.
+		expect(added[0]).toMatchObject({ kind: "ssh", sshHost: "me@cfg.example.com", sshPort: 2222 });
+	});
+
+	test("a ProxyJump entry survives into the added target", async () => {
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
+		await openSshForm(host);
+		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
+		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(select, "jump-chain");
+			select?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		expect(added[0]).toMatchObject({ proxyJump: "bastion" });
+	});
+
+	test("a MusePi-sourced chain survives into the added target", async () => {
+		// The instance form's half of the merge: a host recorded in ssh.json with
+		// its chain must produce a row that dials through it, not the destination.
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
+		await openSshForm(host);
+		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
+		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+		await act(async () => {
+			setter?.call(select, "musepi-jump");
+			select?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		expect(added).toHaveLength(1);
+		expect(added[0]).toMatchObject({ kind: "ssh", sshHost: "me@10.0.0.9", proxyJump: "musepi-bastion" });
+	});
+
+	test("no catalog leaves the manual form exactly as it was", async () => {
+		const host = render({ targets: [localTarget()] });
+		await openSshForm(host);
+		const labels = Array.from(host.querySelectorAll(".gui-field-label")).map(node => node.textContent ?? "");
+		expect(labels).not.toContain(t("settings.connectionCatalogHost"));
+		// The manual host input is still there and still usable.
+		expect(labels).toContain(t("settings.connectionSshHost"));
+	});
+});
+
+/**
+ * Docker detection in the form.
+ *
+ * The distinction that matters: "no container publishes this port" and "the
+ * container list could not be read" are different answers, and a socket
+ * permission error must not be rendered as the former.
+ */
+describe("connection manager docker probe", () => {
+	async function openDockerForm(): Promise<HTMLElement> {
+		const host = render({ targets: [localTarget()] });
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		const tab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(node =>
+			(node.textContent ?? "").includes(t("settings.connectionKindDocker")),
+		);
+		await act(async () => {
+			tab?.click();
+			await Bun.sleep(20);
+		});
+		return host;
+	}
+
+	test("a failed container list keeps the daemon's own text", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({
+				ok: false,
+				reason: "daemon-unreachable",
+				error: "permission denied while trying to connect to the Docker daemon socket",
+			}),
+		};
+		const host = await openDockerForm();
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		const text = host.textContent ?? "";
+		expect(text).toContain(t("settings.connectionDockerListFailed"));
+		expect(text).toContain("permission denied");
+		// The failure is not dressed up as an empty, healthy list.
+		expect(text).not.toContain(t("settings.connectionDockerNone"));
+	});
+
+	test("an empty list is still its own answer", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({ ok: true, containers: [] }),
+		};
+		const host = await openDockerForm();
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		expect(host.textContent ?? "").toContain(t("settings.connectionDockerNone"));
+		expect(host.textContent ?? "").not.toContain(t("settings.connectionDockerListFailed"));
+	});
+
+	test("containers publishing the port are offered with their mapping", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({
+				ok: true,
+				containers: [{ name: "musepi-dev", image: "musepi", hostPort: 8300, containerPort: 8300 }],
+			}),
+		};
+		const host = await openDockerForm();
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		const options = Array.from(host.querySelectorAll("option")).map(option => option.textContent ?? "");
+		expect(options.some(option => option.includes("musepi-dev"))).toBe(true);
 	});
 });

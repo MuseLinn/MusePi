@@ -31,6 +31,20 @@ export const LOCAL_TARGET_ID = "local";
  * One stored target. Field-for-field the persisted `RemoteHost` shape plus the
  * kind and its parameters, so `remote-hosts.ts` stays the single owner of the
  * storage slot (no second store, no migration step).
+ *
+ * The two axes are deliberately separate, because the same host catalog now
+ * feeds both:
+ *
+ *  - an **instance** target (this type) says *where the daemon runs* — this
+ *    machine, an ssh host, a container, a WSL distribution;
+ *  - a **workspace** (`ConnectDialog`'s `mountPath`, persisted per session)
+ *    says *where the files live* — a local path, or a remote path reached
+ *    through an sshfs mount.
+ *
+ * The common case is the same location on both axes, and nothing here should
+ * be read as merging them: a target carries the host facts (`sshHost`,
+ * `sshPort`, `proxyJump`, `keyPath`), while the mounted-remote workspace keeps
+ * its own path and stays a different row type.
  */
 export interface ConnectionTarget {
 	id: string;
@@ -45,6 +59,12 @@ export interface ConnectionTarget {
 	sshHost?: string;
 	/** `ssh` — daemon port on the remote side (defaults to the daemon port). */
 	remotePort?: number;
+	/** `ssh` — port ssh(1) itself dials, when it is not 22. */
+	sshPort?: number;
+	/** `ssh` — `ProxyJump` chain (`bastion` or `a,b`), passed to ssh as `-J`. */
+	proxyJump?: string;
+	/** `ssh` — identity file passed to ssh as `-i`. */
+	keyPath?: string;
 	/** `docker` — container name. */
 	container?: string;
 }
@@ -106,7 +126,17 @@ export function targetCommand(target: ConnectionTarget): string | null {
 			// user typed a custom local endpoint; the forward maps one to the other.
 			const local = portOf(target.url) ?? DEFAULT_DAEMON_PORT;
 			const remote = target.remotePort ?? DEFAULT_DAEMON_PORT;
-			return `ssh -N -L ${local}:127.0.0.1:${remote} ${shellWord(target.sshHost)}`;
+			// Deliberately not the managed tunnel's argv: this command is for a
+			// person's own shell, so it keeps ssh's interactive defaults (a
+			// password prompt must work) and adds only the facts the row knows.
+			// The managed start uses the same destination and forward, plus
+			// `BatchMode=yes` because a background child has no terminal.
+			const parts = ["ssh", "-N"];
+			if (target.sshPort && target.sshPort !== 22) parts.push("-p", String(target.sshPort));
+			if (target.keyPath) parts.push("-i", shellWord(target.keyPath));
+			if (target.proxyJump) parts.push("-J", shellWord(target.proxyJump));
+			parts.push("-L", `${local}:127.0.0.1:${remote}`, shellWord(target.sshHost));
+			return parts.join(" ");
 		}
 		case "docker": {
 			if (!target.container) return null;
@@ -175,7 +205,9 @@ function portOf(url: string): number | null {
 
 /** Quote a word for a shell when it is not already plain. */
 function shellWord(value: string): string {
-	return /^[A-Za-z0-9_@%+=:,./\\-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`;
+	// `~` stays unquoted so `-i ~/.ssh/id_ed25519` expands the way ssh(1) and the
+	// shell expect; quoting it would hand ssh a literal `~`.
+	return /^[A-Za-z0-9_@%+=:,./\\~-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`;
 }
 
 /**
@@ -191,6 +223,9 @@ export function createTarget(input: {
 	distro?: string;
 	sshHost?: string;
 	remotePort?: number;
+	sshPort?: number;
+	proxyJump?: string;
+	keyPath?: string;
 	container?: string;
 }): ConnectionTarget {
 	const target: ConnectionTarget = {
@@ -203,6 +238,9 @@ export function createTarget(input: {
 	if (input.kind === "wsl" && input.distro) target.distro = input.distro;
 	if (input.kind === "ssh" && input.sshHost) target.sshHost = input.sshHost;
 	if (input.kind === "ssh" && input.remotePort) target.remotePort = input.remotePort;
+	if (input.kind === "ssh" && input.sshPort) target.sshPort = input.sshPort;
+	if (input.kind === "ssh" && input.proxyJump) target.proxyJump = input.proxyJump;
+	if (input.kind === "ssh" && input.keyPath) target.keyPath = input.keyPath;
 	if (input.kind === "docker" && input.container) target.container = input.container;
 	return target;
 }
@@ -223,6 +261,11 @@ export function asTarget(value: unknown): ConnectionTarget | null {
 	if (typeof row.remotePort === "number" && Number.isInteger(row.remotePort) && row.remotePort > 0) {
 		target.remotePort = row.remotePort;
 	}
+	if (typeof row.sshPort === "number" && Number.isInteger(row.sshPort) && row.sshPort > 0) {
+		target.sshPort = row.sshPort;
+	}
+	if (typeof row.proxyJump === "string" && row.proxyJump) target.proxyJump = row.proxyJump;
+	if (typeof row.keyPath === "string" && row.keyPath) target.keyPath = row.keyPath;
 	if (typeof row.container === "string" && row.container) target.container = row.container;
 	return target;
 }

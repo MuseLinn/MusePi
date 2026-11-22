@@ -12,6 +12,14 @@ export interface SSHHostConfig {
 	username?: string;
 	port?: number;
 	keyPath?: string;
+	/**
+	 * `ProxyJump` chain (`bastion` or `a,b`), passed to ssh and sshfs as `-J`.
+	 *
+	 * A host reachable only through a jump chain is otherwise listed, registered
+	 * and then unmountable: every consumer has to carry this field, not just the
+	 * tunnel path.
+	 */
+	proxyJump?: string;
 	description?: string;
 	compat?: boolean;
 }

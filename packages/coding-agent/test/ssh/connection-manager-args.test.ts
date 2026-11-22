@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { getRemoteHostDir } from "@musepi/pi-utils";
 import {
@@ -27,6 +28,43 @@ describe("buildRemoteCommand stdin handling", () => {
 	it("omits -n when allowStdin is set so the remote command reads piped stdin", async () => {
 		const args = await buildRemoteCommand(TARGET, "cat", { allowStdin: true });
 		expect(args).not.toContain("-n");
+	});
+});
+
+describe("buildCommonArgs carries the jump chain", () => {
+	// Every ssh command goes through this builder, so a missing `-J` here is a
+	// bastion-only host that probes, mounts or transfers by dialling its
+	// destination directly. The sshfs argv has its own test; this is the other
+	// half, and nothing covered it before.
+	it("emits -J for a host reached through a bastion", async () => {
+		const args = await buildRemoteCommand({ ...TARGET, proxyJump: "bastion" }, "true");
+		expect(args[args.indexOf("-J") + 1]).toBe("bastion");
+	});
+
+	it("keeps a multi-hop chain verbatim", async () => {
+		const args = await buildRemoteCommand({ ...TARGET, proxyJump: "a,b" }, "true");
+		expect(args[args.indexOf("-J") + 1]).toBe("a,b");
+	});
+
+	it("omits -J for a direct host", async () => {
+		const args = await buildRemoteCommand(TARGET, "true");
+		expect(args).not.toContain("-J");
+	});
+
+	it("keeps -p and -i alongside -J", async () => {
+		// A real key file: the builder validates that the identity file exists
+		// before it renders `-i`, so a fake path would fail for the wrong reason.
+		const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "ssh-key-"));
+		const keyPath = path.join(dir, "id_ed25519");
+		await fs.promises.writeFile(keyPath, "not a real key", { mode: 0o600 });
+		try {
+			const args = await buildRemoteCommand({ ...TARGET, port: 2222, keyPath, proxyJump: "bastion" }, "true");
+			expect(args[args.indexOf("-p") + 1]).toBe("2222");
+			expect(args[args.indexOf("-i") + 1]).toBe(keyPath);
+			expect(args[args.indexOf("-J") + 1]).toBe("bastion");
+		} finally {
+			await fs.promises.rm(dir, { recursive: true, force: true });
+		}
 	});
 });
 

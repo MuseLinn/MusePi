@@ -69,8 +69,22 @@ function buildSshfsArgs(host: SSHConnectionTarget): string[] {
 		args.push("-o", `IdentityFile=${host.keyPath}`);
 	}
 
+	// A bastion-only host mounts through the same chain the tunnel dials; without
+	// `-J` sshfs resolves the destination directly and fails to reach it.
+	if (host.proxyJump) {
+		args.push("-J", host.proxyJump);
+	}
+
 	return args;
 }
+
+/**
+ * Test seam: the sshfs argv for one host.
+ *
+ * Exported because the argv is the only place `-J` can be asserted without a
+ * real sshfs binary and a real jump host; the mount itself shells out.
+ */
+export const _sshfsForTests = { buildSshfsArgs };
 
 async function unmountPath(path: string): Promise<boolean> {
 	const fusermount = $which("fusermount") ?? $which("fusermount3");

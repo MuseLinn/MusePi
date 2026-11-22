@@ -290,6 +290,76 @@
 	border-top: 1px solid var(--border);
 }
 
+/* ── Managed process state (tunnel / WSL daemon / container) ──────────────
+ *
+ * A row can describe a process this shell runs. That state is separate from
+ * the connection status beside it — a live tunnel is not a connected daemon —
+ * so it gets its own quiet word rather than borrowing the status colour. The
+ * words carry the meaning; colour only reinforces it, and `failed` is the one
+ * that must not be mistaken for a deliberate stop.
+ */
+.gui-conn-managed {
+	flex: none;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 500;
+	color: var(--color-text-secondary);
+	background: color-mix(in oklab, var(--color-text-secondary) 12%, transparent);
+}
+
+.gui-conn-managed[data-managed="running"] {
+	color: var(--color-success);
+	background: color-mix(in oklab, var(--color-success) 14%, transparent);
+}
+
+.gui-conn-managed[data-managed="starting"] {
+	color: var(--color-warning);
+	background: color-mix(in oklab, var(--color-warning) 14%, transparent);
+}
+
+/* A failed process is a fault the user must act on; a stopped one is not a
+ * fault at all (it reads idle, and this rule never sees it). */
+.gui-conn-managed[data-managed="failed"] {
+	color: var(--color-danger);
+	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
+}
+
+/* The start/stop control sits in the row's existing action slot, so it takes
+ * the tool-button geometry rather than a second button style. */
+.gui-conn-manage {
+	flex: none;
+}
+
+.gui-conn-manage:disabled {
+	opacity: 0.5;
+}
+
+/* The process's own stderr, verbatim. It is pre-formatted because the text is
+ * a tool's output: reflowing it would hide the column that carries the reason
+ * (`Permission denied (publickey).` is one line; a bind conflict names a port). */
+.gui-conn-managed-error {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.gui-conn-managed-error pre {
+	max-height: 132px;
+	margin: 0;
+	padding: 8px 10px;
+	overflow-x: auto;
+	overflow-y: auto;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-danger) 8%, var(--color-surface));
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-danger);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
 /* Avatar-menu entrance: the manager keeps its own composition inside a
  * bounded dialog, so the host page never scrolls under it. */
 .gui-conn-overlay {

@@ -75,6 +75,14 @@ import {
 import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
 import { type BootOutcome, runBootAttempt } from "./lib/connection/boot-attempt";
 import {
+	applyTargetStatus,
+	type ManagedTargetStatus,
+	managedStartBlocker,
+	pruneTargetStatuses,
+	remoteDaemonPort,
+	shellBridge,
+} from "./lib/connection/remote-lifecycle";
+import {
 	bootTargetFor,
 	dropTarget,
 	loadChosenTargetId,
@@ -98,6 +106,7 @@ import {
 	localTargetUrl,
 	stripToken,
 } from "./lib/connection/targets";
+import { useHostCatalog } from "./lib/connection/use-host-catalog";
 import { defaultWslRunner } from "./lib/connection/wsl";
 import {
 	daemonMethodProbeParams,
@@ -675,6 +684,43 @@ function AppInner(): ReactNode {
 	 *  pointed at and the row whose error belongs to the attempt. */
 	const chosenTargetIdRef = useRef<string | null>(loadChosenTargetId());
 	const [targetStatuses, setTargetStatuses] = useState<TargetStatusMap>(() => loadTargetStatuses());
+	/**
+	 * Managed-process status per target, pushed by the main process.
+	 *
+	 * Separate from `targetStatuses` on purpose: that map records connect
+	 * attempts (which the renderer makes), this one records processes (which
+	 * the shell owns). A tunnel can die while the shell is idle, and a connect
+	 * attempt can fail while its tunnel is perfectly healthy — folding the two
+	 * into one slot would let each overwrite the other's fact.
+	 */
+	const [managedStatuses, setManagedStatuses] = useState<Record<string, ManagedTargetStatus>>({});
+	/**
+	 * The host catalog, read once for this window.
+	 *
+	 * Both surfaces that offer a host — the instance form's picker and the
+	 * workspace wizard's list — read this same value, so they cannot disagree
+	 * about which hosts exist.
+	 */
+	const { catalog: hostCatalog } = useHostCatalog();
+	/** Read once at boot: the supervisor survives a renderer reload, so a
+	 *  reloaded window must adopt the statuses of tunnels still running. */
+	useEffect(() => {
+		const bridge = shellBridge();
+		if (!bridge?.listTargets) return;
+		let cancelled = false;
+		void bridge.listTargets().then(
+			rows => {
+				if (cancelled) return;
+				setManagedStatuses(current => rows.reduce(applyTargetStatus, current));
+			},
+			() => {},
+		);
+		const off = bridge.onTargetStatus?.(status => setManagedStatuses(current => applyTargetStatus(current, status)));
+		return () => {
+			cancelled = true;
+			off?.();
+		};
+	}, []);
 	const [attempting, setAttempting] = useState(false);
 	/** Which row's attempt is in flight, so the manager marks that row rather
 	 *  than whatever row happens to be chosen. */
@@ -2553,6 +2599,50 @@ function AppInner(): ReactNode {
 		[connect],
 	);
 
+	/**
+	 * Start the process a forwarded row needs.
+	 *
+	 * The main process owns the handle; this only asks. The supervisor's own
+	 * status events carry the outcome, so a failed start shows ssh's stderr in
+	 * the row instead of a message assembled here — the renderer never
+	 * paraphrases a tool's error.
+	 */
+	const startManagedTarget = useCallback((target: ConnectionTarget): void => {
+		const bridge = shellBridge();
+		if (!bridge || managedStartBlocker(target, bridge.platform) !== null) return;
+		const localPort = daemonPortOf(target.url);
+		if (target.kind === "ssh") {
+			void bridge.startSshTunnel?.({
+				id: target.id,
+				localPort,
+				remotePort: remoteDaemonPort(target, DEFAULT_PORT),
+				destination: target.sshHost ?? "",
+				sshPort: target.sshPort,
+				proxyJump: target.proxyJump,
+				keyPath: target.keyPath,
+			});
+			return;
+		}
+		if (target.kind === "wsl") {
+			void bridge.startWslDaemon?.({ id: target.id, distro: target.distro ?? "", port: localPort });
+			return;
+		}
+		if (target.kind === "docker") {
+			// The daemon binds the container-side port; `localPort` is the host side
+			// the container publishes. Same distinction the ssh forward makes.
+			void bridge.dockerExec?.({
+				id: target.id,
+				container: target.container ?? "",
+				port: localPort,
+				containerPort: remoteDaemonPort(target, DEFAULT_PORT),
+			});
+		}
+	}, []);
+	/** Stop only what this shell started; the supervisor refuses the rest. */
+	const stopManagedTarget = useCallback((target: ConnectionTarget): void => {
+		void shellBridge()?.stopTarget?.(target.id);
+	}, []);
+
 	const addTarget = useCallback((target: ConnectionTarget): void => {
 		const previous = connTargetsRef.current.find(row => row.id === target.id);
 		setConnTargets(current => storeTarget(current, target));
@@ -2567,6 +2657,16 @@ function AppInner(): ReactNode {
 		});
 	}, []);
 	const removeConnTarget = useCallback((id: string): void => {
+		// A removed row must not leave a live process behind with nothing on
+		// screen naming it. The supervisor stops only its own record, so a
+		// tunnel the user started survives a row deletion.
+		void shellBridge()?.stopTarget?.(id);
+		setManagedStatuses(current =>
+			pruneTargetStatuses(
+				current,
+				connTargetsRef.current.filter(row => row.id !== id),
+			),
+		);
 		setConnTargets(current => dropTarget(current, id));
 	}, []);
 
@@ -4612,6 +4712,10 @@ function AppInner(): ReactNode {
 						? (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform
 						: undefined
 				}
+				managed={managedStatuses}
+				catalog={hostCatalog}
+				onStartManaged={startManagedTarget}
+				onStopManaged={stopManagedTarget}
 				onConnect={target => void connectToTarget(target)}
 				onAdd={addTarget}
 				onRemove={removeConnTarget}
@@ -4890,6 +4994,7 @@ function AppInner(): ReactNode {
 					open={connectOpen}
 					onClose={() => setConnectOpen(false)}
 					rpc={rpc}
+					catalog={hostCatalog}
 					onOpenWorkspace={handleOpenRemoteWorkspace}
 				/>
 			</div>
@@ -5562,6 +5667,7 @@ function AppInner(): ReactNode {
 				open={connectOpen}
 				onClose={() => setConnectOpen(false)}
 				rpc={rpc}
+				catalog={hostCatalog}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
 			{/* Avatar-menu entrance: the SAME manager the disconnected and
@@ -5581,6 +5687,10 @@ function AppInner(): ReactNode {
 						activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
 						busyId={attempting ? attemptTargetId : null}
 						lastError={connectError}
+						managed={managedStatuses}
+						catalog={hostCatalog}
+						onStartManaged={startManagedTarget}
+						onStopManaged={stopManagedTarget}
 						detect={defaultWslRunner}
 						platform={
 							isElectron()

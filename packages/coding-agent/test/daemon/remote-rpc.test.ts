@@ -199,3 +199,39 @@ describe("remote.disconnect", () => {
 		expect(called).toBe(1);
 	});
 });
+
+describe("remote.hostAdd carries a ProxyJump chain", () => {
+	test("a registered bastion-only host keeps its chain, so the mount can use -J", async () => {
+		const configPath = await tmpConfigDir();
+		await addRemoteHost({
+			name: "internal",
+			host: "10.0.0.5",
+			username: "me",
+			proxyJump: "bastion",
+		});
+		// Stored, not merely accepted: a field dropped here is a host that lists,
+		// registers and then fails to mount.
+		const stored = await readSSHConfigFile(configPath);
+		expect(stored.hosts?.internal?.proxyJump).toBe("bastion");
+
+		// And it reaches the mount as the target the sshfs argv is built from.
+		let mounted: Record<string, unknown> | null = null;
+		_remoteForTests.setHelpers({
+			hasSshfs: () => true,
+			ensureHostInfo: async () => ({ os: "linux", shell: "bash" }),
+			mountRemote: async target => {
+				mounted = target as Record<string, unknown>;
+				return "/tmp/fake-mount/internal";
+			},
+		});
+		await connectRemoteHost({ name: "internal" });
+		expect(mounted).toMatchObject({ host: "10.0.0.5", proxyJump: "bastion" });
+	});
+
+	test("a chain-less host stores no proxyJump field", async () => {
+		const configPath = await tmpConfigDir();
+		await addRemoteHost({ name: "direct", host: "h.example.com" });
+		const stored = await readSSHConfigFile(configPath);
+		expect(stored.hosts?.direct?.proxyJump).toBeUndefined();
+	});
+});
