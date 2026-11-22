@@ -1611,16 +1611,6 @@ button.gui-stats-pill {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	/* Electron app-region: make the entire splash draggable so users can reposition
-	 * it while waiting for the daemon/SDK to finish loading (cold start ~3-4s). */
-	-webkit-app-region: drag;
-}
-
-/* Button and links inside the splash must be non-drag to avoid stealing focus
- * from the window (user can click retry without dragging the window). */
-.gui-splash button,
-.gui-splash a {
-	-webkit-app-region: no-drag;
 }
 
 /* Boot hand-off layer: the shell mounts as soon as the daemon answers and
@@ -1634,9 +1624,6 @@ button.gui-stats-pill {
 	z-index: 260;
 	display: flex;
 	pointer-events: none;
-	/* The splash body is a window-drag region; the hand-off layer must not
-	 * steal a drag from the shell now living underneath it. */
-	-webkit-app-region: no-drag;
 	animation: gui-splash-handoff-out 300ms ease-out forwards;
 }
 
@@ -2157,7 +2144,6 @@ button.gui-stats-pill {
 /* ── Session toolbar (rides the immersive top edge, ZCode-style) ────── */
 
 .gui-session-toolbar {
-	-webkit-app-region: drag;
 	position: relative;
 	z-index: 5;
 	margin: 0 8px;
@@ -2166,11 +2152,6 @@ button.gui-stats-pill {
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
-}
-
-.gui-session-toolbar .gui-tool-btn,
-.gui-session-toolbar .gui-tool-btn * {
-	-webkit-app-region: no-drag;
 }
 
 .gui-tool-btn {

@@ -8,7 +8,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { StartupSplash } = require("../src/components/StartupSplash");
 const { ensureChromiumExecutable } = require("../../../packages/coding-agent/src/tools/browser/launch");
-const CSS = ["gui-base.css", "gui-composer.css"]
+const CSS = ["gui-base.css", "gui-composer.css", "gui-window-drag.css"]
 	.map(file => fs.readFileSync(path.resolve(import.meta.dir, "../src/styles", file), "utf8"))
 	.join("\n");
 // StatusText lives in client-core; its stylesheet is part of the shared

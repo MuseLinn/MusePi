@@ -627,8 +627,6 @@
 }
 
 .gui-pin-drag {
-	-webkit-app-region: drag;
-	app-region: drag;
 	/* Immersive: the strip is an invisible overlay (still draggable) that
 	 * only surfaces on hover — the widget bleeds edge-to-edge otherwise. */
 	position: absolute;
@@ -671,8 +669,6 @@
 .gui-pin-actions {
 	display: flex;
 	gap: 6px;
-	-webkit-app-region: no-drag;
-	app-region: no-drag;
 	opacity: 0;
 	transform: translateY(2px);
 	transition: opacity 140ms ease, transform 140ms ease;
@@ -1178,7 +1174,6 @@
 	height: 56px;
 	padding: 0 12px;
 	flex-shrink: 0;
-	-webkit-app-region: drag;
 	/* Center-column header: macOS traffic lights sit over the left pane's
 	 * drag strip; the button cluster stays at a fixed position, never
 	 * shifting with pane state. */
@@ -1188,14 +1183,8 @@
 }
 
 /* Sidebar's top clearance row: macOS traffic lights float over it (overlay
- * title bar) and the empty area drags the window (openchamber-style). */
-.gui-pane-drag {
-	-webkit-app-region: drag;
-}
-
-/* Spans the toolbar's blank area so the whole top edge drags. */
+ * title bar) and the empty area drags the window (gui-window-drag.css). */
 .gui-toolbar-drag {
-	-webkit-app-region: drag;
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -1206,7 +1195,6 @@
 }
 
 .gui-toolbar .gui-tool-btn {
-	-webkit-app-region: no-drag;
 	position: relative;
 	z-index: 2;
 	/* openchamber header icon button: 32px hit area, rounded-md */
@@ -7043,7 +7031,6 @@ body.gui-resizing {
 	left: 50%;
 	transform: translateX(-50%);
 	max-width: 40%;
-	-webkit-app-region: no-drag;
 }
 
 .gui-tool-model {

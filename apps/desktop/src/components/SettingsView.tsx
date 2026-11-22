@@ -291,9 +291,10 @@ export function SettingsView({
 	const settingsContentRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(settingsContentRef);
 	// The app sidebar's slot filler (app.tsx renders `.gui-settings-nav-slot`
-	// while the settings shell is active). The nav column portals into it so
-	// the shell shares the main layout — discovered after mount because the
-	// slot div and this view land in the SAME commit.
+	// while the settings shell is active; gui-window-drag.css makes it the
+	// window band). The nav column portals into it so the shell shares the main
+	// layout — discovered after mount because the slot div and this view land in
+	// the SAME commit.
 	const [navSlot, setNavSlot] = useState<HTMLElement | null>(null);
 	useLayoutEffect(() => {
 		setNavSlot(document.getElementById("gui-settings-nav-slot"));
@@ -470,8 +471,11 @@ export function SettingsView({
 
 	return (
 		<div className="gui-settings-view">
-			{/* Window drag strip (main-UI parity): long-press/drag the top band
-			 * to move the window; the nav/surface below stay interactive. */}
+			{/* Window band over the settings content column (main-UI parity): the
+			 * settings shell has no chat header here, so this strip is what
+			 * carries the gutter above the surface. Its height keeps the surface's
+			 * top edge on the same line as the chat card's and clears the
+			 * Windows overlay buttons; gui-window-drag.css owns the region. */}
 			<div className="gui-settings-drag" aria-hidden />
 			<div className="flex min-h-0 flex-1">
 				{/* Left navigation column — mounted into the app sidebar's slot
@@ -479,7 +483,11 @@ export function SettingsView({
 				 * shell is active) so the settings shell shares the main layout
 				 * geometry instead of floating a second column beside the session
 				 * list (slot replacement, 2026-09-24). Falls back to inline
-				 * rendering when no slot host exists (standalone/test mounts). */}
+				 * rendering when no slot host exists (standalone/test mounts).
+				 *
+				 * The slot is the window band (gui-window-drag.css): it owns the
+				 * strip above 返回 / 搜索, and the nav column marks itself `off` so
+				 * the band never eats a click. */}
 				{(() => {
 					const nav = (
 						<SettingsNav

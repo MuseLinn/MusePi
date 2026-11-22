@@ -10,6 +10,9 @@ body {
 	height: 100%;
 	background: transparent;
 	overflow: hidden;
+	/* The HUD is a no-focus overlay that must never move the window, and this
+	 * entry point does not load gui.css, so it cannot read the contract sheet
+	 * (gui-window-drag.css). Keep the one declaration local. */
 	-webkit-app-region: no-drag;
 	user-select: none;
 }

@@ -85,7 +85,6 @@
 	border: 1px solid var(--color-danger-bd);
 	font-size: var(--ui-font-size-xs);
 	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
-	-webkit-app-region: no-drag;
 	animation: gui-error-toast-in 220ms var(--spring) both;
 }
 
@@ -162,10 +161,11 @@
 }
 
 /* Top band: keeps the first destination out of the window's titlebar/drag
- * strip and gives the rail its own grabbable area. Height matches the chat
- * header (`h-12`). It is intentionally EMPTY: the window's single fold/unfold
- * control is the fixed titlebar cluster at `left:68px` (gui-chat.css), which
- * used to collide with a second toggle rendered here. */
+ * strip and gives the rail its own grabbable area (the band itself is
+ * declared in gui-window-drag.css). Height matches the chat header (`h-12`).
+ * It is intentionally EMPTY: the window's single fold/unfold control is the
+ * fixed titlebar cluster at `left:68px` (gui-chat.css), which used to collide
+ * with a second toggle rendered here. */
 .gui-rail-top {
 	height: 48px;
 	width: 100%;
@@ -173,7 +173,6 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	-webkit-app-region: drag;
 }
 
 .gui-rail-group {
@@ -231,8 +230,6 @@
 	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
-	/* The rail's top band is a window drag surface; its controls are not. */
-	-webkit-app-region: no-drag;
 	transition:
 		background 120ms ease-out,
 		color 120ms ease-out;

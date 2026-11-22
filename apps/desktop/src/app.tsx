@@ -400,6 +400,12 @@ function ChatSurfaceShell({ leave, children }: { leave?: boolean; children: Reac
 				 * surface + card gutter on the floating card. Page destinations
 				 * must not look 8px wider or cast a different shadow (see
 				 * `.gui-page-card` in gui-chat.css). */}
+				{/* Window band over the gutter above the card (main-view parity):
+				 * ChatView's strip does the same inside `.gui-pane-center`, and a
+				 * page destination has no chat header to inherit one from — without
+				 * this the strip above the card was dead. It must be a SIBLING of
+				 * the surface: a band inside it would turn the card draggable. */}
+				<div className="gui-drag-strip" aria-hidden />
 				<div className="gui-chat-surface flex min-h-0 flex-1 flex-col" style={{ margin: "var(--gui-card-gutter)" }}>
 					<div className="gui-page-card flex min-h-0 flex-1 flex-col">{children}</div>
 				</div>
@@ -4568,9 +4574,10 @@ function AppInner(): ReactNode {
 						</button>
 					</div>
 				)}
-				{/* Window chrome: slim draggable strip (traffic lights ride
-				 * above it at x16,y17) with the session title small. */}
-				<div className="gui-mini-drag" aria-hidden>
+				{/* Window chrome: slim band (traffic lights ride above it at
+				 * x16,y17) with the session title small. The band's leading inset
+				 * is the macOS traffic-light reservation. */}
+				<div className="gui-mini-drag" aria-hidden data-gui-window-drag="band">
 					<span className="gui-mini-title">{miniTitle}</span>
 				</div>
 				<div className="gui-mini-chat relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -4969,6 +4976,10 @@ function AppInner(): ReactNode {
 						<div
 							id="gui-settings-nav-slot"
 							className={shell.navSlotLeaving ? "gui-settings-nav-slot gui-slot-leave" : "gui-settings-nav-slot"}
+							/* Window band: the portalled nav starts below this slot's
+							 * top padding, so this strip — not the nav column — is the
+							 * part above 返回 / 搜索 that moves the window. The band and
+							 * the nav column's opt-out both live in gui-window-drag.css. */
 							style={{ width: sideCollapsed ? 256 : sideWidth }}
 						/>
 					)}

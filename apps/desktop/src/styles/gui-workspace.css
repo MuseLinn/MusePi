@@ -3814,7 +3814,6 @@
 		color 120ms ease,
 		border-color 120ms ease,
 		transform 120ms ease;
-	-webkit-app-region: no-drag;
 }
 .gui-parent-back:hover {
 	color: var(--color-text);

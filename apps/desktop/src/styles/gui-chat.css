@@ -1552,7 +1552,8 @@ html.gui-vt-surface-only::view-transition-new(root),
 	overflow: hidden;
 }
 
-/* ── Window drag regions (openchamber app-region parity) ─────────────── */
+/* ── Window drag regions: gui-window-drag.css owns the region property;
+ *    the rules here only carry geometry and the controls' opt-outs. ────── */
 .gui-drag-strip {
 	position: absolute;
 	top: 0;
@@ -1560,20 +1561,10 @@ html.gui-vt-surface-only::view-transition-new(root),
 	right: 0;
 	height: 8px;
 	z-index: 40;
-	-webkit-app-region: drag;
 }
 
-.gui-header {
-	-webkit-app-region: drag;
-}
-
-.gui-header button,
-.gui-header .gui-float-controls {
-	-webkit-app-region: no-drag;
-}
-
-/* Window header container (openchamber Header parity): a separate layer
- * above the chat surface — full-width drag, seamless with the background. */
+/* Window header container: a separate layer above the chat surface — a
+ * full-width band (gui-window-drag.css), seamless with the background. */
 .gui-header {
 	background: transparent;
 	/* Above the chat surface (z 5): icon-button tooltips and header popups
@@ -1609,10 +1600,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	-webkit-app-region: no-drag;
-	/* Electron: drag regions swallow pointer events — this overlay floats
-	 * over the sidebar/header drag strips, so mark it no-drag explicitly. */
-	-webkit-app-region: no-drag;
 }
 
 /* Windows/Linux have no macOS traffic lights — the cluster stays at the
@@ -1882,7 +1869,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 10%, var(--color-surface));
 	color: var(--color-text);
 	font-size: 12.5px;
-	-webkit-app-region: no-drag;
 	animation: gui-pause-in 220ms var(--spring);
 }
 
@@ -1941,7 +1927,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 10%, var(--color-surface));
 	color: var(--color-text);
 	font-size: 12.5px;
-	-webkit-app-region: no-drag;
 }
 
 .gui-pending-calls-text {
@@ -1985,7 +1970,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 		visibility 0s linear 320ms,
 		backdrop-filter 320ms var(--spring),
 		-webkit-backdrop-filter 320ms var(--spring);
-	-webkit-app-region: no-drag;
 }
 
 .gui-global-pause--active {
@@ -2317,7 +2301,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 	border-radius: 999px;
 	padding: 0 8px;
 	cursor: pointer;
-	-webkit-app-region: no-drag;
 	transition:
 		background 120ms ease-out,
 		color 120ms ease-out;
@@ -2955,8 +2938,9 @@ body.gui-resizing .gui-pane-right {
 	display: flex;
 	align-items: center;
 	flex-shrink: 0;
-	/* The 28px drag strip above eats into the offset: 12 + 28 = 40, so the
-	 * back button stays level with the main sidebar's 新建任务 row. */
+	/* The slot above this head reserves the titlebar band (gui-board.css) and
+	 * the head's own padding keeps the back button level with the main
+	 * sidebar's 新建任务 row. */
 	padding: 12px 10px 8px;
 }
 
@@ -3020,7 +3004,6 @@ body.gui-resizing .gui-pane-right {
 	 * top-right 48px of the window. */
 	height: 48px;
 	flex-shrink: 0;
-	-webkit-app-region: drag;
 }
 
 
@@ -5107,8 +5090,8 @@ body.gui-resizing .gui-pane-right {
 @media (max-width: 900px) {
 	.gui-settings-nav-head {
 		justify-content: center;
-		/* Same top offset as the wide layout (12 + 28px drag strip) — the
-		 * back button stays level with the main sidebar's 新建任务 row. */
+		/* Same top offset as the wide layout — the back button stays level with
+		 * the main sidebar's 新建任务 row. */
 		padding: 12px 4px 8px;
 	}
 
@@ -5283,7 +5266,6 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-mini-drag {
-	-webkit-app-region: drag;
 	flex-shrink: 0;
 	display: flex;
 	align-items: center;
