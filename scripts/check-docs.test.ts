@@ -66,7 +66,7 @@ describe("documentation metadata gate", () => {
 		});
 		const result = await check(root);
 		expect(result.exitCode).toBe(1);
-		expect(result.output).toContain("status must be living, reference, draft, or archived");
+		expect(result.output).toContain("status must be living, reference, or draft");
 		expect(result.output).toContain("summary must be a non-empty string");
 		expect(result.output).toContain("scope must list at least one owning path");
 	});

@@ -114,6 +114,9 @@ const localOnlyWorkspacePackages = ["packages/mnemopi"];
 // rules, the .d.ts extension rewrite, and the wire-method gates. CI's
 // `workspace` bucket runs this list, so a regression in a gate (or in the gate
 // that keeps RPC method names honest) turns CI red rather than only a local run.
+// `package.json` → `test:scripts` is the local counterpart and is not the same
+// list; a guard test added to only one of them runs in one place and not the
+// other, which is how `check-overflow-axis.test.ts` stayed out of CI.
 const ciScriptTests = [
 	"./scripts/ci-concurrency.test.ts",
 	"./scripts/ci-contract.test.ts",
@@ -124,6 +127,7 @@ const ciScriptTests = [
 	"./scripts/prune-caches.test.ts",
 	"./scripts/check-peer-compat.test.ts",
 	"./scripts/check-rpc-method-names.test.ts",
+	"./scripts/check-overflow-axis.test.ts",
 	"./scripts/rpc-commands.test.ts",
 ];
 

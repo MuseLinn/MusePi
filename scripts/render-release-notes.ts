@@ -284,20 +284,38 @@ export function countReleaseEntries(body: string): ReleaseEntryCounts {
 	return counts;
 }
 
-/** Non-empty blocks of a section, separated by blank lines. */
-function sectionBlocks(body: string): string[] {
-	const blocks: string[] = [];
+/** One blank-line-separated block of a section body. */
+export interface SectionBlock {
+	/** 1-based line number of the block's first line, counted from the body's first line. */
+	line: number;
+	lines: string[];
+}
+
+/**
+ * Non-empty blocks of a section, separated by blank lines, with their line
+ * numbers. The release body and `check-changelog-i18n` both read a section
+ * through this one split: only `- ` blocks are entries on the page, so a block
+ * that starts anywhere else is prose the page keeps and the entry count loses.
+ */
+export function sectionBlockRanges(body: string): SectionBlock[] {
+	const blocks: SectionBlock[] = [];
 	let current: string[] = [];
-	for (const line of body.split(/\r?\n/)) {
+	let start = 0;
+	body.split(/\r?\n/).forEach((line, index) => {
 		if (line.trim() === "") {
-			if (current.length > 0) blocks.push(current.join("\n"));
+			if (current.length > 0) blocks.push({ line: start + 1, lines: current });
 			current = [];
-			continue;
+			return;
 		}
+		if (current.length === 0) start = index;
 		current.push(line);
-	}
-	if (current.length > 0) blocks.push(current.join("\n"));
+	});
+	if (current.length > 0) blocks.push({ line: start + 1, lines: current });
 	return blocks;
+}
+
+function sectionBlocks(body: string): string[] {
+	return sectionBlockRanges(body).map(block => block.lines.join("\n"));
 }
 
 interface SectionGroup {
@@ -321,7 +339,8 @@ function groupSectionBody(body: string): SectionGroup[] {
 	return groups;
 }
 
-function isEntryBlock(block: string): boolean {
+/** True when a block is an entry — the only block shape the page counts. */
+export function isEntryBlock(block: string): boolean {
 	return block.startsWith("- ");
 }
 

@@ -52,6 +52,9 @@ scope:
 | `SliderTrack` | 两套阶梯共用的轨道本体 | 由 `components/LadderSlider.tsx` 导出；全仓唯一的轨道标记——新的阶梯只提供标签与标题行，不再画第二条轨道 |
 | `--gui-slider-*` 消费方 | 两套自定义阶梯 + 两个自愿接入的原生 range | 两套阶梯渲染同一个 `SliderTrack`；原生 `<input class="gui-range">` 全仓只有两处：通知主音量（`settings-sections/notifications.tsx`）与桌宠尺寸（`settings-sections/companion.tsx`）。适用范围与例外见下 |
 | `SplitterGrip` 的宿主命中带 | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | 三条接缝各自的定位层 |
+| `MarketplaceDetailDialog` | 插件详情页（版本、描述、技能、底部动作） | `components/MarketplaceDetailDialog.tsx`；样式表在 `styles/gui-marketplace-detail.css` |
+
+**桌面样式表只有一个归属目录：`apps/desktop/src/styles/`。** 那里的每个文件都是 `gui-*` 族的样式表；组件需要样式时从该目录导入（`../styles/gui-<name>.css`），不再自带同级 `.css`。最后一份例外（插件详情样式表）已从 `components/` 迁入，层叠里不再有没有归属的一段。
 | `SecretSettingsSection` | 密钥库设置页 | `settings-sections/secret-settings.tsx`；一张静态状态卡、`密钥 · N` + 添加，随后**只有一块正文**（`form ? 表单 : 空态或行列表`，两者绝不并存）；行用 `gui-agent-card`、控件消费 `--control-*`。**不要**为行添加可用性 chip：`secret.list` 只携带元数据 |
 
 **滑块视觉契约（`SliderTrack`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都渲染这一个组件，谁也不再自带轨道标记。它画的是紧凑的「内嵌」力道条，而不是表单字段：一条 `--gui-slider-hit`（28px）的命中胶囊，内部凹槽高 `--gui-slider-track`（22px）、上下各内缩 3px，描边用内阴影发丝线而不是 border（轨道的盒子就是指针测量的行程，border 会让指针数学偏移一像素）。它由两层承担：一层不可见、按滑块半径内缩的测量轨道（指针读它的盒子）和一条铺满胶囊、上下各内缩 3px 的可见凹槽——凹槽若只到测量轨道处，就会像一条两头留空的滑轨。档位是落在凹槽**上**的 `--gui-slider-dot-size` 圆点；填充从胶囊左边缘穿过滑块，所以连第一档也在强调色上；滑块是取页面正文墨色的浅色圆盘，悬停与拖动时放大。配色是我们的（`--color-accent` 画轨道与填充；滑块取 `--color-text`，填充内的档位点取不透明的 on-accent 墨色，因为两者都压在强调色上），不是「中性手柄 + 外来蓝」。档位点必须不透明：同样的墨色混到 62% 后，在浅色填充上测得 2.4–3.1:1、深色填充上 3.2–3.4:1，整条带子大部分都低于图形元素 3:1 的下限，填充内的档位会在「已选到这里」的位置上变淡；不透明后浅色 3.7–5.3:1、深色 7.0–8.2:1，每个位置都在下限之上。未到达的档位用 55% 的正文墨色，对凹槽测得浅色 3.2:1、深色 4.1:1，同样在下限之上，又明显弱于已到达的档位，两种状态仍然分得清。由此有两条必须守住的结果：轨道下方**没有标签行**——每一档把名字放在自己圆点的 `title` 上，并配一条加宽的透明悬停带，因为 4px 且 `pointer-events: none` 的圆点根本不可能成为悬停目标；思考阶梯的标题行**只有一行**，分区标签与当前档位并排（选中 Auto 时由 `Auto · <档位>` 取代档位本身），所以数值不会在窄版 Agent 面板里折到标签下面。方向键走的是同一批档位、并和松手走同一条钳制路径，所以模型上限在两条路径上都成立；键盘处理器**故意**只按 `disabled` 拦截，因为顶部档位被上限挡住的阶梯仍然有合法档位，一律拒绝按键会让「正需要解释上限」的那些模型彻底失去键盘操作。设置阶梯共用胶囊、凹槽、圆点和滑块，只有标题行不同：它所在的设置行左侧已经写了设置名，所以数值单独占轨道上方那一行，并保留该行 210px 的宽度。
@@ -168,7 +171,8 @@ scope:
 | 护栏 | 强制内容 |
 | --- | --- |
 | `scripts/check-radius-tokens.ts` | 禁止字面量 `border-radius`;每个 `--radius-*` 都必须有定义 |
-| `scripts/check-overflow-axis.ts` | 样式规则必须同时声明两个溢出轴(或用简写);横向滚动容器要在护栏的白名单里带理由登记;不得留下过期白名单项 |
+| `scripts/check-overflow-axis.ts` | 样式规则必须同时声明两个溢出轴(或用简写);横向滚动容器要在护栏的白名单里带理由登记;不得留下过期白名单项。它自己的测试在 CI 里跑 |
+| `scripts/check-changelog-i18n.ts` | 已发布条目的 `- EN:` 子行有且只有一条;`[Unreleased]` 的每一行都是分类标题、条目或其缩进子行——没有条目的段落会带行号失败 |
 | `scripts/check-splitter-grip.ts` | 只有 `SplitterGrip.tsx` 能输出握柄类名;拖动态挂在胶囊自身的 `data-resizing` 上,绝不用全局 `body.gui-resizing`;已退役的 `.gui-resize-grip` 不得回归 |
 | `test/splitter-grip.test.ts` | 握柄原语的 token、三态与接缝几何 |
 | `test/slider-tokens.test.ts` | 共享滑块 token 族、两套阶梯、原生 range 配色与模型折叠卡片的焦点契约 |

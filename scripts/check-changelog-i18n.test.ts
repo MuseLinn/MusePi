@@ -33,11 +33,12 @@ describe("checkChangelogI18n", () => {
 		expect(checkChangelogI18n(content).problems).toEqual([]);
 	});
 
-	test("exempts the Unreleased section", () => {
+	test("does not require an EN child in [Unreleased]", () => {
 		const content = `${HEADER}## [Unreleased]\n\n### Added\n\n- 未发布条目，无需英文。\n`;
 		const result = checkChangelogI18n(content);
 		expect(result.problems).toEqual([]);
-		expect(result.checked).toBe(0);
+		// Still counted, because its line structure is judged.
+		expect(result.checked).toBe(1);
 	});
 
 	test("does not let an EN child satisfy the NEXT bullet", () => {
@@ -68,5 +69,58 @@ describe("checkChangelogI18n", () => {
 
 	test("an empty file is not an error", () => {
 		expect(checkChangelogI18n("").problems).toEqual([]);
+	});
+});
+
+describe("checkChangelogI18n — [Unreleased] line structure", () => {
+	test("accepts categories, bullets, their EN children and wrapped bodies", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 改进\n\n- **标题**：正文。\n  - EN: Title and body.\n  续行也属于上面那条。\n\n### 修复\n\n- 修复条目。\n  - EN: A fix.\n`;
+		expect(checkChangelogI18n(content).problems).toEqual([]);
+	});
+
+	/** The shipped defect: the title line of a bullet was deleted, leaving its
+	 *  EN child as a paragraph. The renderer keeps that block and loses the
+	 *  entry, so the page showed an untitled paragraph. */
+	test("flags a deleted bullet title, naming the exact line", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 改进\n\n- 甲。\n  - EN: A.\n\n  - EN: orphaned translation of a deleted title.\n`;
+		const result = checkChangelogI18n(content);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(10);
+		expect(result.problems[0]?.version).toBe("Unreleased");
+		expect(result.problems[0]?.message).toContain("orphan");
+	});
+
+	test("flags a paragraph that opens a block without a bullet", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 新功能\n\n- 甲。\n  - EN: A.\n\n一段没有条目的正文。\n`;
+		const result = checkChangelogI18n(content);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(10);
+		expect(result.problems[0]?.message).toContain("orphan paragraph");
+	});
+
+	test("flags an unindented continuation line under a bullet", () => {
+		// Same rendering failure as the orphan paragraph: the block starts with
+		// `- ` but this line is a sibling paragraph, not the bullet's own body.
+		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- 甲。\n  续行。\n没有缩进的续行。\n`;
+		const result = checkChangelogI18n(content);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(9);
+	});
+
+	test("counts an [Unreleased] bullet once, alongside released bullets", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- 甲。\n\n## [1.2.3] - 2026-01-01\n\n- 乙。\n  - EN: B.\n`;
+		const result = checkChangelogI18n(content);
+		expect(result.problems).toEqual([]);
+		expect(result.checked).toBe(2);
+	});
+
+	test("stops judging structure at the next released heading", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- 甲。\n\n## [1.2.3] - 2026-01-01\n\n一段已发布的平铺正文。\n`;
+		expect(checkChangelogI18n(content).problems).toEqual([]);
+	});
+
+	test("a file without [Unreleased] is judged on released bullets only", () => {
+		const content = `${HEADER}## [1.2.3] - 2026-01-01\n\n### Fixed\n\n- 甲。\n  - EN: A.\n\n一段平铺正文。\n`;
+		expect(checkChangelogI18n(content).problems).toEqual([]);
 	});
 });
