@@ -739,7 +739,7 @@ export const commands = {
 	"commands.presetChatDescription": "极简对话:仅内置核心工具 + 固定 prompt + 无压缩",
 	"commands.presetDesignName": "设计模式",
 	"commands.presetDesignDescription": "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
-	"commands.presetCreatorName": "创作模式",
+	"commands.presetCreatorName": "创造模式",
 	"commands.presetCreatorDescription": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
 	"Run the MusePi setup wizard (first-run configuration)": "运行 MusePi 设置向导（首次运行配置）",
 	"List, preview, or switch themes": "列出、预览或切换主题",
@@ -1407,7 +1407,7 @@ export const commands = {
 	"preset chat description": "极简对话:仅内置核心工具 + 固定 prompt + 无压缩",
 	"preset design name": "设计模式",
 	"preset design description": "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
-	"preset creator name": "创作模式",
+	"preset creator name": "创造模式",
 	"preset creator description": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
 } as const;
 

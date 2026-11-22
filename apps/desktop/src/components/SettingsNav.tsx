@@ -381,18 +381,15 @@ export function navGroups(
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
 	// A page slot whose id names an existing page TAKES IT OVER: the built-in
 	// row (and its id, keywords and deep links) stays, and the extension does
-	// not add a second row. Only genuinely new pages get an `ext:` row.
+	// not add a second row. Only genuinely new pages get an `ext:` row, and
+	// `settings.section.<page>.<seat>` — a row the named page renders itself —
+	// never gets one at all.
 	const builtinIds = new Set(groups.flatMap(group => group.items.map(item => item.id)));
-	/** Settings page namespace (dsh vocabulary): `settings.section.<id>`. */
-	const pageIdOf = (slot: string): string | null => {
+	/** Settings slot namespace (dsh vocabulary): `settings.section.<suffix>`.
+	 *  A slot outside the namespace is not a nav page. */
+	const sectionSuffixOf = (slot: string): string | null => {
 		const prefix = PAGE_SLOT_PREFIXES.find(candidate => slot.startsWith(candidate));
-		if (!prefix) return null;
-		const suffix = slot.slice(prefix.length);
-		// `settings.section.<page>.<seat>` is a page-OWNED row seat, not a page.
-		if (suffix.includes(".")) return null;
-		// A slot may name a capability alias (sessions / memory → session-memory);
-		// resolve it before deciding whether it takes over a built-in page.
-		return (SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix;
+		return prefix ? slot.slice(prefix.length) : null;
 	};
 	const iconOf = (name: string | undefined): IconName | undefined =>
 		name && name in iconSpriteData ? (name as IconName) : undefined;
@@ -401,12 +398,20 @@ export function navGroups(
 		{ label?: string; icon?: IconName; order?: number; keywords?: readonly string[] }
 	>();
 	for (const c of extTabs) {
-		const pageId = pageIdOf(c.slot);
+		const suffix = sectionSuffixOf(c.slot);
+		if (suffix === null) continue;
+		// A page-owned row seat renders inside its page (SettingsView mounts
+		// `settings.section.<active>.` after the page content); it never becomes
+		// a nav row of its own — that pushed a second 滚动进度轨 page next to 外观.
+		if (suffix.includes(".")) continue;
+		// A slot may name a capability alias (sessions / memory → session-memory);
+		// resolve it before deciding whether it takes over a built-in page.
+		const pageId = (SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix;
 		// An alias names a sub-page of a composite page (sessions/memory inside
 		// 会话与记忆): the composite owns its label and position, so only a slot
 		// whose id IS the page id may rewrite the nav identity.
-		const direct = pageId === c.slot.slice((PAGE_SLOT_PREFIXES.find(p => c.slot.startsWith(p)) ?? "").length);
-		if (pageId && builtinIds.has(pageId)) {
+		const direct = pageId === suffix;
+		if (builtinIds.has(pageId)) {
 			if (!direct) continue;
 			overrides.set(pageId, {
 				...(c.label ? { label: c.label } : {}),
