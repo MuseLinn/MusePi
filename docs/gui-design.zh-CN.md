@@ -977,14 +977,20 @@ Guest／移动端顶栏使用 `HostManager` 统一完成已保存电脑的切换
 
 待发送消息在桌面使用内联队列面板，在 compact／移动壳使用底部玻璃 Sheet。两端都支持暂停／恢复、取回、删除、立即发送和清空；桌面另支持编辑和同组拖拽排序。暂停只停止队列投递，不中止当前回合。消息文本、附件、稳定行 ID、顺序和暂停状态在应用重启后保留，空闲会话也能继续查看和操作队列。只读协作链接可以查看宿主队列，但不能修改。
 
-## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
+## 6. 品牌图标
 
-- **源文件**:`apps/desktop/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。
-- **设计语言**:**点阵卡上的 IP 桌宠**——桌面桌宠的定帧(金球 + 白色头戴耳机,几何逐字抄自 `SplashOrb.tsx`,scale 2.0)居中带柔光,背景保留 23×23 淡点阵(fg 9% 透明度,`r=4.2`,间距 ~35.8px,球周 r=300 留白晕)。**无轨道环**:真实 CompanionArt 的环(rx 104)整环画在不透明球体(r 114.27)之后,静止帧根本看不见环——品牌定帧不得凭空画环(2026-09-28 用户反馈)。卡背景 = 主题深色微渐变(`#242128 → #1b191f`)。替代点阵 π(2026-08-06):旧规"配色只用主题色、零强调色"为品牌 IP 有意打破——金球就是标识(对标 kimicode 式 IP 图标,小袁总 2026-09-28);点阵留作与 `DotMatrixMark` 的视觉脐带。
-- **卡中卡布局(2026-08-06 实测 kimi 对齐)**:不变——深色卡占 tile **80.5%(824/1024,四周对称 100px 透明边距)** + 卡角 superellipse n=5 圆角,与 Kimi 桌面 app 完全一致。**与邻位 app 视觉统一优先于 HIG 抽象规范**——kimi 实际就是卡中卡,我们要并排同大。
-- **同步副本**:`build/icon.png`(打包源 / win32 窗口图标,`ICON_PATH`)+ `build/icon-dock.png`(dev Dock setIcon);打包版 icns 同样带 80.5% 卡边距(不重打包则 bundle icns 手动同步)。~~`src/vendor/logo.png`~~ 已于 2026-09-28 删除——splash 不再内嵌栅格 logo(品牌标是 SplashOrb SVG)。
-- **改动流程**:改 `build/icon.svg`(参数见文件头注释:卡占比、superellipse n、网格间距/点径/透明度、留白晕、球 scale/圆心)→ Chromium headless 渲染 1024 PNG(`omitBackground` 保住 100px 透明边距)→ 复制到 icon.png + icon-dock.png → Pillow 生成 `icon.ico`(16–256)与 `icon.icns`(16–512 @1x/@2x;Windows 上 icns 跳过旧版 1024 档——macOS 会降采样,release bundle icns 打包时本就要重生成)→ **手动同步 bundle icns 后必须重签**(`codesign --force --deep --sign - release/mac-arm64/MusePi.app`——签名后改资源会失效,CSDN 4.3 坑)→ `bun run pack:dir` 重打包(dev 模式 Dock 图标走 `app.dock.setIcon(build/icon-dock.png)`,打包版用 bundle icns——**只换 png 不重打包,打包版 Dock 仍是旧图标**)。
-- **站点 favicon**:`assets/icon.svg`(GitHub Pages,64×64)同款球脸 + 深色圆角方块——favicon 尺寸下耳机丢弃(<4px 笔画会糊成噪点)。桌宠形象变更时两处 orb SVG 保持视觉同步。
+上线的标识是已认可的香槟金球加修订后的耳机，放在官方 S5 超椭圆卡上，再从这张 1024 母稿缩放。`apps/desktop/build/icon.png` 就是这张母稿（1024×1024 RGBA，四周 100px 透明边）。`build/icon-dock.png` 与它字节相同。`build/icon.png` 同时是打包源和 win32 窗口图标（`ICON_PATH`）。
+
+- **卡面**：1024 画布，边距 100px（824/1024 = 80.5%），超椭圆 n=5，球心 `(608.5, 616.8)`，半径 `381.4`。官方 81 枚点阵（`r=4.2`，`fill=rgba(236,232,233,0.09)`）已经烤进光栅。不画轨道环。卡面保持 80.5%，以便和旁边的卡中卡应用一样大；不要把卡铺满整块 tile。
+- **缩放**：32px 及以上是 1024 母稿的 Lanczos 纯缩放。16px 只在 64→32→16 的过程中，给已经存在的白色特征（眼、笑、头箍和耳罩）加浅暗缝和轻微反锐化。耳机和脸都保留，没有另一张 16px 形象。
+- **容器**：`build/icon.icns` 含 icp4/16、icp5/32、icp6/64、ic07/128、ic08/256、ic09/512、ic10/1024。`build/icon.ico` 含 16/24/32/48/64/128/256，全部 32 位。两者里 16px 是轻描边那一档，更大的尺寸都是纯缩放。`installerSidebar.bmp` 与 `uninstallerSidebar.bmp` 是同一张 164×314 位图；`installerHeader.bmp` 为 150×57；`apps/desktop/installer/ui/assets/brand-mark.png` 为 280×280。
+- **SVG 嵌入的是光栅，不是新描的脸。** 嵌入 1024 卡面母稿的有：`build/icon.svg`、`assets/icon.svg`、`packages/client-core/public/favicon.svg`、`web/assets/musepi-mark.svg`、`apps/harmony/AppScope/resources/base/media/app_icon.svg`、`apps/harmony/entry/src/main/resources/base/media/app_icon.svg`。`web/assets/musepi-mark.svg` 和两份鸿蒙 `app_icon.svg` 与 `build/icon.svg` 字节相同。同一角色完整放进卡内、双耳罩都可见的有：`build/icon-mini.svg`、`build/icon-mini-plain.svg`（同一张母稿，不是第二张脸）、`build/icon-android-fg.svg`。由该角色派生的剪影嵌入有：`build/icon-android-mono.svg`、`build/icon-stat.svg`、`build/icon-orb-lineart.svg`、`build/icon-tray-solid.svg`、`build/icon-tray-hollow.svg`。
+- **Favicon** 在 `packages/client-core/public/`（`favicon.svg`、`favicon.ico`、`favicon.png`，以及 16/32/180/192/512 的 PNG）使用这张母稿。16px 仍保留耳机。`assets/icon.svg` 是站点标记用的同一张母稿。
+- **Android** 启动图标、圆形启动图标、自适应前景、单色和闪屏 PNG 都在 `apps/mobile/android/app/src/main/res/` 下，是同一角色在原有画布上的缩放。`mipmap-anydpi-v26/*.xml`、`drawable/ic_launcher_background.xml`、`values/ic_launcher_background.xml` 保持原样（`#1B191F`）。
+- **鸿蒙** `media/` 仍然只接受 SVG——放进 PNG 文件会让应用白屏（见 `docs/mobile-design.md`）。两份 `app_icon.svg` 保持 SVG，并在其中嵌入光栅母稿。ArkUI 会不会把这张嵌入图画出来，还没有在真机上验证。
+- **打包**：开发态 Dock 调用 `app.dock.setIcon(build/icon-dock.png)`。打包版使用 bundle icns，所以只换 png、不重打包，打包版 Dock 仍是旧图标。手动同步 icns 之后必须重签：`codesign --force --deep --sign - release/mac-arm64/MusePi.app`。
+- **不要用 `scripts/regen-brand-icons.py` 重生成这套文件。** 该脚本仍把 SVG 当成按尺寸分开的矢量母稿，并会改写 favicon PNG、Android 光栅，以及 `apps/desktop/electron/tray.cjs` 里的托盘 base64 帧。仓库里的文件就是已认可的字节。32px 及以上是 1024 母稿的缩放；16px 是轻描边帧，不是重新光栅化的矢量。
+- **不属于这张母稿**：`apps/desktop/build/ic_stat_musepi.xml` 与 `apps/mobile/android/app/src/main/res/drawable/ic_stat_musepi.xml` 仍是 24dp 矢量。`apps/desktop/electron/tray.cjs` 里嵌着的托盘帧不会因为 `build/icon-tray-*.svg` 更新而改写。营销横幅和 OG 图（`assets/banner.png`、`assets/readme-banner.png`、`web/assets/og-card.png`、`web/assets/og-card.jpg`、`packages/client-core/public/og-image.png`）是另一套图。鸿蒙的 `connect_*.svg` / `tab_*.svg` 是界面图标，不是应用图标。
 
 ## 7. 图标 morph 与色彩管线（定稿 2026-09-18）
 
