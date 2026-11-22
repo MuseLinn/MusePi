@@ -145,6 +145,7 @@ scope:
 ## 按压手势（居中的控件在原地按压）
 
 按压只是**缩放，不是位移**。若控件静止态的 transform 同时承担居中（`left: 50%` 下的 `translateX(-50%)`），两者必须放进各自独立的自定义属性——`.gui-agent-capsule` 用 `--gui-capsule-shift` 承担居中、`--gui-capsule-press` 承担手势——这样改用**布局**居中的表面只需把位移清零，仍保留按压。设置里的效果预览（`.gui-effect-preview-identity`）就是这种表面：一行 flex 居中同一个真实药丸，此前因为 `:active` 重新声明了完整 transform，点击时会左跳半个自身宽度。清零要写 `translateX(0)` 而不是 `none`——`none scale(0.97)` 是非法 transform，会把手势整个丢掉。`test/agent-capsule-geometry.test.ts` 通过 CDP `CSS.forcePseudoState` 驱动**真实**的 `:active`（注入一条只设置 `--gui-capsule-press` 的规则只能证明变量可用，把 bug 还原后照样全绿），断言两处按压后的药丸中心 x 不变、且两处都确实变窄。任何新的、把居中 transform 与按压组合在一起的药丸都遵循同样的拆分。
+
 ## 打开成本（点击挂载的表面先出首帧）
 
 因点击而挂载的表面，不得在挂载帧里构建它的重子树。Agent 标签页的实测得出两条规则：**重列表在首帧绘制之后或按需挂载，绝不能在挂载时就躲在折叠的披露区里建好**（`session.agent` 的模型目录改为首次展开时挂载并保持挂载；260 个模型的目录实测 316ms → 22ms），以及**可能被重新挂载的列表要用缓存快照播种、同时仍然重新读取**（`ModelSelector` 的 `catalogCache`，按读取键索引：`session:<id>` / `registry`）。播种绝不能比事实活得更久：读取失败时删除该键并清空行，缓存本身有上限且按最近使用淘汰——因为没有任何事件会报告某段会话已关闭。改变 `width` 的折叠/展开动效会逐帧重排面板及其 flex 兄弟——改为在内容上动 `transform`/`opacity`，盒子（宽度**与外距**）只落一次，并把自带动效的子元素（`.gui-pane-resize-x`、`.gui-agent-dock`）排除在内容规则之外。守卫：`test/agent-info-pane-open-cost.test.tsx`（首帧不读目录、不建行；列表只在展开后出现；重新挂载由缓存播种；读取被拒绝后不留行、也不污染后续挂载）与 `test/panel-fold-reflow.test.ts`（宽度、左缘与外距保持到那一次切换；抽屉退出全程可见）。
