@@ -25,13 +25,24 @@
  * allowlist is the human judgement; this guard keeps the declaration honest
  * and forces a new horizontal scroller to be named.
  *
+ * Generated output is not source. The guard reads the stylesheets git tracks
+ * plus untracked files that are not ignored, and never a gitignored path:
+ * `apps/desktop/src/styles/tailwind.out.css` is a build artifact, and its
+ * utilities (`.overflow-y-auto` and friends) declare one axis by construction
+ * because that is what those utilities mean. Reading it made the local gate
+ * red on any tree where someone had built first while clean CI stayed green —
+ * a guard that fails on build output teaches people to ignore it. The skip is
+ * answered by git (`git ls-files` plus `git check-ignore`), not by a list that
+ * needs maintenance, so a new generated stylesheet is skipped the moment it is
+ * ignored. An untracked stylesheet that is NOT ignored is still scanned, so
+ * writing a new sheet cannot dodge the guard.
+ *
  *   bun scripts/check-overflow-axis.ts
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOTS = ["apps/desktop/src"];
-const SKIP = new Set(["node_modules", "dist", ".git", "build", "release", ".desktop-build"]);
 
 /**
  * Horizontal scrollers that are allowed to scroll sideways, with the reason.
@@ -60,21 +71,101 @@ export interface OverflowProblem {
 	detail: string;
 }
 
+/** A gitignored stylesheet the guard deliberately did not read. */
+export interface SkippedStylesheet {
+	file: string;
+	/** The ignore rule that matched, as `source:line (pattern)`. */
+	rule: string;
+}
+
+export interface StylesheetScan {
+	/** Repo-relative stylesheets the guard audits. */
+	files: string[];
+	/** Ignored stylesheets skipped, each with the rule that skipped it. */
+	skipped: SkippedStylesheet[];
+}
+
 const RULE = /([^{}]+)\{([^{}]*)\}/g;
 
 function stripComments(source: string): string {
 	return source.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
-function cssFiles(root: string): string[] {
+/**
+ * Drop the stylesheets git ignores.
+ *
+ * Pure so the rule can be tested without a repository: the caller supplies the
+ * candidate list and the set git reported as ignored. Sorted so the report and
+ * the problem order do not depend on filesystem enumeration order.
+ */
+export function selectStylesheets(candidates: readonly string[], ignored: ReadonlySet<string>): string[] {
+	const seen = new Set<string>();
 	const out: string[] = [];
-	for (const entry of readdirSync(root, { withFileTypes: true })) {
-		if (SKIP.has(entry.name) || entry.name.startsWith(".")) continue;
-		const path = join(root, entry.name);
-		if (entry.isDirectory()) out.push(...cssFiles(path));
-		else if (entry.isFile() && path.endsWith(".css")) out.push(path);
+	for (const file of candidates) {
+		if (!file.endsWith(".css")) continue;
+		if (ignored.has(file) || seen.has(file)) continue;
+		seen.add(file);
+		out.push(file);
 	}
-	return out;
+	return out.sort();
+}
+
+function git(args: string[], cwd: string): string {
+	const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+	if (result.exitCode !== 0) {
+		throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`);
+	}
+	return result.stdout.toString();
+}
+
+function splitNul(output: string): string[] {
+	return output
+		.split("\0")
+		.map(part => part.trim())
+		.filter(part => part.length > 0);
+}
+
+/**
+ * Enumerate the stylesheets to audit under `roots`, asking git what it tracks
+ * and what it ignores.
+ *
+ * `--cached` is the tracked set, `--others --exclude-standard` adds a
+ * developer's new unignored sheet, and `--others --ignored` names exactly what
+ * to leave out. A tracked path that no longer exists on disk is dropped rather
+ * than read as empty — a deleted file is not a stylesheet with zero rules.
+ */
+export function scanStylesheets(root: string, roots: readonly string[] = ROOTS): StylesheetScan {
+	const candidates = splitNul(
+		git(["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...roots], root),
+	);
+	const ignoredFiles = splitNul(
+		git(["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ...roots], root),
+	).filter(file => file.endsWith(".css"));
+	const ignored = new Set(ignoredFiles);
+	const files = selectStylesheets(candidates, ignored).filter(file => existsSync(join(root, file)));
+
+	const skipped: SkippedStylesheet[] = [];
+	if (ignoredFiles.length > 0) {
+		// Exit 1 means "no path matched an ignore rule", which cannot happen for
+		// a list git just reported as ignored; treat it as no rules rather than
+		// failing the guard over a diagnostic.
+		const result = Bun.spawnSync(["git", "check-ignore", "-v", "--", ...ignoredFiles], {
+			cwd: root,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const rules = new Map<string, string>();
+		for (const line of result.stdout.toString().split("\n")) {
+			const tab = line.indexOf("\t");
+			if (tab < 0) continue;
+			const [source = "", lineNo = "", pattern = ""] = line.slice(0, tab).split(":");
+			rules.set(line.slice(tab + 1).trim(), `${source}:${lineNo} (${pattern})`);
+		}
+		for (const file of ignoredFiles.sort()) {
+			skipped.push({ file, rule: rules.get(file) ?? "ignored (rule not reported)" });
+		}
+	}
+	return { files, skipped };
 }
 
 /** Normalise a selector list to the individual selectors this guard names. */
@@ -192,10 +283,10 @@ export function unusedAllowlistEntries(files: { file: string; source: string }[]
 
 function main(): void {
 	const repoRoot = join(import.meta.dir, "..");
-	const files = ROOTS.flatMap(root => cssFiles(join(repoRoot, root)));
-	const sources = files.map(file => ({
+	const scan = scanStylesheets(repoRoot);
+	const sources = scan.files.map(file => ({
 		file: relative(repoRoot, file).split("\\").join("/"),
-		source: readFileSync(file, "utf8"),
+		source: readFileSync(join(repoRoot, file), "utf8"),
 	}));
 
 	const problems = sources.flatMap(({ file, source }) => auditOverflowAxis(file, source));
@@ -213,7 +304,9 @@ function main(): void {
 		);
 		process.exit(1);
 	}
-	console.log(`overflow-axis: OK — ${sources.length} stylesheet(s), every scroller declares both axes`);
+	const skipped = scan.skipped.length > 0 ? `, ${scan.skipped.length} ignored stylesheet(s) skipped` : "";
+	for (const { file, rule } of scan.skipped) console.log(`  skipped ${file} — gitignored by ${rule}`);
+	console.log(`overflow-axis: OK — ${sources.length} stylesheet(s)${skipped}, every scroller declares both axes`);
 }
 
 if (import.meta.main) main();

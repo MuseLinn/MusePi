@@ -8,7 +8,15 @@
  * failure it prevents.
  */
 import { describe, expect, test } from "bun:test";
-import { auditOverflowAxis, HORIZONTAL_SCROLLERS, unusedAllowlistEntries } from "./check-overflow-axis";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import {
+	auditOverflowAxis,
+	HORIZONTAL_SCROLLERS,
+	scanStylesheets,
+	selectStylesheets,
+	unusedAllowlistEntries,
+} from "./check-overflow-axis";
 
 const rules = (source: string) => auditOverflowAxis("a.css", source);
 
@@ -93,5 +101,55 @@ describe("unusedAllowlistEntries", () => {
 			.map(selector => `${selector} { color: red; }`)
 			.join("\n");
 		expect(unusedAllowlistEntries([{ file: "a.css", source }])).toHaveLength(0);
+	});
+});
+
+describe("selectStylesheets", () => {
+	test("drops a stylesheet git ignores — the build artifact that made the gate red", () => {
+		// The shipped defect: `tailwind.out.css` is generated, gitignored, and its
+		// `.overflow-y-auto` utility declares one axis by construction. Scanning it
+		// turned a developer's built tree red while clean CI stayed green.
+		const candidates = ["apps/desktop/src/styles/gui-chat.css", "apps/desktop/src/styles/tailwind.out.css"];
+		const selected = selectStylesheets(candidates, new Set(["apps/desktop/src/styles/tailwind.out.css"]));
+		expect(selected).toEqual(["apps/desktop/src/styles/gui-chat.css"]);
+	});
+
+	test("keeps an untracked stylesheet that is not ignored", () => {
+		// The skip must be about git's ignore rules, not about "not tracked":
+		// a new sheet under review is scanned like any other.
+		const candidates = ["apps/desktop/src/styles/new-sheet.css"];
+		expect(selectStylesheets(candidates, new Set())).toEqual(candidates);
+	});
+
+	test("ignores non-CSS files and duplicates", () => {
+		const candidates = ["a.css", "a.css", "b.ts", "c.css"];
+		expect(selectStylesheets(candidates, new Set())).toEqual(["a.css", "c.css"]);
+	});
+
+	test("is order-independent, so the report does not depend on enumeration", () => {
+		expect(selectStylesheets(["b.css", "a.css"], new Set())).toEqual(["a.css", "b.css"]);
+	});
+});
+
+describe("scanStylesheets", () => {
+	test("skips the built sheet in this tree and names the rule that skipped it", () => {
+		// Runs against the real repository: the generated sheet is either present
+		// (a developer built first) or absent (clean checkout), and either way it
+		// must never be audited. Asserting the rule text proves the skip is git's
+		// answer rather than a path hardcoded in the guard.
+		const scan = scanStylesheets(join(import.meta.dir, ".."));
+		expect(scan.files.length).toBeGreaterThan(10);
+		for (const file of scan.files) expect(file.endsWith(".css")).toBe(true);
+		expect(scan.files).not.toContain("apps/desktop/src/styles/tailwind.out.css");
+		if (existsSync(join(import.meta.dir, "..", "apps/desktop/src/styles/tailwind.out.css"))) {
+			const entry = scan.skipped.find(item => item.file === "apps/desktop/src/styles/tailwind.out.css");
+			expect(entry?.rule).toContain("apps/desktop/.gitignore");
+		}
+	});
+
+	test("still audits every tracked stylesheet under the root", () => {
+		const scan = scanStylesheets(join(import.meta.dir, ".."));
+		expect(scan.files).toContain("apps/desktop/src/styles/gui-chat.css");
+		expect(scan.files).toContain("apps/desktop/src/styles/gui-settings.css");
 	});
 });

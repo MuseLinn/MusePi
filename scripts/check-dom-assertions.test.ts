@@ -1,0 +1,157 @@
+/**
+ * `check-dom-assertions` contract tests.
+ *
+ * The ban exists because a failing `expect(<DOM node>).toBeNull()` stalls Bun's
+ * reporter instead of printing a diff: measured here, a guard that should fail in
+ * milliseconds reported "timed out after 5000ms" and the process took 69.8s.
+ * These cases pin what the ban catches and — just as important — what it must
+ * leave alone, because a ban that also fires on the boolean replacement would
+ * forbid its own fix.
+ */
+import { describe, expect, test } from "bun:test";
+import { collectDomAssertions, countByFile, growth, testSources } from "./check-dom-assertions";
+
+const sites = (source: string) => collectDomAssertions("a.test.tsx", source);
+
+describe("collectDomAssertions", () => {
+	test("flags toBeNull on a querySelector result", () => {
+		const found = sites('expect(host.querySelector(".gui-row")).toBeNull();');
+		expect(found).toHaveLength(1);
+		expect(found[0]?.text).toBe('expect(host.querySelector(".gui-row")).toBeNull()');
+	});
+
+	test("flags the negative form too — it serialises the same node", () => {
+		// `.not.toBeNull()` fails when the node is PRESENT, and prints the node.
+		// Leaving it legal would keep the stall for the more common assertion.
+		expect(sites('expect(host.querySelector(".gui-row")).not.toBeNull();')).toHaveLength(1);
+	});
+
+	test("flags toBeDefined on a DOM query", () => {
+		expect(sites('expect(document.getElementById("root")).toBeDefined();')).toHaveLength(1);
+	});
+
+	test("flags a node reached through a child accessor", () => {
+		expect(sites("expect(list.firstElementChild).toBeNull();")).toHaveLength(1);
+	});
+
+	test("reads a nested call as one argument", () => {
+		// A selector may contain parentheses; stopping at the first `)` would read
+		// the argument as truncated and miss the matcher.
+		const found = sites('expect(host.querySelector(".a[data-x=\\"(1)\\"]")).toBeNull();');
+		expect(found).toHaveLength(1);
+	});
+
+	test("flags an aliased node — the shape that passed green", () => {
+		// `const node = host.querySelector(".x"); expect(node).toBeNull();` reaches
+		// the reporter exactly as the inline form does, so matching only the inline
+		// text shipped a promise narrower than the mechanism it describes.
+		const found = sites('const node = host.querySelector(".gui-row");\nexpect(node).toBeNull();');
+		expect(found).toHaveLength(1);
+		expect(found[0]?.text).toBe("expect(node).toBeNull()");
+		expect(found[0]?.line).toBe(2);
+	});
+
+	test("flags the aliased negative form and a typed generic binding", () => {
+		expect(sites('const node = host.querySelector(".a");\nexpect(node).not.toBeNull();')).toHaveLength(1);
+		expect(sites('const node = host.querySelector<HTMLElement>(".a");\nexpect(node).toBeNull();')).toHaveLength(1);
+	});
+
+	test("flags an aliased assertion that appears before its binding", () => {
+		// Bindings are collected from the whole file first, so statement order does
+		// not decide whether a node assertion is seen.
+		expect(sites('expect(node).toBeNull();\nconst node = host.querySelector(".a");')).toHaveLength(1);
+	});
+
+	test("does not treat an identifier bound to something else as a node", () => {
+		// The ban must not guess from a name: `expect(value).toBeNull()` prints a
+		// value, and flagging it would forbid the boolean replacement too.
+		expect(sites("const value = compute();\nexpect(value).toBeNull();")).toEqual([]);
+		expect(sites("const rows = await readRows();\nexpect(rows).toBeUndefined();")).toEqual([]);
+	});
+
+	test("flags an inline query with a TypeScript type argument", () => {
+		// `querySelector<HTMLElement>(` puts the type argument between the accessor
+		// and its `(`; without allowing it the inline form was skipped.
+		expect(sites('expect(host.querySelector<HTMLElement>(".gui-row")).toBeNull();')).toHaveLength(1);
+	});
+
+	test("does not fire on the boolean replacement", () => {
+		// The fix must be legal, or the ban forbids its own remedy.
+		expect(sites('expect(host.querySelector(".gui-row") === null).toBe(true);')).toEqual([]);
+		expect(sites('expect(host.querySelector(".gui-row") !== null).toBe(true);')).toEqual([]);
+	});
+
+	test("does not fire on a length assertion", () => {
+		expect(sites('expect(host.querySelectorAll(".gui-row").length).toBe(0);')).toEqual([]);
+	});
+
+	test("does not fire on a non-DOM subject", () => {
+		// `toBeNull` on a plain value prints a value, not a node: no stall.
+		expect(sites("expect(readCachedCatalog(key)).toBeNull();")).toEqual([]);
+		expect(sites("expect(payload.error).toBeUndefined();")).toEqual([]);
+	});
+
+	test("does not fire on another matcher over a node", () => {
+		expect(sites('expect(host.querySelector(".gui-row")).toBeTruthy();')).toEqual([]);
+		expect(sites('expect(host.querySelector(".gui-row")?.className).toContain("gui-row");')).toEqual([]);
+	});
+
+	test("reports the line of the assertion", () => {
+		const source = [
+			'import { test } from "bun:test";',
+			"",
+			'test("x", () => {',
+			'\texpect(host.querySelector(".a")).toBeNull();',
+			"});",
+		].join("\n");
+		expect(sites(source)[0]?.line).toBe(4);
+	});
+});
+
+describe("growth", () => {
+	test("fails a file that gained a site", () => {
+		const violations = growth({ "a.test.ts": 3 }, { "a.test.ts": 2 });
+		expect(violations).toEqual([{ file: "a.test.ts", count: 3, allowed: 2 }]);
+	});
+
+	test("treats a file with no baseline entry as allowing none", () => {
+		expect(growth({ "new.test.ts": 1 }, {})).toEqual([{ file: "new.test.ts", count: 1, allowed: 0 }]);
+	});
+
+	test("does not fail a shrink, so paying the debt needs no bookkeeping", () => {
+		expect(growth({ "a.test.ts": 1 }, { "a.test.ts": 5 })).toEqual([]);
+	});
+});
+
+describe("countByFile", () => {
+	test("counts per file, which is the granularity the baseline records", () => {
+		const counts = countByFile([
+			{ file: "a.test.ts", line: 1, text: "x" },
+			{ file: "a.test.ts", line: 9, text: "y" },
+			{ file: "b.test.ts", line: 3, text: "z" },
+		]);
+		expect(counts).toEqual({ "a.test.ts": 2, "b.test.ts": 1 });
+	});
+});
+
+describe("testSources", () => {
+	test("scans the co-located suites under src, not only test/", () => {
+		// The reporter stall is a property of the matcher and the received value,
+		// not of a directory. Scoping the pathspec to `apps/desktop/test` let a
+		// planted site under `src/` pass green while 26 suites live there.
+		const files = testSources();
+		expect(files.some(file => file.startsWith("apps/desktop/src/"))).toBe(true);
+		expect(files).toContain("apps/desktop/src/components/brand-icon-toggle.test.tsx");
+	});
+
+	test("still scans the package's test directory", () => {
+		expect(testSources()).toContain("apps/desktop/test/agent-info-pane.test.tsx");
+	});
+
+	test("never scans an implementation file", () => {
+		// Widening the pathspec must not turn the ban into a source linter: a
+		// `querySelector(...).toBeNull()` in shipping code is a different thing
+		// from a test assertion, and the reporter stall does not apply.
+		expect(testSources().filter(file => !/\.(test|spec)\.(ts|tsx)$/.test(file))).toEqual([]);
+	});
+});

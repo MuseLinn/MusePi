@@ -165,6 +165,8 @@ scope:
 
 护栏会失败于:只声明一个轴的规则、未登记的横向滚动容器、以及已经不再横向滚动或已不存在的白名单项(过期的豁免正是白名单变成 bug 藏身处的方式)。契约:`scripts/check-overflow-axis.ts` + `scripts/check-overflow-axis.test.ts`;卡片的真实 Chromium 证明(两个 `scrollWidth === clientWidth` 以及它开在侧栏旁边)在 `apps/desktop/test/project-hover-card-geometry.test.ts`。
 
+**生成产物不参与扫描。** 护栏的样式表清单来自 git——已跟踪的文件加上未跟踪但未被忽略的文件,再减去被忽略的路径——并会为每个跳过的文件打印跳过它的那条规则。`apps/desktop/src/styles/tailwind.out.css` 是构建产物(`apps/desktop/.gitignore:1`),其中的 `.overflow-y-auto` 这类工具类按定义就只声明一个轴;扫描它会让「先构建过」的开发者在本地看到红色,而干净检出的 CI 一直是绿的。用 git 回答而不是维护一份生成文件清单,新出现的生成样式表在它被忽略的那一刻就会被跳过;反过来,未被忽略的新样式表仍然会被扫描,所以新写一个文件绕不过护栏。
+
 ## 护栏(代码胜于文字)
 
 文字规则只是建议,检查才是契约。能被机械验证的标准都配了护栏并接进 `bun run check:tools`,破坏它会让 CI 失败,而不是靠评审发现:
@@ -172,7 +174,7 @@ scope:
 | 护栏 | 强制内容 |
 | --- | --- |
 | `scripts/check-radius-tokens.ts` | 禁止字面量 `border-radius`;每个 `--radius-*` 都必须有定义 |
-| `scripts/check-overflow-axis.ts` | 样式规则必须同时声明两个溢出轴(或用简写);横向滚动容器要在护栏的白名单里带理由登记;不得留下过期白名单项。它自己的测试在 CI 里跑 |
+| `scripts/check-overflow-axis.ts` | 样式规则必须同时声明两个溢出轴(或用简写);横向滚动容器要在护栏的白名单里带理由登记;不得留下过期白名单项;git 忽略的构建产物不扫描,每次跳过都打印跳过它的规则。它自己的测试在 CI 里跑 |
 | `scripts/check-changelog-i18n.ts` | 已发布条目的 `- EN:` 子行有且只有一条;`[Unreleased]` 的每一行都是分类标题、条目或其缩进子行——没有条目的段落会带行号失败 |
 | `scripts/check-splitter-grip.ts` | 只有 `SplitterGrip.tsx` 能输出握柄类名;拖动态挂在胶囊自身的 `data-resizing` 上,绝不用全局 `body.gui-resizing`;已退役的 `.gui-resize-grip` 不得回归 |
 | `test/splitter-grip.test.ts` | 握柄原语的 token、三态与接缝几何 |

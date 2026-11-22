@@ -381,6 +381,8 @@ describe("session hover card geometry", () => {
 		expect(geometry.rowGap).toBe(1);
 	});
 
+	// @guard: revert apps/desktop/src/styles/gui-chrome.css:869 | color: inherit;
+	// @guard: test both cards' rows take the recipe's muted tone
 	test("both cards' rows take the recipe's muted tone, not full-strength text", async () => {
 		// The regression this guards: a later single-class rule on the project row
 		// (`color: inherit`) tied on specificity with the recipe's

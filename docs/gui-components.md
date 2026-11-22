@@ -151,6 +151,8 @@ A scroll container declares **the axis it uses and the axis it must not use**. S
 
 The guard fails on: a rule that declares one axis alone, a horizontal scroller that is not on the list, and a list entry that no longer scrolls sideways or no longer exists (a stale exemption is how an allowlist turns into a place bugs hide). Contracts: `scripts/check-overflow-axis.ts` + `scripts/check-overflow-axis.test.ts`; the card's real-Chromium proof (both `scrollWidth === clientWidth` and its placement beside the sidebar) is `apps/desktop/test/project-hover-card-geometry.test.ts`.
 
+**Generated output is not scanned.** The guard takes its stylesheet list from git — tracked files plus untracked-unignored, minus ignored paths — and prints the rule that skipped each generated sheet. `apps/desktop/src/styles/tailwind.out.css` is a build artifact (`apps/desktop/.gitignore:1`), and its utilities such as `.overflow-y-auto` declare one axis by construction; scanning it turned a developer who had built first red while clean CI stayed green. Asking git rather than maintaining a generated-file list means a new generated sheet is skipped the moment it is ignored — and an untracked sheet that is *not* ignored is still scanned, so writing a new file cannot dodge the guard.
+
 ## Dialogs and boards
 
 - Every dialog goes through `DialogFrame`; rules in `docs/gui-dialog-spec.md` (size tiers, scroll container, focus, modifier specificity).
@@ -173,7 +175,7 @@ A prose rule is advisory; a check is a contract. Where a standard can be verifie
 | Guard | Enforces |
 | --- | --- |
 | `scripts/check-radius-tokens.ts` | No literal `border-radius`; every `--radius-*` is defined |
-| `scripts/check-overflow-axis.ts` | A stylesheet rule sets both overflow axes (or the shorthand); a horizontal scroller is named in the guard's allowlist with a reason; no stale allowlist entry. Its own suite runs in CI |
+| `scripts/check-overflow-axis.ts` | A stylesheet rule sets both overflow axes (or the shorthand); a horizontal scroller is named in the guard's allowlist with a reason; no stale allowlist entry; gitignored build output is skipped and each skip names its rule. Its own suite runs in CI |
 | `scripts/check-changelog-i18n.ts` | A released bullet has exactly one `- EN:` child; every `[Unreleased]` line is a category heading, a bullet, or an indented child of one — an untitled paragraph fails with its line |
 | `scripts/check-disabled-hover.ts` | A class with a `:disabled` rule excludes the pointer in `:hover` (`:hover:not(:disabled)`) or resets it (`:disabled:hover`); generated asset bundles are exempt |
 | `scripts/check-splitter-grip.ts` | Only `SplitterGrip.tsx` may emit the grip class; the drag state keys off the pill's own `data-resizing`, never the global `body.gui-resizing`; the retired `.gui-resize-grip` stays gone |

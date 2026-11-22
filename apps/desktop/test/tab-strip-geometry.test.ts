@@ -170,6 +170,8 @@ afterAll(async () => {
 }, 60_000);
 
 describe("header session tab strip", () => {
+	// @guard: revert apps/desktop/src/styles/gui-chat.css:2347 | flex: 1 1 auto;
+	// @guard: test three tabs are three equal widths at a narrow window
 	test("three tabs are three equal widths at a narrow window", async () => {
 		await load(HEADER_FIXTURE);
 		const strip = await readStrip("header-scroll", "gui-session-tab");
