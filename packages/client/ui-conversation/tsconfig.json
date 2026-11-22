@@ -1,0 +1,17 @@
+{
+	"extends": "../../tsconfig.workspace.json",
+	"include": [
+		"src"
+	],
+	"compilerOptions": {
+		"noEmit": true,
+		"types": [
+			"bun",
+			"node"
+		],
+		"skipLibCheck": true,
+		"lib": [
+			"ES2024"
+		]
+	}
+}

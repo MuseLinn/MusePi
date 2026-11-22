@@ -47,8 +47,8 @@ import {
 	SESSION_INFO_AGENTS_SLOT,
 	SESSION_INFO_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
-} from "@musepi/ui-conversation/contract/slots";
-import { defineSlot } from "@musepi/ui-slots/contract/slots";
+} from "@musepi/ui-conversation/client/contract/slots";
+import { defineSlot } from "@musepi/ui-slots";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import * as React from "react";
 import {

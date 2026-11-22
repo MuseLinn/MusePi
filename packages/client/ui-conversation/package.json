@@ -7,7 +7,8 @@
 	"description": "Conversation seats: composer, input, hero and session-info contracts.",
 	"exports": {
 		".": "./src/index.ts",
-		"./contract/slots": "./src/contract/slots.ts"
+		"./client/contract/slots": "./src/client/contract/slots.ts",
+		"./src/*": "./src/*"
 	},
 	"dependencies": {
 		"@musepi/ui-slots": "workspace:*"

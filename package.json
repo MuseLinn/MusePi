@@ -13,7 +13,8 @@
 		"packages": [
 			"packages/*",
 			"apps/*",
-			"tools/*"
+			"tools/*",
+			"packages/client/*"
 		],
 		"catalog": {
 			"@babel/generator": "^7.29.7",

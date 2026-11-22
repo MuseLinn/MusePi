@@ -7,7 +7,7 @@
 	"description": "Typed UI slot declarations shared by the desktop shell and Cordis contributions.",
 	"exports": {
 		".": "./src/index.ts",
-		"./contract/slots": "./src/contract/slots.ts"
+		"./src/*": "./src/*"
 	},
 	"dependencies": {
 		"@musepi/collab-proto": "workspace:*"

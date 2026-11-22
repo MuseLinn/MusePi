@@ -217,6 +217,20 @@
         "happy-dom": "^20.12.0",
       },
     },
+    "packages/client/ui-conversation": {
+      "name": "@musepi/ui-conversation",
+      "version": "0.7.7",
+      "dependencies": {
+        "@musepi/ui-slots": "workspace:*",
+      },
+    },
+    "packages/client/ui-slots": {
+      "name": "@musepi/ui-slots",
+      "version": "0.7.7",
+      "dependencies": {
+        "@musepi/collab-proto": "workspace:*",
+      },
+    },
     "packages/coding-agent": {
       "name": "@musepi/pi-coding-agent",
       "version": "0.7.7",
@@ -413,20 +427,6 @@
       "devDependencies": {
         "chalk": "catalog:",
         "ghostty-web": "catalog:",
-      },
-    },
-    "packages/ui-conversation": {
-      "name": "@musepi/ui-conversation",
-      "version": "0.7.7",
-      "dependencies": {
-        "@musepi/ui-slots": "workspace:*",
-      },
-    },
-    "packages/ui-slots": {
-      "name": "@musepi/ui-slots",
-      "version": "0.7.7",
-      "dependencies": {
-        "@musepi/collab-proto": "workspace:*",
       },
     },
     "packages/utils": {
@@ -1191,9 +1191,9 @@
 
     "@musepi/typescript-edit-benchmark": ["@musepi/typescript-edit-benchmark@workspace:tools/typescript-edit-benchmark"],
 
-    "@musepi/ui-conversation": ["@musepi/ui-conversation@workspace:packages/ui-conversation"],
+    "@musepi/ui-conversation": ["@musepi/ui-conversation@workspace:packages/client/ui-conversation"],
 
-    "@musepi/ui-slots": ["@musepi/ui-slots@workspace:packages/ui-slots"],
+    "@musepi/ui-slots": ["@musepi/ui-slots@workspace:packages/client/ui-slots"],
 
     "@napi-rs/cli": ["@napi-rs/cli@3.7.2", "", { "dependencies": { "@inquirer/prompts": "^8.5.2", "@napi-rs/cross-toolchain": "^1.0.3", "@napi-rs/wasm-tools": "^1.0.1", "@octokit/rest": "^22.0.1", "clipanion": "^4.0.0-rc.4", "colorette": "^2.0.20", "emnapi": "^1.11.1", "es-toolkit": "^1.47.0", "js-yaml": "^4.2.0", "obug": "^2.1.2", "semver": "^7.8.2", "typanion": "^3.14.0" }, "peerDependencies": { "@emnapi/runtime": "^1.7.1" }, "optionalPeers": ["@emnapi/runtime"], "bin": { "napi": "dist/cli.js", "napi-raw": "cli.mjs" } }, "sha512-shDW0Td/XZQpP04Yy+OsMt1ILMKGGkoLcy1zVAsSAK0fLfWm0Upgkmfs/NOV2ZhMQwkgpR3ZEdyHmTwgrUDQuA=="],
 
