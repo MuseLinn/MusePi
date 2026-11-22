@@ -87,6 +87,7 @@ import {
 	saveTargetStatuses,
 	storeTarget,
 	type TargetStatusMap,
+	withoutTargetStatus,
 } from "./lib/connection/target-store";
 import {
 	type ConnectionTarget,
@@ -193,18 +194,40 @@ const STARTUP_SHELL =
 const DEFAULT_PORT = STARTUP_SHELL?.daemonPort ?? 8300;
 const DEFAULT_URL = `ws://127.0.0.1:${DEFAULT_PORT}`;
 
-/** Where this launch starts. Read once: a `useState` initializer still runs on
- *  every render, and re-reading storage there would cost a parse per paint. */
+/**
+ * Where this launch starts, as one pure function over the stored facts.
+ *
+ * The row decides, not the raw slot: a row keeps its token out of its own
+ * `url` (the secret rides the connection URL only), so booting from `boot.url`
+ * dropped the token and a `--remote-token` instance failed with 401 on the next
+ * launch. `buildWsUrl` restores it. A local kind means the local daemon — using
+ * the stored endpoint there would re-dial the forwarded row `bootTargetFor`
+ * just refused, which is the opposite of its fallback.
+ */
+export function initialBootUrl(input: {
+	storedUrl: string | null;
+	targets: readonly ConnectionTarget[];
+	chosenId: string | null;
+	statuses: TargetStatusMap;
+	defaultUrl: string;
+}): string {
+	if (!input.storedUrl) return input.defaultUrl;
+	const boot = bootTargetFor(input.targets, input.chosenId, input.statuses);
+	if (boot.kind === "local") return input.defaultUrl;
+	return buildWsUrl({ id: boot.id, label: boot.label, url: boot.url, token: boot.token });
+}
+
+/** Read once: a `useState` initializer still runs on every render, and
+ *  re-reading storage there would cost a parse per paint. */
 const INITIAL_URL = (() => {
-	// Last successful connection wins (`musepi-gui-url`): a daemon on a
-	// non-default port keeps working across app restarts. When the chosen target
-	// is a stored row whose endpoint did not answer, boot goes back to the local
-	// row instead of failing the same way again.
 	try {
-		const stored = localStorage.getItem("musepi-gui-url");
-		if (!stored) return DEFAULT_URL;
-		const boot = bootTargetFor(loadTargets(DEFAULT_PORT), loadChosenTargetId(), loadTargetStatuses());
-		return boot.kind === "local" ? stored : boot.url;
+		return initialBootUrl({
+			storedUrl: localStorage.getItem("musepi-gui-url"),
+			targets: loadTargets(DEFAULT_PORT),
+			chosenId: loadChosenTargetId(),
+			statuses: loadTargetStatuses(),
+			defaultUrl: DEFAULT_URL,
+		});
 	} catch {
 		return DEFAULT_URL;
 	}
@@ -2517,8 +2540,12 @@ function AppInner(): ReactNode {
 				await connect(targetUrl);
 				attribute(endpoint, null);
 			} catch (err) {
-				// The row keeps its error; the list is never replaced by it.
-				attribute(endpoint, err instanceof Error ? err.message : String(err));
+				// The row keeps its error; the list is never replaced by it. The
+				// message is scrubbed first: `RpcClient` reports the URL it dialled,
+				// which carries the token, and this string is persisted into a
+				// second slot that would outlive removing the token from the row.
+				const raw = err instanceof Error ? err.message : String(err);
+				attribute(endpoint, stripToken(raw));
 				setLastAttemptFailed(true);
 			} finally {
 				setAttempting(false);
@@ -2528,9 +2555,33 @@ function AppInner(): ReactNode {
 		[connect],
 	);
 
-	const addTarget = useCallback((target: ConnectionTarget): void => {
-		setConnTargets(current => storeTarget(current, target));
+	/**
+	 * Drop a row's stored status.
+	 *
+	 * A stored error describes the credential that produced it, so it must not
+	 * outlive a token change: `addTarget` calls this when the token differs, and
+	 * the same helper is what a removal would use.
+	 */
+	const clearTargetStatus = useCallback((id: string): void => {
+		setTargetStatuses(current => {
+			const next = withoutTargetStatus(current, id);
+			if (next === current) return current;
+			saveTargetStatuses(next);
+			return next;
+		});
 	}, []);
+
+	const addTarget = useCallback(
+		(target: ConnectionTarget): void => {
+			const previous = connTargetsRef.current.find(row => row.id === target.id);
+			setConnTargets(current => storeTarget(current, target));
+			// A stored error describes the credential that produced it. Once the
+			// token changes (or is removed) that error is about a secret the row no
+			// longer has, so it is dropped rather than shown against the new one.
+			if (previous && previous.token !== target.token) clearTargetStatus(target.id);
+		},
+		[clearTargetStatus],
+	);
 	const removeConnTarget = useCallback((id: string): void => {
 		setConnTargets(current => dropTarget(current, id));
 	}, []);

@@ -155,15 +155,22 @@ export function daemonPortOf(url: string, fallback: number = DEFAULT_DAEMON_PORT
 	}
 }
 
+/**
+ * The port a row's own endpoint names. One rule with {@link daemonPortOf}: a
+ * portless loopback endpoint means the daemon on this machine, so a row that
+ * says `localhost` must not produce `-L 80:…` or `--port 80`. Unparseable
+ * values resolve to no port at all, letting the caller apply its default.
+ */
 function portOf(url: string): number | null {
+	// No port at all for a value that is not a ws/wss endpoint, so the caller's
+	// own default applies instead of a borrowed HTTP one.
 	try {
-		const parsed = new URL(url);
-		const port = Number.parseInt(parsed.port, 10);
-		if (Number.isInteger(port) && port > 0) return port;
-		return parsed.protocol === "wss:" ? 443 : 80;
+		const protocol = new URL(url).protocol;
+		if (protocol !== "ws:" && protocol !== "wss:") return null;
 	} catch {
 		return null;
 	}
+	return daemonPortOf(url);
 }
 
 /** Quote a word for a shell when it is not already plain. */

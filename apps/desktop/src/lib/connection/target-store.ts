@@ -178,6 +178,20 @@ export function recordTargetStatus(
 	return { ...statuses, [id]: { lastAttemptAt: at, lastError: error } };
 }
 
+/**
+ * The status map without one row's entry.
+ *
+ * A stored error describes the credential that produced it, so it is dropped
+ * when that credential changes: keeping it would show an error about a token
+ * the row no longer has, and `recordTargetStatus` may have captured a URL that
+ * carried it.
+ */
+export function withoutTargetStatus(statuses: TargetStatusMap, id: string): TargetStatusMap {
+	if (!(id in statuses)) return statuses;
+	const { [id]: _dropped, ...rest } = statuses;
+	return rest;
+}
+
 /** Persist a new/edited target and return the full list it belongs to. */
 export function storeTarget(targets: readonly ConnectionTarget[], target: ConnectionTarget): ConnectionTarget[] {
 	const next = upsertTarget(targets, target);

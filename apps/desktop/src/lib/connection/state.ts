@@ -27,7 +27,14 @@ export interface ConnectionFacts {
 	disconnectedByUser: boolean;
 	/** The last attempt ended in an error. */
 	lastAttemptFailed: boolean;
-	/** At least one target is stored, or the local default counts as one. */
+	/**
+	 * The user has stored at least one row of their own.
+	 *
+	 * Deliberately not "the list is non-empty": the built-in local row is always
+	 * present, so counting it would make every install configured and leave
+	 * `unconfigured` unreachable. A fresh install is unconfigured until the user
+	 * stores a row or an attempt fails.
+	 */
 	hasTargets: boolean;
 }
 

@@ -110,6 +110,10 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 
 行状态是派生的、从不存储,且只有活的客户端才产生 `connected`:上次成功读作「上次用过」(`settings.connectionStatusLastUsed`),所以列表绝不会与页头的「已断开」自相矛盾,两行都成功过时也不可能同时宣称那唯一一条连接。`unconfigured` 刻意只在「没有存过任何行、且没有尝试失败」时可达:`boot` 在每条失败路径都会结算 `lastAttemptFailed`,所以首次启动遇到一个死掉的守护进程会落在 `unreachable`——这是诚实的答案,因为确实尝试过。平静的首次启动界面因此只在尝试发生之前可达;这一点是刻意接受的,而不是把 boot 的失败特判成「什么都没发生」。
 
+启动的起点是 `initialBootUrl`(纯函数,为测试导出):本机类型返回本机守护进程地址——在那里用存下来的端点等于重新去拨 `bootTargetFor` 刚刚拒绝的那个转发行;其余类型返回 `buildWsUrl(row)`。行本身不保存 token,所以只从 `row.url` 启动会丢掉这个密钥,带 `--remote-token` 的实例下次启动就会 401。
+
+连接错误在存储或显示之前先做脱敏:`RpcClient` 的拒绝信息是 `cannot connect to <url>`,而那个 URL 带着 token,所以 `connectToTarget` 存进状态槽的是 `stripToken(message)`。存下来的错误描述的是产生它的那份凭据,因此 `addTarget` 在行的 token 变化或被移除时用 `withoutTargetStatus` 丢掉该行条目——否则一条关于「行上已不存在的 token」的错误会在编辑之后继续留着。
+
 添加表单在保存前先校验:`normalizeRemoteHostUrl` 接受裸 `host:port`(与实例弹窗一致),拒绝一切非 ws/wss/http/https 的写法,并在表单里报 `settings.instanceUrlInvalid`——这里的端点会成为下次启动的目标,所以 boot 解析不了的值绝不能进存储。boot 的 `try` 也因此补上了 `catch`:每次退出要么记录成功、要么记录失败,抛错(存着一个无法解析的端点、或探测本身失败)再也不能跳过 `recordBootOutcome`、让门在「启动从未连上」之后仍推出 `disconnected-by-user`。`daemonPortOf` 从不抛错,并把非 ws/wss 的协议当作「没有守护进程端口」(`ftp://nope` 会被解析成 80 端口,所以真正的守卫是协议判断而不是解析)。不带端口的 `ws:`/`wss:` **回环**端点解析成守护进程自己的默认端口(`DEFAULT_DAEMON_PORT`)而不是 80:`normalizeRemoteHostUrl("localhost")` 得到的是 `ws://localhost`,若按裸解析走,Electron 的本机探测会去查 80 端口、跳过拨号、永远到不了 `startDaemonViaShell`——首次启动就此无法拉起守护进程。显式端口永远优先,远端主机保留 ws/wss 的 80/443 默认值,因为在那里它确实就是 HTTP(S) 端口。
 
 每次启动尝试的退出都会结算一个结果:`lib/connection/boot-attempt.ts`(`runBootAttempt`)把抛错、或没有结算就返回,都转成一条已记录的失败,于是 `lastAttemptFailed` 绝不会在一次没有连上的启动之后仍为 false。失败总会存下一条行上能显示的原因——有捕获到的连接错误就用它,否则用 `settings.cannotReachLocalDaemon`。普通冷启动在 `connect()` 之前就于 `daemonPortOpen` 短路,没有这条兜底,行上就会在「无法连接」下面显示原始的哨兵字符串 `unreachable`。

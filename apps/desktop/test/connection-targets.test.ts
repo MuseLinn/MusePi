@@ -116,6 +116,25 @@ describe("connection targets", () => {
 		expect(targetCommand(localTarget())).toBeNull();
 	});
 
+	test("a typed localhost row uses the daemon port, not 80, in its command", () => {
+		// One rule with `daemonPortOf`: a portless loopback endpoint means the
+		// daemon on this machine. Two resolvers used to disagree here, so an ssh
+		// row typed as `localhost` produced `-L 80:127.0.0.1:8300`.
+		const ssh = createTarget({
+			id: "s9",
+			label: "Local box",
+			url: "ws://localhost",
+			kind: "ssh",
+			sshHost: "me@example.com",
+			remotePort: 8300,
+		});
+		expect(targetCommand(ssh)).toContain(`${DEFAULT_DAEMON_PORT}:127.0.0.1:8300`);
+		expect(targetCommand(ssh)).not.toContain("-L 80:");
+		const docker = createTarget({ id: "d9", label: "Box", url: "ws://localhost", kind: "docker", container: "c" });
+		expect(targetCommand(docker)).toContain(`--port ${DEFAULT_DAEMON_PORT}`);
+		expect(targetCommand(docker)).not.toContain("--port 80");
+	});
+
 	test("wsl, ssh and docker rows show the exact command to copy", () => {
 		const wsl = createTarget({
 			id: "w1",
