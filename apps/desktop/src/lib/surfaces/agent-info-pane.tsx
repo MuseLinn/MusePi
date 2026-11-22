@@ -63,6 +63,32 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Two-phase open: `true` on the frame AFTER the first painted one.
+ *
+ * Opening the capsule changes the panel's width and mounts this tab in the
+ * same click. The shell — identity head, the model card's `provider/id`
+ * readout, the session rows — is what the click is asking for, so it renders
+ * on that frame; everything that derives from a session read mounts once the
+ * frame is on screen. Double `requestAnimationFrame` because a single one
+ * still runs before the frame it scheduled is painted.
+ */
+function useAfterFirstPaint(): boolean {
+	const [ready, setReady] = useState(false);
+	useEffect(() => {
+		if (ready) return;
+		let inner = 0;
+		const outer = requestAnimationFrame(() => {
+			inner = requestAnimationFrame(() => setReady(true));
+		});
+		return () => {
+			cancelAnimationFrame(outer);
+			cancelAnimationFrame(inner);
+		};
+	}, [ready]);
+	return ready;
+}
+
 /** Compact token count ("128K", "1.2M") for the usage row. */
 function formatTokens(n: number | null | undefined): string | null {
 	if (n == null || !Number.isFinite(n) || n < 0) return null;
@@ -165,6 +191,18 @@ export function AgentInfoPane({
 		? `${info.model.provider ? `${info.model.provider}/` : ""}${info.model.id}`
 		: (usage?.model ?? null);
 	const modelName = info?.model?.name ?? info?.model?.id ?? null;
+	// The model catalogue is the one heavy subtree here: the inline list builds
+	// a row per model (a real catalog is hundreds) and it used to be mounted
+	// behind the folded disclosure from the first frame, so the click that
+	// opened the tab paid for all of it. Measured on a 260-model catalog:
+	// ~316ms for the commit that mounted the rows, against ~50ms for the whole
+	// rest of the pane at any catalog size. It now mounts on the first open and
+	// stays mounted afterwards, so the search query, the scroll position and
+	// the loaded list survive a fold.
+	const [catalogueOpened, setCatalogueOpened] = useState(false);
+	// The thinking ladder waits for the tab's first painted frame; the identity
+	// shell renders immediately. See useAfterFirstPaint.
+	const heavyReady = useAfterFirstPaint();
 	// The model card's collapsed readout: the model reference with the level it
 	// is running at. Expanding the card is the only way into the picker.
 	const [modelOpen, setModelOpen] = useState(false);
@@ -300,7 +338,14 @@ export function AgentInfoPane({
 					className="gui-agent-model-card"
 					aria-expanded={modelOpen}
 					aria-controls={modelListId}
-					onClick={() => (modelOpen ? collapseModel() : setModelOpen(true))}
+					onClick={() => {
+						if (modelOpen) {
+							collapseModel();
+							return;
+						}
+						setCatalogueOpened(true);
+						setModelOpen(true);
+					}}
 					onKeyDown={event => {
 						// Focus can be back on the card while the list is open
 						// (shift-Tab); Escape still folds the disclosure and keeps
@@ -341,24 +386,29 @@ export function AgentInfoPane({
 					</span>
 				</button>
 				<Reveal open={modelOpen}>
+					{/* Mounted on first open, then kept: a disclosure that is
+					 * never opened must not build the catalog, and one that
+					 * was opened keeps its query, scroll and loaded list. */}
 					<div id={modelListId}>
-						<ModelSelector
-							inline
-							active={modelOpen}
-							rpc={rpc}
-							sessionId={sessionId}
-							currentModelId={modelRef}
-							onSelect={() => afterSwitch()}
-							onSwitchError={onSwitchError}
-							onAddProvider={onAddProvider}
-							onDismiss={collapseModel}
-						/>
+						{catalogueOpened ? (
+							<ModelSelector
+								inline
+								active={modelOpen}
+								rpc={rpc}
+								sessionId={sessionId}
+								currentModelId={modelRef}
+								onSelect={() => afterSwitch()}
+								onSwitchError={onSwitchError}
+								onAddProvider={onAddProvider}
+								onDismiss={collapseModel}
+							/>
+						) : null}
 					</div>
 				</Reveal>
 			</section>
 
 			<section className="gui-agent-info-section">
-				{info === null ? (
+				{info === null || !heavyReady ? (
 					<>
 						<div className="gui-agent-info-section-head">
 							<span>{t("general.agentInfoThinking")}</span>
