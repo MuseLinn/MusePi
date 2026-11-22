@@ -661,6 +661,10 @@ export interface TrajectoryTurnGroup {
 	 *  仅靠深度编号无法区分,标签补 journal 创建序序号。 */
 	displayTurnLabel?: string;
 	events: TrajectoryEvent[];
+	/** 该轮不在活跃路径上(撤回落下的旁支):地图据此画成 off-path,
+	 *  而不是与在视轮同款。活跃路径未知时为 undefined——"不在路径上"
+	 *  只有已知路径才有意义。 */
+	offPath?: boolean;
 	/** 该 turn 首个事件时间戳(折叠行显示;无则 undefined)。 */
 	firstTs?: string;
 	/** 该 turn 首个事件数值时间戳(Overview 时间轴投影锚)。 */
@@ -718,6 +722,10 @@ export function groupTrajectoryTurns(
 				// 展示标签 = 组内事件的 pathTurnLabel(深度+同父兄弟序);
 				// 组首事件恒为轮起始(user/advisor),标签随该轮起始。
 				displayTurnLabel: ev.pathTurnLabel,
+				// 轮首事件带 branch = 该轮不在活跃路径上(撤回落下的旁支 /
+				// 重答前的旧轮)。分支标记只由"已知活跃路径"推出,无路径时
+				// 为 undefined——见 TrajectoryTurnGroup.offPath。
+				offPath: ev.branch === true ? true : undefined,
 				events: [],
 				firstTs: ev.timestamp,
 				startMs: ev.tsMs,

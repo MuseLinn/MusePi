@@ -329,6 +329,11 @@ export const general = {
 	"general.fileRootSelected": "文件面板根目录已切换：{path}",
 	"general.doubleClickRename": "双击重命名",
 	"general.revertMessage": "撤回该消息",
+	"general.withdrawConfirm":
+		"这一回合会移到一个旁支分支上，不会删除任何内容。它的文字和图片会回到输入框，输入框上方的浮条提供一次撤销。",
+	"general.withdrawConfirmBusy": "正在写的回复会在撤回时停止。",
+	"general.withdrawConfirmEarlierTurn": "更早的一回合",
+	"general.withdrawConfirmAction": "撤回回合",
 	"general.removeQuote": "移除引用",
 	"general.fileReferences": "文件引用",
 	"general.chatReferences": "会话引用",
