@@ -469,6 +469,9 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		aliases: ["status"],
 		icon: "extension",
 		description: "Open Extensions & plugins",
+		// The TUI dashboard is the surface this command drives; the GUI owns
+		// the same management through its extension page and never routes here.
+		surfaces: ["tui"],
 		// issue #38 Step 2: the session's 10 extension meta-tools start
 		// default-inactive (their schemas stay out of the prompt/request).
 		// Explicitly opening the extension center is the agreed hard trigger

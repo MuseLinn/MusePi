@@ -1,38 +1,63 @@
 /**
- * Extension meta-tool set (issue #38 Step 2): the agent-facing extension
- * bootstrap/lifecycle tools. These cost real per-request tokens (full JSON
- * schemas in the `tools` field / `## functions` namespace) yet are used in
- * well under 1% of ordinary coding turns, so they are DEFAULT-INACTIVE:
- * registered in every session but excluded from the initial active set,
- * activated on demand via the `/extensions` command
- * (`AgentSession.activateExtensionMetaTools`).
+ * Creation tool ring (issue #38 Step 2): the agent-facing self-bootstrap
+ * tools. They cost real per-request tokens (full JSON schemas in the `tools`
+ * field / `## functions` namespace) yet are used in well under 1% of ordinary
+ * coding turns, so they are DEFAULT-INACTIVE: registered in every session but
+ * excluded from the initial active set.
  *
- * `extensions_list` (read-only inventory) intentionally stays active — it
- * is the cheap way for the model to see what is loaded.
+ * Two separate lifetimes:
+ * - {@link CREATION_RING_TOOL_NAMES} — session-scoped dynamic Cordis plugins
+ *   plus the read-only inventory. This is the creation ring: what "make me a
+ *   plugin" means to the model, and the plugin inventory an ordinary work
+ *   session does not carry. The creator preset activates it from session start
+ *   (`tools.extensionMetaTools`).
+ * - {@link LEGACY_EXTENSION_TOOL_NAMES} — the session-level legacy extension
+ *   loader (Track B, the compatibility surface for other agents' plugin
+ *   formats). It exists so old extensions can still be loaded when the user
+ *   explicitly asks for one from the extension management surface; it is NOT
+ *   part of the creation ring and the creator preset never activates it.
  *
  * The GUI extension panels manage extensions through direct daemon RPCs and
  * do not depend on these agent-facing tools, so default-inactive does not
  * affect the GUI management paths.
  */
 
-/** Names of the extension meta tools that start inactive (issue #38). */
-export const EXTENSION_META_TOOL_NAMES: readonly string[] = [
-	// Lifecycle (extension-lifecycle-tools.ts)
+/** Creation ring: session-scoped dynamic Cordis plugins. */
+export const CORDIS_TOOL_NAMES: readonly string[] = [
+	"cordis_define",
+	"cordis_run",
+	"cordis_stop",
+	"cordis_undefine",
+	"cordis_inspect",
+] as const;
+
+/** Creation ring: the tools the creator preset activates from session start —
+ *  dynamic Cordis plugins plus the read-only inventory they are verified with. */
+export const CREATION_RING_TOOL_NAMES: readonly string[] = [...CORDIS_TOOL_NAMES, "extensions_list"] as const;
+
+/** Track B compatibility loader — explicit extension management only, never the creator ring. */
+export const LEGACY_EXTENSION_TOOL_NAMES: readonly string[] = [
 	"extension_load",
 	"extension_reload",
 	"extension_status",
 	"extension_validate",
 	"extension_rollback",
-	// Runtime bootstrap (plugin-runtime-tools.ts)
-	"ext_define",
-	"ext_run",
-	"ext_stop",
-	"ext_undefine",
-	"ext_inspect",
 ] as const;
 
+/** Every default-inactive tool; the extension management surface activates this full set. */
+export const EXTENSION_META_TOOL_NAMES: readonly string[] = [
+	...CREATION_RING_TOOL_NAMES,
+	...LEGACY_EXTENSION_TOOL_NAMES,
+] as const;
+
+const CREATION_RING_TOOL_NAME_SET = new Set<string>(CREATION_RING_TOOL_NAMES);
 const EXTENSION_META_TOOL_NAME_SET = new Set<string>(EXTENSION_META_TOOL_NAMES);
 
 export function isExtensionMetaToolName(name: string): boolean {
 	return EXTENSION_META_TOOL_NAME_SET.has(name);
+}
+
+/** Whether a tool belongs to the creation ring the creator preset activates. */
+export function isCreationRingToolName(name: string): boolean {
+	return CREATION_RING_TOOL_NAME_SET.has(name);
 }

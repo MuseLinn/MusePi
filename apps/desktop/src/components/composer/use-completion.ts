@@ -15,20 +15,6 @@ import type { HashCompletionEntry } from "./completion-menus";
  *  ranking. */
 const SLASH_GUI_NATIVE: ReadonlySet<string> = new Set(["usage", "context", "guided-goal"]);
 
-/** TUI-only daemon commands the GUI intercepts with its own handling — own
- *  panels (usage/context/debug/btw/autoresearch) or the guided-goal RPC
- *  (startGuidedGoal, TUI /guided-goal parity with inline args). These are
- *  the only tuiOnly entries allowed to stay in the / menu (everything else
- *  tuiOnly can only answer "该命令仅在终端中可用", so it is hidden). */
-const GUI_PANEL_INTERCEPTS: ReadonlySet<string> = new Set([
-	"usage",
-	"context",
-	"debug",
-	"btw",
-	"autoresearch",
-	"guided-goal",
-]);
-
 /**
  * "@"/"#"/"//" completion machinery (TUI parity): the three completion
  * state machines share the textarea anchor and the draft setter. "/"
@@ -155,13 +141,10 @@ export function useCompletion({
 			category: "GUI",
 		};
 		const list = [
-			// Hide TUI-only daemon commands the GUI has no handling for — they
-			// can only answer "该命令仅在终端中可用" when sent. GUI-intercepted
-			// names (panel or guided-RPC parity) and skill commands stay visible.
-			...(slashCmds ?? []).filter(
-				c =>
-					c.name !== "usage" && c.name !== "context" && !(c.tuiOnly === true && !GUI_PANEL_INTERCEPTS.has(c.name)),
-			),
+			// The daemon filters `commands.list` by surface: everything it returns
+			// is offered on GUI. TUI dashboards and GUI-panel commands are declared
+			// on the command itself, so no client-side whitelist decides visibility.
+			...(slashCmds ?? []).filter(c => c.name !== "usage" && c.name !== "context"),
 			guiUsageCmd,
 			guiContextCmd,
 		];
@@ -196,7 +179,7 @@ export function useCompletion({
 			setSlashIdx(0);
 			if (!slashCmds && rpc) {
 				void rpc
-					.request<SlashEntry[]>("commands.list", {})
+					.request<SlashEntry[]>("commands.list", { surface: "gui" })
 					.then(list => setSlashCmds(list ?? []))
 					.catch(() => {});
 			}

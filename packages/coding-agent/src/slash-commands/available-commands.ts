@@ -7,6 +7,7 @@ import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash
 import { t } from "../i18n/index.js";
 import { ACP_BUILTIN_RESERVED_NAMES, isAcpBuiltinShadowedName } from "./acp-builtins";
 import { BUILTIN_SLASH_COMMANDS_INTERNAL } from "./builtin-registry";
+import { servesSurface } from "./surfaces";
 
 /** Translate a description at menu-build time (locale is ready here), tolerating undefined. */
 const tr = (s: string | undefined): string | undefined => (s === undefined ? undefined : t(s));
@@ -45,7 +46,7 @@ export async function buildAvailableSlashCommands(
 	};
 
 	for (const command of BUILTIN_SLASH_COMMANDS_INTERNAL) {
-		if (!command.handle) continue;
+		if (!command.handle || !servesSurface(command, "acp")) continue;
 		const hint = command.acpInputHint ?? command.inlineHint;
 		appendCommand({
 			name: command.name,

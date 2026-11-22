@@ -2015,7 +2015,7 @@ export const settings = {
 	"Erase all terminal scrollback, then replay one current-width transcript":
 		"清空全部终端回滚区，再以当前宽度重放一份对话",
 	"Extended Context": "扩展上下文",
-	"Extension Meta Tools": "扩展元工具",
+	"Creation Tools": "创造工具",
 	"External Thinking": "外部思考",
 	"Filled one-row field anchored by a single accent rail": "单行填充输入区，一侧由强调导轨收边",
 	"Filled one-row field with accent end caps": "单行填充输入区，两端强调帽",
@@ -2190,8 +2190,8 @@ export const settings = {
 	"user@host destination for the ssh reverse forward": "ssh 反向转发的 user@host 目标",
 	使用中文界面: "使用中文界面",
 	简体中文: "简体中文",
-	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
-		"从会话开始即启用扩展引导/生命周期工具集（extension_load、extension_reload、ext_define 等）。默认关闭，普通会话不带这些 schema；creator 预设会自动启用。",
+	"Activate the plugin creation ring from session start: cordis_define/run/stop/undefine/inspect for session-scoped prototypes, plus extension_load/reload/status/validate/rollback to load and verify a plugin package on disk. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
+		"从会话开始即启用插件创造工具环：cordis_define/run/stop/undefine/inspect 做会话内原型，extension_load/reload/status/validate/rollback 加载并验证磁盘上的插件包。默认关闭，普通会话不带这些 schema；creator 预设会自动启用。",
 	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.":
 		"为内置通用 task 子代理启用 prewalk：以解析到的模型起步、规划并开始实现，在第一次编辑/写入时移交 'smol' 角色。按代理的覆盖（/agents 中心的 task.agentPrewalk）与用户代理的 prewalk frontmatter 不受此开关影响。",
 	"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).":

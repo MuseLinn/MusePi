@@ -167,12 +167,20 @@ describe("tool card titles", () => {
 			<ToolView
 				name="write"
 				running
-				args={{ path: "xd://ext_define", content: JSON.stringify({ name: "gradient-wallpaper", purpose: "壁纸" }) }}
+				args={{
+					path: "xd://cordis_define",
+					content: JSON.stringify({ name: "gradient-wallpaper", purpose: "壁纸" }),
+				}}
 			/>,
 		);
-		expect(html).toContain(t("tools.toolExtDefine"));
+		expect(html).toContain(t("tools.toolCordisDefine"));
 		expect(html).toContain("gradient-wallpaper");
 		expect(html).not.toContain("xd://");
 		expect(html).not.toContain(t("tools.toolWrite"));
+	});
+
+	it("keeps old ext_* transcript names on the Cordis card", () => {
+		expect(toolCallTitle("ext_define", resolveToolRenderer("ext_define"))).toBe(t("tools.toolCordisDefine"));
+		expect(toolCallTitle("ext_run", resolveToolRenderer("ext_run"))).toBe(t("tools.toolCordisRun"));
 	});
 });

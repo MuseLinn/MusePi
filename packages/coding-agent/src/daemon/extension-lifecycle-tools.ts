@@ -98,8 +98,10 @@ export function createExtensionManagerTools(
 ): Array<CustomTool<any, any>> {
 	const extensionsListTool: CustomTool<typeof extListSchema> = {
 		name: "extensions_list",
+		defaultInactive: true, // creation/inventory ring only
 		label: "扩展清单",
-		description: "列出当前会话已加载的扩展:路径/工具名/预设/提示词区块/槽位组件。只读,无副作用。",
+		description:
+			"列出当前会话已加载的插件/扩展:路径/工具名/预设/提示词区块/槽位组件。只读,无副作用。创造模式与扩展管理面会自动启用它;普通会话默认不带这个 schema。",
 		parameters: extListSchema,
 		async execute(
 			_toolCallId: string,

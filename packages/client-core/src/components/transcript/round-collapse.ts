@@ -593,6 +593,11 @@ const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
  *  every plugin action under "编辑了 N 个文件"; the run gives them their own
  *  segment instead. */
 const EXTENSION_TOOLS = new Set([
+	"cordis_define",
+	"cordis_inspect",
+	"cordis_run",
+	"cordis_stop",
+	"cordis_undefine",
 	"ext_define",
 	"ext_inspect",
 	"ext_run",

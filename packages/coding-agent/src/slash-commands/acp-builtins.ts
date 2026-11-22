@@ -1,6 +1,7 @@
 import type { AvailableCommand } from "@musepi/pi-utils/acp";
 import { BUILTIN_SLASH_COMMANDS_INTERNAL, lookupBuiltinSlashCommand } from "./builtin-registry";
 import { parseSlashCommand } from "./helpers/parse";
+import { servesSurface } from "./surfaces";
 import type { AcpBuiltinSlashCommandResult, SlashCommandRuntime } from "./types";
 
 export type { AcpBuiltinSlashCommandResult } from "./types";
@@ -12,7 +13,7 @@ export type { AcpBuiltinSlashCommandResult } from "./types";
  * registering `models` would appear in the palette but execute the builtin).
  */
 export const ACP_BUILTIN_RESERVED_NAMES: ReadonlySet<string> = new Set(
-	BUILTIN_SLASH_COMMANDS_INTERNAL.filter(c => c.handle !== undefined).flatMap(c => [c.name, ...(c.aliases ?? [])]),
+	BUILTIN_SLASH_COMMANDS_INTERNAL.filter(c => servesSurface(c, "acp")).flatMap(c => [c.name, ...(c.aliases ?? [])]),
 );
 
 /**
@@ -30,12 +31,13 @@ export function isAcpBuiltinShadowedName(name: string): boolean {
 }
 
 /**
- * Commands advertised to ACP clients. Entries without a text-mode `handle`
- * (e.g. `/quit`, `/login`, dashboards) are filtered out so the client doesn't
- * see commands it cannot drive.
+ * Commands advertised to ACP clients. The `acp` surface is the filter: TUI
+ * dashboards and GUI-panel commands never reach a client that cannot drive
+ * them, and an explicit `surfaces` declaration can drop a text handler from
+ * the advertised set without deleting the handler.
  */
-export const ACP_BUILTIN_SLASH_COMMANDS: AvailableCommand[] = BUILTIN_SLASH_COMMANDS_INTERNAL.filter(
-	command => command.handle !== undefined,
+export const ACP_BUILTIN_SLASH_COMMANDS: AvailableCommand[] = BUILTIN_SLASH_COMMANDS_INTERNAL.filter(command =>
+	servesSurface(command, "acp"),
 ).map(command => {
 	// Honor mode-specific copy: ACP clients receive concise text-mode
 	// descriptions/hints when the spec sets `acpDescription` / `acpInputHint`,

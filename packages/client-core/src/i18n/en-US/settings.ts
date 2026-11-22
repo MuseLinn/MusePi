@@ -3883,7 +3883,7 @@ export const settings = {
 	"Erase all terminal scrollback, then replay one current-width transcript":
 		"Erase all terminal scrollback, then replay one current-width transcript",
 	"Extended Context": "Extended Context",
-	"Extension Meta Tools": "Extension Meta Tools",
+	"Creation Tools": "Creation Tools",
 	"External Thinking": "External Thinking",
 	"Filled one-row field anchored by a single accent rail": "Filled one-row field anchored by a single accent rail",
 	"Filled one-row field with accent end caps": "Filled one-row field with accent end caps",
@@ -4113,8 +4113,8 @@ export const settings = {
 	"user@host destination for the ssh reverse forward": "user@host destination for the ssh reverse forward",
 	使用中文界面: "使用中文界面",
 	简体中文: "简体中文",
-	"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
-		"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.",
+	"Activate the plugin creation ring from session start: cordis_define/run/stop/undefine/inspect for session-scoped prototypes, plus extension_load/reload/status/validate/rollback to load and verify a plugin package on disk. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.":
+		"Activate the plugin creation ring from session start: cordis_define/run/stop/undefine/inspect for session-scoped prototypes, plus extension_load/reload/status/validate/rollback to load and verify a plugin package on disk. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.",
 	"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.":
 		"Arm prewalk for the bundled generic `task` subagent: it starts on its resolved model, plans and begins the implementation, then hands off to the 'smol' role at its first edit/write. Per-agent overrides (task.agentPrewalk, configured from the /agents hub) and user agent `prewalk` frontmatter apply regardless of this toggle.",
 	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.":

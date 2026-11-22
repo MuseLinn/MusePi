@@ -382,6 +382,8 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 		name: "debug",
 		icon: "bug",
 		description: "Open debug tools selector",
+		// The GUI renders the same diagnostics actions as its own panel.
+		surfaces: ["tui", "gui"],
 		handleTui: async (_command, runtime) => {
 			await runtime.ctx.showDebugSelector();
 			runtime.ctx.editor.setText("");

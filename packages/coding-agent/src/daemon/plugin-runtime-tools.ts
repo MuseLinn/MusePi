@@ -1,18 +1,20 @@
 /**
- * P2 动态自举工具链(cordis-host-runner 的 musepi 落地,无审批):
+ * P2 会话级动态 Cordis 插件工具链（cordis-host-runner 的 MusePi 落地，无审批）：
  *
- * 会话内 agent 定义→运行→停用→删除动态插件工具,全程沙箱隔离:
- * - ext_define  { name, purpose, hostCode, pluginId? }
- *     定义不可变 package(pluginId 省略 = 新插件)。host 代码语法预检。
- * - ext_run     { pluginId, packageId? }
- *     激活版本(packageId 省略 = 最新):vm 沙箱执行 host 半体 → defineTool
- *     注册工具 → 写入会话工具链(extdyn__ 命名空间,立即对模型可见)。
- * - ext_stop    { pluginId }     停用:移除该插件全部动态工具。
- * - ext_undefine{ pluginId }     删除插件(含活动 run 与全部版本)。
- * - ext_inspect { pluginId? }    注册表快照(含每工具状态)。
+ * 会话内 agent 定义→运行→停用→删除动态插件，全程沙箱隔离：
+ * - cordis_define  { name, purpose, hostCode, idPrefix?, pluginId? }
+ *     定义不可变包（pluginId 省略 = 新插件，提供 = 追加版本）。只定义、不运行。
+ * - cordis_run     { pluginId, packageId?, mode? }
+ *     激活版本（packageId 省略 = 最新）：vm 沙箱执行 host 半体 → defineTool
+ *     注册工具 → 写入会话工具链（extdyn__ 命名空间，立即对模型可见）。
+ *     mode=run 首次激活/重启当前；mode=update 切换版本（要求已在运行）。
+ * - cordis_stop    { pluginId }   停用：移除该插件全部动态工具，保留定义与版本。
+ * - cordis_undefine{ pluginId }   删除插件（含活动 run 与全部版本）。
+ * - cordis_inspect { pluginId?, packageId? }
+ *     注册表快照；两者都给时返回该版本的 hostCode 源码，用于原位修复。
  *
- * 工具名命名空间 `extdyn__<name>`(MCP `mcp__` 同款约定),避免与内置
- * 工具冲突;同一会话内工具全量 reconcile —— 会话间注册表独立。
+ * 工具名命名空间 `extdyn__<name>`（MCP `mcp__` 同款约定），避免与内置
+ * 工具冲突；同一会话内工具全量 reconcile —— 会话间注册表独立。
  */
 
 import { type } from "@musepi/musepi-type";
@@ -33,6 +35,8 @@ export interface RuntimePackageVersion {
 
 export interface RuntimePluginRun {
 	packageId: string;
+	/** 本次激活标识（cordis_run 回执；失败诊断与 UI 卡片用）。 */
+	runId: string;
 	/** 活动动态工具(注册名 = extdyn__name;全量 reconcile 用)。 */
 	customTools: CustomTool[];
 	startedAt: number;
@@ -53,6 +57,7 @@ export interface RuntimePluginSnapshot {
 	purpose: string;
 	packageCount: number;
 	activePackageId?: string;
+	activeRunId?: string;
 	activeToolNames: string[];
 }
 
@@ -61,6 +66,7 @@ export class RuntimeToolRegistry {
 	readonly #plugins = new Map<string, RuntimePlugin>();
 	#pluginSeq = 0;
 	#packageSeq = 0;
+	#runSeq = 0;
 
 	mintPluginId(prefix: string): string {
 		return `${prefix}${String(++this.#pluginSeq).padStart(3, "0")}`;
@@ -68,6 +74,10 @@ export class RuntimeToolRegistry {
 
 	mintPackageId(): string {
 		return `pkg${String(++this.#packageSeq).padStart(3, "0")}`;
+	}
+
+	mintRunId(): string {
+		return `run${String(++this.#runSeq).padStart(3, "0")}`;
 	}
 
 	get(pluginId: string): RuntimePlugin | undefined {
@@ -98,6 +108,7 @@ export class RuntimeToolRegistry {
 			purpose: plugin.purpose,
 			packageCount: plugin.packages.size,
 			activePackageId: plugin.activeRun?.packageId,
+			activeRunId: plugin.activeRun?.runId,
 			activeToolNames: plugin.activeRun?.customTools.map(t => t.name) ?? [],
 		};
 	}
@@ -117,12 +128,14 @@ interface DefineParams {
 	name: string;
 	purpose: string;
 	hostCode: string;
+	idPrefix?: string;
 	pluginId?: string;
 }
 
 interface RunParams {
 	pluginId: string;
 	packageId?: string;
+	mode?: string;
 }
 
 interface SimpleParams {
@@ -140,22 +153,27 @@ export function createExtensionRuntimeTools(
 	registryFor: (ctx: CustomToolContext) => RuntimeToolRegistry,
 ): Array<CustomTool<any, any>> {
 	const defineSchema = type({
-		name: type("string").describe("插件名(非空)"),
-		purpose: type("string").describe("插件用途(非空,一行说明)"),
+		name: type("string").describe("插件名(非空,一行)"),
+		purpose: type("string").describe("插件用途(非空,一行说明它对用户做什么)"),
 		hostCode: type("string").describe(
-			"host 半体代码:async 函数体,调用注入的 defineTool({name,description,parameters,run})",
+			"host 半体:async 函数体。只能调用注入的 defineTool({name,description,parameters,run})、setTimeout、clearTimeout、console;不要写 TypeScript、JSX、import 或 require",
 		),
-		pluginId: type("string").describe("省略 = 新建插件;提供 = 追加不可变版本").optional(),
+		idPrefix: type("string").describe("新插件的语义 id 前缀:3–6 个小写英文字母(如 clock);省略 = dyn").optional(),
+		pluginId: type("string").describe("省略 = 新建插件;提供 = 给该插件追加一个不可变版本").optional(),
 	});
 	const runSchema = type({
-		pluginId: type("string").describe("插件 id(ext_define 返回值)"),
+		pluginId: type("string").describe("插件 id(cordis_define 返回值)"),
 		packageId: type("string").describe("省略 = 激活最新版本").optional(),
+		mode: type("string")
+			.describe("run = 首次激活或重启当前版本(默认);update = 切换到目标版本,要求该插件已在运行")
+			.optional(),
 	});
 	const simpleSchema = type({
 		pluginId: type("string").describe("插件 id"),
 	});
 	const inspectSchema = type({
 		pluginId: type("string").describe("省略 = 全部插件").optional(),
+		packageId: type("string").describe("与 pluginId 同时给出时返回该版本的 hostCode 源码").optional(),
 	});
 
 	const textResult = (text: string): { content: Array<{ type: "text"; text: string }> } => ({
@@ -163,11 +181,11 @@ export function createExtensionRuntimeTools(
 	});
 
 	const defineTool: CustomTool<typeof defineSchema> = {
-		name: "ext_define",
+		name: "cordis_define",
 		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
-		label: "定义动态插件",
+		label: "定义 Cordis 插件",
 		description:
-			"定义动态插件(不可变版本):语法预检通过后存入会话注册表。hostCode 是 async 函数体,可调用注入的 defineTool({name,description,parameters,run}) 声明工具。返回 pluginId/packageId。",
+			"定义一个动态 Cordis 插件版本(不可变包)。只定义、不运行:hostCode 语法预检通过后存入会话注册表,返回 pluginId 与 packageId。hostCode 是 async 函数体,只能调用注入的 defineTool({name,description,parameters,run})、setTimeout、clearTimeout、console;不要写 TypeScript、JSX、import 或 require。插件只存在于当前会话,不写盘。给已有插件追加版本时传 pluginId 与新的 hostCode。",
 		parameters: defineSchema,
 		async execute(
 			_toolCallId: string,
@@ -181,9 +199,16 @@ export function createExtensionRuntimeTools(
 			const p = params as DefineParams;
 			const name = p.name.trim();
 			const purpose = p.purpose.trim();
-			if (name.length === 0) return textResult('{"ok":false,"error":"ext_define needs a non-empty name"}');
-			if (purpose.length === 0) return textResult('{"ok":false,"error":"ext_define needs a non-empty purpose"}');
-			if (p.hostCode.length === 0) return textResult('{"ok":false,"error":"ext_define needs non-empty hostCode"}');
+			const idPrefix = p.idPrefix?.trim() ?? "";
+			if (name.length === 0) return textResult('{"ok":false,"error":"cordis_define needs a non-empty name"}');
+			if (purpose.length === 0) return textResult('{"ok":false,"error":"cordis_define needs a non-empty purpose"}');
+			if (p.hostCode.length === 0)
+				return textResult('{"ok":false,"error":"cordis_define needs non-empty hostCode"}');
+			if (idPrefix.length > 0 && !/^[a-z]{3,6}$/.test(idPrefix)) {
+				return textResult(
+					'{"ok":false,"error":"cordis_define idPrefix must be 3–6 lowercase English letters (for example clock)"}',
+				);
+			}
 			try {
 				precheckCode(p.hostCode, "hostCode");
 			} catch (error) {
@@ -196,7 +221,7 @@ export function createExtensionRuntimeTools(
 				return textResult(`{"ok":false,"error":"plugin ${pluginId} does not exist"}`);
 			}
 			if (!plugin) {
-				const minted = registry.mintPluginId("dyn");
+				const minted = registry.mintPluginId(idPrefix.length > 0 ? idPrefix : "dyn");
 				plugin = {
 					pluginId: minted,
 					sessionId: ctx.sessionManager.getSessionId(),
@@ -221,11 +246,11 @@ export function createExtensionRuntimeTools(
 	};
 
 	const runTool: CustomTool<typeof runSchema> = {
-		name: "ext_run",
+		name: "cordis_run",
 		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
-		label: "运行动态插件",
+		label: "运行 Cordis 插件",
 		description:
-			"激活插件版本:vm 沙箱执行 host 半体,defineTool 声明的工具注册进会话工具链(extdyn__ 前缀),下个模型调用即可用。同一插件重新运行 = 热更新版本。",
+			"激活一个插件版本:在 vm 沙箱执行 host 半体,defineTool 声明的工具立即注册进会话工具链(extdyn__ 前缀),下一次模型调用即可用。mode=run(默认)用于首次激活或重启当前版本;mode=update 用于切换到目标版本,要求该插件已在运行。同一插件重新运行 = 热更新版本,旧版本工具被替换。",
 		parameters: runSchema,
 		async execute(
 			_toolCallId: string,
@@ -237,9 +262,18 @@ export function createExtensionRuntimeTools(
 			const session = sessionOf(ctx);
 			if (!session) return textResult('{"ok":false,"error":"no live session"}');
 			const p = params as RunParams;
+			const mode = p.mode?.trim() || "run";
+			if (mode !== "run" && mode !== "update") {
+				return textResult('{"ok":false,"error":"cordis_run mode must be \\"run\\" or \\"update\\""}');
+			}
 			const registry = registryFor(ctx);
 			const plugin = registry.get(p.pluginId);
 			if (!plugin) return textResult(`{"ok":false,"error":"plugin ${p.pluginId} does not exist"}`);
+			if (mode === "update" && !plugin.activeRun) {
+				return textResult(
+					`{"ok":false,"error":"cordis_run mode=update requires plugin ${p.pluginId} to be running; use mode=run for the first activation"}`,
+				);
+			}
 			const packageId = p.packageId ?? [...plugin.packages.keys()].sort().at(-1);
 			const version = packageId ? plugin.packages.get(packageId) : undefined;
 			if (!version) {
@@ -312,8 +346,10 @@ export function createExtensionRuntimeTools(
 			});
 			// 写入活动 run 后全量 reconcile(本插件旧工具被同 plugins 覆盖,
 			// 其他插件工具保留)。
+			const runId = registry.mintRunId();
 			plugin.activeRun = {
 				packageId: version.packageId,
+				runId,
 				customTools,
 				startedAt: Date.now(),
 			};
@@ -324,6 +360,8 @@ export function createExtensionRuntimeTools(
 						ok: true,
 						pluginId: plugin.pluginId,
 						packageId: version.packageId,
+						runId,
+						mode,
 						tools: customTools.map(t => t.name),
 					},
 					null,
@@ -334,10 +372,11 @@ export function createExtensionRuntimeTools(
 	};
 
 	const stopTool: CustomTool<typeof simpleSchema> = {
-		name: "ext_stop",
+		name: "cordis_stop",
 		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
-		label: "停用动态插件",
-		description: "停用插件:移除该插件全部动态工具,会话工具链立即 reconcile。",
+		label: "停用 Cordis 插件",
+		description:
+			"停用插件:移除该插件全部动态工具,会话工具链立即 reconcile。插件定义与全部版本保留,之后可用 cordis_run 重新激活。",
 		parameters: simpleSchema,
 		async execute(
 			_toolCallId: string,
@@ -360,10 +399,10 @@ export function createExtensionRuntimeTools(
 	};
 
 	const undefineTool: CustomTool<typeof simpleSchema> = {
-		name: "ext_undefine",
+		name: "cordis_undefine",
 		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
-		label: "删除动态插件",
-		description: "删除插件及全部版本;活动 run 先停用。",
+		label: "删除 Cordis 插件",
+		description: "删除插件及其全部版本,活动 run 先停用。只在确认用户不再需要该插件时使用;不可恢复。",
 		parameters: simpleSchema,
 		async execute(
 			_toolCallId: string,
@@ -389,10 +428,11 @@ export function createExtensionRuntimeTools(
 	};
 
 	const inspectTool: CustomTool<typeof inspectSchema> = {
-		name: "ext_inspect",
+		name: "cordis_inspect",
 		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
-		label: "检查动态插件",
-		description: "会话动态插件注册表快照:插件/版本数/活动 run/工具名。只读。",
+		label: "检查 Cordis 插件",
+		description:
+			"会话动态插件注册表快照:插件/版本数/活动 run/工具名。只读。pluginId 与 packageId 同时给出时额外返回该不可变版本的 hostCode 源码,用于失败后原位修复(追加修正版本,不要另建插件)。",
 		parameters: inspectSchema,
 		async execute(
 			_toolCallId: string,
@@ -402,24 +442,36 @@ export function createExtensionRuntimeTools(
 			_signal?: AbortSignal,
 		): Promise<AgentToolResult<any, typeof inspectSchema.infer>> {
 			const registry = registryFor(ctx);
-			const p = params as { pluginId?: string };
+			const p = params as { pluginId?: string; packageId?: string };
 			if (p.pluginId) {
 				const plugin = registry.get(p.pluginId);
+				if (!plugin) return textResult(`{"ok":false,"error":"plugin ${p.pluginId} does not exist"}`);
+				const base = {
+					pluginId: plugin.pluginId,
+					name: plugin.name,
+					purpose: plugin.purpose,
+					packageCount: plugin.packages.size,
+					activePackageId: plugin.activeRun?.packageId,
+					activeRunId: plugin.activeRun?.runId,
+					activeToolNames: plugin.activeRun?.customTools.map(t => t.name) ?? [],
+				};
+				const version = p.packageId ? plugin.packages.get(p.packageId) : undefined;
+				if (p.packageId && !version) {
+					return textResult(`{"ok":false,"error":"package ${p.packageId} not found"}`);
+				}
 				return textResult(
 					JSON.stringify(
-						plugin
+						version
 							? {
 									ok: true,
-									plugin: {
+									plugin: base,
+									source: {
 										pluginId: plugin.pluginId,
-										name: plugin.name,
-										purpose: plugin.purpose,
-										packageCount: plugin.packages.size,
-										activePackageId: plugin.activeRun?.packageId,
-										activeToolNames: plugin.activeRun?.customTools.map(t => t.name) ?? [],
+										packageId: version.packageId,
+										hostCode: version.hostCode,
 									},
 								}
-							: { ok: false, error: `plugin ${p.pluginId} does not exist` },
+							: { ok: true, plugin: base },
 						null,
 						2,
 					),

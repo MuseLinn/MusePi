@@ -4896,16 +4896,18 @@ export class DaemonServer {
 				);
 			}
 			case "commands.list": {
-				// Slash-command catalog for the GUI composer's / completion
-				// (same source of truth as the TUI's builtin registry, plus the
-				// TUI's skill commands when skills.enableSkillCommands is on —
-				// default true; /skill:<name> is a real agent-side invocation).
-				// `tuiOnly` marks entries without an ACP/text-mode `handle` —
-				// session.slashCommand reports those "tui-only", so the GUI
-				// hides them (minus its own intercepted panel commands)
-				// instead of letting the user fire commands that can only
-				// answer "该命令仅在终端中可用".
+				// Slash-command catalog for one surface: the TUI dispatches its own
+				// registry, ACP advertises its text-mode slice, and the GUI asks for
+				// `surface: "gui"` here. `surfaces` is declared on each command (or
+				// derived from its handlers), so a GUI panel command and a terminal
+				// dashboard are decided at the command definition — not by the
+				// client guessing from handler presence. `tuiOnly` stays on the wire
+				// for older clients that still read it.
+				const paramsSurface =
+					typeof params === "object" && params !== null ? (params as { surface?: unknown }).surface : undefined;
+				const surface = paramsSurface === "acp" ? "acp" : "gui";
 				const { BUILTIN_SLASH_COMMANDS_INTERNAL } = await import("../slash-commands/builtin-registry");
+				const { commandSurfaces, servesSurface } = await import("../slash-commands/surfaces");
 				const { getSkillSlashCommandName } = await import("../extensibility/skills");
 				const list: {
 					name: string;
@@ -4914,7 +4916,8 @@ export class DaemonServer {
 					kind: "command" | "skill";
 					category: string;
 					tuiOnly: boolean;
-				}[] = BUILTIN_SLASH_COMMANDS_INTERNAL.map(c => ({
+					surfaces: readonly string[];
+				}[] = BUILTIN_SLASH_COMMANDS_INTERNAL.filter(c => servesSurface(c, surface)).map(c => ({
 					name: c.name,
 					description: c.description,
 					subcommands: c.subcommands?.map((sc: { name: string; description?: string }) => ({
@@ -4923,7 +4926,8 @@ export class DaemonServer {
 					})),
 					kind: "command",
 					category: slashCommandCategory(c.name),
-					tuiOnly: typeof c.handle !== "function",
+					tuiOnly: !commandSurfaces(c).includes("gui"),
+					surfaces: commandSurfaces(c),
 				}));
 				// Inline extensions (pi.registerCommand at session bootstrap —
 				// autoresearch, task-card style) register into the SESSION's
@@ -4947,6 +4951,7 @@ export class DaemonServer {
 						kind: "command",
 						category: slashCommandCategory(cmd.name),
 						tuiOnly: false,
+						surfaces: ["tui", "gui"],
 					});
 				}
 				for (const skill of await this.#services.get<MarketplaceService>("marketplace").getSkills()) {
@@ -4956,8 +4961,9 @@ export class DaemonServer {
 						kind: "skill",
 						// Second badge = discovery scope (project vs user).
 						category: skill.source.split(":")[1] === "project" ? "project" : "user",
-						// Skills are agent-side invocations — never tui-only.
+						// Skills are agent-side invocations — every surface can send them.
 						tuiOnly: false,
+						surfaces: ["tui", "acp", "gui"],
 					});
 				}
 				return list;

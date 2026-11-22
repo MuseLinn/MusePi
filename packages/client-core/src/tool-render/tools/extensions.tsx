@@ -56,6 +56,7 @@ interface Payload {
 	plugins: PluginEntry[];
 	plugin: PluginEntry | null;
 	restoredFrom: string | null;
+	source: { pluginId: string; packageId: string; hostCode: string } | null;
 }
 
 function strings(value: unknown): string[] {
@@ -147,7 +148,16 @@ function payloadOf(result: ToolRenderProps["result"]): Payload | null {
 		plugins: pluginEntries(parsed.plugins),
 		plugin: pluginEntry(parsed.plugin),
 		restoredFrom: str(parsed.restoredFrom),
+		source: parseSource(parsed.source),
 	};
+}
+
+function parseSource(value: unknown): { pluginId: string; packageId: string; hostCode: string } | null {
+	if (!isRecord(value)) return null;
+	const pluginId = str(value.pluginId);
+	const packageId = str(value.packageId);
+	const hostCode = str(value.hostCode);
+	return pluginId !== null && packageId !== null && hostCode !== null ? { pluginId, packageId, hostCode } : null;
 }
 
 function statusBadge(payload: Payload | null): ReactNode {
@@ -179,7 +189,22 @@ function pluginIdArg(args: Record<string, unknown>): string | null {
 	return str(args.pluginId);
 }
 
-function Summary({ name, args, result }: ToolRenderProps): ReactNode {
+/** Old transcript names for the dynamic-plugin tools, before the Cordis rename. */
+const CORDIS_ALIASES: Readonly<Record<string, string>> = {
+	ext_define: "cordis_define",
+	ext_inspect: "cordis_inspect",
+	ext_run: "cordis_run",
+	ext_stop: "cordis_stop",
+	ext_undefine: "cordis_undefine",
+};
+
+/** Canonical tool name: old `ext_*` transcripts render as their `cordis_*` card. */
+function canonicalToolName(name: string): string {
+	return CORDIS_ALIASES[name] ?? name;
+}
+
+function Summary({ name: wireName, args, result }: ToolRenderProps): ReactNode {
+	const name = canonicalToolName(wireName);
 	const payload = payloadOf(result);
 	switch (name) {
 		case "extensions_list":
@@ -221,7 +246,8 @@ function Summary({ name, args, result }: ToolRenderProps): ReactNode {
 				</>
 			);
 		}
-		case "ext_define": {
+		case "ext_define":
+		case "cordis_define": {
 			const pluginName = payload?.name ?? str(args.name);
 			if (pluginName === null || pluginName.length === 0) return null;
 			const purpose = payload?.purpose ?? str(args.purpose);
@@ -384,6 +410,9 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 			{payload.plugins.length > 0 && <div className="tv-list">{payload.plugins.map(pluginRow)}</div>}
 			{payload.plugin !== null && <div className="tv-list">{pluginRow(payload.plugin)}</div>}
 			{errorsBlock(t("tools.extensionErrors"), payload.errors)}
+			{payload.source !== null && (
+				<Output text={payload.source.hostCode} title={t("tools.pluginSource")} variant="code" maxLines={16} />
+			)}
 			{name === "extension_validate" && success && <Note tone="ok">{t("tools.extensionPassed")}</Note>}
 		</>
 	);
@@ -394,6 +423,11 @@ export const extensionsRenderer: ToolRenderer = { Summary, Body };
 /** Extension/plugin lifecycle wire names — the run summary counts these as
  *  plugin operations instead of file edits. */
 export const EXTENSION_TOOL_NAMES: readonly string[] = [
+	"cordis_define",
+	"cordis_inspect",
+	"cordis_run",
+	"cordis_stop",
+	"cordis_undefine",
 	"ext_define",
 	"ext_inspect",
 	"ext_run",

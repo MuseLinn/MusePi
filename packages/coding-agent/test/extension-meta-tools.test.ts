@@ -5,30 +5,44 @@ import path from "node:path";
 import { createExtensionManagerTools } from "@musepi/pi-coding-agent/daemon/extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "@musepi/pi-coding-agent/daemon/plugin-runtime-tools";
 import {
+	CORDIS_TOOL_NAMES,
+	CREATION_RING_TOOL_NAMES,
 	EXTENSION_META_TOOL_NAMES,
 	isExtensionMetaToolName,
+	LEGACY_EXTENSION_TOOL_NAMES,
 } from "@musepi/pi-coding-agent/extensibility/extension-meta-tools";
 import { buildSystemPrompt } from "@musepi/pi-coding-agent/system-prompt";
 
 const sessionOf = () => null;
 
 describe("extension meta tools (issue #38 Step 2)", () => {
-	test("constants: 10 names, predicate matches exactly", () => {
-		expect(EXTENSION_META_TOOL_NAMES).toHaveLength(10);
+	test("constants: 11 names, predicate matches exactly", () => {
+		expect(EXTENSION_META_TOOL_NAMES).toHaveLength(11);
 		for (const name of EXTENSION_META_TOOL_NAMES) {
 			expect(isExtensionMetaToolName(name)).toBe(true);
 		}
-		// extensions_list 保留常驻,不属于默认摘除集合
-		expect(isExtensionMetaToolName("extensions_list")).toBe(false);
+		// extensions_list 属于创造环(插件管理面 parity),不再常驻
+		expect(isExtensionMetaToolName("extensions_list")).toBe(true);
 		expect(isExtensionMetaToolName("read")).toBe(false);
 		expect(isExtensionMetaToolName("")).toBe(false);
 	});
 
-	test("lifecycle factory: 5 meta tools default-inactive, extensions_list stays active", () => {
+	test("the creation ring is Cordis plus the inventory, disjoint from the Track B loader", () => {
+		expect(CREATION_RING_TOOL_NAMES.filter(name => name !== "extensions_list")).toEqual([...CORDIS_TOOL_NAMES]);
+		expect(CREATION_RING_TOOL_NAMES).toContain("extensions_list");
+		expect(LEGACY_EXTENSION_TOOL_NAMES.every(name => name.startsWith("extension_"))).toBe(true);
+		expect(new Set(EXTENSION_META_TOOL_NAMES).size).toBe(
+			CREATION_RING_TOOL_NAMES.length + LEGACY_EXTENSION_TOOL_NAMES.length,
+		);
+		for (const name of CREATION_RING_TOOL_NAMES) expect(LEGACY_EXTENSION_TOOL_NAMES).not.toContain(name);
+	});
+
+	test("lifecycle factory: all six tools default-inactive (inventory joins the ring)", () => {
 		const tools = createExtensionManagerTools(sessionOf);
 		const byName = new Map(tools.map(t => [t.name, t]));
 		expect(byName.has("extensions_list")).toBe(true);
 		for (const name of [
+			"extensions_list",
 			"extension_load",
 			"extension_reload",
 			"extension_status",
@@ -37,18 +51,24 @@ describe("extension meta tools (issue #38 Step 2)", () => {
 		]) {
 			expect(byName.get(name)?.defaultInactive).toBe(true);
 		}
-		expect(byName.get("extensions_list")?.defaultInactive).not.toBe(true);
-		// 工厂产出与常量集合一致(lifecycle 侧 5 个)
+		// 工厂产出与常量集合一致(lifecycle 侧 6 个)
 		const inactive = tools.filter(t => t.defaultInactive === true).map(t => t.name);
 		expect(inactive.sort()).toEqual(
-			["extension_load", "extension_reload", "extension_rollback", "extension_status", "extension_validate"].sort(),
+			[
+				"extensions_list",
+				"extension_load",
+				"extension_reload",
+				"extension_rollback",
+				"extension_status",
+				"extension_validate",
+			].sort(),
 		);
 	});
 
-	test("runtime factory: all 5 bootstrap tools default-inactive", () => {
+	test("runtime factory: the 5 Cordis tools are the creation ring, all default-inactive", () => {
 		const registry = new RuntimeToolRegistry();
 		const tools = createExtensionRuntimeTools(sessionOf, () => registry);
-		expect(tools).toHaveLength(5);
+		expect(tools.map(t => t.name).sort()).toEqual([...CORDIS_TOOL_NAMES].sort());
 		for (const t of tools) {
 			expect(EXTENSION_META_TOOL_NAMES).toContain(t.name);
 			expect(t.defaultInactive).toBe(true);
@@ -85,7 +105,7 @@ describe("extension meta tools (issue #38 Step 2)", () => {
 
 		// inventory 本体确实包含新增的工具名(证明差异只发生在 inventory 区段)
 		expect(metaText).toContain("extension_load");
-		expect(metaText).toContain("ext_define");
+		expect(metaText).toContain("cordis_define");
 		expect(baseText).not.toContain("extension_load");
 
 		// 差异起点不得早于 inventory 标记(防回归:工具名泄漏进正文)

@@ -1372,8 +1372,8 @@ export class DaemonSessionHost {
 		});
 	}
 
-	/** P2 动态自举:会话级动态插件工具链(ext_define/ext_run/ext_stop/
-	 *  ext_undefine/ext_inspect)——实现见 plugin-runtime-tools.ts。
+	/** P2 动态自举:会话级动态 Cordis 插件工具链(cordis_define/cordis_run/
+	 *  cordis_stop/cordis_undefine/cordis_inspect)——实现见 plugin-runtime-tools.ts。
 	 *  每会话独立 registry,沙箱(vm)承载 host 半体。 */
 	#dynamicRegistries = new Map<string, RuntimeToolRegistry>();
 

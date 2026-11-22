@@ -12,6 +12,9 @@ export interface SubcommandDef {
 	usage?: string;
 }
 
+/** A surface that advertises slash commands. */
+export type SlashCommandSurface = "tui" | "acp" | "gui";
+
 /** Declarative builtin slash command metadata used by autocomplete and help UI. */
 export interface BuiltinSlashCommand {
 	name: string;
@@ -27,6 +30,14 @@ export interface BuiltinSlashCommand {
 	inlineHint?: string;
 	/** TUI-only dynamic status text for command-name autocomplete. Static `description` remains canonical for ACP/help. */
 	getTuiAutocompleteDescription?: (runtime: TuiSlashCommandRuntime) => string | undefined;
+	/**
+	 * Surfaces this command is offered on. Omitted = derived from its handlers:
+	 * a TUI handler serves `tui`, a text-mode `handle` serves `acp` and `gui`.
+	 * Set it explicitly when the handler is not the whole story — a GUI panel
+	 * that intercepts a TUI-only command, or a TUI dashboard action that the
+	 * GUI manages through its own surface.
+	 */
+	surfaces?: readonly SlashCommandSurface[];
 }
 
 /** Parsed slash-command text after stripping the leading "/". */

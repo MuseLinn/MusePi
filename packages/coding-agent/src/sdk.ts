@@ -96,7 +96,11 @@ import {
 } from "./extensibility/custom-commands";
 import { discoverCustomToolPaths, loadCustomTools, type ToolPathWithSource } from "./extensibility/custom-tools";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./extensibility/custom-tools/types";
-import { EXTENSION_META_TOOL_NAMES } from "./extensibility/extension-meta-tools";
+import {
+	CREATION_RING_TOOL_NAMES,
+	EXTENSION_META_TOOL_NAMES,
+	isCreationRingToolName,
+} from "./extensibility/extension-meta-tools";
 import {
 	discoverAndLoadExtensions,
 	discoverExtensionPaths,
@@ -172,6 +176,7 @@ import {
 	type ScopedPromptHostLedger,
 } from "./prompts/host";
 import { type ProjectContextHolder, registerProjectContextSections } from "./prompts/project-context";
+import cordisPluginsTemplate from "./prompts/system/cordis-plugins.md" with { type: "text" };
 import extensionsInventoryTemplate from "./prompts/system/extensions-inventory.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
@@ -2685,6 +2690,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			);
 		};
 		rebuildExtensionInventory(extensionsResult.extensions);
+		// Cordis creation guide: the tool ring is active, so the model gets the
+		// workflow, identity rules, and the Track A/Track B boundary in the same
+		// prompt instead of inferring them from tool schemas alone. Removed again
+		// when a preset switch turns the ring off.
+		const applyCordisGuide = (): void => {
+			modeRuntime.composer.removeBySource("cordis:guide");
+			if (settings.get("tools.extensionMetaTools") !== true) return;
+			modeRuntime.composer.add({ name: "cordis-plugins", order: 24, text: cordisPluginsTemplate }, "cordis:guide");
+		};
+		applyCordisGuide();
 
 		// Load inline extensions from factories
 		if (inlineExtensions.length > 0) {
@@ -3886,13 +3901,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 		}
 		// Settings/preset override (tools.extensionMetaTools, e.g. the creator
-		// preset): surface the extension bootstrap ring (extension_load/reload/
-		// status/validate/rollback + ext_define/run/stop/undefine/inspect) as
-		// top-level active tools from session start. Without this they only
-		// mount as xd:// devices and need /extensions for top-level access.
+		// preset): surface the Cordis creation ring as top-level active tools from
+		// session start. Track B's extension_* loader is a compatibility surface
+		// and is never activated by this ring. Without the flag the ring only
+		// mounts as xd:// devices and needs /extensions for top-level access.
 		// An explicit toolNames list means the caller owns the set — don't widen.
 		if (extensionMetaToolsRequested && !options.toolNames) {
-			for (const name of EXTENSION_META_TOOL_NAMES) {
+			for (const name of CREATION_RING_TOOL_NAMES) {
 				if (toolRegistry.has(name) && !initialToolNames.includes(name)) initialToolNames.push(name);
 			}
 		}
@@ -3937,10 +3952,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			for (const name of initialToolNames) {
 				const tool = toolRegistry.get(name);
 				const explicitlyRequested = explicitlyRequestedToolNameSet?.has(name) === true;
-				// tools.extensionMetaTools pins the bootstrap ring top-level: mounting
-				// them as xd:// devices would re-hide the very tools the override
-				// just surfaced.
-				const pinnedTopLevel = extensionMetaToolsRequested && EXTENSION_META_TOOL_NAMES.includes(name);
+				// Creation-ring tools stay top-level: mounting them as xd:// devices
+				// would re-hide the very tools the override just surfaced.
+				const pinnedTopLevel = extensionMetaToolsRequested && CREATION_RING_TOOL_NAMES.includes(name);
 				if (
 					tool &&
 					xdevReadAvailable &&
@@ -4335,6 +4349,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			// 1) composer:卸载旧 mode 区块 → 挂新 mode 区块(沿用初始 base,§5.6)。
 			if (prev?.id) modeRuntime.composer.removeBySource(`mode:${prev.id}`);
 			for (const section of next.prompt) modeRuntime.composer.add({ ...section, source: `mode:${next.id}` });
+			// 2) the Cordis creation guide follows the creation-ring override, not
+			//    the mode itself: switching to creator adds it, leaving removes it.
+			applyCordisGuide();
 			// 2) settings:清旧 mode 的运行时覆盖 → 应用新 mode 的(用户全局显式值
 			//    最后生效,§4.3;override/clearOverride 非持久,不污染会话配置)。
 			const toolSettingsSnapshot = (): string =>
@@ -4396,6 +4413,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					if (!defaultInactiveToolNames.has(name)) nextActive.add(name);
 				}
 				for (const name of EXTENSION_META_TOOL_NAMES) {
+					// Only the creation ring follows the preset flag. The Track B
+					// compatibility loader is left exactly as the session had it
+					// (e.g. activated by an explicit /extensions), so a mode switch
+					// never silently grants or revokes it.
+					if (!isCreationRingToolName(name)) continue;
 					if (settings.get("tools.extensionMetaTools") === true && !options.toolNames && toolRegistry.has(name)) {
 						nextActive.add(name);
 					} else {

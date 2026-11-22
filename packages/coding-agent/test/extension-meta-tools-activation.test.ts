@@ -6,7 +6,11 @@ import { type } from "@musepi/musepi-type";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { EXTENSION_META_TOOL_NAMES } from "@musepi/pi-coding-agent/extensibility/extension-meta-tools";
+import {
+	CREATION_RING_TOOL_NAMES,
+	EXTENSION_META_TOOL_NAMES,
+	LEGACY_EXTENSION_TOOL_NAMES,
+} from "@musepi/pi-coding-agent/extensibility/extension-meta-tools";
 import type { CreateAgentSessionOptions, CustomTool } from "@musepi/pi-coding-agent/sdk";
 import { createAgentSession, discoverAuthStorage } from "@musepi/pi-coding-agent/sdk";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
@@ -14,11 +18,11 @@ import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
 /**
  * Contract: `tools.extensionMetaTools` (settings/preset override — the creator
- * preset sets it) must surface the extension bootstrap ring
- * (extension_load/reload/status/validate/rollback + ext_define/run/stop/
- * undefine/inspect) as top-level active tools from session start, instead of
- * the default state where defaultInactive custom tools only mount as xd://
- * devices and need /extensions for top-level access.
+ * preset sets it) must surface the Cordis creation ring
+ * (cordis_define/run/stop/undefine/inspect) as top-level active tools from
+ * session start. Track B's legacy extension loader (extension_*) is a
+ * compatibility surface: it stays default-inactive, mounts as xd:// devices,
+ * and is only activated by an explicit /extensions.
  */
 describe("tools.extensionMetaTools initial activation", () => {
 	let modelRegistry!: ModelRegistry;
@@ -101,7 +105,7 @@ describe("tools.extensionMetaTools initial activation", () => {
 		}
 	});
 
-	it("activates the extension meta ring top-level when tools.extensionMetaTools is on", async () => {
+	it("activates the creation ring top-level when tools.extensionMetaTools is on", async () => {
 		const tempDir = makeTempDir();
 		const settings = Settings.isolated({ "tools.extensionMetaTools": true });
 		const { session } = await createAgentSession({
@@ -110,16 +114,41 @@ describe("tools.extensionMetaTools initial activation", () => {
 			customTools: metaRingTools,
 		});
 		try {
-			for (const name of EXTENSION_META_TOOL_NAMES) {
+			for (const name of CREATION_RING_TOOL_NAMES) {
 				expect(session.getActiveToolNames()).toContain(name);
 				expect(session.getXdevToolEntries().map(entry => entry.name)).not.toContain(name);
 			}
 			const prompt = session.systemPrompt.join("\n");
-			for (const name of EXTENSION_META_TOOL_NAMES) {
+			for (const name of CREATION_RING_TOOL_NAMES) {
 				// Top-level tools render label-first with the name in backticks.
 				expect(prompt).toContain(`\`${name}\``);
 			}
-			expect(prompt).not.toContain("xd://extension_load");
+			expect(prompt).not.toContain("xd://cordis_define");
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("keeps the Track B extension loader default-inactive under the creator ring", async () => {
+		const tempDir = makeTempDir();
+		const settings = Settings.isolated({ "tools.extensionMetaTools": true });
+		const { session } = await createAgentSession({
+			...baseOptions(tempDir),
+			settings,
+			customTools: metaRingTools,
+		});
+		try {
+			const active = session.getActiveToolNames();
+			const mounted = session.getXdevToolEntries().map(entry => entry.name);
+			for (const name of LEGACY_EXTENSION_TOOL_NAMES) {
+				expect(active).not.toContain(name);
+				// Compatibility stays reachable only as a device, not as a top-level tool.
+				expect(mounted).toContain(name);
+			}
+			// The full meta set still owns every name, so /extensions can activate them all.
+			expect(EXTENSION_META_TOOL_NAMES).toHaveLength(
+				CREATION_RING_TOOL_NAMES.length + LEGACY_EXTENSION_TOOL_NAMES.length,
+			);
 		} finally {
 			await session.dispose();
 		}

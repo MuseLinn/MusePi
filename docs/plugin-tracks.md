@@ -23,6 +23,8 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **一句话**：比 omp 多一套 cordis 插件系统，比 dsh 多一套其他 agent 扩展的前向兼容。
 
+**创造模式只面向 Track A**：creator 预设激活的是 Cordis 环（`cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine` / `cordis_inspect`），模型默认交付具名导出的 Track A 插件包。Track B 的会话加载器（`extension_load` / `reload` / `status` / `validate` / `rollback`）是**兼容面**，不属于创造工具集、默认不激活，只在用户明确处理旧扩展时通过扩展管理面（TUI 面板 / GUI 扩展页）显式启用；`/extensions` 只是 TUI 面入口。模型不应把 Track B 入口当成新插件的写法。
+
 Track A 入口必须使用**具名导出**：`export const name`、`export const inject`、可选的 `export const provide` / `export const Config`、`export function apply(ctx, config)`。不要写 `export default apply` 或 `export default { ... }`：前者会被宿主解析成 legacy bare factory，`name` / `inject` / `provide` 全部失效；后者不是 dsh 的入口约定。MusePi 的 loader 仍兼容旧写法，但新插件一律用具名导出。
 Track A 的 `apply` 收到同一个对象，既是 `pi`（平铺兼容面），也是 `ctx`（dsh 风格服务面）。新插件应使用 `ctx.tools.register`、`ctx.commands.register`、`ctx.settings.register`、`ctx.prompts.register`、`ctx.slots.register`、`ctx.rpc.register`、`ctx.memory.registerBackendProvider`、`ctx.hmr.onChange`；`pi.registerTool` 等平铺方法只作为既有插件的兼容别名保留。
 
