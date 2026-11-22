@@ -14,23 +14,47 @@
 	 * two custom ladders — the settings detent ladder and the thinking
 	 * ladder — plus the native `.gui-range` inputs that opt in (notification
 	 * master volume, companion size). A slider that needs a new size or colour
-	 * extends THIS family instead of painting its own rail. The inset is the
-	 * knob radius: the rail is laid out inset by it, so an end stop never
-	 * hangs past the rail, and the thinking slider measures that rail instead
-	 * of restating the radius in JS. Desktop voice settings have no slider
-	 * (`tts.rate` is a rolling counter); the mobile `VoicePanel` rate is its
-	 * own control in `packages/client-core`. */
-	--gui-slider-track: 6px;
+	 * extends THIS family instead of painting its own rail. Desktop voice
+	 * settings have no slider (`tts.rate` is a rolling counter); the mobile
+	 * `VoicePanel` rate is its own control in `packages/client-core`.
+	 *
+	 * Two heights, not one: `--gui-slider-hit` is the pad the pointer can grab,
+	 * `--gui-slider-track` the groove drawn inside it. The pad is bigger than
+	 * the ink on purpose — a 6px rail is a 6px target — while the groove stays
+	 * a single rounded band, the inline shape the reference menu uses. The
+	 * handle rides inside the groove (18px in 22px) and `--gui-slider-inset` is
+	 * its radius: the invisible measured rail is inset by that radius, so an end
+	 * stop never hangs past the pill, and the slider measures that rail instead
+	 * of restating the radius in JS. */
+	--gui-slider-hit: 28px;
+	--gui-slider-track: 22px;
 	--gui-slider-dot-size: 4px;
 	--gui-slider-knob-size: 18px;
 	--gui-slider-inset: calc(var(--gui-slider-knob-size) / 2);
 	--gui-slider-rest: color-mix(in oklab, var(--color-text) 16%, transparent);
+	--gui-slider-hairline: color-mix(in oklab, var(--color-text) 14%, transparent);
 	--gui-slider-fill: var(--color-accent);
 	--gui-slider-fill-hot: color-mix(in oklab, var(--color-accent) 72%, var(--color-text));
-	--gui-slider-dot: color-mix(in oklab, var(--color-text) 42%, transparent);
-	--gui-slider-dot-on: color-mix(in oklab, var(--color-accent) 70%, var(--color-text));
-	--gui-slider-knob: var(--color-accent);
-	--gui-slider-knob-rim: var(--color-surface-raised);
+	/* Unreached detents: muted text ink, measured against the groove at 3.2:1
+	 * light and 4.1:1 dark. 42% was 2.3:1 in the light scheme — under the 3:1
+	 * floor for graphical objects — and 55% is still clearly weaker than the
+	 * opaque on-accent ink of a reached detent, so the reached/unreached
+	 * hierarchy survives the contrast fix. */
+	--gui-slider-dot: color-mix(in oklab, var(--color-text) 55%, transparent);
+	/* Filled detents always sit ON the accent fill (the fill runs from the box
+	 * edge to the handle, so even rung 0's dot is inside it), so they take the
+	 * on-accent ink: the accent itself would disappear into the fill. Opaque,
+	 * not a mix: the 62% mix measured 2.4–3.1:1 across the light fill and
+	 * 3.2–3.4:1 in the dark one, i.e. under the 3:1 floor for graphical objects
+	 * over most of the band, and the filled dots thinned out exactly where the
+	 * ladder reads as "selected up to here". Opaque measures 3.7–5.3:1 light
+	 * and 7.0–8.2:1 dark — above the floor at every position. */
+	--gui-slider-dot-on: var(--color-accent-fg);
+	/* The handle sits on the accent fill, so it takes the page's text ink: the
+	 * accent is mid-luminance in both schemes, which makes text ink the colour
+	 * that always contrasts with it. An accent disc needed a rim to separate it
+	 * from its own fill and that rim read as a heavy dark ring at this size. */
+	--gui-slider-knob: var(--color-text);
 	--gui-slider-knob-shadow: 0 1px 3px color-mix(in oklab, var(--color-text) 28%, transparent);
 	--gui-slider-focus: 0 0 0 3px color-mix(in oklab, var(--color-accent) 40%, transparent);
 	--gui-slider-hover-scale: 1.08;
@@ -3382,130 +3406,25 @@ body.gui-resizing .gui-pane-right {
 /* Numeric setting with a declared preset ladder: one detent per preset, so a
  * release and the arrow keys can only land on supported values. Index-spaced
  * because preset values are frequently non-linear (1, 2.5, 5, 10, 20, 50…).
- * Geometry and states come from the shared slider family (`--gui-slider-*`,
- * declared in gui-chat.css): the settings ladder and the thinking ladder are
- * the same track, fill, detents and knob; only the labels differ.
  *
- * `--gui-ladder-p` is the fractional rung the thumb is drawn at: the pointer
- * glues the thumb to itself for the whole gesture, and the release drops
- * `[data-dragging]` so `left` eases from that position to the committed rung —
- * a drag reads as one continuous travel, not a row of jumps. */
-.gui-ladder {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 6px;
+ * The track is the family's (`.gui-slider-track` via `SliderTrack`), so this
+ * ladder and the thinking ladder are one control with two heads; only this
+ * head differs: with no section label to sit beside, the value takes the
+ * line above the track. The settings row's own label already names the
+ * setting to the left, so the head carries the value alone. */
+.gui-slider--detent {
+	flex: none;
 	width: 210px;
 	max-width: 42vw;
 }
-
-.gui-ladder-value {
-	max-width: 100%;
-	padding: 0 7px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: var(--ui-font-size-xs);
-	font-variant-numeric: tabular-nums;
+.gui-slider--detent .gui-slider-head {
+	justify-content: flex-end;
+}
+/* The detent ladder sits at the end of a settings row whose label already
+ * names the setting, so its head carries the value alone. */
+.gui-slider--detent .gui-slider-value {
+	font-weight: 400;
 	color: var(--color-text-muted);
-}
-
-.gui-ladder-track {
-	position: relative;
-	/* Inset by the knob radius so the extreme detents stay inside the row
-	 * instead of hanging half a circle past its right edge. */
-	width: calc(100% - var(--gui-slider-inset) * 2);
-	margin: 0 var(--gui-slider-inset);
-	height: 22px;
-	cursor: pointer;
-	touch-action: none;
-}
-
-.gui-ladder-track:focus-visible {
-	/* A 210px outline box reads as a second, unrelated frame around the rail;
-	 * the halo on the thumb marks the focused control without redrawing the
-	 * track's geometry. */
-	outline: none;
-}
-
-.gui-ladder-track:focus-visible .gui-ladder-thumb {
-	box-shadow: var(--gui-slider-focus);
-}
-
-.gui-ladder-rail,
-.gui-ladder-fill {
-	position: absolute;
-	top: 50%;
-	left: 0;
-	height: var(--gui-slider-track);
-	border-radius: var(--radius-full);
-	transform: translateY(-50%);
-}
-
-.gui-ladder-rail {
-	right: 0;
-	background: var(--gui-slider-rest);
-}
-
-.gui-ladder-fill {
-	width: calc(100% * var(--gui-ladder-p, 0));
-	background: linear-gradient(90deg, var(--gui-slider-fill-hot), var(--gui-slider-fill));
-}
-
-.gui-ladder-tick {
-	position: absolute;
-	top: 50%;
-	left: calc(100% * var(--gui-ladder-dot-p, 0));
-	width: var(--gui-slider-dot-size);
-	height: var(--gui-slider-dot-size);
-	border-radius: var(--radius-full);
-	transform: translate(-50%, -50%);
-	background: var(--gui-slider-dot);
-	pointer-events: none;
-	transition: background-color 120ms ease;
-}
-
-.gui-ladder-tick--on {
-	background: var(--gui-slider-dot-on);
-}
-
-.gui-ladder-thumb {
-	position: absolute;
-	top: 50%;
-	left: calc(100% * var(--gui-ladder-p, 0));
-	width: var(--gui-slider-knob-size);
-	height: var(--gui-slider-knob-size);
-	border-radius: var(--radius-full);
-	transform: translate(-50%, -50%);
-	background: var(--gui-slider-knob);
-	border: 2px solid var(--gui-slider-knob-rim);
-	box-shadow: var(--gui-slider-knob-shadow);
-	pointer-events: none;
-	transition:
-		left var(--gui-slider-ease),
-		scale 120ms ease;
-}
-
-/* Same gate as the thinking ladder: `.gui-ladder--disabled` dims the ladder,
- * and a dimmed ladder must not lift its thumb on hover. */
-.gui-ladder:not(.gui-ladder--disabled) .gui-ladder-track:hover .gui-ladder-thumb,
-.gui-ladder-track[data-dragging] .gui-ladder-thumb {
-	scale: var(--gui-slider-hover-scale);
-}
-
-/* While the pointer owns the thumb it must sit under it, not lag one frame;
- * the release restores the transition so the detent pulls it in. */
-.gui-ladder-track[data-dragging] .gui-ladder-thumb,
-.gui-ladder-track[data-dragging] .gui-ladder-fill {
-	transition: none;
-}
-
-.gui-ladder--disabled {
-	opacity: var(--gui-slider-disabled-opacity);
-}
-
-.gui-ladder--disabled .gui-ladder-track {
-	cursor: default;
 }
 
 /* Free numeric setting: rolling counter. Drag or wheel to step, click the
@@ -3698,15 +3617,11 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-warning);
 }
 
-.gui-motion-off .gui-ladder-thumb,
-.gui-motion-off .gui-ladder-tick,
 .gui-motion-off .gui-rollnum-reel {
 	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.gui-ladder-thumb,
-	.gui-ladder-tick,
 	.gui-rollnum-reel {
 		transition: none;
 	}
@@ -7440,41 +7355,65 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-danger);
 }
 
-/* Thinking ladder: the shared slider primitive over the model's real rungs.
- * A thick rail, a fill that ends under the knob, one detent per rung and a
- * knob that lifts on hover/drag; the rung names sit below the track because a
- * thinking level is read as a word. `--gui-slider-p` is the only value the
- * pointer writes — the release is what commits. */
+/* Slider surface: the family's track, drawn once for both ladders.
+ *
+ * The geometry is the reference menu's inline effort bar rather than a
+ * settings control's row: a 28px hit pill whose groove is inset 3px top and
+ * bottom (22px tall) with an inset hairline, detents sitting on the groove,
+ * and the fill running from the left edge to the knob. The extra height is hit
+ * area, not ink — the visible rail stays as slim as the panel's other
+ * hairlines, which is what keeps the ladder from reading as a form field.
+ *
+ * The thinking ladder's head is ONE line — section label, then the current
+ * level — and no caption row sits under the track: each rung names itself in
+ * its dot's `title`, and `aria-valuetext` names the stop a release lands on.
+ * A caption strip under a 28px pill is what read as misaligned, and it was
+ * also the row that pushed the label and the value onto two lines in the
+ * narrow Agent pane.
+ *
+ * `--gui-slider-p` is the fractional position the pointer writes; `[data-
+ * dragging]` drops the `left` transition so the knob never lags the pointer,
+ * and the release restores it so the detent pulls the knob in. */
 .gui-slider {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 4px;
 	min-width: 0;
 }
+/* One line, always: the label may ellipsize but the value never wraps under
+ * it. `white-space: nowrap` on the row is the contract the geometry test
+ * asserts at the pane's narrowest width. */
 .gui-slider-head {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 8px;
 	min-width: 0;
+	white-space: nowrap;
 }
+.gui-slider-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	color: var(--color-text-faint);
+}
+/* The current level is the head's one emphasised readout: accent ink, the way
+ * the reference marks the selected effort. */
 .gui-slider-value {
+	flex: none;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
-	color: var(--color-text);
-}
-.gui-slider-resolved {
-	min-width: 0;
-	overflow: hidden;
-	font-size: var(--ui-font-size-xs);
-	color: var(--color-text-faint);
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	color: var(--color-accent);
 }
 .gui-slider-track {
 	position: relative;
-	height: 28px;
+	height: var(--gui-slider-hit);
 	cursor: pointer;
 	/* A drag belongs to the track, never to text selection or the panel's
 	 * scroll gesture. */
@@ -7482,26 +7421,49 @@ body.gui-resizing .gui-pane-right {
 	user-select: none;
 }
 .gui-slider-track:focus-visible {
+	/* The halo rides the knob: a 28px outline around a full-width pill reads
+	 * as a second, unrelated frame. */
 	outline: none;
 }
 .gui-slider-track:focus-visible .gui-slider-knob {
 	box-shadow: var(--gui-slider-knob-shadow), var(--gui-slider-focus);
 }
-.gui-slider-rail,
+/* Two layers, two jobs. `.gui-slider-rail` is INVISIBLE and exists only so the
+ * pointer can measure the travel span: it is inset by the knob radius, so the
+ * extreme rungs land where the handle can sit inside the pill and a knob-size
+ * change moves hit-testing with it. `.gui-slider-groove` is the band you see,
+ * and it is full-bleed: the handle travels between the pill's capped ends, so a
+ * groove that stopped short of them would read as a rail with dead ears. */
+.gui-slider-rail {
+	position: absolute;
+	top: calc((var(--gui-slider-hit) - var(--gui-slider-track)) / 2);
+	left: var(--gui-slider-inset);
+	right: var(--gui-slider-inset);
+	height: var(--gui-slider-track);
+}
+.gui-slider-groove,
 .gui-slider-fill {
 	position: absolute;
-	top: 50%;
-	left: var(--gui-slider-inset);
+	top: calc((var(--gui-slider-hit) - var(--gui-slider-track)) / 2);
 	height: var(--gui-slider-track);
 	border-radius: var(--radius-full);
-	transform: translateY(-50%);
 }
-.gui-slider-rail {
-	right: var(--gui-slider-inset);
+.gui-slider-groove {
+	left: 0;
+	right: 0;
 	background: var(--gui-slider-rest);
+	/* An inset hairline rather than a border, so the band's box is exactly the
+	 * pill it fills. */
+	box-shadow: inset 0 0 0 0.5px var(--gui-slider-hairline);
 }
+/* The fill runs from the pill's left edge to the handle, so the filled end is
+ * covered all the way through rung 0 instead of leaving the first detent on
+ * bare groove. Its width therefore starts at the handle's own diameter and
+ * grows by the travel span; at the last rung its right edge is exactly the
+ * handle's right edge, which is the groove's right cap. */
 .gui-slider-fill {
-	width: calc((100% - var(--gui-slider-inset) * 2) * var(--gui-slider-p, 0));
+	left: 0;
+	width: calc(var(--gui-slider-knob-size) + (100% - var(--gui-slider-knob-size)) * var(--gui-slider-p, 0));
 	background: linear-gradient(90deg, var(--gui-slider-fill-hot), var(--gui-slider-fill));
 }
 .gui-slider-dot {
@@ -7519,8 +7481,25 @@ body.gui-resizing .gui-pane-right {
 .gui-slider-dot--on {
 	background: var(--gui-slider-dot-on);
 }
+/* A 4px dot cannot be a hover target, and the caption row that used to name
+ * the rungs is gone. Each dot therefore carries a transparent band taller than
+ * the groove: hovering it shows the dot's `title`, which is that rung's name —
+ * the same text `aria-valuetext` reports for the current stop. Only the band
+ * answers the pointer, so a press on a rung still starts a drag on the track
+ * beneath it. */
+.gui-slider-dot::after {
+	content: "";
+	position: absolute;
+	inset: calc((var(--gui-slider-track) - var(--gui-slider-hit)) / 2) -3px;
+	pointer-events: auto;
+}
+/* A rung above the model's ceiling becomes a hollow ring: as legible as a
+ * filled dot, unmistakably not the shape of a reachable one. Its name still
+ * reaches the pointer through the same band, so the rung stays discoverable
+ * without being selectable. */
 .gui-slider-dot[data-capped] {
-	opacity: 0.35;
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--gui-slider-dot);
 }
 .gui-slider-knob {
 	position: absolute;
@@ -7528,7 +7507,6 @@ body.gui-resizing .gui-pane-right {
 	left: calc(var(--gui-slider-inset) + (100% - var(--gui-slider-inset) * 2) * var(--gui-slider-p, 0));
 	width: var(--gui-slider-knob-size);
 	height: var(--gui-slider-knob-size);
-	border: 2px solid var(--gui-slider-knob-rim);
 	border-radius: var(--radius-full);
 	transform: translate(-50%, -50%);
 	background: var(--gui-slider-knob);
@@ -7549,27 +7527,6 @@ body.gui-resizing .gui-pane-right {
 .gui-slider-track[data-dragging] .gui-slider-fill,
 .gui-slider-track[data-dragging] .gui-slider-knob {
 	transition: none;
-}
-.gui-slider-ticks {
-	display: flex;
-	justify-content: space-between;
-	gap: 4px;
-	font-size: 10px;
-	line-height: 1.2;
-	color: var(--color-text-faint);
-}
-.gui-slider-tick {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.gui-slider-tick--on {
-	color: var(--color-text);
-}
-.gui-slider-tick--capped {
-	opacity: 0.45;
-	text-decoration: line-through;
 }
 .gui-slider[data-disabled="true"] {
 	opacity: var(--gui-slider-disabled-opacity);

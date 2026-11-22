@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
 
 /**
@@ -142,6 +142,132 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
 }
 
 /**
+ * The track both ladders draw: the hit pill, the inset groove with its
+ * hairline, the fill that ends under the knob, one detent per rung and the
+ * knob itself.
+ *
+ * It is the family's only track markup — the thinking ladder and the settings
+ * detent ladder differ in their head (a label and a readout on one line, or
+ * the value over the track) and in what a rung means, never in how the track
+ * looks or how the pointer moves. `--gui-slider-p` is the fractional position
+ * and `--gui-slider-dot-p` a rung's position; both are read by CSS, so a
+ * pointer move re-renders nothing but the style attribute.
+ *
+ * There is deliberately no caption row beneath the track. Every rung names
+ * itself twice instead: its dot carries the label as `title`, and the dot's
+ * padded hover band (CSS `::after`, wider than the 4px ink) makes that title
+ * reachable — a `pointer-events: none` dot could never be a hover target. The
+ * track's own `aria-valuetext` names the rung a release would land on, and
+ * arrow keys step through the same rungs, so assistive tech hears every level
+ * without a caption strip. A press that starts on a dot still belongs to the
+ * track: the handler sits on the track and the event bubbles.
+ *
+ * The key handler gates on `disabled` alone, deliberately. A ladder whose
+ * model caps some rungs still has reachable rungs (`off`, `auto`, everything
+ * at or below the ceiling), so refusing keys whenever any rung is capped would
+ * make the whole control keyboard-dead on exactly the models that need the
+ * cap explained. The cap is enforced where it belongs instead — `step()` and
+ * the release path both go through the caller's `reachable`, so a key that
+ * asks for a capped rung settles on the ceiling. Both paths, one rule.
+ */
+export interface SliderTrackProps {
+	slider: SliderDrag;
+	/** Highest rung index. */
+	last: number;
+	/** One label per rung, in track order. */
+	labels: readonly string[];
+	/** One flag per rung: visible but unreachable. */
+	capped?: readonly boolean[];
+	/** Rungs a PageUp/PageDown jumps; omit when the ladder has no page step. */
+	pageStep?: number;
+	disabled?: boolean;
+	ariaLabel?: string;
+	/** The rung a release would land on, named for the screen reader. */
+	valueText: string;
+	/** Id of a note the control explains itself with — the thinking ladder's
+	 *  ceiling note, so the cap is part of the slider's accessible description
+	 *  and not only a paragraph that happens to sit under it. */
+	describedBy?: string;
+}
+
+export function SliderTrack({
+	slider,
+	last,
+	labels,
+	capped,
+	pageStep,
+	disabled = false,
+	ariaLabel,
+	valueText,
+	describedBy,
+}: SliderTrackProps): ReactNode {
+	return (
+		<div
+			className="gui-slider-track"
+			role="slider"
+			tabIndex={disabled ? -1 : 0}
+			aria-label={ariaLabel}
+			aria-disabled={disabled || undefined}
+			aria-describedby={describedBy}
+			aria-valuemin={0}
+			aria-valuemax={last}
+			aria-valuenow={slider.target}
+			aria-valuetext={valueText}
+			data-dragging={slider.dragging ? "" : undefined}
+			data-disabled={disabled ? "true" : undefined}
+			style={{ "--gui-slider-p": slider.position / last } as CSSProperties}
+			{...slider.handlers}
+			onKeyDown={event => {
+				if (disabled) return;
+				let next: number | null = null;
+				switch (event.key) {
+					case "ArrowLeft":
+					case "ArrowDown":
+						next = slider.target - 1;
+						break;
+					case "ArrowRight":
+					case "ArrowUp":
+						next = slider.target + 1;
+						break;
+					case "Home":
+						next = 0;
+						break;
+					case "End":
+						next = last;
+						break;
+					case "PageUp":
+						if (pageStep) next = slider.target + pageStep;
+						break;
+					case "PageDown":
+						if (pageStep) next = slider.target - pageStep;
+						break;
+					default:
+						break;
+				}
+				if (next == null) return;
+				event.preventDefault();
+				slider.step(next);
+			}}
+		>
+			<span className="gui-slider-groove" aria-hidden="true" />
+			<span ref={slider.setRail} className="gui-slider-rail" aria-hidden="true" />
+			<span className="gui-slider-fill" aria-hidden="true" />
+			{labels.map((label, index) => (
+				<span
+					key={`${index}:${label}`}
+					className={`gui-slider-dot${index <= slider.target ? " gui-slider-dot--on" : ""}`}
+					data-capped={capped?.[index] ? "" : undefined}
+					style={{ "--gui-slider-dot-p": index / last } as CSSProperties}
+					title={label}
+					aria-hidden="true"
+				/>
+			))}
+			<span className="gui-slider-knob" aria-hidden="true" />
+		</div>
+	);
+}
+
+/**
  * Thinking-effort ladder slider.
  *
  * One discrete track over the current model's REAL efforts plus `auto` (and
@@ -150,13 +276,14 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
  * release writes — a slider that committed every pointer tick would send one
  * RPC per pixel and race its own optimistic state.
  *
- * `ceiling` is the model's top supported rung: rungs above it stay visible,
- * struck through, and neither the draft nor the commit can land on them, so the
- * model's limit is readable instead of silently missing.
+ * The control is ONE inline row: the section label and the current level share
+ * a single line (the resolved `Auto · <level>` replaces the plain level while
+ * the auto rung is selected), and the track below carries no caption strip —
+ * rung names live on each dot's `title` and in `aria-valuetext`.
  *
- * The track is the shared slider primitive (`.gui-slider`, `--gui-slider-*`):
- * the same rail, fill, detents and knob as the settings detent ladder, with the
- * ladder labels below because a thinking level is read as a word, not a value.
+ * `ceiling` is the model's top supported rung: rungs above it stay visible as
+ * hollow dots, and neither the draft nor the commit can land on them, so the
+ * model's limit is readable instead of silently missing.
  */
 
 interface LadderRung {
@@ -262,77 +389,50 @@ export function LadderSlider({
 		if (next !== (value ?? null)) onCommit(next);
 	};
 	const slider = useSliderDrag({ last, value: committed, reachable: clampIndex, onSettle: commit, disabled });
-
+	// Declared before the empty-ladder return so the hook order cannot depend on
+	// the model's ladder.
+	const noteId = useId();
+	// A ladder with no efforts has no track; the note takes the place of the
+	// control rather than sitting under a dead slider.
 	if (efforts.length === 0) {
-		return <p className="gui-agent-info-note">{t("general.agentInfoThinkingUnsupported")}</p>;
+		return (
+			<div className="gui-slider">
+				<div className="gui-slider-head">
+					<span className="gui-slider-label">{t("general.agentInfoThinking")}</span>
+				</div>
+				<p className="gui-agent-info-note">{t("general.agentInfoThinkingUnsupported")}</p>
+			</div>
+		);
 	}
 
 	const rung = rungs[slider.target] ?? rungs[0]!;
+	// One readout, named once: while the auto rung is selected the resolved
+	// effort replaces the bare `Auto`, so the visible value and the screen
+	// reader's `aria-valuetext` are the same string.
+	const readout = rung.auto && resolved ? `${t("transcript.thinkingAuto")} · ${thinkingLabel(resolved)}` : rung.label;
+	// The ceiling note explains why some rungs are hollow; pointing the slider's
+	// description at it keeps the cap inside the control's accessible name and
+	// description instead of leaving it as a paragraph a screen reader may skip.
+	const ceilingNote = rungs.some(item => item.capped) && ceiling;
 
 	return (
 		<div className="gui-slider" data-disabled={disabled ? "true" : undefined}>
 			<div className="gui-slider-head">
-				<span className="gui-slider-value">{rung.label}</span>
-				{rung.auto && resolved ? (
-					<span className="gui-slider-resolved">{`${t("transcript.thinkingAuto")} · ${thinkingLabel(resolved)}`}</span>
-				) : null}
+				<span className="gui-slider-label">{t("general.agentInfoThinking")}</span>
+				<span className="gui-slider-value">{readout}</span>
 			</div>
-			<div
-				className="gui-slider-track"
-				role="slider"
-				tabIndex={disabled ? -1 : 0}
-				aria-label={t("general.agentInfoThinking")}
-				aria-disabled={disabled || undefined}
-				aria-valuemin={0}
-				aria-valuemax={last}
-				aria-valuenow={slider.target}
-				aria-valuetext={rung.label}
-				data-dragging={slider.dragging ? "" : undefined}
-				style={{ "--gui-slider-p": slider.position / last } as CSSProperties}
-				{...slider.handlers}
-				onKeyDown={event => {
-					if (disabled) return;
-					const step: Record<string, number> = {
-						ArrowLeft: -1,
-						ArrowDown: -1,
-						ArrowRight: 1,
-						ArrowUp: 1,
-					};
-					let next: number | null = null;
-					const delta = step[event.key];
-					if (delta !== undefined) next = slider.target + delta;
-					else if (event.key === "Home") next = 0;
-					else if (event.key === "End") next = last;
-					if (next == null) return;
-					event.preventDefault();
-					slider.step(next);
-				}}
-			>
-				<span ref={slider.setRail} className="gui-slider-rail" aria-hidden="true" />
-				<span className="gui-slider-fill" aria-hidden="true" />
-				{rungs.map((item, index) => (
-					<span
-						key={item.level ?? "off"}
-						className={`gui-slider-dot${index <= slider.target ? " gui-slider-dot--on" : ""}`}
-						data-capped={item.capped ? "" : undefined}
-						style={{ "--gui-slider-dot-p": index / last } as CSSProperties}
-						aria-hidden="true"
-					/>
-				))}
-				<span className="gui-slider-knob" aria-hidden="true" />
-			</div>
-			<div className="gui-slider-ticks" aria-hidden="true">
-				{rungs.map((item, index) => (
-					<span
-						key={item.level ?? "off"}
-						className={`gui-slider-tick${index === slider.target ? " gui-slider-tick--on" : ""}${item.capped ? " gui-slider-tick--capped" : ""}`}
-					>
-						{item.label}
-					</span>
-				))}
-			</div>
-			{rungs.some(item => item.capped) && ceiling ? (
-				<p className="gui-agent-info-note">
+			<SliderTrack
+				slider={slider}
+				last={last}
+				labels={rungs.map(item => item.label)}
+				capped={rungs.map(item => item.capped)}
+				disabled={disabled}
+				ariaLabel={t("general.agentInfoThinking")}
+				valueText={readout}
+				describedBy={ceilingNote ? noteId : undefined}
+			/>
+			{ceilingNote ? (
+				<p className="gui-agent-info-note" id={noteId}>
 					{`${t("transcript.thinkingCappedModel")} · ${t("transcript.modelCap")} ${thinkingLabel(ceiling)}`}
 				</p>
 			) : null}
