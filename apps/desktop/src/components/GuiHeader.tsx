@@ -730,7 +730,7 @@ export function GuiHeader({
 						/>
 					</button>
 				)}
-				<div className="gui-openin-capsule">
+				<div className="gui-openin-capsule gui-liquid-glass">
 					<button
 						type="button"
 						data-header-trigger="proj-main"
@@ -1209,7 +1209,7 @@ export function GuiHeader({
 				{/* Open-in capsule: the selected
 				 * app's icon with a dropdown of every installed app. */}
 				{openInDir && (
-					<div className="gui-openin-capsule">
+					<div className="gui-openin-capsule gui-liquid-glass">
 						<button
 							type="button"
 							data-header-trigger="openIn-main"

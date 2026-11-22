@@ -1459,16 +1459,10 @@ html.gui-vt-surface-only::view-transition-new(root),
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	/* Match the real composer card (gui-composer-frame): frosted glass,
-	 * hairline ring + shadow — the preview should show what the chat
-	 * actually renders, not a simplified solid card. */
+	/* Layout only; the card is the shared `gui-liquid-glass` pane so the
+	 * preview shows the same material the chat renders. */
 	padding: 8px 10px;
-	border: 0.5px solid transparent;
 	border-radius: var(--radius-xl);
-	background: color-mix(in oklab, var(--color-surface-raised) 42%, transparent);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow: var(--gui-input-shadow);
 }
 
 .gui-effect-preview-inputrow {
@@ -2119,8 +2113,8 @@ html.gui-vt-surface-only::view-transition-new(root),
 	align-items: center;
 	overflow: visible;
 	border-radius: var(--radius-lg);
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
+	/* radius-lg × 1.5: the flare follows the capsule's own corner. */
+	--glass-pane-spill: 12px;
 }
 
 .gui-openin-main {
@@ -2144,7 +2138,7 @@ html.gui-vt-surface-only::view-transition-new(root),
 	width: 22px;
 	align-items: center;
 	justify-content: center;
-	border-left: 1px solid var(--border);
+	border-left: 1px solid var(--glass-pane-side);
 	color: var(--color-text-faint);
 	border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
 }
@@ -6456,9 +6450,8 @@ body.gui-resizing .gui-pane-right {
 	max-width: min(560px, calc(100% - 48px));
 	padding: 7px 12px;
 	border-radius: var(--radius-xl);
-	background: color-mix(in oklab, var(--color-surface-raised) 84%, transparent);
-	border: 1px solid var(--border);
-	box-shadow: var(--gui-input-shadow);
+	/* A thicker step of the same pane: the recap floats over moving text. */
+	--glass-pane-tint: color-mix(in oklab, var(--color-surface-raised) 84%, transparent);
 	font-size: 12.5px;
 	line-height: 17px;
 	color: var(--color-text-muted);

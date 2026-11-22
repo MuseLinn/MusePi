@@ -936,7 +936,7 @@
 	background:
 		var(--glass-sheen),
 		color-mix(in oklab, var(--color-surface-raised) 48%, transparent);
-	box-shadow: var(--gui-input-shadow, var(--shadow-overlay));
+	box-shadow: var(--glass-pane-shadow, var(--shadow-overlay));
 	container-type: inline-size;
 	transition:
 		border-color 160ms var(--spring),

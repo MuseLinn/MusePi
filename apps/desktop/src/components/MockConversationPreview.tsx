@@ -171,7 +171,7 @@ export function MockComposer({
 	input?: ReactNode;
 }): ReactNode {
 	return (
-		<div className="gui-effect-preview-composer">
+		<div className="gui-effect-preview-composer gui-liquid-glass">
 			<div className="gui-effect-preview-inputrow">
 				<span className="gui-effect-preview-input">{input ?? t("composer.askAnythingCommands.info")}</span>
 			</div>

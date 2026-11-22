@@ -207,13 +207,16 @@ code,
  * frosted glass, so applying the class is always safe: Chromium hides an
  * element whose filter references a missing id, which is why the warp
  * filter is gated on the ready class instead of declared unconditionally.
- * The element keeps its own translucent background as the tint wash; the
- * warp layer (::before) and the rim highlight (::after) paint beneath it
- * (z-index −1 under isolation). Set --gui-liquid-glass-blur on the pane
+ * THE MATERIAL IS THIS CLASS. A host adds `gui-liquid-glass`, sets its
+ * radius and layout, and declares no fill, edge or shadow of its own: the
+ * tint, the two lit bands, the side lines, the outer hairlines, the inner
+ * spill and the lift all live here. Set --gui-liquid-glass-blur on the pane
  * for a blur that differs from the global glass token. */
 .gui-liquid-glass {
 	position: relative;
 	isolation: isolate;
+	background: var(--glass-pane-tint);
+	box-shadow: var(--glass-pane-shadow);
 }
 .gui-liquid-glass::before {
 	content: "";
@@ -221,7 +224,9 @@ code,
 	inset: 0;
 	z-index: -1;
 	border-radius: inherit;
-	background: inherit;
+	/* No inherited fill: the element already paints the tint, and a second
+	 * copy here composites over it (42% becomes 66%), so the glass reads
+	 * opaque. This layer carries only the blur and its displacement. */
 	backdrop-filter: blur(var(--gui-liquid-glass-blur, var(--gui-glass-blur)))
 		saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-liquid-glass-blur, var(--gui-glass-blur)))
@@ -236,19 +241,38 @@ html.gui-liquid-glass-ready .gui-liquid-glass::before {
 	inset: 0;
 	z-index: -1;
 	border-radius: inherit;
-	padding: 1.5px;
-	background: linear-gradient(
-		135deg,
-		rgb(255 255 255 / 0.55),
-		rgb(255 255 255 / 0.18) 33%,
-		transparent 66%
-	);
-	-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-	-webkit-mask-composite: xor;
-	mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-	mask-composite: exclude;
-	opacity: 0.7;
 	pointer-events: none;
+	/* The spill rides this layer because the warp layer (::before) blurs
+	 * everything painted under it; a 2px plateau at the band's full strength
+	 * plus the flare is what the reference material carries along both lit
+	 * edges, and the 1px crisp core is the inset shadow below. */
+	background:
+		linear-gradient(
+			to bottom,
+			var(--glass-pane-band) 0,
+			var(--glass-pane-band) 2px,
+			color-mix(in srgb, var(--glass-pane-band) 35%, transparent)
+				calc(var(--glass-pane-spill) * 0.5),
+			transparent var(--glass-pane-spill)
+		),
+		linear-gradient(
+			to top,
+			var(--glass-pane-band) 0,
+			var(--glass-pane-band) 2px,
+			color-mix(in srgb, var(--glass-pane-band) 35%, transparent)
+				calc(var(--glass-pane-spill) * 0.5),
+			transparent var(--glass-pane-spill)
+		);
+	/* Two lit edges against thin dark sides, nothing around the corners:
+	 * the side lines and bands taper through the arcs, and each outer shadow
+	 * only shows along the edge it is offset away from. */
+	box-shadow:
+		inset 1px 0 0 var(--glass-pane-side),
+		inset -1px 0 0 var(--glass-pane-side),
+		inset 0 1px 0 var(--glass-pane-band),
+		inset 0 -1px 0 var(--glass-pane-band),
+		0 -0.5px 0 0 var(--glass-pane-hairline),
+		0 0.5px 0 0 var(--glass-pane-hairline);
 }
 
 /* Light scheme: macOS dims the backdrop behind the window with the

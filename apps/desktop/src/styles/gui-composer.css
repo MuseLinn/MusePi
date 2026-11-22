@@ -128,17 +128,11 @@
 	flex-direction: column;
 	gap: 6px;
 	padding: 8px 10px 8px;
-	border: 0.5px solid transparent;
+	border: none;
 	border-radius: var(--radius-xl);
-	/* Frosted glass: translucent enough that the brand watermark blurs
-	 * through the card (visible frosted effect over the π backdrop). The
-	 * backdrop-filter itself lives on the .gui-liquid-glass warp layer
-	 * (gui-base.css) so the rim can refract; this element keeps only the
-	 * tint wash. */
-	background: color-mix(in oklab, var(--color-surface-raised) 42%, transparent);
-	box-shadow: var(--gui-input-shadow);
-	/* Smooth height changes when the textarea autosizes. */
-	transition: box-shadow 160ms ease-out;
+	/* Layout only. The fill, blur, edges, spill and lift are the
+	 * `.gui-liquid-glass` material (gui-base.css); this element declares
+	 * none of them. */
 	/* Container-query context for the model/thinking capsule: the pill's
 	 * icon-only collapse resolves against THIS frame's inline size (the
 	 * frame's width is driven by the surface, unlike the pill whose width

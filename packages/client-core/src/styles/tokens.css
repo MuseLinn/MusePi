@@ -342,6 +342,19 @@
 	--glass-hairline-strong: color-mix(in srgb, var(--fg) 30%, transparent);
 	--glass-rim-hi: color-mix(in srgb, var(--fg) 26%, transparent);
 	--glass-rim-lo: oklch(0 0 0 / 22%);
+	/* Pane material for floating glass (composer, command capsule, status
+	 * capsule): a tint over the blurred backdrop, a 1px band on the top and
+	 * bottom edges, a 1px line down each side, and a half-pixel dark hairline
+	 * just outside the two bands. The corners draw nothing — a ring around
+	 * them is what reads as a border rather than material. The ladder above
+	 * is the solid-card edge; this is the water pass. */
+	--glass-pane-tint: color-mix(in oklab, var(--bg-raised) 40%, transparent);
+	--glass-pane-band: color-mix(in srgb, var(--fg) 22%, transparent);
+	--glass-pane-side: color-mix(in srgb, var(--fg) 14%, transparent);
+	--glass-pane-hairline: oklch(0 0 0 / 50%);
+	--glass-pane-shadow: 0 0 18px oklch(0 0 0 / 30%);
+	/* Flare length, sized from the host's corner radius (radius × 1.5). */
+	--glass-pane-spill: 18px;
 	--glass-hover: color-mix(in srgb, var(--fg) 10%, transparent);
 	--glass-hover-strong: color-mix(in srgb, var(--fg) 18%, transparent);
 	--glass-active: color-mix(in oklab, var(--color-accent) 22%, transparent);
@@ -481,6 +494,14 @@
 	 * neutral dark hairline and a darkening hover. Only the neutral shadow,
 	 * bottom echo and accent-active strength still need a light value. */
 	--glass-rim-lo: oklch(0 0 0 / 10%);
+	/* Light panes are a cool grey, never white: a white tint on a white page
+	 * leaves the top / bottom bands nothing to stand out from, and the grey
+	 * is what makes the pane read as glass rather than a lighter card. */
+	--glass-pane-tint: color-mix(in oklab, var(--bg-inset) 45%, transparent);
+	--glass-pane-band: oklch(1 0 0 / 100%);
+	--glass-pane-side: oklch(0 0 0 / 24%);
+	--glass-pane-hairline: oklch(0 0 0 / 20%);
+	--glass-pane-shadow: 0 0 18px oklch(0 0 0 / 6%);
 	--glass-active: color-mix(in oklab, var(--color-accent) 16%, transparent);
 	--glass-card-shadow:
 		0 1px 2px oklch(0.3 0 0 / 10%),
@@ -595,6 +616,11 @@
 			0 24px 60px oklch(0.3 0.02 60 / 18%),
 			inset 0 1px 0 oklch(1 0 0 / 92%),
 			inset 0 -1px 0 oklch(0.4 0.02 60 / 10%);
+		--glass-pane-tint: color-mix(in oklab, var(--bg-inset) 45%, transparent);
+		--glass-pane-band: oklch(1 0 0 / 100%);
+		--glass-pane-side: oklch(0 0 0 / 24%);
+		--glass-pane-hairline: oklch(0 0 0 / 20%);
+		--glass-pane-shadow: 0 0 18px oklch(0 0 0 / 6%);
 	}
 
 	/* mono accent, system-light fallback */

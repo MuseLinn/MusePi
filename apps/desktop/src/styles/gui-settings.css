@@ -1529,25 +1529,6 @@
 	white-space: nowrap;
 }
 
-/* Shared input-surface shadow (user: welcome had none, in-session was too
- * heavy — one recipe for both). .gui-border-beam is included because the
- * beam wrapper carries the shadow (its overflow:hidden clips the frame's). */
-.gui-input-shadow,
-.gui-welcome-input,
-.gui-composer-frame,
-.gui-border-beam {
-	--gui-input-shadow:
-		0 0 0 0.5px rgba(255, 255, 255, 0.08),
-		0 1px 2px rgba(0, 0, 0, 0.16),
-		0 8px 24px rgba(0, 0, 0, 0.22),
-		inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.gui-welcome-input {
-	box-shadow: var(--gui-input-shadow);
-	transition: box-shadow 160ms ease-out;
-}
-
 .gui-welcome-input textarea {
 	/* Kill the UA :focus outline (specificity (0,1,1) beats the
 	 * tailwind .outline-none class (0,1,0), which loses to Chromium's
@@ -1580,10 +1561,9 @@
 .gui-border-beam {
 	--beam-stroke-opacity: 1.9;
 	/* The beam element clips its children (overflow: hidden + border-radius),
-	 * which would crop the frame's own box-shadow — carry the shared input
-	 * shadow on the wrapper so both composers (welcome + session) keep their
-	 * outer lift. */
-	box-shadow: var(--gui-input-shadow);
+	 * which would crop the frame's own box-shadow — carry the pane's lift on
+	 * the wrapper so both composers (welcome + session) keep it. */
+	box-shadow: var(--glass-pane-shadow);
 }
 [data-theme="dark"] .gui-border-beam {
 	--beam-stroke-opacity: 1;

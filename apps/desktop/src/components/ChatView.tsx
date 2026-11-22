@@ -3783,7 +3783,7 @@ export function ChatView({
 														 * wire activity or the dismiss button. */}
 														{snap?.recap && (
 															<div
-																className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
+																className={`gui-recap-row gui-liquid-glass${recapExpanded ? " gui-recap-row--expanded" : ""}`}
 																title={recapExpanded ? t("tools.collapse") : t("tools.expand")}
 																role="button"
 																onClick={() => setRecapExpanded(v => !v)}
