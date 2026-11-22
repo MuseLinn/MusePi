@@ -3311,12 +3311,17 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 }
 
-/* Numeric setting with a declared preset ladder: one detent per preset, so
- * the wheel and the pointer can only land on supported values. Index-spaced
+/* Numeric setting with a declared preset ladder: one detent per preset, so a
+ * release and the arrow keys can only land on supported values. Index-spaced
  * because preset values are frequently non-linear (1, 2.5, 5, 10, 20, 50…).
  * Geometry and states come from the shared slider family (`--gui-slider-*`,
  * declared in gui-chat.css): the settings ladder and the thinking ladder are
- * the same track, fill, detents and knob; only the labels differ. */
+ * the same track, fill, detents and knob; only the labels differ.
+ *
+ * `--gui-ladder-p` is the fractional rung the thumb is drawn at: the pointer
+ * glues the thumb to itself for the whole gesture, and the release drops
+ * `[data-dragging]` so `left` eases from that position to the committed rung —
+ * a drag reads as one continuous travel, not a row of jumps. */
 .gui-ladder {
 	display: flex;
 	flex-direction: column;
@@ -3375,17 +3380,21 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-ladder-fill {
+	width: calc(100% * var(--gui-ladder-p, 0));
 	background: linear-gradient(90deg, var(--gui-slider-fill-hot), var(--gui-slider-fill));
 }
 
 .gui-ladder-tick {
 	position: absolute;
 	top: 50%;
+	left: calc(100% * var(--gui-ladder-dot-p, 0));
 	width: var(--gui-slider-dot-size);
 	height: var(--gui-slider-dot-size);
 	border-radius: var(--radius-full);
 	transform: translate(-50%, -50%);
 	background: var(--gui-slider-dot);
+	pointer-events: none;
+	transition: background-color 120ms ease;
 }
 
 .gui-ladder-tick--on {
@@ -3395,6 +3404,7 @@ body.gui-resizing .gui-pane-right {
 .gui-ladder-thumb {
 	position: absolute;
 	top: 50%;
+	left: calc(100% * var(--gui-ladder-p, 0));
 	width: var(--gui-slider-knob-size);
 	height: var(--gui-slider-knob-size);
 	border-radius: var(--radius-full);
@@ -3402,6 +3412,7 @@ body.gui-resizing .gui-pane-right {
 	background: var(--gui-slider-knob);
 	border: 2px solid var(--gui-slider-knob-rim);
 	box-shadow: var(--gui-slider-knob-shadow);
+	pointer-events: none;
 	transition:
 		left var(--gui-slider-ease),
 		scale 120ms ease;
@@ -3409,17 +3420,24 @@ body.gui-resizing .gui-pane-right {
 
 /* Same gate as the thinking ladder: `.gui-ladder--disabled` dims the ladder,
  * and a dimmed ladder must not lift its thumb on hover. */
-.gui-ladder:not(.gui-ladder--disabled) .gui-ladder-track:hover .gui-ladder-thumb {
+.gui-ladder:not(.gui-ladder--disabled) .gui-ladder-track:hover .gui-ladder-thumb,
+.gui-ladder-track[data-dragging] .gui-ladder-thumb {
 	scale: var(--gui-slider-hover-scale);
 }
 
-/* Pressed: the thumb must sit under the pointer, not lag one frame. */
-.gui-ladder-track:active .gui-ladder-thumb {
+/* While the pointer owns the thumb it must sit under it, not lag one frame;
+ * the release restores the transition so the detent pulls it in. */
+.gui-ladder-track[data-dragging] .gui-ladder-thumb,
+.gui-ladder-track[data-dragging] .gui-ladder-fill {
 	transition: none;
 }
 
 .gui-ladder--disabled {
 	opacity: var(--gui-slider-disabled-opacity);
+}
+
+.gui-ladder--disabled .gui-ladder-track {
+	cursor: default;
 }
 
 /* Free numeric setting: rolling counter. Drag or wheel to step, click the
@@ -3613,12 +3631,14 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-motion-off .gui-ladder-thumb,
+.gui-motion-off .gui-ladder-tick,
 .gui-motion-off .gui-rollnum-reel {
 	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.gui-ladder-thumb,
+	.gui-ladder-tick,
 	.gui-rollnum-reel {
 		transition: none;
 	}

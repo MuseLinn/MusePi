@@ -421,6 +421,100 @@ describe("agent info pane", () => {
 		await unmount();
 	});
 
+	it("puts the thumb under the cursor on the press frame, not on a detent", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		// 300px track, 18px knob: rung k sits at 9 + (282 * k) / 6, so rungs 1 and
+		// 2 are at x=56 and x=103 and x=90 is between them. The old render snapped
+		// the press to the magnetic rung and only followed the pointer after a
+		// 2px threshold, so the first move hopped ~20px backwards.
+		stubTrackWidth(track, 300);
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-slider-p")) * 282;
+		await act(async () => pointer(track, "pointerdown", 90));
+		// The thumb is at the pointer on the first frame: 90 - 9 = 81px of travel.
+		expect(thumb()).toBeCloseTo(81, 6);
+		// The readout, however, already names the rung the release would land on.
+		expect(track.getAttribute("aria-valuenow")).toBe("2");
+		// A 3px move keeps it under the cursor instead of hopping to a detent.
+		await act(async () => pointer(track, "pointermove", 93));
+		expect(thumb()).toBeCloseTo(84, 6);
+		expect(level(calls)).toBeUndefined();
+		// A press with no travel still commits the rung under the pointer.
+		await act(async () => pointer(track, "pointerup", 93));
+		expect(track.getAttribute("aria-valuenow")).toBe("2");
+		expect(level(calls)).toBe("low");
+		await unmount();
+	});
+
+	it("glues the thumb to the pointer instead of hopping between rungs", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		// 300px track, 18px knob (9px inset a side) over 7 rungs: a rounded index
+		// can only move in 47px steps, so 10px of pointer travel would leave the
+		// thumb still for four moves out of five.
+		stubTrackWidth(track, 300);
+		const railLeft = 9;
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-slider-p")) * (300 - 18);
+		const samples: { x: number; thumb: number }[] = [];
+		await act(async () => pointer(track, "pointerdown", railLeft));
+		expect(thumb()).toBe(0);
+		for (let x = railLeft + 10; x <= railLeft + 60; x += 10) {
+			await act(async () => pointer(track, "pointermove", x));
+			samples.push({ x, thumb: thumb() });
+		}
+		const steps = samples.map((sample, index) => sample.thumb - (index === 0 ? 0 : samples[index - 1]!.thumb));
+		// Every 10px of pointer travel moved the thumb 10px: the position is
+		// fractional, so the drag is one continuous gesture.
+		for (const step of steps) expect(step).toBeCloseTo(10, 6);
+		expect(Math.min(...steps)).toBeGreaterThan(0);
+		// Nothing was written while the pointer was down.
+		expect(level(calls)).toBeUndefined();
+		// Released between detents (0.64 of rung 1): the magnetic target is rung 1,
+		// never a fractional rung.
+		await act(async () => pointer(track, "pointerup", railLeft + 60));
+		expect(track.getAttribute("aria-valuenow")).toBe("1");
+		expect(level(calls)).toBe("minimal");
+		await unmount();
+	});
+
+	it("names the rung a release would land on while the pointer is between detents", async () => {
+		const { rpc } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		stubTrackWidth(track, 300);
+		// 9 + 0.58 * 282 ≈ 172: past rung 3, short of the halfway point to rung 4.
+		await act(async () => {
+			pointer(track, "pointerdown", 9);
+			pointer(track, "pointermove", 172);
+		});
+		const ticks = [...host.querySelectorAll(".gui-slider-tick")];
+		expect(track.getAttribute("aria-valuenow")).toBe("3");
+		expect(track.getAttribute("aria-valuetext")).toBe(ticks[3]?.textContent);
+		expect(host.querySelector(".gui-slider-value")?.textContent).toBe(ticks[3]?.textContent);
+		expect(ticks[3]?.classList.contains("gui-slider-tick--on")).toBe(true);
+		await act(async () => pointer(track, "pointercancel", 172));
+		await unmount();
+	});
+
+	it("never lets a fractional drag land above the model ceiling", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		stubTrackWidth(track, 300);
+		// Past `high` (rung 4) the next rung is capped: 0.85 of the span sits
+		// between the capped ones and must still report the ceiling.
+		await act(async () => {
+			pointer(track, "pointerdown", 9);
+			pointer(track, "pointermove", Math.round(9 + 282 * 0.85));
+		});
+		expect(track.getAttribute("aria-valuenow")).toBe("4");
+		await act(async () => pointer(track, "pointerup", Math.round(9 + 282 * 0.85)));
+		expect(level(calls)).toBe("high");
+		await unmount();
+	});
+
 	it("maps the press through the laid-out rail, not a baked-in knob radius", async () => {
 		const { rpc } = makeRpc();
 		const { host, unmount } = await mount(rpc);

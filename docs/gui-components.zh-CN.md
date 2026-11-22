@@ -48,10 +48,12 @@ scope:
 | `RightRail` | 右边缘 44px 图标栏 | 右面板的入口；**面板收起时也必须渲染** |
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
 | `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选 |
-| `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；指针与方向键只能落在已声明档位 |
+| `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；松手与方向键只能落在已声明档位 |
 | `--gui-slider-*` 消费方 | 两套自定义阶梯 + 两个自愿接入的原生 range | 两套阶梯共用完整轨道；原生 `<input class="gui-range">` 全仓只有两处：通知主音量（`settings-sections/notifications.tsx`）与桌宠尺寸（`settings-sections/companion.tsx`）。适用范围与例外见下 |
 | `SplitterGrip` 的宿主命中带 | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | 三条接缝各自的定位层 |
 | `SecretSettingsSection` | 密钥库设置页 | `settings-sections/secret-settings.tsx`；一张静态状态卡、`密钥 · N` + 添加，随后**只有一块正文**（`form ? 表单 : 空态或行列表`，两者绝不并存）；行用 `gui-agent-card`、控件消费 `--control-*`。**不要**为行添加可用性 chip：`secret.list` 只携带元数据 |
+
+**滑块拖动契约（`useSliderDrag`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都调用这一个 hook，设置阶梯自己不再持有任何指针数学。指针驱动的是**连续的**位置——`--gui-slider-p` / `--gui-ladder-p` 是 `position / last`，从来不是档位序号——所以滑块跟着指针走，而不是在档位之间跳。档位是吸附而不是绑定：最近的**可达**档位就是磁性目标，指针停在两档之间时，数值读数、高亮的档位名与 `aria-valuenow`/`aria-valuetext` 都指向这个目标，标签与读屏不会互相矛盾。滑块只在手势结束时落到目标上：松手（或按键步进）恢复 `left` 上的 `--gui-slider-ease` 过渡，档位把滑块吸进去；手势期间 `[data-dragging]` 关掉过渡，滑块不会落后指针。「减弱动效」下过渡被去掉，吸附立即到位、不做动画。滑块从按下的第一帧起就停在指针处——在两档之间按下不会先跳到某一档再回来；没有位移的单击也会落在指针下的档位，因为松手时才解析最后的指针位置。手势期间不写任何值——一次手势只触发一次 `onSettle`，因此设置阶梯不再每个指针事件写一次 `settings.set`，思考阶梯也保持「一次手势一次 RPC」。取消手势不写值，并回到已提交的档位。方向键 / Home / End 仍是逐档步进，但走同一条落位路径，键盘与指针因此共享同一个视觉过渡。模型上限以上的档位在轨道上和提交时一样不可达；指针停在其中时报的是上限档位。
 
 **滑块适用范围。** 该族覆盖两套阶梯与上述两个原生 range。有四处已发布滑块**有意**留在族外，各自属于独立表面：`.gui-sketch-range`（画板笔宽，`gui-composer.css`）、浏览器设备栏的宽高 range（`gui-browser-toolbar.css`）、截图编辑器的描边宽度（`.gui-shot-weight input`，`ScreenshotEditorDialog.tsx`）与 `.tr-ui-range`（`packages/client-core/src/ui-blocks/ui-blocks.css`）；移动端 `VoicePanel` 的语速是第五处。它们可以在各自的 scope 内收敛到该族；在此之前不得手抄族内几何。桌面端语音设置没有滑块——`tts.rate` 是 schema 数值，渲染成滚动数字。
 

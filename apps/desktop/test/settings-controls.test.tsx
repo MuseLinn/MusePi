@@ -155,6 +155,151 @@ describe("numeric controls", () => {
 		expect(changes.at(-1)).toEqual(["temperature", 1]);
 	});
 
+	it("puts the thumb under the cursor on the press frame, not on a detent", () => {
+		const changes: [string, unknown][] = [];
+		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
+		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		if (!track) throw new Error("no ladder track");
+		const rect = (left: number, width: number): DOMRect =>
+			({
+				left,
+				top: 0,
+				right: left + width,
+				bottom: 22,
+				width,
+				height: 22,
+				x: left,
+				y: 0,
+				toJSON: () => ({}),
+			}) as DOMRect;
+		track.getBoundingClientRect = () => rect(0, 300);
+		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		if (!rail) throw new Error("no rail");
+		rail.getBoundingClientRect = () => rect(0, 300);
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-ladder-p")) * 300;
+		const presets = (SETTINGS_SCHEMA.temperature.ui.options ?? []).length - 1;
+		if (presets < 2) return;
+
+		// 6 presets over 300px: detents at 0, 60, 120… A press at 90 is midway,
+		// and the thumb must render there rather than jumping to detent 2 (120).
+		act(() => track.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 90 })));
+		expect(thumb()).toBeCloseTo(90, 6);
+		// The committed value still decides what a release lands on, not the thumb.
+		expect(changes).toEqual([]);
+		act(() => track.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, cancelable: true, clientX: 93 })));
+		expect(thumb()).toBeCloseTo(93, 6);
+		// A press with no travel commits the detent under the pointer, once.
+		expect(changes).toEqual([]);
+		act(() => track.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, cancelable: true, clientX: 93 })));
+		expect(changes).toEqual([["temperature", 0.2]]);
+	});
+
+	it("writes nothing when a settings drag is cancelled", () => {
+		const changes: [string, unknown][] = [];
+		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
+		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		if (!track) throw new Error("no ladder track");
+		const rect = (left: number, width: number): DOMRect =>
+			({
+				left,
+				top: 0,
+				right: left + width,
+				bottom: 22,
+				width,
+				height: 22,
+				x: left,
+				y: 0,
+				toJSON: () => ({}),
+			}) as DOMRect;
+		track.getBoundingClientRect = () => rect(0, 300);
+		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		if (!rail) throw new Error("no rail");
+		rail.getBoundingClientRect = () => rect(0, 300);
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-ladder-p")) * 300;
+		const resting = thumb();
+
+		act(() => track.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 30 })));
+		act(() => track.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, cancelable: true, clientX: 240 })));
+		act(() =>
+			track.dispatchEvent(new MouseEvent("pointercancel", { bubbles: true, cancelable: true, clientX: 240 })),
+		);
+		// A cancelled gesture neither writes nor leaves the thumb where it was dragged.
+		expect(changes).toEqual([]);
+		expect(thumb()).toBeCloseTo(resting, 6);
+	});
+
+	it("drags continuously and writes once, on release", () => {
+		const changes: [string, unknown][] = [];
+		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
+		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		if (!track) throw new Error("no ladder track");
+		// Happy-dom lays nothing out; give the measured rail a 300px span.
+		const rect = (left: number, width: number): DOMRect =>
+			({
+				left,
+				top: 0,
+				right: left + width,
+				bottom: 22,
+				width,
+				height: 22,
+				x: left,
+				y: 0,
+				toJSON: () => ({}),
+			}) as DOMRect;
+		track.getBoundingClientRect = () => rect(0, 300);
+		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		if (!rail) throw new Error("no rail");
+		rail.getBoundingClientRect = () => rect(0, 300);
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-ladder-p")) * 300;
+		const presets = (SETTINGS_SCHEMA.temperature.ui.options ?? []).length - 1;
+
+		act(() => track.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 0 })));
+		const steps: number[] = [];
+		let previous = thumb();
+		for (let x = 10; x <= 60; x += 10) {
+			act(() => track.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, cancelable: true, clientX: x })));
+			steps.push(thumb() - previous);
+			previous = thumb();
+		}
+		// The settings ladder is the thinking ladder's implementation: 10px of
+		// pointer travel is 10px of thumb travel, not a hop between presets.
+		if (presets > 1) for (const step of steps) expect(step).toBeCloseTo(10, 6);
+		expect(changes).toEqual([]);
+	});
+
+	it("snaps to the nearest detent without writing every pointer tick", () => {
+		const changes: [string, unknown][] = [];
+		const scope = mount([item("temperature")], { temperature: 0.5 }, changes);
+		const track = scope.querySelector<HTMLElement>(".gui-ladder-track");
+		if (!track) throw new Error("no ladder track");
+		const rect = (left: number, width: number): DOMRect =>
+			({
+				left,
+				top: 0,
+				right: left + width,
+				bottom: 22,
+				width,
+				height: 22,
+				x: left,
+				y: 0,
+				toJSON: () => ({}),
+			}) as DOMRect;
+		track.getBoundingClientRect = () => rect(0, 300);
+		const rail = track.querySelector<HTMLElement>(".gui-ladder-rail");
+		if (!rail) throw new Error("no rail");
+		rail.getBoundingClientRect = () => rect(0, 300);
+
+		act(() => track.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, clientX: 0 })));
+		for (let x = 10; x <= 300; x += 10) {
+			act(() => track.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, cancelable: true, clientX: x })));
+		}
+		// Dragging across the whole ladder wrote nothing yet.
+		expect(changes).toEqual([]);
+		act(() => track.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, cancelable: true, clientX: 300 })));
+		// One write for the whole gesture, on the last preset.
+		expect(changes).toEqual([["temperature", 1]]);
+	});
+
 	it("steps a free number and keeps the step proportional to its magnitude", () => {
 		const port: [string, unknown][] = [];
 		const portScope = mount([item("images.urls.sshRemotePort")], { "images.urls.sshRemotePort": 8787 }, port);

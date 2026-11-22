@@ -1,15 +1,154 @@
 import { t } from "@musepi/client-core";
-import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode, PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useRef, useState } from "react";
 import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
+
+/**
+ * Pointer and key math for the GUI's ladders — this thinking ladder and the
+ * settings detent ladder (`settings-controls/LadderSlider.tsx`), which imports
+ * it. One implementation, so the two never drift into different drag feels.
+ *
+ * The pointer writes a FRACTIONAL rung position: the thumb stays glued to the
+ * pointer instead of hopping between detents, which is what made the old drag
+ * read as a sequence of jumps. Detents are magnetic, not binding — `target` is
+ * the nearest reachable rung and follows the pointer while the readout and
+ * `aria-valuenow`/`aria-valuetext` report it, and the thumb only settles onto it
+ * when the gesture ends (the CSS eases `left`, so the release snaps; reduced
+ * motion lands at once). Nothing is written during the gesture: `onSettle`
+ * fires once on release, or once per discrete key step.
+ */
+export interface SliderDragOptions {
+	/** Highest rung index: the measured travel span covers rungs 0..last. */
+	last: number;
+	/** Committed rung — where the thumb rests between gestures. */
+	value: number;
+	/** Rounded index → the rung a release may land on (a model ceiling, an
+	 *  unreachable detent). Identity with clamping when every rung is legal. */
+	reachable?(index: number): number;
+	/** One call per gesture: the rung a release or a key step landed on. */
+	onSettle(index: number): void;
+	disabled?: boolean;
+}
+
+export interface SliderDrag {
+	/** Callback ref for the element whose border box spans the travel. */
+	setRail(node: HTMLElement | null): void;
+	/** Fractional rung the thumb is drawn at. */
+	position: number;
+	/** Rung a release would land on right now. */
+	target: number;
+	dragging: boolean;
+	handlers: {
+		onPointerDown(event: ReactPointerEvent<HTMLElement>): void;
+		onPointerMove(event: ReactPointerEvent<HTMLElement>): void;
+		onPointerUp(event: ReactPointerEvent<HTMLElement>): void;
+		onPointerCancel(): void;
+		onLostPointerCapture(): void;
+	};
+	/** Discrete move (arrow keys): settles exactly like a release. */
+	step(index: number): void;
+}
+
+export function useSliderDrag({ last, value, reachable, onSettle, disabled = false }: SliderDragOptions): SliderDrag {
+	const rail = useRef<HTMLElement | null>(null);
+	const dragRef = useRef<{ pointerId: number } | null>(null);
+	const rawRef = useRef<number | null>(null);
+	// The fractional pointer position while a gesture is live; `null` when the
+	// pointer does not own the thumb.
+	const [drag, setDrag] = useState<number | null>(null);
+
+	const settle = (index: number): number => {
+		const rounded = Math.round(index);
+		return reachable ? reachable(rounded) : Math.min(Math.max(rounded, 0), last);
+	};
+
+	/** Pointer x → fractional rung, or null while the rail has no laid-out
+	 *  width (the first frame, a hidden panel). The rail's rect is exactly the
+	 *  travel span, because CSS insets it by the knob radius. */
+	const positionAt = (clientX: number): number | null => {
+		const rect = rail.current?.getBoundingClientRect();
+		if (!rect || rect.width <= 0) return null;
+		return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * last;
+	};
+
+	const drop = (index: number | null): void => {
+		if (!dragRef.current) return;
+		dragRef.current = null;
+		rawRef.current = null;
+		setDrag(null);
+		// A cancelled gesture writes nothing; an ended one settles on its rung and
+		// the committed prop — updated optimistically by the owner in the same
+		// batch — becomes the thumb's target, so the CSS transition eases it there.
+		if (index != null) onSettle(settle(index));
+	};
+
+	const step = (index: number): void => {
+		onSettle(settle(index));
+	};
+
+	// The pointer owns the thumb for the whole gesture: the rendered position is
+	// the raw pointer position from the first frame, so a press between detents
+	// never jumps the thumb to a detent and back. The readout and ARIA follow the
+	// magnetic target instead, and a release under the pointer's last position
+	// lands on the detent it resolves to — so a click without travel still picks
+	// the rung under the cursor.
+	const position = drag ?? value;
+	const target = drag == null ? value : settle(drag);
+
+	return {
+		setRail: useCallback((node: HTMLElement | null) => {
+			rail.current = node;
+		}, []),
+		position,
+		target,
+		dragging: drag !== null,
+		handlers: {
+			onPointerDown: event => {
+				if (disabled || event.button !== 0) return;
+				const raw = positionAt(event.clientX);
+				if (raw == null) return;
+				event.preventDefault();
+				try {
+					event.currentTarget.setPointerCapture?.(event.pointerId);
+				} catch {
+					/* capture is best-effort; the release still settles */
+				}
+				dragRef.current = { pointerId: event.pointerId };
+				rawRef.current = raw;
+				setDrag(raw);
+				event.currentTarget.focus();
+			},
+			onPointerMove: event => {
+				const state = dragRef.current;
+				if (!state || state.pointerId !== event.pointerId) return;
+				const raw = positionAt(event.clientX);
+				if (raw == null) return;
+				rawRef.current = raw;
+				setDrag(raw);
+			},
+			onPointerUp: event => {
+				const state = dragRef.current;
+				if (!state || state.pointerId !== event.pointerId) return;
+				drop(positionAt(event.clientX) ?? rawRef.current);
+			},
+			// A cancelled drag never commits: dropping the draft lets the
+			// committed value drive the thumb again. `lostpointercapture` also
+			// fires after a normal release, where no drag is left to cancel.
+			onPointerCancel: () => drop(null),
+			onLostPointerCapture: () => drop(null),
+		},
+		step,
+	};
+}
 
 /**
  * Thinking-effort ladder slider.
  *
  * One discrete track over the current model's REAL efforts plus `auto` (and
- * `off` when the model has a ladder to turn off). The knob follows the drag;
- * only the release writes — a slider that committed every pointer tick would
- * send one RPC per pixel and race its own optimistic state.
+ * `off` when the model has a ladder to turn off). The knob tracks the pointer
+ * continuously and snaps to the nearest reachable rung on release; only the
+ * release writes — a slider that committed every pointer tick would send one
+ * RPC per pixel and race its own optimistic state.
  *
  * `ceiling` is the model's top supported rung: rungs above it stay visible,
  * struck through, and neither the draft nor the commit can land on them, so the
@@ -113,63 +252,22 @@ export function LadderSlider({
 	onCommit,
 }: LadderSliderProps): ReactNode {
 	const rungs = ladderRungs(efforts, ceiling, thinkingLabel);
+	const last = Math.max(1, rungs.length - 1);
 	const committed = ladderIndex(rungs, value);
-	const [draft, setDraftState] = useState(committed);
-	const [dragging, setDragging] = useState(false);
-	const trackRef = useRef<HTMLDivElement | null>(null);
-	// The rail is the laid-out span between the two end stops: `--gui-slider-inset`
-	// insets it in CSS, so measuring it keeps the knob size out of the pointer
-	// math instead of restating half of it here.
-	const railRef = useRef<HTMLSpanElement | null>(null);
-	const dragRef = useRef<{ pointerId: number } | null>(null);
-	// The pointer sequence reads the draft between renders: `pointerup` can
-	// arrive in the same tick as its `pointerdown` (a click without a move),
-	// before React has re-rendered from the press. The ref is the source of
-	// truth so that release commits the rung the press landed on.
-	const draftRef = useRef(draft);
-	const applyDraft = useCallback((next: number): void => {
-		draftRef.current = next;
-		setDraftState(next);
-	}, []);
-
-	useEffect(() => {
-		if (!dragging) applyDraft(committed);
-	}, [committed, dragging, applyDraft]);
+	// Rungs above the model's ceiling are visible but unreachable: a gesture that
+	// passes over them reports the ceiling instead, never a capped rung.
+	const clampIndex = (index: number): number => clampLadderIndex(rungs, index);
+	const commit = (index: number): void => {
+		const next = rungs[index]?.level ?? null;
+		if (next !== (value ?? null)) onCommit(next);
+	};
+	const slider = useSliderDrag({ last, value: committed, reachable: clampIndex, onSettle: commit, disabled });
 
 	if (efforts.length === 0) {
 		return <p className="gui-agent-info-note">{t("general.agentInfoThinkingUnsupported")}</p>;
 	}
 
-	const last = Math.max(1, rungs.length - 1);
-	const rung = rungs[draft] ?? rungs[0]!;
-
-	const write = (index: number): void => {
-		const settled = clampLadderIndex(rungs, index);
-		dragRef.current = null;
-		setDragging(false);
-		applyDraft(settled);
-		const next = rungs[settled]?.level ?? null;
-		if (next !== (value ?? null)) onCommit(next);
-	};
-	// A cancelled drag never commits: drop the draft and let the committed
-	// value drive the knob again. `lostpointercapture` also fires after a
-	// normal release, so a settled drag is left alone (its commit owns the
-	// knob from here).
-	const cancel = (): void => {
-		if (!dragRef.current) return;
-		dragRef.current = null;
-		setDragging(false);
-		applyDraft(committed);
-	};
-	/** Pointer x → nearest rung, or null while the rail has no laid-out width
-	 *  (the first frame, a hidden panel). The rail already excludes the knob
-	 *  inset, so its rect is exactly the travel span. */
-	const indexAt = (clientX: number): number | null => {
-		const rect = railRef.current?.getBoundingClientRect();
-		if (!rect || rect.width <= 0) return null;
-		const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-		return Math.round(ratio * last);
-	};
+	const rung = rungs[slider.target] ?? rungs[0]!;
 
 	return (
 		<div className="gui-slider" data-disabled={disabled ? "true" : undefined}>
@@ -180,7 +278,6 @@ export function LadderSlider({
 				) : null}
 			</div>
 			<div
-				ref={trackRef}
 				className="gui-slider-track"
 				role="slider"
 				tabIndex={disabled ? -1 : 0}
@@ -188,39 +285,11 @@ export function LadderSlider({
 				aria-disabled={disabled || undefined}
 				aria-valuemin={0}
 				aria-valuemax={last}
-				aria-valuenow={draft}
+				aria-valuenow={slider.target}
 				aria-valuetext={rung.label}
-				data-dragging={dragging ? "" : undefined}
-				style={{ "--gui-slider-p": draft / last } as CSSProperties}
-				onPointerDown={event => {
-					if (disabled || event.button !== 0) return;
-					event.preventDefault();
-					try {
-						event.currentTarget.setPointerCapture?.(event.pointerId);
-					} catch {
-						/* capture is best-effort; the release still commits */
-					}
-					dragRef.current = { pointerId: event.pointerId };
-					setDragging(true);
-					const next = indexAt(event.clientX);
-					if (next != null) applyDraft(clampLadderIndex(rungs, next));
-					event.currentTarget.focus();
-				}}
-				onPointerMove={event => {
-					const drag = dragRef.current;
-					if (!drag || drag.pointerId !== event.pointerId) return;
-					const next = indexAt(event.clientX);
-					if (next == null) return;
-					const settled = clampLadderIndex(rungs, next);
-					if (settled !== draftRef.current) applyDraft(settled);
-				}}
-				onPointerUp={event => {
-					const drag = dragRef.current;
-					if (!drag || drag.pointerId !== event.pointerId) return;
-					write(draftRef.current);
-				}}
-				onPointerCancel={cancel}
-				onLostPointerCapture={cancel}
+				data-dragging={slider.dragging ? "" : undefined}
+				style={{ "--gui-slider-p": slider.position / last } as CSSProperties}
+				{...slider.handlers}
 				onKeyDown={event => {
 					if (disabled) return;
 					const step: Record<string, number> = {
@@ -231,20 +300,20 @@ export function LadderSlider({
 					};
 					let next: number | null = null;
 					const delta = step[event.key];
-					if (delta !== undefined) next = draftRef.current + delta;
+					if (delta !== undefined) next = slider.target + delta;
 					else if (event.key === "Home") next = 0;
 					else if (event.key === "End") next = last;
 					if (next == null) return;
 					event.preventDefault();
-					write(next);
+					slider.step(next);
 				}}
 			>
-				<span ref={railRef} className="gui-slider-rail" aria-hidden="true" />
+				<span ref={slider.setRail} className="gui-slider-rail" aria-hidden="true" />
 				<span className="gui-slider-fill" aria-hidden="true" />
 				{rungs.map((item, index) => (
 					<span
 						key={item.level ?? "off"}
-						className={`gui-slider-dot${index <= draft ? " gui-slider-dot--on" : ""}`}
+						className={`gui-slider-dot${index <= slider.target ? " gui-slider-dot--on" : ""}`}
 						data-capped={item.capped ? "" : undefined}
 						style={{ "--gui-slider-dot-p": index / last } as CSSProperties}
 						aria-hidden="true"
@@ -256,7 +325,7 @@ export function LadderSlider({
 				{rungs.map((item, index) => (
 					<span
 						key={item.level ?? "off"}
-						className={`gui-slider-tick${index === draft ? " gui-slider-tick--on" : ""}${item.capped ? " gui-slider-tick--capped" : ""}`}
+						className={`gui-slider-tick${index === slider.target ? " gui-slider-tick--on" : ""}${item.capped ? " gui-slider-tick--capped" : ""}`}
 					>
 						{item.label}
 					</span>
