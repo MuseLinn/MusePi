@@ -405,7 +405,7 @@ daemon RPC:
 
 ### 8d. 营销预览 demo（2026-11-05）
 
-站点落地页的交互预览跑的是真实桌面渲染器，只把对端换成夹具 daemon，而不是另做一套假 UI。`apps/desktop/scripts/build-web-demo.mjs` 从 `dist/` 组装 `web/app/`（外壳 chunk 与样式表，字体裁剪到外壳实际绘制的字面），再用 daemon 自己的编译器把 `main.conversation`、`conversation.composer.bar`、`panel.tab.files`、`panel.shell` 四个插槽组件编译进 `web/app/plugins/`。注册项按插槽收集，不是每个插件只取一个；产物先组装在 `.tmp/web-demo-build`，全部检查通过后才替换 `web/app`，raw 体积与传输体积各有预算。`web/demo-src/` 提供假 daemon：`transport.js` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，夹具模块应答启动、会话、文件与 git 的 RPC，`push()` 发出脚本化回合所流经的订阅信封。
+站点落地页的交互预览跑的是真实桌面渲染器，只把对端换成夹具 daemon，而不是另做一套假 UI。`apps/desktop/scripts/build-web-demo.mjs` 从 `dist/` 组装 `web/app/`（外壳 chunk 与样式表，字体裁剪到外壳实际绘制的字面），再用 daemon 自己的编译器把 `main.conversation`、`conversation.composer.bar`、`panel.tab.files`、`panel.shell` 四个插槽组件编译进 `web/app/plugins/`。注册项按插槽收集，不是每个插件只取一个；产物先组装在 `.tmp/web-demo-build`，全部检查通过后才替换 `web/app`，raw 体积与传输体积各有预算。Pages 工作流每次 push 都会跑这两步构建，所以线上预览始终跟着 `main`；仓库里的 `web/app/` 只是本地便利，不是部署来源。`web/demo-src/` 提供假 daemon：`transport.js` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，夹具模块应答启动、会话、文件与 git 的 RPC，`push()` 发出脚本化回合所流经的订阅信封。
 
 - **页面不再套一层模拟窗口**：预览直接挂渲染器；每个视图有一行引导说明该看什么，「下一步」按欢迎 → 对话 → 文件 → 看板推进，访客不需要自己漫无目的地试。
 - **socket 目标刻意指向死端口**：`demo-boot.js` 在渲染器 bundle 之前把 `musepi-gui-url` 固定为 `ws://127.0.0.1:9/demo`。夹具传输层安装失败时，demo 只能停在连接页，绝不能落到本机 8300 的 daemon 上。改夹具时不要把这个 URL 改成活的。

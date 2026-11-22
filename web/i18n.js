@@ -142,7 +142,7 @@
     "mom.desc":
       "The desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work; the whole stack is our own and ships on its own release line. What follows aren't roadmap promises — they're things already shipped in recent releases.",
     "mom.stat1": "LLM providers",
-    "mom.stat2": "Supported platforms",
+    "mom.stat2": "Shipped platforms",
     "mom.stat3": "Extension hubs",
     "mom.stat4": "Shared background service",
     "mom.log1.tag": "Interface",
@@ -169,7 +169,7 @@
     "price.p1name": "Community",
     "price.forever": "/ forever",
     "price.p1desc": "The full MusePi — no locks, no limits.",
-    "price.p1f1": "Desktop GUI · Terminal TUI · Mobile companion",
+    "price.p1f1": "Desktop GUI · terminal TUI · mobile companion (in development)",
     "price.p1f2": "60+ providers, bring your own API keys",
     "price.p1f3": "Runs locally; sessions and settings never upload",
     "price.p1f4": "Extension hot-reload, two extension hubs",
@@ -199,16 +199,16 @@
       "It's a free test during the feature-polishing phase — all core capabilities are open, with no limit on sessions or messages. The community edition stays free forever; Pro and Team are a farther-off consideration that only comes up once the existing capabilities mature — MusePi won't quietly turn what's already free behind a paywall.",
     "faq.q2": "Which platforms are supported?",
     "faq.a2":
-      "Desktop covers macOS (Apple silicon), Windows 10/11 (x64 and ARM64) and Linux (.AppImage and .deb, x64 and ARM64); the terminal TUI runs on all three plus WSL; the mobile companion offers an arm64 .apk for Android; the HarmonyOS NEXT shell ships in the repository and builds with DevEco Studio, with no prebuilt package yet. They all connect to the same background service, with identical sessions and settings.",
+      "Desktop covers macOS (Apple silicon), Windows 10/11 (x64 and ARM64) and Linux (.AppImage and .deb, x64 and ARM64); the terminal TUI runs on all three plus WSL; both are ready to download. The mobile companion and the HarmonyOS NEXT shell are still in development: the Android arm64 .apk and the HarmonyOS project ship as test builds in the repository, with no availability promise yet. They all connect to the same background service, with identical sessions and settings.",
     "faq.q3": "Do I need my own model API keys?",
     "faq.a3":
       "Yes. MusePi supports 60+ model providers; just enter your own keys in settings and model costs are billed directly with the provider you choose. MusePi doesn't proxy or take a cut. You can also connect local models.",
     "faq.q4": "Are my code and data safe?",
     "faq.a4":
-      "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion pairs over the LAN by QR code, and remote control is end-to-end encrypted the whole way — no third-party server in between. Everything else that leaves the machine follows what you turn on: model requests go to the provider you configure; the desktop app reads the GitHub release manifest at launch to surface new versions (set MUSEPI_NO_AUTO_UPDATE=1 to skip the automatic check); and only when you start a public tunnel does collaboration traffic pass through cloudflared.",
+      "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion (in development) is designed to pair over the LAN by QR code, with end-to-end encrypted remote control — no third-party server in between. Everything else that leaves the machine follows what you turn on: model requests go to the provider you configure; the desktop app reads the GitHub release manifest at launch to surface new versions (set MUSEPI_NO_AUTO_UPDATE=1 to skip the automatic check); and only when you start a public tunnel does collaboration traffic pass through cloudflared.",
     "faq.q5": "Where does MusePi come from?",
     "faq.a5":
-      "MusePi is an AI workspace: the desktop GUI, the terminal, the mobile companion and the resident desktop pet share one background service, with models, tools and surfaces all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; everything is MIT-licensed.",
+      "MusePi is an AI workspace: the desktop GUI, the terminal and the resident desktop pet share one background service, with the mobile companion still in development; models, tools and surfaces are all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; everything is MIT-licensed.",
     "faq.q6": "How do I get started?",
     "faq.a6":
       "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Prebuilt binaries need no extra runtime; a from-source install needs Bun 1.4.4 or newer. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
@@ -223,6 +223,7 @@
     /* 页脚 */
     "footer.tag":
       "An AI engine that lives inside your workflow: models, tools and surfaces all swappable, desktop, terminal and phone sharing one brain.",
+    "footer.android": "Android (in development)",
     "footer.terminal": "Terminal",
     "footer.aria": "Footer navigation",
     "footer.colProduct": "Product",
@@ -244,10 +245,10 @@
   var HEAD_EN = {
     title: "MusePi — Your AI partner: more than writing code, reshaped to your workflow",
     description:
-      "MusePi is an AI workspace: the desktop app, the terminal and the mobile companion share the same sessions and settings, so work picks up wherever you are. It gets hands on — writing code, running commands, driving the browser — and it comes apart so you can rebuild it around your workflow: models, tools and surfaces are swappable. 60+ model providers, runs locally, end-to-end encrypted collaboration. Free to test; the community edition is free forever.",
+      "MusePi is an AI workspace: the desktop app and the terminal share the same sessions and settings, so work picks up wherever you are, while the mobile companion is still in development. It gets hands on — writing code, running commands, driving the browser — and it comes apart so you can rebuild it around your workflow: models, tools and surfaces are swappable. 60+ model providers, runs locally, end-to-end encrypted collaboration. Free to test; the community edition is free forever.",
     ogTitle: "MusePi — Your AI partner: more than writing code, reshaped to your workflow",
     ogDescription:
-      "A hands-on AI partner: it writes code, runs commands and drives the browser, and you can rebuild it around your workflow. Desktop · command line · phone share the same sessions, 60+ providers, runs locally. Free to test, community edition free forever.",
+      "A hands-on AI partner: it writes code, runs commands and drives the browser, and you can rebuild it around your workflow. Desktop and command line share the same sessions, mobile is in development, 60+ providers, runs locally. Free to test, community edition free forever.",
   };
 
   /* MPI18N.t() 供 main.js 调用；这里放需要运行时切换的文案。 */
