@@ -2,29 +2,29 @@
  *
  * Package and component fibers own availability. Read/write/search families
  * leave the session tool set when their component is unloaded; unloading the
- * index component stops background scans without changing existing FTS data. */
+ * index component stops background scans without changing existing FTS data.
+ *
+ * Ownership itself lives in `tool-ownership.ts` — this module is the file
+ * domain's view of it, so the file families and every other packaged tool
+ * answer "who owns this tool" from one table.
+ */
 import { isCapabilityActive } from "../extensibility/capability-activation";
+import { isToolOwnerActive, TOOL_OWNERS } from "./tool-ownership";
 
 export const FILE_BACKEND_COMPONENTS = ["read", "write", "search", "index"] as const;
 export type FileBackendComponent = (typeof FILE_BACKEND_COMPONENTS)[number];
 
-const FILE_TOOL_BACKENDS: Record<string, FileBackendComponent> = {
-	read: "read",
-	write: "write",
-	edit: "write",
-	ast_edit: "write",
-	glob: "search",
-	grep: "search",
-	ast_grep: "search",
-};
-
+/** The file-tools component owning `name`, when the owner is in the file domain. */
 export function fileBackendForTool(name: string): FileBackendComponent | null {
-	return FILE_TOOL_BACKENDS[name] ?? null;
+	const owner = TOOL_OWNERS[name];
+	if (owner?.domain !== "file") return null;
+	return FILE_BACKEND_COMPONENTS.includes(owner.id as FileBackendComponent)
+		? (owner.id as FileBackendComponent)
+		: null;
 }
 
 export function isFileBackendToolAllowed(name: string): boolean {
-	const backend = fileBackendForTool(name);
-	return backend === null || isCapabilityActive("file", backend);
+	return isToolOwnerActive(name);
 }
 
 export function isFileIndexBackendEnabled(): boolean {

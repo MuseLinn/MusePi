@@ -72,6 +72,7 @@ import type { PlanProposalHandler } from "./resolve";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
 import { type TodoPhase, TodoTool } from "./todo";
+import { isToolOwnerActive } from "./tool-ownership";
 import { WriteTool } from "./write";
 import { isMountableUnderXdev, type XdevState } from "./xdev";
 import { YieldTool } from "./yield";
@@ -116,6 +117,7 @@ export * from "./review";
 export * from "./security-scan";
 export * from "./think";
 export * from "./todo";
+export * from "./tool-ownership";
 export * from "./tts";
 export * from "./vibe";
 export * from "./write";
@@ -637,6 +639,10 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (Array.isArray(denylist) && (denylist as string[]).includes(name)) return false;
 		// An unloaded file-tools component removes its tool family from the slate.
 		if (!isFileBackendToolAllowed(name)) return false;
+		// Every other packaged tool follows the component that owns it: unloading
+		// or denying that component removes the tool, exactly like the file
+		// families above. Unowned tools stay implicitly available.
+		if (!isToolOwnerActive(name)) return false;
 		// Never in the default set. Explicitly activatable while goal.enabled and
 		// no goal record exists yet — /guided-goal enables it so the agent can
 		// finish the interview with `goal create`, which turns goal mode on. Once

@@ -120,6 +120,7 @@ daemon 会话给 agent 挂了一组创造工具。**创造模式只激活 Cordis
 | 扩展 API 全貌/事件名/命令上下文 | `docs/extensions.md` |
 | 插件两轨与入口规范 | `docs/plugin-tracks.md` |
 | 能力缝（provider/service/slot 所有权） | `docs/capability-seams.md` |
+| 工具所有权（哪个组件拥有哪个内建工具） | `packages/coding-agent/src/tools/tool-ownership.ts` |
 | 插件配置（manifest config / pi.config / 资源卡） | `docs/extensions-dev.md` §13 |
 | 加载机制细节（发现顺序/路径解析/禁用） | `docs/extension-loading.md` |
 | 自定义工具（模型直接调用） | `docs/custom-tools.md` |

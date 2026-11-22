@@ -27,6 +27,8 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **标准 work 面**（便于逐项审阅）：`work` 不叠加预设提示词、不声明 preset 行；能力由三部分组成——`system-prompt.md` 的基础提示词、`STANDARD_TOP_LEVEL_TOOL_NAMES` 显式声明的顶层工具（read/write/bash/edit/glob/grep/computer/eval/task/hub/learn/manage_skill/todo/ask/web_search，与 essentials + `XDEV_KEEP_TOP_LEVEL` 由漂移测试锁定）、以及其余工具经 `xd://` 目录按需发现。能力包（文件工具、委派、LSP、压缩等）由环境自动发现供给，不在 preset 行里重复声明；预设若需要不同工具面，自己声明 `topLevelTools`，不与标准列表合并。创建类工具（Cordis、清单、插件管理、Track B）默认不进入这个面。按工具卡片席位是 `tool.call.toolview.<wire tool name>`，由 `registerToolView` 贡献、客户端 keyed 注册表挂载。
 
+**工具所有权**：每个内建工具在 `tools/tool-ownership.ts` 里可以有一个拥有者组件（`TOOL_OWNERS`），工具可用性跟随该组件的 fiber——卸载或 deny 那个组件，工具就离开工具表；没有拥有者的工具保持隐式可用，从未装载过的域也不会让工具消失。`registerToolOwner(name, owner)` 是运行时声明缝（返回 disposer 恢复上一个拥有者），包可以在 `apply` 里认领自己贡献的工具。这与 `extensionOwnsTool` 互补：后者管「扩展注册了同名工具，核心工厂就不再造一份」。
+
 Track A 入口必须使用**具名导出**：`export const name`、`export const inject`、可选的 `export const provide` / `export const Config`、`export function apply(ctx, config)`。不要写 `export default apply` 或 `export default { ... }`：前者会被宿主解析成 legacy bare factory，`name` / `inject` / `provide` 全部失效；后者不是 dsh 的入口约定。MusePi 的 loader 仍兼容旧写法，但新插件一律用具名导出。
 Track A 的 `apply` 收到同一个对象，既是 `pi`（平铺兼容面），也是 `ctx`（dsh 风格服务面）。新插件应使用 `ctx.tools.register`、`ctx.commands.register`、`ctx.settings.register`、`ctx.prompts.register`、`ctx.slots.register`、`ctx.rpc.register`、`ctx.memory.registerBackendProvider`、`ctx.hmr.onChange`；`pi.registerTool` 等平铺方法只作为既有插件的兼容别名保留。
 
