@@ -553,27 +553,47 @@
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
-/* ── Session hover card (WorkBuddy 悬浮弹窗 parity + 我们的 mode 行) ──
- * Fixed tooltip-grade card floating right of the hovered session row
- * (SessionHoverCard.tsx portals it to document.body — the sidebar's
- * glass/transform ancestors would hijack fixed positioning). Two-phase
- * enter like .gui-menu-popup: base paints at opacity 0 so the frosted
- * backdrop composites before the transform-only entrance — animating
- * opacity on a backdrop-filter surface reads as plain translucency. */
-.gui-session-hover-card {
+/* ── Hover-card recipe（两张悬停卡共用的一份声明）────────────────────
+ * 会话卡与项目卡是同一类表面：portal 到 body 的 L2 浮层，贴在悬停行旁边
+ * 读信息。它们的宽度与内容形状不同，但表面、字号阶梯、行盒与入场必须是
+ * 同一份声明——两个区块各抄一遍这几条，正是两张卡精致度分叉的来源。
+ *
+ * 配方：
+ *   · 表面 — L2 玻璃（color-mix 覆盖层 + backdrop-filter + 六层阴影），
+ *     与 `.gui-menu-popup` 同层，不另造一套玻璃。
+ *   · 标题 — `--ui-font-size` / 600 / line-height 1.35。
+ *   · 元信息行 — xs 字号、2px 分隔点、一个 accent chip：一眼可读的短事实
+ *     （项目卡：目录数 · 会话数；会话卡：模式 chip · 更新于 …）。
+ *   · 行盒 — xs 字号、6px 间距、`3px 4px` 内边距（4px 既是命中区，也是与
+ *     标题文字对齐的栅格），12px 图标 0.75 不透明度，值单行省略。
+ *   · 入场 — 一个 fade + slide 手势：opacity 与 transform 落在同一对关键帧，
+ *     140ms `--spring`。位移方向由 `--gui-hover-card-shift-*` 给出（会话卡
+ *     从行右侧滑入，项目卡从行上方/下方滑入），时长与曲线不各写一份。
+ *     隐藏态写在关键帧里，不写在基础规则里：基础 `opacity: 0` 在
+ *     `prefers-reduced-motion` / `.gui-motion-off` 丢掉动画之后就永远不可见。
+ *
+ * 两张卡各自保留的差异（是内容形状，不是漂移）：
+ *   · 宽度 — 会话卡 288px（标题两行截断），项目卡 240px（目录列表）。
+ *   · 列表 — 项目卡的目录列表有自己的高度上限并自己滚动（`fitProjectCard`
+ *     按实测可用空间夹取），会话卡只有一小叠事实行，不需要滚动。
+ *   · 命中区 — 只有真的能点的行才带 `--action`：项目卡的目录行打开目录，
+ *     会话卡的行是只读的，给只读行铺 hover 底色等于承诺一个不存在的动作。
+ */
+.gui-hover-card {
 	position: fixed;
 	/* Above chat content, below dialog backdrops (3000) / menus (4100). */
 	z-index: var(--z-hover-card);
-	width: 288px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	/* 视口兜底：窄窗口里卡片不准比窗口宽。 */
+	max-width: calc(100vw - 16px);
 	padding: 12px 14px 10px;
 	border-radius: var(--radius-lg);
-	opacity: 0;
-	pointer-events: none;
-	/* Fallback surface: if the layered wash below is
-	 * dropped wholesale (an unresolvable var invalidates the
-	 * whole shorthand), the menu degrades to a solid surface
-	 * instead of fully transparent text over content. Overridden
-	 * below whenever vars resolve, so healthy rendering is
+	/* Fallback surface: if the layered wash below is dropped wholesale (an
+	 * unresolvable var invalidates the whole shorthand), the card degrades to
+	 * a solid surface instead of fully transparent text over content.
+	 * Overridden below whenever vars resolve, so healthy rendering is
 	 * pixel-identical. */
 	background-color: var(--bg-overlay, var(--bg));
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
@@ -587,87 +607,163 @@
 		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
 		0 6px 6px -3px rgba(0, 0, 0, 0.16),
 		0 12px 32px rgba(0, 0, 0, 0.45);
-}
-
-.gui-session-hover-card--entered {
-	opacity: 1;
-	animation: gui-hover-card-in 160ms var(--spring);
+	/* 入场位移：会话卡从行右侧滑入（默认）；项目卡在自己的规则里改方向。 */
+	--gui-hover-card-shift-x: -6px;
+	--gui-hover-card-shift-y: 0px;
+	animation: gui-hover-card-in 140ms var(--spring);
 }
 
 @keyframes gui-hover-card-in {
 	from {
-		transform: translateX(-6px);
+		opacity: 0;
+		transform: translate(var(--gui-hover-card-shift-x, 0px), var(--gui-hover-card-shift-y, 0px));
 	}
 	to {
-		transform: translateX(0);
+		opacity: 1;
+		transform: translate(0, 0);
 	}
 }
 
-.gui-session-hover-card-title {
+.gui-hover-card-title {
 	font-size: var(--ui-font-size);
 	font-weight: 600;
-	line-height: 1.45;
+	line-height: 1.35;
 	color: var(--color-text);
-	/* Two-line clamp (WorkBuddy card parity): long titles truncate with an
-	 * ellipsis instead of blowing the card's height budget. */
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	overflow: hidden;
-	overflow-wrap: anywhere;
-	margin-bottom: 8px;
 }
 
-.gui-session-hover-card-row {
+.gui-hover-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-hover-card-dot {
+	flex: none;
+	width: 2px;
+	height: 2px;
+	border-radius: var(--radius-full);
+	background: currentColor;
+	opacity: 0.6;
+}
+
+.gui-hover-card-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
-	padding: 3px 0;
+	padding: 3px 4px;
+	border-radius: var(--radius-md);
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 
-.gui-session-hover-card-icon {
+/* 行组：卡片正文里的一叠事实行。1px 步进让四五行仍然是一片可扫读的栅格，
+ * 而不是被卡片级 6px gap 拉成五个独立的块。项目卡的目录列表和会话卡的
+ * 事实行都挂这一层。 */
+.gui-hover-card-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+}
+
+/* 命中区只属于会响应的行。只读行（会话卡）没有 `--action`，指针停在上面
+ * 不换底色——那会让人以为点得动。 */
+.gui-hover-card-row--action:hover {
+	background: var(--glass-hover, color-mix(in oklab, var(--color-text) 7%, transparent));
+}
+
+.gui-hover-card-icon {
 	flex: none;
 	width: 12px;
 	height: 12px;
 	opacity: 0.75;
 }
 
-.gui-session-hover-card-icon--ghost {
+.gui-hover-card-icon--ghost {
 	opacity: 0.4;
 }
 
-.gui-session-hover-card-label {
+.gui-hover-card-label {
 	flex: none;
 	color: var(--color-text-faint);
 }
 
-.gui-session-hover-card-text {
+.gui-hover-card-text {
 	min-width: 0;
+	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--color-text);
 }
 
-/* Mode row — the one row that is ours beyond the WorkBuddy reference:
- * accent-tinted chip so the session's preset reads at a glance. */
-.gui-session-hover-card-mode {
-	width: fit-content;
-	margin: 2px 0 1px;
-	padding: 3px 8px;
-	gap: 5px;
+.gui-hover-card-chip {
+	flex: none;
+	max-width: 45%;
+	padding: 0 5px;
 	border-radius: var(--radius-xs);
-	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-	color: var(--color-accent);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.6;
 	font-weight: 600;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-.gui-session-hover-card-mode .gui-session-hover-card-text {
-	color: var(--color-accent);
+@media (prefers-reduced-motion: reduce) {
+	.gui-hover-card {
+		animation: none;
+	}
+}
+
+.gui-motion-off .gui-hover-card {
+	animation: none;
+}
+
+/* ── Session hover card ───────────────────────────────────────────────
+ * Fixed tooltip-grade card floating right of the hovered session row
+ * (SessionHoverCard.tsx portals it to document.body — the sidebar's
+ * glass/transform ancestors would hijack fixed positioning). Surface,
+ * rhythm and entrance come from the hover-card recipe above; this block
+ * only says what session content needs. */
+.gui-session-hover-card {
+	width: 288px;
+	/* 只读卡：指针不落在卡上，也不抢行的 hover。 */
+	pointer-events: none;
+}
+
+.gui-session-hover-card-title {
+	/* Two-line clamp: session titles are long, and truncating them to one
+	 * line hides the part that distinguishes two similar sessions. */
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+
+/* 元信息行的第一格是模式 chip（accent 着色，`mode {id}` 命名链），第二格是
+ * 更新时间的完整读数。两格都能收缩：用户自建预设名与长日期在 288px 里
+ * 会互相挤，挤的时候各自省略，完整值留在 title 上。 */
+.gui-session-hover-card-mode {
+	flex: 0 1 auto;
+}
+
+.gui-session-hover-card-when {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* ── Project hover card（项目行的多目录卡）──────────────────────────────
@@ -688,68 +784,20 @@
  * 与会话悬浮卡当初的结论一致（见 `SessionHoverCard.tsx`）。
  *
  * 展开/收起仍由 React 状态驱动（见 SessionSidebar 的 projectCard），CSS 只
- * 负责出场动效。入场动画只动 transform + opacity，且 reduced motion 下
- * 直接落位。 */
+ * 负责出场动效。表面、字号阶梯、行盒与入场全部来自上面的 hover-card
+ * 配方；这里只写项目内容自己的差异。 */
 .gui-project-hover-card {
-	position: fixed;
-	z-index: var(--z-hover-card);
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
 	width: 240px;
-	/* 视口兜底：窄窗口里卡片不准比窗口宽。侧栏宽度不再参与——卡片已经
-	 * 不在这条滚动容器里了。 */
-	max-width: calc(100vw - 16px);
-	padding: 10px 12px;
-	border-radius: var(--radius-lg);
-	background-color: var(--bg-overlay, var(--bg));
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 6px 6px -3px rgba(0, 0, 0, 0.16),
-		0 12px 32px rgba(0, 0, 0, 0.45);
-	animation: gui-project-hover-card-in 140ms var(--spring);
-}
-
-@keyframes gui-project-hover-card-in {
-	from {
-		opacity: 0;
-		transform: translateY(-4px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
+	/* 从行的方向滑入：卡片贴在行顶向下生长，位移就来自上方。 */
+	--gui-hover-card-shift-x: 0px;
+	--gui-hover-card-shift-y: -4px;
 }
 
 .gui-project-hover-card-title {
-	font-size: var(--ui-font-size);
-	font-weight: 600;
-	line-height: 1.35;
-	color: var(--color-text);
+	/* 项目名是一个名字，不是一段话：单行省略即可，多出的字在 title 上。 */
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.gui-project-hover-card-meta {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	font-size: var(--ui-font-size-xs);
-	color: var(--color-text-faint);
-}
-
-.gui-project-hover-card-dot {
-	width: 2px;
-	height: 2px;
-	border-radius: var(--radius-full);
-	background: currentColor;
-	opacity: 0.6;
 }
 
 /* 列表高度由组件按真实可用空间算好（`fitProjectCard` + 实测兜底），经
@@ -760,15 +808,12 @@
  * `overflow-x` 按规范计算为 `auto`，于是任何比内容盒宽一点的行都会在
  * "内容其实完整"的卡片里长出一条横向滚动条（用户原话：内容明明显示完整
  * 却出现了不该出现的横向滚动）。行内路径用 `nowrap` + 省略号 + `title`
- * 收尾（见 `.gui-project-hover-card-text`），所以这一轴永远不该滚。 */
+ * 收尾（见 `.gui-hover-card-text`），所以这一轴永远不该滚。
+ *
+ * 行步进与事实行共用 `.gui-hover-card-rows` 的 1px；这里只加高度上限与
+ * 滚动。 */
 .gui-project-hover-card-list {
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	min-width: 0;
 	max-height: var(--gui-project-list-max, min(280px, 50vh));
-	margin: 0;
-	padding: 0;
 	list-style: none;
 	overflow-y: auto;
 	overflow-x: clip;
@@ -776,64 +821,15 @@
 }
 
 /* 行在侧栏下方没有空间时整卡翻到行的上方（组件按行的矩形决定）。定位
- * 坐标已是内联的视口值，这里只换出场方向。 */
+ * 坐标已是内联的视口值，这里只换入场位移的方向——同一个 fade+slide 关键帧，
+ * 不另写一份。 */
 .gui-project-hover-card--above {
-	animation-name: gui-project-hover-card-in-from-below;
+	--gui-hover-card-shift-y: 4px;
 }
 
-@keyframes gui-project-hover-card-in-from-below {
-	from {
-		opacity: 0;
-		transform: translateY(4px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-.gui-project-hover-card-row {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	min-width: 0;
-	padding: 3px 4px;
-	border-radius: var(--radius-md);
-	font-size: var(--ui-font-size-xs);
-	color: var(--color-text-muted);
-}
-
-.gui-project-hover-card-row:hover {
-	background: var(--glass-hover, color-mix(in oklab, var(--color-text) 7%, transparent));
-}
-
-.gui-project-hover-card-icon {
-	flex: none;
-	width: 12px;
-	height: 12px;
-	opacity: 0.75;
-}
-
-.gui-project-hover-card-text {
-	min-width: 0;
-	flex: 1;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--color-text);
-}
-
-/* 主目录标记:与会话悬浮卡的 mode chip 同一档——小、圆角、淡强调色。 */
-.gui-project-hover-card-chip {
-	flex: none;
-	padding: 0 5px;
-	border-radius: var(--radius-xs);
-	font-size: var(--ui-font-size-xs);
-	line-height: 1.6;
-	font-weight: 600;
-	color: var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-}
+/* 列表本身把行收得更紧（1px 列表 gap）：一行一个目录、列表自己滚，十几行
+ * 仍可整片扫读。行盒的内边距、图标与省略号来自配方；行确实能打开目录，所以
+ * 行带 `--action`，指针停在上面才有底色。 */
 
 /* 每目录的打开动作:常驻可见（卡片本身就是"看一下"的界面，隐藏动作会让人
  * 以为不能操作），`:hover`/`:focus-visible` 只加强度。 */
@@ -860,16 +856,6 @@
 	outline: 2px solid var(--color-accent);
 	outline-offset: 1px;
 	color: var(--color-text);
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.gui-project-hover-card {
-		animation: none;
-	}
-}
-
-.gui-motion-off .gui-project-hover-card {
-	animation: none;
 }
 
 

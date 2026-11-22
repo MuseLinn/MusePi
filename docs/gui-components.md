@@ -95,6 +95,36 @@ Shared by desktop and mobile; changes must be verified on both.
 
 **Consumers:** the settings nav and its schema-row results (`apps/desktop/src/lib/settings-search.ts`) and the command palette (`apps/desktop/src/components/CommandPalette.tsx` — commands in both languages, settings pages and rows, session titles). Session content search (`session.search`) and the plugin market keep their own indexes and are not routed through this primitive.
 
+## Hover cards (one recipe)
+
+Both sidebar hover cards — the session card (`SessionHoverCard.tsx`, 288px) and the project card (`ProjectHoverCard.tsx`, 240px) — are **one** recipe in `gui-chrome.css`, `.gui-hover-card` plus its `-title` / `-meta` / `-dot` / `-rows` / `-row` / `-icon` / `-label` / `-text` / `-chip` parts. The card blocks that follow it declare only what their content changes; a new popover starts from these parts instead of copying six declarations.
+
+| Part | Value | Why |
+| --- | --- | --- |
+| Surface | L2 glass: `color-mix` overlay + `backdrop-filter` + the six-layer shadow | Same layer as `.gui-menu-popup`; never a second glass family |
+| Title | `--ui-font-size`, weight 600, `line-height: 1.35` | One title size for both cards |
+| Meta line | `--ui-font-size-xs`, 2px dots, one accent chip | A short readable fact line, not a label/value stack |
+| Row box | `--ui-font-size-xs`, 6px gap, `3px 4px`, 12px icon at 0.75, one-line ellipsis | The 4px inline padding is the hit area and the text grid |
+| Row group | `.gui-hover-card-rows`: `1px` step | A stack of facts scans as one grid instead of five separate blocks |
+| Entrance | `gui-hover-card-in`: `opacity` **and** `transform` in one keyframe pair, 140ms `--spring`; direction from `--gui-hover-card-shift-x` / `-y` | One fade-and-slide gesture, not a transform-only animation over an opacity class |
+| Hidden state | Inside the keyframe's `from`, never a base `opacity: 0` | A base opacity with the animation switched off would leave the card permanently invisible |
+| Reduced motion | `animation: none` under `prefers-reduced-motion` and `.gui-motion-off` | Lands immediately, visible |
+
+**What legitimately differs by content:** width (288px with a two-line title clamp for session titles; 240px with a single-line title for a project name), the list (the project card's directory list has its own height cap and scrolls, clamped by `fitProjectCard`; the session card is a short stack of fact rows that never scrolls), and the entrance direction (the session card slides in from the row's right, the project card from above or below, including its `--above` flip).
+
+**Hit areas are honest.** A row carries `.gui-hover-card-row--action` only when it does something. The project card's directory rows open a folder, so they hover; the session card's rows are read-only, so they have no hover wash — a wash there would promise a click that does not exist. `.gui-hover-card-chip` is shared (primary directory / session mode) and both cards keep their own chip label source.
+
+Contracts: `apps/desktop/test/project-hover-card.test.tsx` (state, portal, flip), `apps/desktop/test/session-fork-badge.test.tsx` (the session card's fork line), and `apps/desktop/test/hover-card-geometry.test.ts` (real Chromium: both cards' padding, row step, title clamp, entrance animating opacity and transform together, and reduced motion landing immediately).
+
+### The convergence rule behind it
+
+The user's report was not "make the session card prettier" but "why does the project card look more finished?" — a **finish divergence** between two siblings built at different times. The rule it produced, which applies to the next popover as much as to these two:
+
+1. **A newer component that reads as more finished sets the reference.** When a newly built surface visibly out-finishes an older sibling, the older one converges on it; the newer one's choices become the starting point for the next surface instead of being rediscovered. Divergence in finish between siblings is a defect even when both are individually acceptable.
+2. **Name the ingredients, not the taste.** The three that produced this difference are concrete and reusable: a **dense row grid with honest hit areas** (a real vertical step and a 4px inline pad), **one structured meta line** (dot separators plus one accent chip) instead of a label/value stack, and **an entrance that is one fade-and-slide gesture** rather than a transform animation beside a class that flips opacity. Copy the ingredient, not the pixels.
+3. **Extract on the second copy, not the fourth.** The two cards had already copied the same six declarations into one file. The recipe (`.gui-hover-card` + its parts) is that extraction, so a third hover card consumes it rather than adding a third copy.
+4. **Counter-rule: convergence never restyles behaviour.** A row gets a hover affordance only when clicking it does something. The project card's directory rows open, the session card's rows are read-only, and that asymmetry is correct and stays — the row grid converged, the hit area did not. Convergence is about finish, never about giving a surface an action it does not have.
+
 ## Overflow contract
 
 A scroll container declares **the axis it uses and the axis it must not use**. Setting only one of `overflow-x` / `overflow-y` leaves the other computing to `auto` (the CSS spec forbids `visible` as a companion), so a vertical list silently becomes a horizontal scroller too — and the first row wider than the content box grows a scrollbar under content that was already complete. That shipped on the project hover card ("内容明明显示完整却出现了不该出现的横向滚动") and appeared in ~70 other desktop rules, which is why this is a class rule with a guard rather than a card patch.

@@ -6,9 +6,11 @@ import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import { Icon } from "../vendor/oc-icons";
 
 /**
- * 会话悬浮卡（WorkBuddy 悬浮弹窗 parity + 我们的 mode 行）：鼠标停在侧栏
- * 会话行上 ~350ms 后,在该行右侧浮出一张玻璃卡片,展示标题 / 会话预设 /
- * 任务工作空间 / 最后活跃 / 创建时间。
+ * 会话悬浮卡：鼠标停在侧栏会话行上 ~350ms 后,在该行右侧浮出一张玻璃卡片,
+ * 展示标题 / 模式 / 任务工作空间 / 最后活跃 / 创建时间。
+ *
+ * 表面、字号阶梯、行盒与入场来自 `gui-chrome.css` 的 hover-card 配方
+ * （`.gui-hover-card`），本组件只决定会话内容怎么排。
  *
  * 数据分两半,由 bus 消息 + meta map 拼合:
  * - 行侧(SessionRow)只上报它手里有的展示字段(id/label/分叉来源/时间戳)
@@ -106,7 +108,6 @@ export function SessionHoverCard({
 	modeCatalog?: readonly ModeLabelEntry[] | null;
 }): ReactNode {
 	const [hover, setHover] = useState<SessionHoverPayload | null>(null);
-	const [entered, setEntered] = useState(false);
 	const visibleRef = useRef(false);
 	const showTimer = useRef<number | null>(null);
 	const hideTimer = useRef<number | null>(null);
@@ -127,7 +128,6 @@ export function SessionHoverCard({
 				hideTimer.current = window.setTimeout(() => {
 					hideTimer.current = null;
 					visibleRef.current = false;
-					setEntered(false);
 					setHover(null);
 				}, HIDE_GRACE_MS);
 				return;
@@ -149,15 +149,6 @@ export function SessionHoverCard({
 		};
 	}, []);
 
-	// 双阶段入场(.gui-menu-popup 同款):先以 opacity 0 合成毛玻璃背景,
-	// 下一帧再翻 opacity — backdrop-filter 元素上动画 opacity 会退化成
-	// 普通半透明(frosted 闪变),所以入场动画只动 transform。
-	useEffect(() => {
-		if (!hover) return;
-		const raf = requestAnimationFrame(() => setEntered(true));
-		return () => cancelAnimationFrame(raf);
-	}, [hover]);
-
 	// 滚动即收卡:锚点矩形随滚动失效,卡会钉在错误位置。scroll 不冒泡,
 	// 捕获阶段挂 window 才能覆盖侧栏内层滚动容器。
 	useEffect(() => {
@@ -172,7 +163,6 @@ export function SessionHoverCard({
 			}
 			if (!visibleRef.current) return;
 			visibleRef.current = false;
-			setEntered(false);
 			setHover(null);
 		};
 		window.addEventListener("scroll", onScroll, true);
@@ -184,6 +174,8 @@ export function SessionHoverCard({
 	const cwd = metaRow?.cwd?.trim() || null;
 	const hasBothTimes = Boolean(hover.updatedAt && hover.updatedAt !== hover.timestamp);
 	const forkParent = hover.forked ? hover.parentLabel : null;
+	const modeLabel = resolveModeLabel(metaRow?.modeId, modeCatalog);
+	const updatedAt = fullTime(hover.updatedAt ?? hover.timestamp);
 
 	// 贴行右侧;右侧放不下换左侧;垂直方向夹进视口。
 	const viewportW = window.innerWidth;
@@ -195,45 +187,46 @@ export function SessionHoverCard({
 	const top = Math.min(Math.max(8, hover.anchor.top - 6), Math.max(8, viewportH - CARD_EST_HEIGHT));
 
 	return createPortal(
-		<div
-			className={`gui-session-hover-card${entered ? " gui-session-hover-card--entered" : ""}`}
-			style={{ left, top }}
-			role="tooltip"
-		>
-			<div className="gui-session-hover-card-title" title={hover.label}>
+		// 只读卡：内容与卡片本身都不接受指针（行没有 hover 底色，也没有可点的
+		// 动作），悬停行才是交互面。
+		<div className="gui-hover-card gui-session-hover-card" style={{ left, top }} role="tooltip">
+			<div className="gui-hover-card-title gui-session-hover-card-title" title={hover.label}>
 				{hover.label}
 			</div>
-			{forkParent && (
-				<div className="gui-session-hover-card-row" title={forkParent}>
-					<Icon name="git-branch" className="gui-session-hover-card-icon" />
-					<span className="gui-session-hover-card-text">
-						{t("general.forkedFromWithName", { name: forkParent })}
-					</span>
-				</div>
-			)}
-			<div className="gui-session-hover-card-row gui-session-hover-card-mode">
-				<Icon name="stack" className="gui-session-hover-card-icon" />
-				<span className="gui-session-hover-card-text">{resolveModeLabel(metaRow?.modeId, modeCatalog)}</span>
+			{/* 元信息行：一个 chip（模式）+ 一个读数（更新于）。项目的元信息行
+			 *  是「目录数 · 会话数」，两张卡同一种读法——先给一个可命名的身份，
+			 *  再给一个时间，而不是把所有事实摊成等权的行。 */}
+			<div className="gui-hover-card-meta">
+				<span className="gui-hover-card-chip gui-session-hover-card-mode" title={modeLabel}>
+					{modeLabel}
+				</span>
+				<span className="gui-hover-card-dot" aria-hidden="true" />
+				<span className="gui-session-hover-card-when" title={updatedAt}>
+					{t("settings.updated")} {updatedAt}
+				</span>
 			</div>
-			{cwd && (
-				<div className="gui-session-hover-card-row" title={cwd}>
-					<Icon name="folder" className="gui-session-hover-card-icon" />
-					<span className="gui-session-hover-card-label">{t("general.sessionWorkspace")}</span>
-					<span className="gui-session-hover-card-text">{baseName(cwd)}</span>
-				</div>
-			)}
-			<div className="gui-session-hover-card-row">
-				<Icon name="history" className="gui-session-hover-card-icon" />
-				<span className="gui-session-hover-card-label">{t("settings.updated")}</span>
-				<span className="gui-session-hover-card-text">{fullTime(hover.updatedAt ?? hover.timestamp)}</span>
+			<div className="gui-hover-card-rows">
+				{forkParent && (
+					<div className="gui-hover-card-row" title={forkParent}>
+						<Icon name="git-branch" className="gui-hover-card-icon" />
+						<span className="gui-hover-card-text">{t("general.forkedFromWithName", { name: forkParent })}</span>
+					</div>
+				)}
+				{cwd && (
+					<div className="gui-hover-card-row" title={cwd}>
+						<Icon name="folder" className="gui-hover-card-icon" />
+						<span className="gui-hover-card-label">{t("general.sessionWorkspace")}</span>
+						<span className="gui-hover-card-text">{baseName(cwd)}</span>
+					</div>
+				)}
+				{hasBothTimes && (
+					<div className="gui-hover-card-row">
+						<Icon name="history" className="gui-hover-card-icon gui-hover-card-icon--ghost" />
+						<span className="gui-hover-card-label">{t("general.createdAt")}</span>
+						<span className="gui-hover-card-text">{fullTime(hover.timestamp)}</span>
+					</div>
+				)}
 			</div>
-			{hasBothTimes && (
-				<div className="gui-session-hover-card-row">
-					<Icon name="history" className="gui-session-hover-card-icon gui-session-hover-card-icon--ghost" />
-					<span className="gui-session-hover-card-label">{t("general.createdAt")}</span>
-					<span className="gui-session-hover-card-text">{fullTime(hover.timestamp)}</span>
-				</div>
-			)}
 		</div>,
 		document.body,
 	);

@@ -208,7 +208,7 @@ export function measureCard(card: HTMLElement | null): CardMetrics | null {
 	// 未布局时为 0,读数不可信。
 	if (cardHeight <= 0) return null;
 	const chrome = cardHeight - list.getBoundingClientRect().height;
-	const rows = list.querySelectorAll<HTMLElement>(".gui-project-hover-card-row");
+	const rows = list.querySelectorAll<HTMLElement>(".gui-hover-card-row");
 	if (rows.length === 0) return null;
 	const row =
 		rows.length > 1
@@ -307,7 +307,7 @@ export function ProjectHoverCard({
 				localRef.current = element;
 				cardRef?.(element);
 			}}
-			className={`gui-project-hover-card${fit.above ? " gui-project-hover-card--above" : ""}`}
+			className={`gui-hover-card gui-project-hover-card${fit.above ? " gui-project-hover-card--above" : ""}`}
 			style={style}
 			role="group"
 			aria-label={name}
@@ -323,33 +323,31 @@ export function ProjectHoverCard({
 				onRequestReturnFocus();
 			}}
 		>
-			<div className="gui-project-hover-card-title" title={name}>
+			<div className="gui-hover-card-title gui-project-hover-card-title" title={name}>
 				{name}
 			</div>
-			<div className="gui-project-hover-card-meta">
-				<Icon name="folder" className="gui-project-hover-card-icon" />
+			<div className="gui-hover-card-meta">
+				<Icon name="folder" className="gui-hover-card-icon" />
 				<span>
 					{directories.length === 1
 						? t("general.projectDirectoryOne")
 						: t("general.projectDirectoryCount", { count: directories.length })}
 				</span>
-				<span className="gui-project-hover-card-dot" aria-hidden="true" />
+				<span className="gui-hover-card-dot" aria-hidden="true" />
 				<span>
 					{sessionCount === 1
 						? t("settings.sessionCountOne")
 						: t("settings.sessionCountLabel", { count: sessionCount })}
 				</span>
 			</div>
-			<ul className="gui-project-hover-card-list">
+			<ul className="gui-hover-card-rows gui-project-hover-card-list">
 				{directories.map(directory => (
-					<li key={directory.path} className="gui-project-hover-card-row">
-						<Icon name={directory.primary ? "folder-shared" : "folder"} className="gui-project-hover-card-icon" />
-						<span className="gui-project-hover-card-text" title={directory.path}>
+					<li key={directory.path} className="gui-hover-card-row gui-hover-card-row--action">
+						<Icon name={directory.primary ? "folder-shared" : "folder"} className="gui-hover-card-icon" />
+						<span className="gui-hover-card-text" title={directory.path}>
 							{labelOf(directory.path)}
 						</span>
-						{directory.primary && (
-							<span className="gui-project-hover-card-chip">{t("settings.primaryDirectory")}</span>
-						)}
+						{directory.primary && <span className="gui-hover-card-chip">{t("settings.primaryDirectory")}</span>}
 						{onOpenDirectory && (
 							<button
 								type="button"

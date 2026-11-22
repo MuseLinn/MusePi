@@ -127,16 +127,16 @@ describe("project hover card", () => {
 
 		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
 		expect(card).not.toBeNull();
-		const rows = [...card!.querySelectorAll<HTMLElement>(".gui-project-hover-card-row")];
+		const rows = [...card!.querySelectorAll<HTMLElement>(".gui-hover-card-row")];
 		expect(rows).toHaveLength(3);
 		// Basenames, not full paths — the full path stays on the row title.
-		expect(rows.map(row => row.querySelector(".gui-project-hover-card-text")?.textContent)).toEqual([
+		expect(rows.map(row => row.querySelector(".gui-hover-card-text")?.textContent)).toEqual([
 			"alpha",
 			"alpha-docs",
 			"shared",
 		]);
 		// Exactly one primary marker, on the project root.
-		const chips = [...card!.querySelectorAll<HTMLElement>(".gui-project-hover-card-chip")];
+		const chips = [...card!.querySelectorAll<HTMLElement>(".gui-hover-card-chip")];
 		expect(chips).toHaveLength(1);
 		expect(rows[0]!.contains(chips[0]!)).toBe(true);
 		expect(chips[0]!.textContent).toBe(t("settings.primaryDirectory"));
@@ -310,7 +310,7 @@ describe("project hover card", () => {
 		await flush(20);
 		expect(document.querySelector(".gui-project-hover-card")).not.toBeNull();
 		// Root + 11 additional.
-		expect(document.querySelectorAll(".gui-project-hover-card-row")).toHaveLength(12);
+		expect(document.querySelectorAll(".gui-hover-card-row")).toHaveLength(12);
 	});
 
 	it("stays open when focus reaches the last directory's open button", async () => {
@@ -594,7 +594,7 @@ describe("ProjectHoverCard flip rendering", () => {
 		// Bounded by the room above the row minus the fixed chrome.
 		expect(listMax).toBeLessThanOrEqual(660 - 8 - CARD_CHROME_HEIGHT);
 		// Every row still renders inside that scrollable list.
-		const rows = document.querySelectorAll(".gui-project-hover-card-row");
+		const rows = document.querySelectorAll(".gui-hover-card-row");
 		expect(rows).toHaveLength(11);
 		expect(document.querySelector(".gui-project-hover-card-list")?.contains(rows[10]!)).toBe(true);
 	});

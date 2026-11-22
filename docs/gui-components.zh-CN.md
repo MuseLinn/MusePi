@@ -108,6 +108,27 @@ scope:
 
 新增组件时，请同时更新本目录的这一行，并在 `docs/gui-design.md` 记录它遵守的契约。
 
+## 悬停卡（同一份配方）
+
+侧栏的两张悬停卡——会话卡（`SessionHoverCard.tsx`，288px）与项目卡（`ProjectHoverCard.tsx`，240px）——在 `gui-chrome.css` 里是**一份**配方：`.gui-hover-card` 及其 `-title` / `-meta` / `-dot` / `-rows` / `-row` / `-icon` / `-label` / `-text` / `-chip`。紧随其后的两张卡的区块只声明各自内容改了什么；新的浮层从这些部件起步，而不是再抄六条声明。
+
+| 部件 | 取值 | 为什么 |
+| --- | --- | --- |
+| 表面 | L2 玻璃：`color-mix` 覆盖层 + `backdrop-filter` + 六层阴影 | 与 `.gui-menu-popup` 同层；不另造玻璃家族 |
+| 标题 | `--ui-font-size`、600、`line-height: 1.35` | 两张卡同一个标题档位 |
+| 元信息行 | `--ui-font-size-xs`、2px 分隔点、一个 accent chip | 一行可读的短事实，而不是标签/值堆叠 |
+| 行盒 | `--ui-font-size-xs`、6px 间距、`3px 4px`、12px 图标 0.75 不透明度、单行省略 | 4px 横向内边距既是命中区，也是与标题对齐的文字栅格 |
+| 行组 | `.gui-hover-card-rows`：`1px` 步进 | 一叠事实行读成一片栅格，而不是五个独立块 |
+| 入场 | `gui-hover-card-in`：`opacity` **与** `transform` 在同一对关键帧里，140ms `--spring`；方向由 `--gui-hover-card-shift-x` / `-y` 给出 | 一个 fade + slide 手势，而不是「transform 动画 + 一个负责 opacity 的类」 |
+| 隐藏态 | 写在关键帧的 `from` 里，基础规则不写 `opacity: 0` | 基础 `opacity: 0` 在动画被关掉之后会让卡片永远不可见 |
+| 减弱动效 | `prefers-reduced-motion` 与 `.gui-motion-off` 下 `animation: none` | 直接落位，并且可见 |
+
+**按内容合理不同的部分：** 宽度（会话卡 288px、标题两行截断，因为会话标题长；项目卡 240px、标题单行，因为项目名是一个名字）、列表（项目卡的目录列表有自己的高度上限并自己滚动，由 `fitProjectCard` 按实测空间夹取；会话卡是一小叠事实行，从不滚动）、入场方向（会话卡从行的右侧滑入，项目卡从上方或下方滑入，包括 `--above` 翻转）。
+
+**命中区是诚实的。** 只有真的会响应的行才带 `.gui-hover-card-row--action`。项目卡的目录行会打开文件夹，所以有 hover；会话卡的行是只读的，所以没有 hover 底色——给只读行铺底色等于承诺一个不存在的点击。`.gui-hover-card-chip` 两张卡共用（主目录 / 会话模式），chip 的文案来源各自保留。
+
+契约：`apps/desktop/test/project-hover-card.test.tsx`（状态、portal、翻转）、`apps/desktop/test/session-fork-badge.test.tsx`（会话卡的「分叉自」行）与 `apps/desktop/test/hover-card-geometry.test.ts`（真实 Chromium：两张卡的内边距、行步进、标题截断、入场同时动 opacity 与 transform、减弱动效直接落位）。
+
 ## 溢出契约
 
 滚动容器要声明**它用哪个轴、以及它不许用哪个轴**。只设置 `overflow-x` / `overflow-y` 之一时另一个会计算为 `auto`(规范不允许 `visible` 作为配对值),于是纵向列表悄悄也变成横向滚动容器——第一个比内容盒宽的行就会在**本来已经显示完整**的内容下面长出滚动条。项目悬浮卡就出过这个缺陷(用户原话:「内容明明显示完整却出现了不该出现的横向滚动」),同样的形状在桌面样式里还有约 70 处,所以这是一条带护栏的类别规则,而不是单点补丁。

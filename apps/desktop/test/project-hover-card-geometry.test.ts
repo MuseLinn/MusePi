@@ -84,25 +84,25 @@ function cardMarkup(): string {
 			primary: false,
 		};
 		const label = directory.path.split("/").filter(Boolean).pop() ?? directory.path;
-		const chip = directory.primary ? '<span class="gui-project-hover-card-chip">Primary</span>' : "";
+		const chip = directory.primary ? '<span class="gui-hover-card-chip">Primary</span>' : "";
 		return `
-			<li class="gui-project-hover-card-row">
-				<span class="gui-project-hover-card-icon"></span>
-				<span class="gui-project-hover-card-text" title="${directory.path}">${label}</span>
+			<li class="gui-hover-card-row gui-hover-card-row--action">
+				<span class="gui-hover-card-icon"></span>
+				<span class="gui-hover-card-text" title="${directory.path}">${label}</span>
 				${chip}
 				<button type="button" class="gui-project-hover-card-open" title="Open: ${directory.path}">o</button>
 			</li>`;
 	}).join("");
 	return `
-		<div class="gui-project-hover-card" role="group" aria-label="alpha">
-			<div class="gui-project-hover-card-title" title="alpha">alpha</div>
-			<div class="gui-project-hover-card-meta">
-				<span class="gui-project-hover-card-icon"></span>
+		<div class="gui-hover-card gui-project-hover-card" role="group" aria-label="alpha">
+			<div class="gui-hover-card-title gui-project-hover-card-title" title="alpha">alpha</div>
+			<div class="gui-hover-card-meta">
+				<span class="gui-hover-card-icon"></span>
 				<span>12 directories</span>
-				<span class="gui-project-hover-card-dot"></span>
+				<span class="gui-hover-card-dot"></span>
 				<span>4 sessions</span>
 			</div>
-			<ul class="gui-project-hover-card-list">${rows}</ul>
+			<ul class="gui-hover-card-rows gui-project-hover-card-list">${rows}</ul>
 		</div>`;
 }
 
@@ -209,8 +209,8 @@ async function readGeometry() {
 		const block = select("#block");
 		const card = select(".gui-project-hover-card");
 		const list = select(".gui-project-hover-card-list");
-		const firstRow = select(".gui-project-hover-card-row");
-		const firstText = select(".gui-project-hover-card-text");
+		const firstRow = select(".gui-hover-card-row");
+		const firstText = select(".gui-hover-card-text");
 		const workspace = select(".gui-main");
 		const computed = getComputedStyle(card);
 		const listStyle = getComputedStyle(list);
