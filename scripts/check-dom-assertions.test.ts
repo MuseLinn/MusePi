@@ -9,7 +9,7 @@
  * forbid its own fix.
  */
 import { describe, expect, test } from "bun:test";
-import { collectDomAssertions, countByFile, growth } from "./check-dom-assertions";
+import { collectDomAssertions, countByFile, growth, testSources } from "./check-dom-assertions";
 
 const sites = (source: string) => collectDomAssertions("a.test.tsx", source);
 
@@ -97,5 +97,27 @@ describe("countByFile", () => {
 			{ file: "b.test.ts", line: 3, text: "z" },
 		]);
 		expect(counts).toEqual({ "a.test.ts": 2, "b.test.ts": 1 });
+	});
+});
+
+describe("testSources", () => {
+	test("scans the co-located suites under src, not only test/", () => {
+		// The reporter stall is a property of the matcher and the received value,
+		// not of a directory. Scoping the pathspec to `apps/desktop/test` let a
+		// planted site under `src/` pass green while 26 suites live there.
+		const files = testSources();
+		expect(files.some(file => file.startsWith("apps/desktop/src/"))).toBe(true);
+		expect(files).toContain("apps/desktop/src/components/brand-icon-toggle.test.tsx");
+	});
+
+	test("still scans the package's test directory", () => {
+		expect(testSources()).toContain("apps/desktop/test/agent-info-pane.test.tsx");
+	});
+
+	test("never scans an implementation file", () => {
+		// Widening the pathspec must not turn the ban into a source linter: a
+		// `querySelector(...).toBeNull()` in shipping code is a different thing
+		// from a test assertion, and the reporter stall does not apply.
+		expect(testSources().filter(file => !/\.(test|spec)\.(ts|tsx)$/.test(file))).toEqual([]);
 	});
 });

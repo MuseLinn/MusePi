@@ -16,11 +16,16 @@
  * timeout reads as flake, and flake gets re-run instead of read.
  *
  * What is flagged: an `expect(...)` whose argument is a DOM-node query and whose
- * matcher is `toBeNull`, `toBeDefined` or `not.toBeDefined`. Those three exist
- * to say "this node is absent" or "this node is present", and both facts are
- * boolean: write `expect(node === null).toBe(true)` or `expect(rows.length).toBe(0)`.
- * `.not.toBeNull()` is flagged too — the negative case fails by serialising the
- * same node.
+ * matcher is `toBeNull`, `toBeDefined` or `toBeUndefined`. Those exist to say
+ * "this node is absent" or "this node is present", and both facts are boolean:
+ * write `expect(node === null).toBe(true)` or `expect(rows.length).toBe(0)`.
+ * The negated forms (`.not.toBeNull()`, `.not.toBeDefined()`) are flagged too —
+ * they fail by serialising the same node.
+ *
+ * Where it looks: every `*.test.*` / `*.spec.*` file in `apps/desktop`, which
+ * includes the co-located suites under `src/`. The reporter stall is a property
+ * of the matcher and the received value, not of a directory; scoping to `test/`
+ * left 26 `src/**` suites unguarded. Implementation files are never scanned.
  *
  * What is NOT flagged: every other matcher on a node (`toBe`, `toBeTruthy`,
  * `toContain`, `.length` counts, attribute reads) and every `toBeNull` whose
@@ -28,11 +33,15 @@
  * readThing()).toBeNull()`). The ban is about the reporter stall, not about
  * assertion style in general.
  *
- * Baseline: 182 pre-existing sites are recorded per file, following the shape of
+ * Baseline: the sites already in the tree are recorded per file in
+ * `scripts/dom-assertions-baseline.json`, following the shape of
  * `check-dead-code` and `check-comment-provenance` — a rule that is red on
  * arrival is a rule nobody can land. The gate fails on a NEW site (or a file
  * exceeding its recorded count) and stays green as the debt is paid down. A
- * cleared site needs no bookkeeping; a shrink is picked up by `--write`.
+ * cleared site needs no bookkeeping; a shrink is picked up by `--write`. The
+ * live totals are whatever the baseline currently holds — `--report` lists them,
+ * and the success line prints the count — so this description states the
+ * mechanism rather than a number that would drift from it.
  *
  *   bun scripts/check-dom-assertions.ts            # fail on growth
  *   bun scripts/check-dom-assertions.ts --write    # re-record the baseline
@@ -108,17 +117,25 @@ export function collectDomAssertions(file: string, source: string): DomAssertion
 	return sites;
 }
 
-/** Desktop test sources, tracked or newly written, minus generated output. */
+/**
+ * Desktop test sources across the whole package, tracked or newly written,
+ * minus generated output.
+ *
+ * The pathspec is the package, not `apps/desktop/test`: the reporter stall is a
+ * property of the matcher and the received value, not of a directory, and
+ * `apps/desktop/src/**\/*.test.tsx` holds co-located suites that touch the DOM
+ * the same way. Scoping to `test/` left those unguarded.
+ */
 export function testSources(): string[] {
 	const listed = Bun.spawnSync(
-		["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "apps/desktop/test"],
+		["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "apps/desktop"],
 		{ cwd: ROOT, stdout: "pipe", stderr: "pipe" },
 	);
 	return listed.stdout
 		.toString()
 		.split("\0")
 		.map(entry => entry.trim())
-		.filter(entry => /\.(ts|tsx)$/.test(entry))
+		.filter(entry => /\.(test|spec)\.(ts|tsx)$/.test(entry))
 		.filter(entry => fs.existsSync(path.join(ROOT, entry)))
 		.sort();
 }
@@ -168,7 +185,12 @@ function main(): void {
 		return;
 	}
 
-	const violations = growth(counts, readBaseline().counts);
+	const baseline = readBaseline().counts;
+	const violations = growth(counts, baseline);
+	// A baseline entry whose file is gone describes a tree that no longer
+	// exists. Left unsaid it makes the recorded total and the live total differ
+	// with no explanation — which is how a stale count survives a review.
+	const stale = Object.keys(baseline).filter(file => !(file in counts));
 	if (report) {
 		for (const site of sites) console.log(`  ${site.file}:${site.line}  ${site.text}`);
 	}
@@ -187,10 +209,14 @@ function main(): void {
 		);
 		process.exit(1);
 	}
+	const staleNote =
+		stale.length > 0 ? `; ${stale.length} baseline file(s) no longer exist — re-record with --write` : "";
 	console.log(
-		`dom-assertions: OK — ${sites.length} recorded site(s), no new DOM-node presence assertion` +
+		`dom-assertions: OK — ${sites.length} site(s) across ${Object.keys(counts).length} file(s),` +
+			` no new DOM-node presence assertion${staleNote}` +
 			`\n  the recorded sites still stall on failure; see docs on guards in .agents/rules/testing.md`,
 	);
+	if (stale.length > 0) for (const file of stale.sort()) console.log(`  stale baseline entry: ${file}`);
 }
 
 if (import.meta.main) main();
