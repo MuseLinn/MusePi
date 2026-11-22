@@ -22,6 +22,29 @@ import { type ChatQuoteMark, findQuoteRoot, resolveQuoteAnchor } from "./quote-a
 
 const MARK_HIGHLIGHT = "musepi-quote";
 const FOCUS_HIGHLIGHT = "musepi-quote-focus";
+const HIGHLIGHT_STYLE_ID = "musepi-quote-highlight";
+/**
+ * Bun's CSS parser predates the Custom Highlight API and warns twice per build
+ * on `::highlight()`. The rules are injected here instead of living in the
+ * bundled stylesheet; the browser parses them at runtime, and the injection is
+ * idempotent. This is the one place component CSS is not a stylesheet file.
+ */
+const HIGHLIGHT_CSS = `
+::highlight(${MARK_HIGHLIGHT}) {
+	background-color: color-mix(in oklab, var(--color-accent, #4f7cff) 16%, transparent);
+}
+::highlight(${FOCUS_HIGHLIGHT}) {
+	background-color: color-mix(in oklab, var(--color-accent, #4f7cff) 34%, transparent);
+}
+`;
+
+function ensureHighlightStyles(): void {
+	if (typeof document === "undefined" || document.getElementById(HIGHLIGHT_STYLE_ID)) return;
+	const style = document.createElement("style");
+	style.id = HIGHLIGHT_STYLE_ID;
+	style.textContent = HIGHLIGHT_CSS;
+	document.head.appendChild(style);
+}
 const FLASH_MS = 1600;
 /** Retry cadence while a revealed row is still paging/mounting in. */
 const REVEAL_RETRY_MS = 120;
@@ -40,6 +63,7 @@ function supportsHighlights(): boolean {
 
 function paint(name: string, owner: PaintOwner, ranges: Range[]): void {
 	if (!supportsHighlights()) return;
+	ensureHighlightStyles();
 	const owners = paintedRanges.get(name) ?? new Map<PaintOwner, Range[]>();
 	if (ranges.length > 0) owners.set(owner, ranges);
 	else owners.delete(owner);

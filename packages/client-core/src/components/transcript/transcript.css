@@ -4030,23 +4030,9 @@ a.tr-tool-search-title:hover {
 	border-radius: var(--radius-lg);
 }
 
-/* Anchored chat quotes (CSS Custom Highlight API): the quoted fragment of a
- * sent quote stays softly marked inside its source message, and a click on the
- * quote card flashes it once stronger. `::highlight()` paints behind the text,
- * so the rendered markdown DOM is never touched.
- *
- * Bun's CSS parser predates this spec and prints
- *   warn: Invalid selector. Unsupported pseudo-class or pseudo-element 'highlight'
- * twice on every production build. It is noise only — both rules ship verbatim
- * (verified in `dist/*.css`), and `@supports selector(::highlight(…))` does not
- * silence it either. The runtime guards itself on `CSS.highlights`. */
-::highlight(musepi-quote) {
-	background-color: color-mix(in oklab, var(--color-accent, #4f7cff) 16%, transparent);
-}
-
-::highlight(musepi-quote-focus) {
-	background-color: color-mix(in oklab, var(--color-accent, #4f7cff) 34%, transparent);
-}
+/* Anchored quote highlights are injected at runtime by
+ * `quote-highlight.tsx`: Bun's CSS parser warns on `::highlight()`, and the
+ * browser is the only parser that needs the rules. */
 
 /* ── Completed-round fold header (openchamber 活动 header parity) ───────
  * Working entries of a finished round collapse behind this row; the final
