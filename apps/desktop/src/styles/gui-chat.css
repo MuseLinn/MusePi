@@ -2247,6 +2247,30 @@ html.gui-vt-surface-only::view-transition-new(root),
 
 /* ── Header session tabs (multi-session working set): every tab shares the
  *    same title box; selection changes color only. ── */
+/* Tab strips: equal width, horizontal scroll, no indicator.
+ *
+ * Both strips in the app obey one contract:
+ *   1. every tab holds the SAME width — the header's --gui-session-tab-w and
+ *      the right panel's --gui-surface-tab-w below — so no title is squeezed
+ *      by its neighbours and a long one ellipsizes inside its own tab;
+ *   2. a crowded strip still SCROLLS (`overflow-x: auto`) — hiding the
+ *      indicator is `scrollbar-width: none` + `::-webkit-scrollbar`, never
+ *      `overflow: hidden`, because removing the scrolling is the regression
+ *      this contract exists to prevent;
+ *   3. the strip reveals the active tab on activation (header:
+ *      `lib/session-tab-reveal.ts`; panel: `scrollIntoView` in
+ *      `surface-tabs.tsx`).
+ * The panel tabs are narrower than the header's because its pane can be 260px
+ * wide while the header spans the window; icons and titles are the same shape,
+ * so only the number differs.
+ *
+ * `.gui-surface-tabs` is declared in gui-settings.css (imported first), so the
+ * panel half of the contract lives here where it also wins the cascade. */
+:root {
+	--gui-session-tab-w: 176px;
+	--gui-surface-tab-w: 132px;
+}
+
 .gui-session-tabs {
 	display: flex;
 	min-width: 0;
@@ -2263,9 +2287,12 @@ html.gui-vt-surface-only::view-transition-new(root),
 	overflow-x: auto;
 	overflow-y: hidden;
 	padding: 2px 4px;
-	/* No painted horizontal scrollbar: the row fits by shrinking its tabs and
-	 * ellipsizing the titles. Scrolling stays for the pathological case but
-	 * never draws a track under the header. */
+	/* Tab strip contract (§5z + §4 "tab strips"): equal-width tabs, horizontal
+	 * scroll kept, indicator hidden. Hiding the scrollbar must never be done by
+	 * removing the scrolling — a crowded row keeps `overflow-x: auto` and every
+	 * tab keeps its width; the strip slides under the pointer instead of
+	 * squeezing titles. `.gui-surface-tabs` (right panel) is the same contract
+	 * with a narrower width and lives next to it in this file. */
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	overscroll-behavior-x: contain;
@@ -2277,12 +2304,14 @@ html.gui-vt-surface-only::view-transition-new(root),
 
 .gui-session-tab-slot {
 	display: flex;
-	/* Shrink-to-fit instead of a fixed 176px each: three headers used to total
-	 * more than the strip and the row scrolled. Tabs now share the width down to
-	 * a readable floor, and only a genuinely crowded set scrolls (silently). */
-	flex: 1 1 auto;
-	min-width: 72px;
-	max-width: 176px;
+	/* Equal length, never shrink: each slot holds the same --gui-session-tab-w
+	 * so three tabs are three identical widths and a long title ellipsizes
+	 * inside its own tab. `min-width: 0` keeps the automatic minimum size from
+	 * inflating a slot around a long nowrap title. Sharing the strip
+	 * (`flex: 1 1 auto` with a floor) squeezed every title instead and made the
+	 * row stop scrolling. */
+	flex: 0 0 var(--gui-session-tab-w);
+	min-width: 0;
 }
 
 .gui-session-tab-slot--dragging {
@@ -2441,6 +2470,37 @@ html.gui-vt-surface-only::view-transition-new(root),
 .gui-session-tab-ctl:hover {
 	background: var(--color-hover);
 	color: var(--color-text);
+}
+
+/* Right panel tab strip — the second half of the tab-strip contract stated at
+ * the top of this section. It overrides gui-settings.css (imported first) so
+ * BOTH strips keep equal width, unrestricted horizontal scrolling and no
+ * indicator from one place; the panel's only difference is the narrower
+ * --gui-surface-tab-w.
+ *
+ * `min-width: 0` is what keeps the width fixed: the button is a flex item, so
+ * its automatic minimum size would otherwise inflate around a long nowrap
+ * title instead of letting the title ellipsize inside the tab. The enter/exit
+ * keyframes in gui-settings.css animate `max-width`, so the motion target is
+ * pointed at the same token — otherwise every panel tab would grow to the
+ * keyframes' 200px fallback and snap back to the strip width when it ended. */
+.gui-surface-tabs {
+	overflow-x: auto;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+	overscroll-behavior-x: contain;
+}
+
+.gui-surface-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.gui-surface-tab {
+	--gui-tab-motion-width: var(--gui-surface-tab-w);
+	flex: 0 0 auto;
+	width: var(--gui-surface-tab-w);
+	min-width: 0;
+	max-width: var(--gui-surface-tab-w);
 }
 
 .gui-header-session-row {
