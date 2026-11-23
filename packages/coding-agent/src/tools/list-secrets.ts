@@ -6,6 +6,7 @@
 
 import { type as arkType } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
+import listSecretsDescription from "../prompts/tools/list-secrets.md" with { type: "text" };
 import { listAvailableAgentSecrets } from "../secrets/agent-runtime";
 import { agentSecretEnvName, type SecretScope } from "../secrets/agent-store";
 import type { ToolSession } from ".";
@@ -25,19 +26,12 @@ export interface ListSecretsDetails {
 	meta?: import("./output-meta").OutputMeta;
 }
 
-const DESCRIPTION = `List the agent secrets stored on this machine.
-
-Each entry shows its name, purpose, scope and whether a usable value exists.
-Values are never included: the model can only reach a secret inside a bash
-child process as \`$MUSEPI_SECRET_<NAME>\`. Use \`request_secret\` when a needed
-name is missing.`;
-
 export class ListSecretsTool implements AgentTool<typeof listSecretsSchema, ListSecretsDetails> {
 	readonly name = "list_secrets";
 	readonly approval = "read" as const;
 	readonly label = "List secrets";
 	readonly summary = "List stored agent secret names without values";
-	readonly description = DESCRIPTION;
+	readonly description = listSecretsDescription.trim();
 	readonly parameters = listSecretsSchema;
 	readonly strict = true;
 
