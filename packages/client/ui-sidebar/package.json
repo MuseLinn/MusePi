@@ -9,8 +9,5 @@
 		".": "./src/index.ts",
 		"./client": "./src/client/index.ts",
 		"./src/*": "./src/*"
-	},
-	"dependencies": {
-		"@musepi/client-ui-slots": "workspace:*"
 	}
 }

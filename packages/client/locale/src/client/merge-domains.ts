@@ -1,5 +1,5 @@
 /**
- * i18n 跨域重复键的容错检测（dsh LocaleRuntime fail-safe parity）。
+ * i18n 跨域重复键的容错检测（加载期 fail-safe）。
  *
  * 历史事故：barrel 在模块加载时对跨域重复 key 直接 throw —— 一个重复
  * 文案键就能让整个 GUI 白屏（已发生两次）。现在的契约：

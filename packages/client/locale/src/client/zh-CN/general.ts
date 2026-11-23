@@ -668,7 +668,7 @@ export const general = {
 	"general.togglePreview": "切换预览",
 	"general.user": "用户",
 	"general.assistant": "助手",
-	// Slash-completion tags + hints (openchamber-style rich menu).
+	// Slash-completion tags + hints (rich menu).
 	"general.tagSession": "会话",
 	"general.tagGoal": "计划",
 	"general.tagModel": "模型",

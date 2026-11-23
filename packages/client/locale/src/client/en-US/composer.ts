@@ -75,7 +75,7 @@ export const composer = {
 	"composer.removeAttachment": "Remove attachment",
 	"composer.attachImagesHint": "Images resize to a 1568px long edge · JPEG 80% (under 1.5MB sent as-is)",
 
-	// ── General file attachments (fs.write channel; openchamber parity) ─────
+	// ── General file attachments (fs.write channel) ─────
 	"composer.addAttachments": "Add attachments",
 	"composer.attachmentUploadFailed": "Attachment upload failed",
 	"composer.attachmentExpiredReAdd": "Attachment needs re-attaching (session was switched)",

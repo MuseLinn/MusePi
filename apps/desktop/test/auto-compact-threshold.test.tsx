@@ -111,9 +111,9 @@ describe("AutoCompactThresholdControl", () => {
 				onSwitchToPercent={p => switched.push(p)}
 			/>,
 		);
-		expect(host.querySelector("input[type=range]")).toBeNull();
+		expect(host.querySelector("input[type=range]") === null).toBe(true);
 		const button = host.querySelector("button");
-		expect(button).not.toBeNull();
+		expect(button === null).toBe(false);
 		fire(button!, "onClick", {});
 		expect(switched).toEqual([95]);
 	});
@@ -170,7 +170,7 @@ describe("AutoCompactThresholdControl", () => {
 		fire(host.querySelector("button")!, "onClick", {});
 		const pop = document.querySelector<HTMLElement>(".gui-context-pop")!;
 		const slider = pop.querySelector<HTMLInputElement>("input[type=range]");
-		expect(slider).not.toBeNull();
+		expect(slider === null).toBe(false);
 		expect(slider?.value).toBe("85");
 		// Hierarchy contract: the control closes the card, after every usage
 		// reading, rather than splitting the readout rows.

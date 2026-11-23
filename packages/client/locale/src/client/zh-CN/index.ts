@@ -47,7 +47,7 @@ export const zhCN = {
 	...announcement,
 } as const;
 
-// Module-load duplicate detection (fail-safe, dsh LocaleRuntime parity):
+// Module-load duplicate detection (fail-safe):
 // a key landing in two domains is logged loudly and reported via
 // zhCNDuplicates — it must never throw here (a duplicate key white-screened
 // the whole GUI twice). Tests assert the report is empty (i18n.test.ts).

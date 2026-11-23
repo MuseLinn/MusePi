@@ -73,7 +73,7 @@ export const composer = {
 	"composer.removeAttachment": "移除附件",
 	"composer.attachImagesHint": "图片长边压到 1568px · JPEG 80%（小于 1.5MB 原样发送）",
 
-	// ── General file attachments (fs.write channel; openchamber parity) ─────
+	// ── General file attachments (fs.write channel) ─────
 	"composer.addAttachments": "添加附件",
 	"composer.attachmentUploadFailed": "附件上传失败",
 	"composer.attachmentExpiredReAdd": "附件已失效，请重新添加",

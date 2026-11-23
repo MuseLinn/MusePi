@@ -32,6 +32,7 @@ interface Manifest {
 const MANIFEST_GLOBS = [
 	"package.json",
 	"packages/*/package.json",
+	"packages/client/*/package.json",
 	"apps/*/package.json",
 	"tools/*/package.json",
 ] as const;

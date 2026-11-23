@@ -258,14 +258,6 @@
         "lucide-react": "^1.24.0",
         "react": "19.2.7",
       },
-      "devDependencies": {
-        "@happy-dom/global-registrator": "^20.12.0",
-        "@types/bun": "^1.4.4",
-        "@types/react": "^19.2.17",
-        "@types/react-dom": "^19.2.3",
-        "happy-dom": "^20.12.0",
-        "react-dom": "19.2.7",
-      },
     },
     "packages/client/ui-primitives": {
       "name": "@musepi/client-ui-primitives",
@@ -292,9 +284,6 @@
     "packages/client/ui-sidebar": {
       "name": "@musepi/client-ui-sidebar",
       "version": "0.7.7",
-      "dependencies": {
-        "@musepi/client-ui-slots": "workspace:*",
-      },
     },
     "packages/client/ui-slots": {
       "name": "@musepi/client-ui-slots",

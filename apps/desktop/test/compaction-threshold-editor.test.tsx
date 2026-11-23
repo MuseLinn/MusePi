@@ -104,7 +104,7 @@ describe("CompactionThresholdRowEditor", () => {
 
 	it("shows the empty hint while no override exists", async () => {
 		const host = await mount(<CompactionThresholdRowEditor value={{}} onCommit={() => {}} />);
-		expect(host.querySelector(".gui-threshold-editor-empty")).not.toBeNull();
+		expect(host.querySelector(".gui-threshold-editor-empty") === null).toBe(false);
 		expect(host.querySelectorAll(".gui-threshold-editor-row")).toHaveLength(0);
 	});
 });

@@ -684,7 +684,7 @@ export const general = {
 	"general.togglePreview": "Toggle preview",
 	"general.user": "User",
 	"general.assistant": "Assistant",
-	// Slash-completion tags + hints (openchamber-style rich menu).
+	// Slash-completion tags + hints (rich menu).
 	"general.tagSession": "Session",
 	"general.tagGoal": "Plan",
 	"general.tagModel": "Model",

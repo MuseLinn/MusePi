@@ -9,7 +9,7 @@ import { useEffect } from "react";
  * `data-left-scroll` / `data-right-scroll` 属性;CSS mask-image 规则按
  * 属性挂渐变(纵向上下羽化、横向左右羽化),只在对应方向真实可滚动时
  * 显示。桌面端 transcript / 会话列表 / 设置面板与消息内 markdown 表格 /
- * 代码块同配方(openchamber ScrollShadow parity)。
+ * 代码块同配方。
  *
  * - `attachScrollShadow` / `useScrollShadow`:单一容器(桌面端原有
  *   use-scroll-shadow 的归家实现,desktop-app 从这里 re-export)。

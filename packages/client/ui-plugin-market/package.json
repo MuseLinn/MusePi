@@ -15,13 +15,5 @@
 		"lucide-react": "^1.24.0",
 		"@musepi/client-locale": "workspace:*",
 		"@musepi/client-ui-primitives": "workspace:*"
-	},
-	"devDependencies": {
-		"@happy-dom/global-registrator": "^20.12.0",
-		"@types/bun": "^1.4.4",
-		"@types/react": "^19.2.17",
-		"@types/react-dom": "^19.2.3",
-		"happy-dom": "^20.12.0",
-		"react-dom": "19.2.7"
 	}
 }

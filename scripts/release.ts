@@ -14,7 +14,10 @@ import { runChangelogFixer } from "./fix-changelogs";
 import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 
 const changelogGlob = new Glob("packages/coding-agent/CHANGELOG.musepi.md");
-const packageJsonGlob = new Glob("{packages,apps,tools}/*/package.json");
+const packageJsonGlobs = [
+	new Glob("{packages,apps,tools}/*/package.json"),
+	new Glob("packages/client/*/package.json"),
+] as const;
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 /** Android app manifest — versionName/versionCode live here, hardcoded (see 3c). */
 const gradlePath = "apps/mobile/android/app/build.gradle";
@@ -270,7 +273,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 
 	// 2. Update package versions
 	console.log(`Updating package versions to ${version}…`);
-	const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
+	const pkgJsonPaths = (await Promise.all(packageJsonGlobs.map(glob => Array.fromAsync(glob.scan("."))))).flat();
 
 	// Private packages don't publish to npm — except the release-artifact
 	// packages (gui/guest-client/mobile) whose version drives the

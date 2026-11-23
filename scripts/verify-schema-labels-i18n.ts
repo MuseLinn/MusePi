@@ -28,9 +28,9 @@ const BASELINE_PATH = path.resolve(import.meta.dirname, "verify-schema-labels-i1
 const update = process.argv.includes("--update");
 const SCHEMA = path.resolve(root, "packages/coding-agent/src/config/settings-schema.ts");
 
-/** 两份词典都要齐：桌面读 client-core，终端读 coding-agent。 */
+/** 两份词典都要齐：桌面读 client-locale，终端读 coding-agent。 */
 const DICTIONARIES = [
-	{ label: "client-core (GUI)", dir: "packages/client-core/src/i18n/zh-CN" },
+	{ label: "client-locale (GUI)", dir: "packages/client/locale/src/client/zh-CN" },
 	{ label: "coding-agent (TUI)", dir: "packages/coding-agent/src/i18n/zh-CN" },
 ];
 
