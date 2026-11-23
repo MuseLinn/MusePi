@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { resetCapabilityActivations } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import {
+	activateCapability,
+	isCapabilityActive,
+	resetCapabilityActivations,
+} from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import { BUILTIN_TOOLS, createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
 import {
 	extensionOwnsTool,
+	isToolOwnerActive,
 	pluginOwnsTool,
 	pluginProvidesTool,
 	providedToolNames,
@@ -93,5 +100,30 @@ describe("layered tool resolution", () => {
 		for (const release of releases.splice(0)) release();
 		expect(toolProviderFor("write")).toBeUndefined();
 		expect(toolLayerOf(sessionWith(), "write")).toBeUndefined();
+	});
+
+	test("a released activation does not hide a tool the plugin layer still provides", () => {
+		provide("bash", { packageName: "tool-bash" });
+		const deactivate = activateCapability("tool", "bash");
+		deactivate();
+		expect(isCapabilityActive("tool", "bash")).toBe(false);
+		// The preload/re-mount transient must not remove the whole family.
+		expect(isToolOwnerActive("bash")).toBe(true);
+		for (const release of releases.splice(0)) release();
+		expect(isToolOwnerActive("bash")).toBe(false);
+	});
+
+	test("createTools keeps the owned tool after a released activation", async () => {
+		releases.push(registerToolProvider("bash", BUILTIN_TOOLS.bash, { packageName: "tool-bash" }));
+		const deactivate = activateCapability("tool", "bash");
+		deactivate();
+		const session = {
+			cwd: process.cwd(),
+			settings: Settings.isolated({}),
+			enableLsp: false,
+			skipPythonPreflight: true,
+		} as unknown as ToolSession;
+		const names = (await createTools(session)).map(tool => tool.name);
+		expect(names).toContain("bash");
 	});
 });

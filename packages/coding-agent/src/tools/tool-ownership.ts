@@ -214,7 +214,13 @@ export function toolOwnerOf(name: string): ToolOwner | undefined {
  */
 export function isToolOwnerActive(name: string): boolean {
 	const owner = toolOwnerOf(name);
-	return owner === undefined || isCapabilityActive(owner.domain, owner.id);
+	if (owner === undefined || isCapabilityActive(owner.domain, owner.id)) return true;
+	// A preload or re-mount can dispose the activation while the package still
+	// provides the implementation process-wide. Treating that transient as an
+	// unloaded component would hide the whole owned family (bash, ask,
+	// request_secret) from every session. Component disablement stays
+	// authoritative through `tools.disabled`.
+	return pluginProvidesTool(name);
 }
 
 /** Every tool name that currently has an owner (declared, claimed, or provided). */
