@@ -2,7 +2,7 @@
  * The tool contract: what a tool implementation may depend on.
  *
  * This module is deliberately type-only and imports nothing from the tool
- * implementations. A capability package (`src/bundled-plugins/tool-*`) ships a
+ * implementations. A capability package (`src/plugins/tool-*`) ships a
  * tool's implementation and needs {@link ToolSession} to build it; importing
  * that from the `tools` barrel would pull in every other tool class and close
  * an import cycle (barrel → package → barrel). The reference harness solves the

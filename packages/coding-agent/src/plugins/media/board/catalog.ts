@@ -7,7 +7,7 @@
  * owns blocks and pages and knows nothing about it; the board depends on that
  * plugin for the rendered result, not the other way round.
  */
-import type { ExtensionWidget } from "../../../extensibility/extensions/widget-types";
+import type { ExtensionWidget } from "@musepi/pi-coding-agent/extensibility/extensions/widget-types";
 
 /** Card shell tones (mirrors the GUI registry's WidgetDef.tone so
  *  agents know the visual style of each type). */

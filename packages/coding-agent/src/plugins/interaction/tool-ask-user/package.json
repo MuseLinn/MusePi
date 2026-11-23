@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-ask-user",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "Ask User",
-    "description": "Ask the user and wait for the answer.",
-    "icon": "💬",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "ask",
-        "entry": "./ask.ts",
-        "description": "Ask User"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-ask-user",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Ask User",
+		"description": "Ask the user and wait for the answer.",
+		"icon": "💬",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

@@ -7,7 +7,7 @@
  * `src/tools/memory-*.ts` — the package owns *whether* they mount, and the
  * provider seam makes a package the thing that supplies the implementation.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 
 export const name = "musepi-memory-tools";
 export const inject = [] as const;

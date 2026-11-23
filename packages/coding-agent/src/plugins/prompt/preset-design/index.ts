@@ -7,7 +7,7 @@
  * the rest of the preset. Nothing in `presets/resolve.ts` restates this text,
  * so an edited or disabled row cannot leave a stale design brief behind.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import artifact from "./artifact.md" with { type: "text" };
 import boundary from "./boundary.md" with { type: "text" };
 import brief from "./brief.md" with { type: "text" };

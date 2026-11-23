@@ -8,8 +8,11 @@
 		"label": "rewind",
 		"description": "回滚检查点工具。",
 		"icon": "⏱️",
-		"extensions": ["./index.ts"],
-		"components": [{ "id": "rewind", "entry": "./rewind.ts", "description": "回滚检查点工具。" }],
-		"host": { "readonly": true }
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
 	}
 }

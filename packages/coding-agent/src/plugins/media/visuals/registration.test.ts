@@ -7,7 +7,11 @@
  * (otherwise a presentation surface becomes impossible to turn off).
  */
 import { describe, expect, test } from "bun:test";
-import type { ExtensionWidget, PluginAPI, ToolDefinition } from "../../../extensibility/extensions/types";
+import type {
+	ExtensionWidget,
+	PluginAPI,
+	ToolDefinition,
+} from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { apply } from "./index";
 
 function fakeCtx(): { ctx: PluginAPI; tools: ToolDefinition[]; widgets: ExtensionWidget[] } {

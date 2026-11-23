@@ -6,7 +6,7 @@
  * mode switch that disposes the fiber therefore removes the persona, rather
  * than falling back to an inline copy in the preset definition.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import persona from "./persona.md" with { type: "text" };
 
 /** Plugin identity in the Cordis runtime. */

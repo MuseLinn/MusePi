@@ -1,10 +1,14 @@
 /** Peer messaging, jobs and supervision. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { HubTool } from "@musepi/pi-coding-agent/tools/hub";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-hub";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `hub`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "hub"), "tool-hub:hub");
+	ctx.effect!(
+		registerToolProvider("hub", session => new HubTool(session)),
+		"tool-hub:provide",
+	);
 }

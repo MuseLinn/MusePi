@@ -1,4 +1,4 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { registerFileToolPrompts } from "./prompts";
 
 export const name = "musepi-file-tools";

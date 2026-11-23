@@ -9,8 +9,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import * as path from "node:path";
-import { PLUGIN_MODULE_KIND } from "../../../capability/extension-module";
-import { collectWidgetViews } from "../../../daemon/extension-artifact-compiler";
+import { PLUGIN_MODULE_KIND } from "@musepi/pi-coding-agent/capability/extension-module";
+import { collectWidgetViews } from "@musepi/pi-coding-agent/daemon/extension-artifact-compiler";
 
 const entry = path.join(import.meta.dir, "index.ts");
 

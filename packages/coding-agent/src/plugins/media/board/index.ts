@@ -14,7 +14,7 @@
  *   暴露，读的就是本插件的类型表。
  * - 检视入口：`src/plugins/media/board/`、`docs/gui-widget-spec.md`。
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { BoardTool } from "./tool";
 
 export const name = "musepi-board";

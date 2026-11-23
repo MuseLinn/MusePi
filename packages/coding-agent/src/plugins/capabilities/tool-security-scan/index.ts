@@ -1,10 +1,14 @@
 /** Workspace security scanning. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { SecurityScanTool } from "@musepi/pi-coding-agent/tools/security-scan";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-security-scan";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `security_scan`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "scan"), "tool-security-scan:scan");
+	ctx.effect!(
+		registerToolProvider("security_scan", session => new SecurityScanTool(session)),
+		"tool-security-scan:provide",
+	);
 }

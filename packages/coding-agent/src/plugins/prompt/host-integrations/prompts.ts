@@ -21,10 +21,10 @@
  * pass through untouched instead of hitting strict variable resolution.
  */
 
+import type { PromptHostSurface } from "@musepi/pi-coding-agent/prompts/host";
+import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
+import type { PromptContributionContext } from "@musepi/pi-coding-agent/prompts/types";
 import { prompt } from "@musepi/pi-utils";
-import type { PromptHostSurface } from "../../../prompts/host";
-import { PROMPT_ORDERS } from "../../../prompts/orders";
-import type { PromptContributionContext } from "../../../prompts/types";
 import { wireName } from "../../prompt/prompt-context";
 import autoQaTemplate from "./auto-qa.md" with { type: "text" };
 import mcpServerInstructionsTemplate from "./mcp-server-instructions.md" with { type: "text" };

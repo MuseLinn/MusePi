@@ -6,8 +6,8 @@
  * provider so the settings picker and `memory.status` resolve it through the
  * same seam as every other backend.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { localBackend } from "../../../memory-backend/local-backend";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { localBackend } from "@musepi/pi-coding-agent/memory-backend/local-backend";
 
 export const name = "musepi-memory-local";
 export const inject = [] as const;

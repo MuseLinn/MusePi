@@ -1,10 +1,14 @@
 /** Project knowledge base. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { KnowledgeTool } from "@musepi/pi-coding-agent/tools/knowledge";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-knowledge";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `knowledge`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "knowledge"), "tool-knowledge:knowledge");
+	ctx.effect!(
+		registerToolProvider("knowledge", session => new KnowledgeTool(session)),
+		"tool-knowledge:provide",
+	);
 }

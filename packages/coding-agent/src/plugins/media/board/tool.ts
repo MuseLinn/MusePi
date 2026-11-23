@@ -9,7 +9,7 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
-import type { ExtensionWidget } from "../../../extensibility/extensions/widget-types";
+import type { ExtensionWidget } from "@musepi/pi-coding-agent/extensibility/extensions/widget-types";
 import { widgetTonesWith, widgetTypesWith } from "./catalog";
 import boardDescription from "./prompt.md" with { type: "text" };
 import { listCardResources, ResourceScopeError, readCardText, writeCardText } from "./resources";

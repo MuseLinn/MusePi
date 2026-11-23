@@ -16,8 +16,8 @@
  * `ctx.registerDesignSystem`; this plugin reads that registry only for ids it
  * does not own.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { getDesignSystem } from "../../../presets/design-systems";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { getDesignSystem } from "@musepi/pi-coding-agent/presets/design-systems";
 import {
 	ASSET_POLICY_BRIEFS,
 	type AssetPolicy,

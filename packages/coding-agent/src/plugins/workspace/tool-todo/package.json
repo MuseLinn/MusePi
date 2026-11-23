@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-todo",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "Todo",
-    "description": "Task checklist.",
-    "icon": "✅",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "todo",
-        "entry": "./todo.ts",
-        "description": "Todo"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-todo",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Todo",
+		"description": "Task checklist.",
+		"icon": "✅",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

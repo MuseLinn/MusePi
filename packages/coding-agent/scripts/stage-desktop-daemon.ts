@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { parsePluginComponents } from "@musepi/pi-wire";
 import { compileComponentModule } from "../src/daemon/extension-artifact-compiler";
+import { pluginPackageDirs } from "./plugin-package-dirs";
 
 export interface StageDaemonOptions {
 	readonly binaryPath: string;
@@ -183,8 +184,8 @@ export async function stageDaemon(options: StageDaemonOptions): Promise<void> {
 	const packageRoot = path.join(options.repoRoot, "apps", "desktop");
 	const pluginTrees = [
 		{
-			source: path.join(codingAgentRoot, "src", "bundled-plugins"),
-			destination: path.join(options.outputDir, "bundled-plugins"),
+			source: path.join(codingAgentRoot, "src", "plugins"),
+			destination: path.join(options.outputDir, "plugins"),
 		},
 		{
 			source: path.join(packageRoot, "src", "plugins"),
@@ -194,12 +195,15 @@ export async function stageDaemon(options: StageDaemonOptions): Promise<void> {
 	await fs.mkdir(options.outputDir, { recursive: true });
 	await fs.copyFile(options.binaryPath, path.join(options.outputDir, path.basename(options.binaryPath)));
 	for (const tree of pluginTrees) {
-		const entries = await fs.readdir(tree.source, { withFileTypes: true });
-		const packages = entries.filter(entry => entry.isDirectory());
+		// Staged trees are flat (`<destination>/<package>`): the runtime discovers
+		// packages by their `package.json`, and a staged release should not carry
+		// the source tree's domain grouping into every install. Domains stay a
+		// source-layout concern, which is where they carry meaning.
+		const packages = pluginPackageDirs(tree.source);
 		if (packages.length === 0) throw new Error(`No bundled plugin packages found in ${tree.source}`);
 		await fs.rm(tree.destination, { recursive: true, force: true });
 		for (const entry of packages) {
-			await stagePlugin(path.join(tree.source, entry.name), path.join(tree.destination, entry.name));
+			await stagePlugin(entry.dir, path.join(tree.destination, entry.name));
 		}
 	}
 	for (const packageName of ["bun-pty", "node-pty"]) {
@@ -208,7 +212,7 @@ export async function stageDaemon(options: StageDaemonOptions): Promise<void> {
 		await fs.rm(destinationDir, { recursive: true, force: true });
 		await fs.cp(sourceDir, destinationDir, { recursive: true });
 	}
-	const bridgeDestination = path.join(options.outputDir, "bundled-plugins", "terminal", "pty-bridge.cjs");
+	const bridgeDestination = path.join(options.outputDir, "plugins", "terminal", "pty-bridge.cjs");
 	await fs.mkdir(path.dirname(bridgeDestination), { recursive: true });
 	await fs.copyFile(path.join(codingAgentRoot, "src", "daemon", "pty-bridge.cjs"), bridgeDestination);
 	await assertStagedPluginLayout(options.outputDir);
@@ -239,7 +243,7 @@ export async function assertStagedPluginLayout(root: string): Promise<void> {
 			}
 		}
 	};
-	for (const tree of ["bundled-plugins", "desktop-plugins"]) {
+	for (const tree of ["plugins", "desktop-plugins"]) {
 		const dir = path.join(root, tree);
 		const stat = await fs.stat(dir).catch(() => null);
 		if (stat?.isDirectory()) await walk(dir);
@@ -262,7 +266,7 @@ async function main(): Promise<void> {
 		repoRoot,
 		outputDir: outputDir ? path.resolve(outputDir) : path.join(repoRoot, "apps", "desktop", "vendor", "daemon"),
 	});
-	process.stdout.write("Staged daemon with bundled-plugins and desktop-plugins\n");
+	process.stdout.write("Staged daemon with plugins and desktop-plugins\n");
 }
 
 if (import.meta.main) await main();

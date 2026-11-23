@@ -1,7 +1,7 @@
-import { activateCapability } from "../../../extensibility/capability-activation";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { LearnTool } from "../../../tools/learn";
-import { registerToolProvider } from "../../../tools/tool-ownership";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { LearnTool } from "@musepi/pi-coding-agent/tools/learn";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
 /** The memory-tools package provides `learn` (auto-learn capture + skill). */
 export default function learn(ctx: PluginAPI): void {

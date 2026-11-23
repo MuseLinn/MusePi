@@ -1,15 +1,14 @@
-/**
- * Web tools as a capability package: web search over the configured providers.
- *
- * The search implementation stays in `src/web/search/` and remains the core
- * fallback; mounting this package makes it the provider.
- */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+/** Web search over the configured providers. */
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
+import { WebSearchTool } from "@musepi/pi-coding-agent/web/search";
 
-export const name = "musepi-tool-web";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// Components carry the per-tool registration.
+/** The web package provides `web_search`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "web_search"), "tool-web:search");
+	ctx.effect!(
+		registerToolProvider("web_search", session => new WebSearchTool(session)),
+		"tool-web:provide:web-search",
+	);
 }

@@ -1,5 +1,5 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { activateTtsEngine } from "../../../voice/engine-registry";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { activateTtsEngine } from "@musepi/pi-coding-agent/voice/engine-registry";
 
 export const name = "tts-engine-kokoro";
 

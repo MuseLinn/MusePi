@@ -191,9 +191,22 @@ export function resolvePluginEntry(module: PluginEntryModule): CordisPluginEntry
 		typeof module === "object" && module !== null && "default" in module
 			? (module as { default?: unknown }).default
 			: module;
-	if (inner === undefined || inner === null) return null;
-	if (isCordisPluginEntry(inner)) return inner;
-	if (isBareFactory(inner)) return inner;
+	if (inner !== undefined && inner !== null) {
+		if (isCordisPluginEntry(inner)) return inner;
+		if (isBareFactory(inner)) return inner;
+	}
+	// A module whose entry is the module itself: named `apply` / `inject` /
+	// `name` exports, no default. The Cordis entry shape is `{ name, apply }`,
+	// and the host's own plugins are written exactly that way, so a session
+	// loader that only looked at `default` would silently mount none of them.
+	if (
+		typeof module === "object" &&
+		module !== null &&
+		typeof (module as CordisPluginEntry).apply === "function" &&
+		isCordisPluginEntry(module as CordisPluginEntry)
+	) {
+		return module as CordisPluginEntry;
+	}
 	return null;
 }
 

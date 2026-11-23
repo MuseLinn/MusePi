@@ -1,10 +1,14 @@
 /** Shell command execution. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { BashTool } from "@musepi/pi-coding-agent/tools/bash";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-bash";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `bash`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "bash"), "tool-bash:bash");
+	ctx.effect!(
+		registerToolProvider("bash", session => new BashTool(session)),
+		"tool-bash:provide",
+	);
 }

@@ -1,15 +1,15 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import contextNotesDescription from "../../../prompts/tools/context-notes.md" with { type: "text" };
-import contextNotesTextDescription from "../../../prompts/tools/context-notes-text.md" with { type: "text" };
-import newContextDescription from "../../../prompts/tools/new-context.md" with { type: "text" };
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import {
 	CONTEXT_NOTES_ENTRY_TYPE,
 	type ContextNotesEntry,
 	getContextNotes,
 	MAX_CONTEXT_NOTES_BYTES,
 	renderContextNotes,
-} from "../../../session/context-notes";
-import { createCustomMessage } from "../../../session/messages";
+} from "@musepi/pi-coding-agent/session/context-notes";
+import { createCustomMessage } from "@musepi/pi-coding-agent/session/messages";
+import contextNotesDescription from "./context-notes.md" with { type: "text" };
+import contextNotesTextDescription from "./context-notes-text.md" with { type: "text" };
+import newContextDescription from "./new-context.md" with { type: "text" };
 
 export const name = "musepi-context-notes";
 export const inject = [] as const;

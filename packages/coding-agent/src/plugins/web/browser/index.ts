@@ -1,4 +1,4 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { registerBrowserPrompts } from "./prompts";
 
 export const name = "musepi-browser";

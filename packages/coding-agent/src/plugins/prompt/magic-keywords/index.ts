@@ -20,10 +20,10 @@
  * registry, and the editor paints only registered highlighters. Disabling or
  * unloading the package removes both effects; there is no static fallback.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { renderOrchestrateNotice } from "../../../modes/orchestrate";
-import { ULTRATHINK_NOTICE } from "../../../modes/ultrathink";
-import { renderWorkflowNotice } from "../../../modes/workflow";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { renderOrchestrateNotice } from "@musepi/pi-coding-agent/modes/orchestrate";
+import { ULTRATHINK_NOTICE } from "@musepi/pi-coding-agent/modes/ultrathink";
+import { renderWorkflowNotice } from "@musepi/pi-coding-agent/modes/workflow";
 
 /** Plugin identity in the cordis runtime and the extension center. */
 export const name = "musepi-magic-keywords";

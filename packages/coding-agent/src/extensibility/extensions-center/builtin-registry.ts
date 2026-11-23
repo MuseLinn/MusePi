@@ -2,7 +2,7 @@
  * Built-in distribution annotations.
  *
  * This registry no longer declares runnable subsystems. Each first-party
- * subsystem owns a package under `src/bundled-plugins`; discovery creates its
+ * subsystem owns a package under `src/plugins`; discovery creates its
  * only inventory row and Cordis owns its lifecycle. The entries below only mark
  * rows discovered through another capability scanner as shipped with MusePi.
  */

@@ -1,10 +1,14 @@
 /** 检查点工具。 */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { CheckpointTool } from "@musepi/pi-coding-agent/tools/checkpoint";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-checkpoint";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `checkpoint`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "checkpoint"), "tool-checkpoint:checkpoint");
+	ctx.effect!(
+		registerToolProvider("checkpoint", session => CheckpointTool.createIf(session)),
+		"tool-checkpoint:provide",
+	);
 }

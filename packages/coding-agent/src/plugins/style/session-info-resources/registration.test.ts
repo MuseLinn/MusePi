@@ -6,7 +6,7 @@
  * from the card with no host-side change to notice it.
  */
 import { describe, expect, test } from "bun:test";
-import type { ExtensionComponent, PluginAPI } from "../../../extensibility/extensions/types";
+import type { ExtensionComponent, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { apply } from "./index";
 
 function fakeCtx(): { ctx: PluginAPI; components: ExtensionComponent[] } {

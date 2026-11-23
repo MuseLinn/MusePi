@@ -5,8 +5,8 @@
  * package makes "hindsight" a registered provider, so the settings picker and
  * `memory.status` resolve it through the same seam as every other backend.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { hindsightBackend } from "../../../hindsight/backend";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { hindsightBackend } from "@musepi/pi-coding-agent/hindsight/backend";
 
 export const name = "musepi-memory-hindsight";
 export const inject = [] as const;

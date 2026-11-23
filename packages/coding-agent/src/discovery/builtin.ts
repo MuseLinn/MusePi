@@ -607,7 +607,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		warnings.push(`Failed to discover plugin extension paths: ${String(error)}`);
 	}
 
-	// Bundled plugin packages (src/bundled-plugins, shipped as ./bundled-plugins
+	// Bundled plugin packages (src/plugins, shipped as ./plugins
 	// in the bundled CLI): first-party units in plugin form. Each subdirectory
 	// with a package.json declaring `musepi.extensions` is one package. They run
 	// through the same module loader as any plugin — a bundled unit is a package
@@ -671,7 +671,7 @@ interface BundledPluginPackage {
  * Every bundled plugin package, including preset-owned ones.
  *
  * `MUSEPI_BUNDLED_PLUGIN_ROOTS` supplies the absolute distribution roots.
- * Without it, development resolves the two source trees and `./bundled-plugins`
+ * Without it, development resolves the two source trees and `./plugins`
  * beside its entrypoint. A directory with no readable `musepi.extensions`
  * manifest is skipped — it is not a package, and reporting it would make
  * every stray directory in the tree a plugin.

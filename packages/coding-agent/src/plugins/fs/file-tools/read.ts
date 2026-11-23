@@ -1,7 +1,7 @@
-import { activateCapability } from "../../../extensibility/capability-activation";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { ReadTool } from "../../../tools/read";
-import { registerToolOwner, registerToolProvider } from "../../../tools/tool-ownership";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
+import { registerToolOwner, registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
 /**
  * The file-tools package provides the read family: it owns `read` and supplies

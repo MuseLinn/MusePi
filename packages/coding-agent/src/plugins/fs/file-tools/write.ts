@@ -1,8 +1,8 @@
-import { EditTool } from "../../../edit";
-import { activateCapability } from "../../../extensibility/capability-activation";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { registerToolOwner, registerToolProvider } from "../../../tools/tool-ownership";
-import { WriteTool } from "../../../tools/write";
+import { EditTool } from "@musepi/pi-coding-agent/edit";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { registerToolOwner, registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
+import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
 
 /**
  * The file-tools package provides the write family: `write` and `edit` (plus

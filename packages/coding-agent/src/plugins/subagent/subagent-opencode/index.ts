@@ -1,4 +1,4 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import {
 	type ExternalJsonlEvent,
 	type ExternalProcessFactory,
@@ -8,9 +8,9 @@ import {
 	externalModel,
 	externalTask,
 	runExternalJsonl,
-} from "../../../task/external-cli";
-import { registerExternalExecutableProbe } from "../../../task/external-executable-probe";
-import type { ExternalSubagentExecutor } from "../../../task/types";
+} from "@musepi/pi-coding-agent/task/external-cli";
+import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/external-executable-probe";
+import type { ExternalSubagentExecutor } from "@musepi/pi-coding-agent/task/types";
 
 export const name = "musepi-subagent-opencode";
 export const inject = [] as const;

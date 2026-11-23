@@ -1,7 +1,7 @@
-import { activateCapability } from "../../../extensibility/capability-activation";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { BrowserTool } from "../../../tools/browser";
-import { registerToolProvider } from "../../../tools/tool-ownership";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { BrowserTool } from "@musepi/pi-coding-agent/tools/browser";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
 /**
  * The browser package provides the `browser` tool itself; the `launch` /

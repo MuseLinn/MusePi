@@ -13,8 +13,8 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
+import { awaitWidgetAnswer, type WidgetAnswer } from "@musepi/pi-coding-agent/tools/widget-answer";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
-import { awaitWidgetAnswer, type WidgetAnswer } from "../../../tools/widget-answer";
 import widgetDescription from "./prompt.md" with { type: "text" };
 import { WIDGET_RENDER_WHEN } from "./when";
 

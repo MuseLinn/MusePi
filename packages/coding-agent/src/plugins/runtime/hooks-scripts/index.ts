@@ -1,9 +1,9 @@
 import * as path from "node:path";
-import { Settings } from "../../../config/settings";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { installCommandHookBridge } from "../../../extensibility/hooks/command/bridge";
-import { scanScriptHookRoots } from "../../../extensibility/hooks/command/scripts";
-import { stringArrayFromRow } from "../../../extensibility/plugins/row-config";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { installCommandHookBridge } from "@musepi/pi-coding-agent/extensibility/hooks/command/bridge";
+import { scanScriptHookRoots } from "@musepi/pi-coding-agent/extensibility/hooks/command/scripts";
+import { stringArrayFromRow } from "@musepi/pi-coding-agent/extensibility/plugins/row-config";
 
 /**
  * Directory-shaped hooks, mounted as a preset row.

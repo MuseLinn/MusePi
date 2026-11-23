@@ -2,9 +2,9 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { ExtensionSkillDeclaration, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { stringArrayFromRow } from "@musepi/pi-coding-agent/extensibility/plugins/row-config";
 import { parseFrontmatter } from "@musepi/pi-utils";
-import type { ExtensionSkillDeclaration, PluginAPI } from "../../../extensibility/extensions/types";
-import { stringArrayFromRow } from "../../../extensibility/plugins/row-config";
 
 /**
  * File skills, scoped by a preset row.

@@ -1,17 +1,14 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { registerComputerPrompts } from "./prompts";
+/** Operate the host desktop through screenshots, input and the accessibility tree. */
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { ComputerTool } from "@musepi/pi-coding-agent/tools/computer";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-computer";
-export const inject = [] as const;
-export const provide = [] as const;
-
+/** The computer package provides `computer`. */
 export function apply(ctx: PluginAPI): void {
-	computer(ctx);
-	// Prompt contributions are session-scoped (dsh: register when the agent
-	// exists), so a shared instance can serve several sessions.
-	ctx.on("session_start", () => {
-		if (ctx.promptHost) registerComputerPrompts(ctx.promptHost);
-	});
+	ctx.effect!(activateCapability("tool", "computer"), "tool:computer");
+	ctx.effect!(
+		registerToolProvider("computer", session => new ComputerTool(session)),
+		"computer:provide",
+	);
 }
-
-function computer(ctx: PluginAPI): void {}

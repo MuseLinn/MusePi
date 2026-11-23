@@ -1,6 +1,6 @@
-import { createBunPtyBackend } from "../../../daemon/terminal-provider";
-import type { TerminalRegistry } from "../../../daemon/terminal-registry";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { createBunPtyBackend } from "@musepi/pi-coding-agent/daemon/terminal-provider";
+import type { TerminalRegistry } from "@musepi/pi-coding-agent/daemon/terminal-registry";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 
 export const name = "terminal-provider-bunpty";
 export const inject = ["terminal:backends"] as const;

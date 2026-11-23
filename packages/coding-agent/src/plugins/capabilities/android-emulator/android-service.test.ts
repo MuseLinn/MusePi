@@ -121,7 +121,9 @@ describe("AndroidDeviceService", () => {
 			await writeFile(join(root, "app-debug.apk"), "apk");
 			const runner = new FakeRunner();
 			const service = new AndroidDeviceService({ adbPath: "adb", runner });
-			await expect(service.install("emulator-5554", root, "../../../outside.apk")).rejects.toThrow("workspace");
+			await expect(service.install("emulator-5554", root, "@musepi/pi-coding-agent/outside.apk")).rejects.toThrow(
+				"workspace",
+			);
 			await service.install("emulator-5554", root, "app-debug.apk");
 			expect(runner.calls[0]!.args.slice(0, 5)).toEqual(["-s", "emulator-5554", "install", "-r", "-g"]);
 		} finally {

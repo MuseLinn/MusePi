@@ -117,11 +117,11 @@ async function main(): Promise<void> {
 		await ensureShebang();
 		await Bun.write(path.join(outDir, "docs-index.generated.txt"), docsPayload.payload);
 		// Bundled plugin packages ship the same way: the bundled CLI discovers
-		// them from disk (src/bundled-plugins in dev, ./bundled-plugins in the
-		// bundled CLI), and each subdirectory is one loadable package.
-		await fs.cp(path.join(packageDir, "src/bundled-plugins"), path.join(outDir, "bundled-plugins"), {
-			recursive: true,
-		});
+		// them from disk (src/plugins in dev, ./plugins in the bundled CLI), and
+		// each package is one loadable unit. The source tree groups packages by
+		// domain; the shipped tree is flat, so discovery in a release reads the
+		// package list rather than the source layout.
+		await fs.cp(path.join(packageDir, "src/plugins"), path.join(outDir, "plugins"), { recursive: true });
 	} finally {
 		await runCommand(["bun", "--cwd=../stats", "run", "gen:stats:reset"]);
 	}

@@ -8,8 +8,11 @@
 		"label": "checkpoint",
 		"description": "检查点工具。",
 		"icon": "⏱️",
-		"extensions": ["./index.ts"],
-		"components": [{ "id": "checkpoint", "entry": "./checkpoint.ts", "description": "检查点工具。" }],
-		"host": { "readonly": true }
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
 	}
 }

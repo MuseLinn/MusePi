@@ -10,7 +10,7 @@
  * discovery: it is a preset contribution, not something every session should
  * load and then ignore.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import persona from "./persona.md" with { type: "text" };
 
 /** Plugin identity in the Cordis runtime. */

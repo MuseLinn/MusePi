@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-request-secret",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "Request Secret",
-    "description": "Ask the user for a secret.",
-    "icon": "🔑",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "request",
-        "entry": "./request.ts",
-        "description": "Request Secret"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-request-secret",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Request Secret",
+		"description": "Ask the user for a secret.",
+		"icon": "🔑",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

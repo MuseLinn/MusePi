@@ -8,8 +8,9 @@
 		"label": "Web Tools",
 		"description": "Web search over the configured providers.",
 		"icon": "🌐",
-		"extensions": ["./index.ts"],
-		"components": [{ "id": "search", "entry": "./search.ts", "description": "网页搜索工具。" }],
+		"extensions": [
+			"./index.ts"
+		],
 		"host": {
 			"readonly": true
 		}

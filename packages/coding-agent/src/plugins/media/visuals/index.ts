@@ -15,7 +15,7 @@
  * - 冲突：独占 `widget` 工具名。
  * - 检视入口：`src/plugins/media/visuals/`、`docs/gui-widget-spec.md`。
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { registerVisualPrompts } from "./prompts";
 import { WidgetTool } from "./tool";
 

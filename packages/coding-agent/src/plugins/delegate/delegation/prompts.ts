@@ -7,10 +7,11 @@
  * static prose and its dynamic branches live in `delegation.md` (Handlebars);
  * this function only collects the template data and renders.
  */
+
+import type { PromptHostSurface } from "@musepi/pi-coding-agent/prompts/host";
+import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
+import type { PromptContributionContext } from "@musepi/pi-coding-agent/prompts/types";
 import { prompt } from "@musepi/pi-utils";
-import type { PromptHostSurface } from "../../../prompts/host";
-import { PROMPT_ORDERS } from "../../../prompts/orders";
-import type { PromptContributionContext } from "../../../prompts/types";
 import { wireName } from "../../prompt/prompt-context";
 import delegationTemplate from "./delegation.md" with { type: "text" };
 

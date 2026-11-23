@@ -31,7 +31,7 @@
  * 这正是「插件只组合宿主已有能力」的形态：它不复制统计逻辑，只把读数画出来。
  */
 
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 
 /** 插件在 cordis 运行时与扩展中心的身份。 */
 export const name = "musepi-stats-pills";

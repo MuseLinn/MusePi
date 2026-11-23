@@ -1,7 +1,7 @@
+import type { ExtensionContext, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { nextActionableTask } from "@musepi/pi-coding-agent/tools/todo";
 import { logger, prompt } from "@musepi/pi-utils";
-import type { ExtensionContext, PluginAPI } from "../../../extensibility/extensions/types";
-import idleRecapPrompt from "../../../prompts/system/recap-user.md" with { type: "text" };
-import { nextActionableTask } from "../../../tools/todo";
+import idleRecapPrompt from "./recap-user.md" with { type: "text" };
 
 export const name = "musepi-idle-maintenance";
 export const inject = [] as const;

@@ -1,10 +1,14 @@
 /** Delegate work to subagents. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { TaskTool } from "@musepi/pi-coding-agent/task";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-task";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `task`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "task"), "tool-task:task");
+	ctx.effect!(
+		registerToolProvider("task", session => TaskTool.create(session)),
+		"tool-task:provide",
+	);
 }

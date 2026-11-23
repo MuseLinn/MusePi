@@ -9,14 +9,14 @@
  */
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools/contract";
+import type { OutputMeta } from "@musepi/pi-coding-agent/tools/output-meta";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
+import { toolResult } from "@musepi/pi-coding-agent/tools/tool-result";
 import { prompt } from "@musepi/pi-utils";
-import { activateCapability } from "../../../extensibility/capability-activation";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import notifyUserDescription from "../../../prompts/tools/notify-user.md" with { type: "text" };
-import type { ToolSession } from "../../../tools/contract";
-import type { OutputMeta } from "../../../tools/output-meta";
-import { registerToolProvider } from "../../../tools/tool-ownership";
-import { toolResult } from "../../../tools/tool-result";
+import notifyUserDescription from "./notify-user.md" with { type: "text" };
 
 export const name = "musepi-tool-notify-user";
 export const inject = [] as const;

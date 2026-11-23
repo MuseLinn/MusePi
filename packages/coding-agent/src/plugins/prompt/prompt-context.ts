@@ -7,7 +7,7 @@
  * information from `toolRefs` so the rendered text always names what the model
  * will actually call.
  */
-import type { PromptContributionContext } from "../../prompts/types";
+import type { PromptContributionContext } from "@musepi/pi-coding-agent/prompts/types";
 
 function refs(context: PromptContributionContext): Record<string, unknown> {
 	const value = context.toolRefs;

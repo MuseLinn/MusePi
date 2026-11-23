@@ -1,7 +1,12 @@
 /** Minimal one-turn Codex app-server JSON-RPC adapter. */
+
+import {
+	type ExternalProcessFactory,
+	externalDisposeGrace,
+	spawnExternalProcess,
+} from "@musepi/pi-coding-agent/task/external-cli";
+import type { ExternalSubagentContext, ExternalSubagentResult } from "@musepi/pi-coding-agent/task/types";
 import { AbortError, type ChildProcess } from "@musepi/pi-utils/ptree";
-import { type ExternalProcessFactory, externalDisposeGrace, spawnExternalProcess } from "../../../task/external-cli";
-import type { ExternalSubagentContext, ExternalSubagentResult } from "../../../task/types";
 
 export interface CodexAppServerSpec {
 	command: string[];

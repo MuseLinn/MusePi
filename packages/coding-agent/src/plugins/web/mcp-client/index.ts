@@ -1,5 +1,5 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import type { MCPServerConfig } from "../../../mcp/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 
 /**
  * One MCP server, declared by ONE preset row.

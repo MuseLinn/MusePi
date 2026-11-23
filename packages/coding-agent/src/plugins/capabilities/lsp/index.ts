@@ -1,17 +1,14 @@
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { registerLspPrompts } from "./prompts";
+/** Definitions, references, diagnostics and rename through language servers. */
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { LspTool } from "@musepi/pi-coding-agent/lsp/tool";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-lsp";
-export const inject = [] as const;
-export const provide = [] as const;
-
+/** The lsp package provides `lsp`. */
 export function apply(ctx: PluginAPI): void {
-	lsp(ctx);
-	// Prompt contributions are session-scoped (dsh: register when the agent
-	// exists), so a shared instance can serve several sessions.
-	ctx.on("session_start", () => {
-		if (ctx.promptHost) registerLspPrompts(ctx.promptHost);
-	});
+	ctx.effect!(activateCapability("tool", "lsp"), "tool:lsp");
+	ctx.effect!(
+		registerToolProvider("lsp", session => LspTool.createIf(session)),
+		"lsp:provide",
+	);
 }
-
-function lsp(ctx: PluginAPI): void {}

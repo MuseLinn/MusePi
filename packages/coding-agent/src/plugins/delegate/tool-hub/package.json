@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-hub",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "Coordination Hub",
-    "description": "Peer messaging, jobs and supervision.",
-    "icon": "🔗",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "hub",
-        "entry": "./hub.ts",
-        "description": "Coordination Hub"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-hub",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Coordination Hub",
+		"description": "Peer messaging, jobs and supervision.",
+		"icon": "🔗",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

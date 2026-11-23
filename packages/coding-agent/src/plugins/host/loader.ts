@@ -2,8 +2,8 @@
  * Loader for the bundled plugin packages.
  *
  * The first-party units that ship in plugin form live in
- * `src/bundled-plugins/<name>/`, and the bundled CLI copies the
- * tree to `./bundled-plugins`. Discovery finds them like any plugin; this
+ * `src/plugins/<domain>/<name>/`, and the bundled CLI copies the
+ * tree to `./plugins`. Discovery finds them like any plugin; this
  * module additionally offers a one-shot idempotent load, so a host that wants
  * the first-party contributions guaranteed — regardless of whether extension
  * discovery ran — can call it before reading the registry.
@@ -21,15 +21,18 @@
  */
 
 import * as path from "node:path";
+import { discoverBundledPluginPaths } from "@musepi/pi-coding-agent/discovery/builtin";
+import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
+import type { Extension } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { resolvePluginEntry, toFactory } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-entry";
+import { disposePluginPrimitives } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-primitives";
+import {
+	ensureHostPlugins,
+	resetHostPlugins,
+} from "@musepi/pi-coding-agent/extensibility/plugins/runtime/host-runtime";
+import { registerMagicKeyword } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 import { logger } from "@musepi/pi-utils";
-import { discoverBundledPluginPaths } from "../../discovery/builtin";
-import { ExtensionRuntime, loadExtensionFromFactory } from "../../extensibility/extensions/loader";
-import type { Extension } from "../../extensibility/extensions/types";
-import { resolvePluginEntry, toFactory } from "../../extensibility/plugins/runtime/cordis-entry";
-import { disposePluginPrimitives } from "../../extensibility/plugins/runtime/cordis-primitives";
-import { ensureHostPlugins, resetHostPlugins } from "../../extensibility/plugins/runtime/host-runtime";
-import { registerMagicKeyword } from "../../modes/magic-keyword-registry";
-import { EventBus } from "../../utils/event-bus";
 
 /**
  * Bundled packages whose prompt-host contributions are part of the core
@@ -57,7 +60,7 @@ const SESSION_PROMPT_PACKAGE_DIRS: ReadonlySet<string> = new Set([
  *
  * Filtered from {@link discoverBundledPluginPaths} by package directory name:
  * bundled copies keep the `<root>/<package>/` layout in every distribution
- * shape (source tree, staged `./bundled-plugins`, packaged roots).
+ * shape (source tree, staged `./plugins`, packaged roots).
  */
 export async function discoverBundledSessionPromptPluginPaths(): Promise<string[]> {
 	const paths = await discoverBundledPluginPaths();

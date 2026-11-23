@@ -1,7 +1,7 @@
-import { activateCapability } from "../../../extensibility/capability-activation";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { MemoryRecallTool } from "../../../tools/memory-recall";
-import { registerToolProvider } from "../../../tools/tool-ownership";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { MemoryRecallTool } from "@musepi/pi-coding-agent/tools/memory-recall";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
 /** The memory-tools package provides `recall` (read side). */
 export default function recall(ctx: PluginAPI): void {

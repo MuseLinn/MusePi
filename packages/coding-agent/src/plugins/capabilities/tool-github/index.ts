@@ -1,10 +1,14 @@
 /** Issues, PRs and search via the gh CLI. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { GithubTool } from "@musepi/pi-coding-agent/tools/gh";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-github";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `github`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "github"), "tool-github:github");
+	ctx.effect!(
+		registerToolProvider("github", session => GithubTool.createIf(session)),
+		"tool-github:provide",
+	);
 }

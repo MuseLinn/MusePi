@@ -1,8 +1,8 @@
+import type { ExtensionContext, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { AgentEndEvent } from "@musepi/pi-coding-agent/extensibility/shared-events";
+import { promptSuggestionText, turnAllowsPromptSuggestion } from "@musepi/pi-coding-agent/session/prompt-suggestion";
 import { logger, prompt } from "@musepi/pi-utils";
-import type { ExtensionContext, PluginAPI } from "../../../extensibility/extensions/types";
-import type { AgentEndEvent } from "../../../extensibility/shared-events";
-import suggestionInstruction from "../../../prompts/system/suggestion-instruction.md" with { type: "text" };
-import { promptSuggestionText, turnAllowsPromptSuggestion } from "../../../session/prompt-suggestion";
+import suggestionInstruction from "./suggestion-instruction.md" with { type: "text" };
 
 export const name = "musepi-prompt-suggestion";
 export const inject = [] as const;

@@ -13,7 +13,7 @@
  *   各自命令执行，截图采集串行且仅缓存最新帧。
  * - 检视入口：`src/plugins/capabilities/android-emulator/`、`docs/extensions-dev.md`。
  */
-import type { ExtensionRpcHandler, PluginAPI } from "../../../extensibility/extensions/types";
+import type { ExtensionRpcHandler, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { AndroidDeviceService } from "./android-service";
 import { createAndroidEmulatorTool } from "./tools";
 

@@ -350,7 +350,7 @@ export interface ModeResolver {
  *  label/description 由 daemon modes.list 按内置 id 本地化(i18n keys)。
  *
  *  预设只声明组合(插件行、模型角色、工具/压缩状态);persona 文本由
- *  bundled-plugins/preset-{chat,design,creator} 各自拥有。插件行被停用或
+ *  plugins/prompt/preset-{chat,design,creator} 各自拥有。插件行被停用或
  *  预设被切换时,注册随 fiber 消失,这里没有可回退的静态副本。 */
 export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 	work: {

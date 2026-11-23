@@ -1,10 +1,14 @@
 /** Ask the user and wait for the answer. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { AskTool } from "@musepi/pi-coding-agent/tools/ask";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-ask-user";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `ask`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "ask"), "tool-ask-user:ask");
+	ctx.effect!(
+		registerToolProvider("ask", session => AskTool.createIf(session)),
+		"tool-ask-user:provide",
+	);
 }

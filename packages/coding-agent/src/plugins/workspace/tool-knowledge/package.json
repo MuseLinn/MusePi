@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-knowledge",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "Knowledge",
-    "description": "Project knowledge base.",
-    "icon": "📚",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "knowledge",
-        "entry": "./knowledge.ts",
-        "description": "Knowledge"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-knowledge",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Knowledge",
+		"description": "Project knowledge base.",
+		"icon": "📚",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

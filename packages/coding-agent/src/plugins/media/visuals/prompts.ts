@@ -12,10 +12,10 @@
  * interpolates it rather than carrying a second copy.
  */
 
+import type { PromptHostSurface } from "@musepi/pi-coding-agent/prompts/host";
+import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
+import type { PromptContributionContext } from "@musepi/pi-coding-agent/prompts/types";
 import { prompt } from "@musepi/pi-utils";
-import type { PromptHostSurface } from "../../../prompts/host";
-import { PROMPT_ORDERS } from "../../../prompts/orders";
-import type { PromptContributionContext } from "../../../prompts/types";
 import section from "./visual-answers.md" with { type: "text" };
 import { WIDGET_RENDER_WHEN } from "./when";
 

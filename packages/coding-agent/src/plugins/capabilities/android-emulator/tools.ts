@@ -1,5 +1,5 @@
 import type { AgentToolResult } from "@musepi/pi-agent-core";
-import type { PluginAPI, ToolDefinition } from "../../../extensibility/extensions/types";
+import type { PluginAPI, ToolDefinition } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import type { AndroidDeviceService } from "./android-service";
 
 interface AndroidToolParams {

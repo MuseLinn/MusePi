@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-list-secrets",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "List Secrets",
-    "description": "List secret names.",
-    "icon": "🗝️",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "list",
-        "entry": "./list.ts",
-        "description": "List Secrets"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-list-secrets",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "List Secrets",
+		"description": "List secret names.",
+		"icon": "🗝️",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

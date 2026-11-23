@@ -24,7 +24,7 @@
  * 资源读数不是会话元数据：缺了它卡片依然完整，所以这里没有内置回退。
  */
 
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 
 /** 插件在 cordis 运行时与扩展中心的身份。 */
 export const name = "musepi-session-info-resources";

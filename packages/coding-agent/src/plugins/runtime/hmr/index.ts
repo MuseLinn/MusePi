@@ -6,10 +6,10 @@
  */
 import * as fsSync from "node:fs";
 import * as path from "node:path";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { resolveExtensionWatchRoots } from "@musepi/pi-coding-agent/extensibility/plugins/hmr/roots";
+import { createHmrService, type HmrService } from "@musepi/pi-coding-agent/extensibility/plugins/hmr/service";
 import { getPluginsDir } from "@musepi/pi-utils";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { resolveExtensionWatchRoots } from "../../../extensibility/plugins/hmr/roots";
-import { createHmrService, type HmrService } from "../../../extensibility/plugins/hmr/service";
 
 export const name = "musepi-hmr";
 export const inject = [] as const;

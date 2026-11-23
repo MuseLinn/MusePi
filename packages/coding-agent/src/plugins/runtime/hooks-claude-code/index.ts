@@ -1,8 +1,8 @@
 import * as path from "node:path";
-import { Settings } from "../../../config/settings";
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { installCommandHookBridge } from "../../../extensibility/hooks/command/bridge";
-import { loadHookConfigFile } from "../../../extensibility/hooks/command/load";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { installCommandHookBridge } from "@musepi/pi-coding-agent/extensibility/hooks/command/bridge";
+import { loadHookConfigFile } from "@musepi/pi-coding-agent/extensibility/hooks/command/load";
 
 /**
  * Claude Code command hooks, mounted as a preset row.

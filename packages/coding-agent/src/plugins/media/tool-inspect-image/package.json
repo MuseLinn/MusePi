@@ -1,25 +1,18 @@
 {
-  "name": "musepi-tool-inspect-image",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "license": "MIT",
-  "musepi": {
-    "label": "Inspect Image",
-    "description": "Vision inspection of an image.",
-    "icon": "🖼️",
-    "extensions": [
-      "./index.ts"
-    ],
-    "components": [
-      {
-        "id": "inspect",
-        "entry": "./inspect.ts",
-        "description": "Inspect Image"
-      }
-    ],
-    "host": {
-      "readonly": true
-    }
-  }
+	"name": "musepi-tool-inspect-image",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Inspect Image",
+		"description": "Vision inspection of an image.",
+		"icon": "🖼️",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
 }

@@ -1,10 +1,14 @@
 /** List secret names. */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
+import { activateCapability } from "@musepi/pi-coding-agent/extensibility/capability-activation";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { ListSecretsTool } from "@musepi/pi-coding-agent/tools/list-secrets";
+import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
-export const name = "musepi-tool-list-secrets";
-export const inject = [] as const;
-export const provide = [] as const;
-
-export function apply(_ctx: PluginAPI): void {
-	// The component carries the tool registration.
+/** Provides `list_secrets`. */
+export function apply(ctx: PluginAPI): void {
+	ctx.effect!(activateCapability("tool", "list"), "tool-list-secrets:list");
+	ctx.effect!(
+		registerToolProvider("list_secrets", session => new ListSecretsTool(session)),
+		"tool-list-secrets:provide",
+	);
 }

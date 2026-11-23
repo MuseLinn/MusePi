@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
 import { type } from "@musepi/musepi-type";
-import { parseConfigFields } from "@musepi/pi-wire";
 import type {
 	ExtensionComponent,
 	ExtensionContext,
 	ExtensionRpcHandler,
 	PluginAPI,
 	ToolDefinition,
-} from "../../../extensibility/extensions/types";
+} from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { parseConfigFields } from "@musepi/pi-wire";
 import { AndroidDeviceService, type AndroidProcessRunner, type AndroidRunResult } from "./android-service";
 import { apply } from "./index";
 import { createAndroidEmulatorTool } from "./tools";

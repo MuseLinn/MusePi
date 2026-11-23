@@ -12,8 +12,8 @@
  * page resolve a backend with no session, and a session-scoped mount would
  * register the same provider once per session.
  */
-import type { PluginAPI } from "../../../extensibility/extensions/types";
-import { sharpshooterBackend } from "../../../sharpshooter/backend";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { sharpshooterBackend } from "@musepi/pi-coding-agent/sharpshooter/backend";
 
 export const name = "musepi-memory-sharpshooter";
 export const inject = [] as const;
