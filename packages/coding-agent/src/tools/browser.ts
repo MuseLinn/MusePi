@@ -7,7 +7,6 @@ import { prompt, Snowflake, untilAborted } from "@musepi/pi-utils";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
 import { resolveToCwd } from "../render/path-utils";
-import type { ToolSession } from "../sdk";
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { resolveCmuxKind } from "./browser/cmux/rpc";
@@ -67,6 +66,7 @@ import {
 } from "./browser/tab-supervisor";
 import { type BrowserVisualCrop, resolveVisualCrop } from "./browser/visual-crop";
 import { type BrowserWaitResult, pageWaitCode } from "./browser/wait";
+import type { ToolSession } from "./contract";
 import type { OutputMeta } from "./output-meta";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";

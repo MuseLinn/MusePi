@@ -1,8 +1,8 @@
 import { pathToFileURL } from "node:url";
 import { untilAborted } from "@musepi/pi-utils";
-import type { ToolSession } from "../sdk";
 import type { BrowserHandle } from "./browser/registry";
 import type { ScreenshotResult } from "./browser/tab-protocol";
+import type { ToolSession } from "./contract";
 import { ToolAbortError, ToolError } from "./tool-errors";
 
 const PDF_IMAGE_MEMBER_RE = /^(.*\.pdf):(.*)$/i;

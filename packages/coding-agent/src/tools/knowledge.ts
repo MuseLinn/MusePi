@@ -31,7 +31,7 @@ import {
 	updateTodo,
 } from "../knowledge/store";
 import knowledgeDescription from "../prompts/tools/knowledge.md" with { type: "text" };
-import type { ToolSession } from "../sdk";
+import type { ToolSession } from "./contract";
 
 const KnowledgeKind = type('"note" | "todo" | "plan"').describe("which kind of knowledge");
 

@@ -14,7 +14,6 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { isReadableUrlPath, type LineRange, parseLineRanges } from "../render/path-utils";
 import { formatBytes, formatExpandHint, getDomain, replaceTabs } from "../render/render-utils";
 import { type Theme, theme } from "../render/theme/theme";
-import type { ToolSession } from "../sdk";
 import type { AgentStorage } from "../session/agent-storage";
 import { DEFAULT_MAX_BYTES, truncateHead } from "../session/streaming-output";
 import { renderStatusLine, urlHyperlink } from "../tui";
@@ -27,6 +26,7 @@ import { extractWithParallel, findParallelApiKey, getParallelExtractContent } fr
 import type { RenderResult, SpecialHandler } from "../web/scrapers/types";
 import { finalizeOutput, loadPage, looksLikeHtml, MAX_BYTES, MAX_OUTPUT_CHARS } from "../web/scrapers/types";
 import { convertWithMarkit, fetchBinary } from "../web/scrapers/utils";
+import type { ToolSession } from "./contract";
 import { applyListLimit } from "./list-limit";
 import { formatStyledArtifactReference, type OutputMeta } from "./output-meta";
 import { listTables, looksLikeSqlite, openSqliteReadConnection, renderTableList } from "./sqlite-reader";

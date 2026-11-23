@@ -8,10 +8,9 @@ import chalk from "@musepi/pi-utils/chalk";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import todoDescription from "../prompts/tools/todo.md" with { type: "text" };
 import type { Theme } from "../render/theme/theme";
-import type { ToolSession } from "../sdk";
 import type { SessionEntry } from "../session/session-entries";
 import { framedBlock, renderStatusLine, renderTreeList } from "../tui";
-import type { TodoItem, TodoPhase, TodoStatus } from "./contract";
+import type { TodoItem, TodoPhase, TodoStatus, ToolSession } from "./contract";
 
 export type { TodoItem, TodoPhase, TodoStatus } from "./contract";
 

@@ -40,7 +40,6 @@ import {
 	splitPathAndSelPreferringLiteral,
 } from "../render/path-utils";
 import { formatBytes, shortenPath } from "../render/render-utils";
-import type { ToolSession } from "../sdk";
 import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
@@ -73,6 +72,7 @@ import {
 	scanConflictLines,
 	scanFileForConflicts,
 } from "./conflict-detect";
+import type { ToolSession } from "./contract";
 import { executeReadUrl, fetchReadUrl, parseReadUrlTarget } from "./fetch";
 import { type OutputMeta, resolveOutputMaxColumns } from "./output-meta";
 import { readArchive, resolveArchiveReadPath } from "./read-archive";

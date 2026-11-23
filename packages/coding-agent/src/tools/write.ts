@@ -56,7 +56,6 @@ import {
 	truncateToWidth,
 } from "../render/render-utils";
 import { getLanguageFromPath, highlightCode, type Theme } from "../render/theme/theme";
-import type { ToolSession } from "../sdk";
 import { fileHyperlink, framedBlock, renderStatusLine } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import { routeWriteThroughBridge } from "./acp-bridge";
@@ -71,6 +70,7 @@ import {
 	parseConflictUri,
 	spliceConflict,
 } from "./conflict-detect";
+import type { ToolSession } from "./contract";
 import { invalidateFsScanAfterWrite } from "./fs-cache-invalidation";
 import { type OutputMeta, outputMeta } from "./output-meta";
 import { enforcePlanModeWrite, resolvePlanPath, unwrapHashlineHeaderPath } from "./plan-mode-guard";

@@ -8,8 +8,8 @@ import {
 } from "@musepi/pi-utils/ar";
 import { resolveReadPath } from "../render/path-utils";
 import { formatBytes } from "../render/render-utils";
-import type { ToolSession } from "../sdk";
 import { truncateHead } from "../session/streaming-output";
+import type { ToolSession } from "./contract";
 import { applyListLimit } from "./list-limit";
 import type { ReadToolDetails } from "./read";
 import {

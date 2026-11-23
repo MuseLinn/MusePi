@@ -11,7 +11,6 @@ import { normalizeToLF } from "../edit/normalize";
 import { formatPathRelativeToCwd, type LineRange } from "../render/path-utils";
 import { formatBytes, shortenPath } from "../render/render-utils";
 import { isMarkdownPath } from "../render/theme/theme";
-import type { ToolSession } from "../sdk";
 import {
 	DEFAULT_MAX_BYTES,
 	noTruncResult,
@@ -21,6 +20,7 @@ import {
 } from "../session/streaming-output";
 import { buildLineEntriesWithBlockContext, type LineEntry, lineEntriesToPlainText } from "../utils/block-context";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
+import type { ToolSession } from "./contract";
 import type { ReadToolDetails } from "./read";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
