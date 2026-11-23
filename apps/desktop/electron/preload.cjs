@@ -68,6 +68,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	 *  down (working sessions keep running; ownership moves, the daemon
 	 *  does not restart). Resolves true when adopted. */
 	adoptDaemon: () => ipcRenderer.invoke("daemon-adopt"),
+	/** Lid-closed sleep prevention (daemon setting power.preventLidSleep).
+	 *  The shell owns the machine-side effect so it survives daemon restarts;
+	 *  `set` resolves { enabled, supported, error? } with the state that
+	 *  actually holds. */
+	lidSleepState: () => ipcRenderer.invoke("desktop-lid-sleep:state"),
+	setLidSleep: enabled => ipcRenderer.invoke("desktop-lid-sleep:set", enabled === true),
 	/** Relocate the app data root (设置 → 常规 → 数据存储路径): picks a
 	 *  parent folder, copies the current root into `<picked>/.musepi`,
 	 *  persists the override, respawns the daemon with PI_CONFIG_DIR.

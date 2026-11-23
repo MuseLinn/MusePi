@@ -229,7 +229,7 @@ function daemonCommand(port) {
  * Launch `musepi serve --port <port>` detached and wait for the listener.
  * Resolves the bound port (matches the requested one) or rejects.
  */
-async function startInternal(port, env = {}) {
+async function startInternal(port, env = {}, options = {}) {
 	if (probe() === port && (await portOpen(port))) {
 		console.error("[daemon] adopt existing listener on :" + port);
 		return port;
@@ -249,6 +249,9 @@ async function startInternal(port, env = {}) {
 	// serves the built artifacts instead of recompiling the whole composition —
 	// the compile stays as the fallback for anything the pass did not cover
 	// (third-party plugins, or a source edit since the build).
+	// Surface capabilities the daemon cannot detect by itself (the shell applies
+	// lid-closed sleep prevention), as `cliSignals`.
+	if (options.cliSignals) daemonEnv.MUSEPI_CLI_SIGNALS = JSON.stringify(options.cliSignals);
 	const prebuiltPlugins = path.join(__dirname, "..", "dist", "plugins");
 	if (!__dirname.includes("app.asar") && fs.existsSync(path.join(prebuiltPlugins, "manifest.json"))) {
 		daemonEnv.MUSEPI_PLUGIN_ARTIFACTS ??= prebuiltPlugins;

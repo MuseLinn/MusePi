@@ -122,6 +122,7 @@ import { copyToClipboard, openMiniChat } from "./lib/electron";
 import { escapeStopsTurn } from "./lib/escape-stop";
 import { invalidateGitStatuses } from "./lib/git-status-cache";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
+import { syncLidSleepToShell } from "./lib/lid-sleep-sync";
 import { ensureLiquidGlass } from "./lib/liquid-glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
 import { dispatchNotification } from "./lib/notify";
@@ -2522,6 +2523,14 @@ function AppInner(): ReactNode {
 		if (!window.electronAPI?.onPowerResume) return;
 		return window.electronAPI.onPowerResume(() => recoverFromDropRef.current());
 	}, []);
+
+	// Lid-closed sleep prevention is a machine-side effect (assertion, lid
+	// action, inhibitor) the daemon cannot own, so the shell mirrors the
+	// stored setting onto itself — at launch and after every write.
+	useEffect(() => {
+		if (!rpc) return;
+		return syncLidSleepToShell(rpc);
+	}, [rpc]);
 
 	// Desktop custom-protocol OAuth callback (musepi://oauth/callback): the
 	// shell forwards the URL, the daemon validates state and finishes the flow.

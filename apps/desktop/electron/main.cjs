@@ -54,6 +54,20 @@ const {
 	state: updaterState,
 } = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
+const { createLidPower } = require("./lid-power.cjs");
+// Lid-closed sleep prevention lives here, not in the daemon: the macOS
+// assertion has to survive daemon restarts, and the Windows/Linux mechanisms
+// change machine state the shell must restore on quit.
+const lidPower = createLidPower({ log: msg => console.log(`[lid-power] ${msg}`) });
+/** cliSignals for the daemon this shell owns: it cannot apply lid-closed
+ *  prevention itself, so it only shows that row when the shell says so. */
+function daemonCliSignals() {
+	const supported = lidPower.supported();
+	return {
+		lidPower: supported,
+		...(supported && lidPower.enabled ? { capabilitiesOverride: { lidPower: true } } : {}),
+	};
+}
 
 // ── Main-process log + crash guard ───────────────────────────────────────
 // Electron main's console writes go to the parent's stdio pipe. When the GUI
@@ -270,6 +284,9 @@ let daemonQuitHandled = false;
 	if (process.platform !== "win32") powerMonitor.on("shutdown", () => { sessionEnding = true; });
 	app.on("before-quit", event => {
 		console.error("[main] before-quit");
+		// Give the machine its own lid policy back; runs once because the
+		// module clears its state before the async restore.
+		lidPower.restoreBeforeQuit();
 		// Second pass (fired by our own app.quit()): teardown already ran.
 		if (daemonQuitHandled) return;
 		// Electron does not await async quit handlers: hold this quit open while
@@ -4039,7 +4056,7 @@ ipcMain.handle("daemon-port-open", (_event, port) => portOpen(Number(port)));
 // holds the port, the spawn reports EADDRINUSE instead of killing it.
 ipcMain.handle("daemon-start", async (_event, port) => {
 	await reapOrphanedDaemons();
-	return start(Number(port), daemonEnv());
+	return start(Number(port), daemonEnv(), { cliSignals: daemonCliSignals() });
 });
 // Boot takeover gate (renderer app.tsx tryUrl): after a successful connect,
 // is the daemon we landed on an orphan WE spawned whose owning GUI is gone?
@@ -4053,6 +4070,26 @@ ipcMain.handle("daemon-orphaned", async () => (await findOrphanedDaemon()) !== n
 // the registry ownerPid so a graceful quit tears it down. Used when the
 // orphan still has working sessions and must not be restarted mid-turn.
 ipcMain.handle("daemon-adopt", async () => adoptDaemon());
+
+// ── IPC: lid-closed sleep prevention (settings key power.preventLidSleep) ──
+//
+// The renderer mirrors the daemon setting into this handler; the shell keeps
+// the machine-side effect so it outlives every daemon restart.
+ipcMain.handle("desktop-lid-sleep:state", () => ({
+	enabled: lidPower.enabled,
+	supported: lidPower.supported(),
+}));
+ipcMain.handle("desktop-lid-sleep:set", async (_event, next) => {
+	if (typeof next !== "boolean") return { enabled: lidPower.enabled, supported: lidPower.supported() };
+	try {
+		const state = next ? await lidPower.acquire() : await lidPower.release();
+		return { ...state, supported: true };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(`[lid-power] ${next ? "enable" : "disable"} failed: ${message}`);
+		return { enabled: lidPower.enabled, supported: true, error: message };
+	}
+});
 /**
  * Managed remote targets — the tunnels and daemons this shell spawns.
  *

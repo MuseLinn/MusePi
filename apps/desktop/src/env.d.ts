@@ -147,6 +147,12 @@ interface Window {
 		 *  on wake where renderer visibilitychange/online may not. The renderer
 		 *  uses it to recover the daemon connection proactively. */
 		onPowerResume(cb: () => void): () => void;
+		/** Lid-closed sleep prevention (daemon setting power.preventLidSleep):
+		 *  the shell applies it to the machine so it survives daemon restarts.
+		 *  `set` resolves the state that actually holds, plus `error` when the
+		 *  platform refused. */
+		lidSleepState(): Promise<{ enabled: boolean; supported: boolean }>;
+		setLidSleep(enabled: boolean): Promise<{ enabled: boolean; supported: boolean; error?: string }>;
 		/** Desktop custom-protocol OAuth callback URL (musepi://oauth/callback). */
 		onOAuthCallback?(cb: (url: string) => void): () => void;
 	};

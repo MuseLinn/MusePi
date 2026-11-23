@@ -64,6 +64,7 @@ import { getHostService } from "./extensibility/plugins/runtime/host-services";
 import { setLocale } from "./i18n/index.js";
 import { registerDaemonProjectPresence } from "./launch/presence";
 import type { MCPManager } from "./mcp";
+import { setUiCapabilities, type UiCapabilities } from "./modes/components/settings-defs";
 import { InteractiveMode } from "./modes/interactive-mode";
 import type { PrintModeOptions } from "./modes/print-mode";
 import { claimRpcInput } from "./modes/rpc/rpc-input";
@@ -898,6 +899,24 @@ function discoverSystemPromptFile(): string | undefined {
 	return undefined;
 }
 
+/**
+ * Capabilities declared by the shell hosting this process (`MUSEPI_CLI_SIGNALS`).
+ *
+ * The desktop shell applies lid-closed sleep prevention itself, so it hands
+ * the row to the daemon it spawns once the user has switched it on; every
+ * other launch (terminal, headless) applies nothing and leaves it hidden.
+ */
+function readShellCapabilities(): UiCapabilities {
+	const raw = Bun.env.MUSEPI_CLI_SIGNALS;
+	if (!raw) return { lidPower: false };
+	try {
+		const parsed = JSON.parse(raw) as { capabilitiesOverride?: { lidPower?: unknown } };
+		return { lidPower: parsed?.capabilitiesOverride?.lidPower === true };
+	} catch {
+		return { lidPower: false };
+	}
+}
+
 /** Discover APPEND_SYSTEM.md file if no CLI append system prompt was provided */
 function discoverAppendSystemPromptFile(): string | undefined {
 	const projectPath = findConfigFile("APPEND_SYSTEM.md", { user: false });
@@ -1354,6 +1373,10 @@ export async function runRootCommand(
 	}
 	if (parsedArgs.mode === "rpc" || parsedArgs.mode === "rpc-ui") {
 		applyRpcDefaultSettingOverrides(settingsInstance);
+		// The desktop shell declares the capabilities it can apply on this host
+		// (lid-closed sleep prevention); settings rows gated on them stay hidden
+		// on every surface that does not.
+		setUiCapabilities(readShellCapabilities());
 	} else if (parsedArgs.mode === "acp") {
 		applyAcpDefaultSettingOverrides(settingsInstance);
 	}

@@ -1862,10 +1862,11 @@ export class Settings {
 		}
 
 		// power.preventIdleSleep / power.preventSystemSleep / power.declareUserActive
-		// / power.preventDisplaySleep (four booleans) → power.sleepPrevention enum.
-		// The enum is cumulative: each level adds the flags of all lower levels.
-		// Migration picks the highest level whose condition is met, scanning from
-		// most to least aggressive so a single enum value captures the old state.
+		// / power.preventDisplaySleep (four booleans) and the retired
+		// "idle"/"system" sleepPrevention levels → { off, sleep, display }.
+		// Every predecessor pinned the system awake, so all of them land on at
+		// least "sleep"; the two that also kept the display awake ("idle",
+		// "display") and the legacy idle default become "display".
 		if (
 			!("sleepPrevention" in ((raw.power as Record<string, unknown>) ?? {})) &&
 			raw["power.sleepPrevention"] === undefined
@@ -1883,7 +1884,7 @@ export class Settings {
 			const display = getFlag("preventDisplaySleep");
 			const anySet = idle !== undefined || system !== undefined || user !== undefined || display !== undefined;
 			if (anySet) {
-				const mode = system || user ? "system" : display ? "display" : idle !== false ? "idle" : "off";
+				const mode = system || user ? "sleep" : display ? "display" : idle !== false ? "display" : "off";
 				const powerRoot = (powerObj ?? {}) as Record<string, unknown>;
 				powerRoot.sleepPrevention = mode;
 				raw.power = powerRoot;
@@ -1899,6 +1900,17 @@ export class Settings {
 			delete raw["power.preventSystemSleep"];
 			delete raw["power.declareUserActive"];
 			delete raw["power.preventDisplaySleep"];
+		} else {
+			const powerObj = raw.power as Record<string, unknown> | undefined;
+			const stored = powerObj?.sleepPrevention ?? raw["power.sleepPrevention"];
+			const retired = stored === "idle" ? "display" : stored === "system" ? "sleep" : undefined;
+			// Rewrite through the nested object when it exists so the cleaned
+			// value and the removal of the flat duplicate live in one layer.
+			if (retired) {
+				if (powerObj) powerObj.sleepPrevention = retired;
+				else raw["power.sleepPrevention"] = retired;
+			}
+			if (raw["power.sleepPrevention"] !== undefined) delete raw["power.sleepPrevention"];
 		}
 
 		// Migration for renamed settings grep.* and glob.* from search.* and find.*:

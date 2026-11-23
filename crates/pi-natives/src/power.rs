@@ -3,6 +3,12 @@
 //! Exposes a small N-API handle that acquires a macOS `IOKit` power assertion
 //! on construction and releases it on `stop()`/drop. On non-macOS platforms the
 //! handle is a no-op so higher layers can use one code path.
+//!
+//! The desktop app owns the macOS "keep running with the lid closed" case.
+//! The daemon it spawns may be replaced at any time, so the shell takes an
+//! `IOKit` assertion (with the display assertion) through
+//! `startMacOSPowerAssertionWithTimeout` in `packages/natives/native/index.js`
+//! and renews its `TimeoutSeconds` until the shell exits.
 
 use napi_derive::napi;
 
@@ -233,8 +239,9 @@ impl MacOSPowerAssertion {
 				kinds.push(platform::AssertionKind::PreventDisplaySleep);
 			}
 			let mut inners: Vec<platform::AssertionInner> = Vec::with_capacity(kinds.len());
+			let timeout = options.as_ref().and_then(|v| v.timeout_seconds);
 			for kind in kinds {
-				inners.push(platform::AssertionInner::start(kind, reason)?);
+				inners.push(platform::AssertionInner::start(kind, reason, timeout)?);
 			}
 			Ok(Self { inners })
 		}

@@ -844,12 +844,14 @@ export class AgentSession {
 		const mode = this.settings.get("power.sleepPrevention");
 		if (mode === "off") return;
 		try {
+			// "sleep" pins only system sleep; "display" additionally keeps the
+			// panel awake. Neither declares the user active: the session's own
+			// input already resets idle timers, and a periodic wake would fight
+			// the user's screen-lock policy.
 			this.#powerAssertion = MacOSPowerAssertion.start({
 				reason: "MusePi agent session",
-				idle: true,
-				display: mode === "display" || mode === "system",
-				system: mode === "system",
-				user: mode === "system",
+				system: true,
+				display: mode === "display",
 			});
 		} catch (error) {
 			logger.warn("Failed to acquire macOS power assertion", { error: String(error) });

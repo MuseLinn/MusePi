@@ -154,3 +154,37 @@ export const ProcessStatus = {
 	Exited: "exited",
 };
 // --- end generated native exports ---
+
+/** Renewal cadence for {@link startMacOSPowerAssertionWithTimeout}. */
+const MACOS_POWER_RENEW_MS = 2_000;
+
+/**
+ * Hold a macOS system + display assertion that survives this process exiting:
+ * each IOKit assertion carries a `TimeoutSeconds` and is re-taken every
+ * {@link MACOS_POWER_RENEW_MS} until `stop()`, so the desktop shell keeps the
+ * machine awake with the lid closed across the daemon restarts it owns, and a
+ * shell that dies stops renewing and lets the assertions lapse.
+ */
+export function startMacOSPowerAssertionWithTimeout(seconds) {
+	if (!(seconds > 0)) throw new RangeError(`Power assertion timeout must be positive: ${seconds}`);
+	const acquire = () =>
+		MacOSPowerAssertion.start({ system: true, display: true, timeoutSeconds: Math.ceil(seconds) });
+	let handle = acquire();
+	const timer = setInterval(() => {
+		try {
+			const next = acquire();
+			handle.stop();
+			handle = next;
+		} catch {
+			// Keep the previous assertion; the next tick retries within the
+			// timeout, so a failed renewal cannot leave the machine uncovered.
+		}
+	}, MACOS_POWER_RENEW_MS);
+	timer.unref?.();
+	return {
+		stop() {
+			clearInterval(timer);
+			handle.stop();
+		},
+	};
+}

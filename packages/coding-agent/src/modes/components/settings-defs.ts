@@ -27,6 +27,22 @@ import {
 } from "../../config/settings-schema";
 import { t } from "../../i18n/index.js";
 
+/** Desktop capabilities, set by the shell that hosts this process. */
+export interface UiCapabilities {
+	/** The daemon runs under the desktop shell, whose main process applies
+	 *  `power.preventLidSleep` (lid-closed sleep prevention). Headless and
+	 *  terminal surfaces cannot, so they hide the row instead of offering a
+	 *  switch with no effect. */
+	lidPower: boolean;
+}
+
+let uiCapabilities: UiCapabilities = { lidPower: false };
+
+/** Called by the TUI once it knows the shell it runs under. */
+export function setUiCapabilities(next: UiCapabilities): void {
+	uiCapabilities = next;
+}
+
 function pluginSettingsVisible(packageName: string): boolean {
 	try {
 		const disabled = Settings.instance.get("disabledExtensions") ?? [];
@@ -105,6 +121,9 @@ export type SettingDef =
 
 const CONDITIONS: Record<string, () => boolean> = {
 	macOS: () => process.platform === "darwin",
+	// Lid-closed prevention is applied by the desktop shell's main process, so
+	// only a shell that declares the capability shows the switch.
+	lidPower: () => uiCapabilities.lidPower,
 	hasImageProtocol: () => !!TERMINAL.imageProtocol,
 	advisorEnabled: () => {
 		try {

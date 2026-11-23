@@ -245,7 +245,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 	],
 	tasks: ["Modes", "Subagents", "Isolation", "Commands & Skills"],
 	providers: ["Services", "Fireworks", "Tiny Model", "Protocol", "Timeouts", "Privacy"],
-	general: ["Power (macOS)"],
+	general: ["Power"],
 };
 
 /** Status line segment identifiers */
@@ -537,39 +537,51 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	// macOS power assertions (caffeinate flags). No-op on other platforms.
+	// Lid-open sleep prevention while the session runs an agent turn. macOS
+	// backs it with IOKit assertions; other platforms record the choice and
+	// never take one.
 	"power.sleepPrevention": {
 		type: "enum",
-		values: ["off", "idle", "display", "system"] as const,
-		default: "idle",
+		values: ["off", "sleep", "display"] as const,
+		default: "sleep",
 		ui: {
 			tab: "general",
-			group: "Power (macOS)",
-			label: "Sleep Prevention",
-			description:
-				"Prevent macOS sleep during active sessions. Each level is cumulative — it adds the flags of all lower levels.",
+			group: "Power",
+			label: "Prevent sleep with the lid open",
+			description: "Choose sleep and display behavior when your computer is idle with the lid open",
 			options: [
 				{
 					value: "off",
 					label: "Off",
-					description: "Do not prevent any sleep",
+					description: "Follow system sleep settings. Agent pauses tasks when your computer sleeps",
 				},
 				{
-					value: "idle",
-					label: "Prevent Idle Sleep",
-					description: "Keep the system awake while a session is open (caffeinate -i)",
+					value: "sleep",
+					label: "Prevent sleep, allow display sleep",
+					description: "Plugged in, Agent keeps running tasks. On battery, sleep may still pause tasks",
 				},
 				{
 					value: "display",
-					label: "Prevent Display Sleep",
-					description: "Also keep the display from idle-sleeping (caffeinate -i -d)",
-				},
-				{
-					value: "system",
-					label: "Prevent System Sleep",
-					description: "Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)",
+					label: "Prevent sleep and display sleep",
+					description: "Agent keeps running on battery or AC power. The display stays on, using more energy",
 				},
 			],
+		},
+	},
+	// Lid-closed half of Power. Only the desktop shell can apply it (its main
+	// process owns the platform helpers that keep the machine awake with the
+	// lid shut), so `condition: "lidPower"`: surfaces without that capability
+	// hide the row rather than offer a switch that cannot act.
+	"power.preventLidSleep": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "general",
+			group: "Power",
+			condition: "lidPower",
+			label: "Prevent sleep after closing the lid",
+			description:
+				"Agent keeps working with the lid closed. Open-lid settings stay unchanged. Keep it plugged in. Windows asks for administrator approval the first time",
 		},
 	},
 	"advisor.enabled": {
@@ -3477,7 +3489,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "memory",
-			group: "General",
+			group: "settings.memory.group.maintenance",
 			label: "settings.memory.idleEnqueue.title",
 			description: "settings.memory.idleEnqueue.desc",
 		},
@@ -3488,7 +3500,7 @@ export const SETTINGS_SCHEMA = {
 		default: 60,
 		ui: {
 			tab: "memory",
-			group: "General",
+			group: "settings.memory.group.maintenance",
 			label: "settings.memory.idleEnqueueMinutes.title",
 			description: "settings.memory.idleEnqueueMinutes.desc",
 			condition: "memoryIdleEnqueueEnabled",

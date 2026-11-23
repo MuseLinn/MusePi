@@ -407,10 +407,9 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<h2 className="gui-settings-page-title">{t("settings.general2")}</h2>
 			<p className="gui-settings-page-desc">{t("settings.generalSettings")}</p>
 			{/* Schema-driven settings on the general tab (settings.schema
-			 * ui.tab = "general", e.g. power.sleepPrevention). Rendered here
-			 * so the daemon's single source of truth drives the panel; the
-			 * old hand-written "保持电脑运行" toggle was replaced by this
-			 * four-level Sleep Prevention enum. */}
+			 * ui.tab = "general", group Power). The lid-open levels are the
+			 * daemon's power.sleepPrevention; the lid-closed switch is
+			 * power.preventLidSleep, applied by the shell (lib/lid-sleep-sync). */}
 			<SchemaTabSection rpc={rpc} tabs={["general"]} />
 			<div className="gui-settings-row">
 				<div>
