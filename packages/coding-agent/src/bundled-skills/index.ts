@@ -5,6 +5,7 @@ export const BUNDLED_SKILL_NAMES: readonly string[] = [
 	"musepi-plugin-dev",
 	"ui-ux-pro-max",
 	"board-design",
+	"office",
 ];
 
 /** Skills that used to ship inside a plugin package. Kept for migration only:

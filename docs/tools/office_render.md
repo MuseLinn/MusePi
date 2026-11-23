@@ -1,27 +1,36 @@
 # office_render
 
-> Renders the text structure of Office Open XML files (`.docx`, `.xlsx`, `.pptx`).
+> Renders document pages, slides, or worksheet areas as PNG images.
 
 ## Source
 - Entry: `packages/coding-agent/src/tools/office.ts`
+- Conversion service: `packages/coding-agent/src/office/office-kit.ts`
 - Plugin package: `packages/coding-agent/src/plugins/document/tool-office/`
+- Skill: `packages/coding-agent/src/plugins/prompt/product-skills/skills/office/SKILL.md`
 - Key collaborators:
-  - `fflate` — reads the Office package ZIP synchronously.
   - `packages/coding-agent/src/tools/tool-ownership.ts` — `office_render` is owned by the `tool/office` component.
-  - The plugin's `Config.maxChars` sets the default text ceiling.
+  - `packages/coding-agent/src/tools/office-activation.ts` — the tool is registered but inactive until an Office skill loads.
+
+## Admission
+`office_render` is in the session's registry from the start but not in its tool slate. A successful `/skill:office` invocation or `skill://office` read admits the whole Office group (`office_render`, `office_convert`, `office_recalculate`) from the following step. The activation skill names default to `office`, `office-docx`, `office-xlsx`, `office-pptx` and are the plugin's `Config.activationSkills`.
 
 ## Inputs
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `input` | `string` | Yes | A `.docx`, `.xlsx` or `.pptx` file, relative to the session working directory. |
-| `pages` | `number[]` | No | `pptx` only: one-based slide numbers; omitted renders every slide. Rejected for `docx` because page selection needs an Office converter. |
-| `sheet` | `string` | No | `xlsx` only: exact worksheet name; omitted renders every sheet. |
-| `range` | `string` | No | `xlsx` only: an A1 range such as `A1:H40`. |
-| `maxChars` | `number` | No | Text ceiling for this call (1000-500000); defaults to the plugin's `Config.maxChars`. |
+| `input` | `string` | Yes | `doc`, `docx`, `odt`, `xls`, `xlsx`, `ods`, `ppt`, `pptx`, `odp`, or `pdf`, relative to the session working directory. The source is never modified. |
+| `pages` | `number[]` | No | Distinct one-based pages or slides; omitted renders every page. Rejected for spreadsheets. |
+| `sheet` | `string` | No | Spreadsheet only: exact worksheet name; omitted renders every sheet. |
+| `range` | `string` | No | Spreadsheet only: an A1 range such as `A1:H40`; requires `sheet`. |
+| `dpi` | `number` | No | Rendering resolution from 24 to 600; default 144. |
 
 ## Outputs
-Text sections (`Paragraphs`, `Slide N`, `Sheet: <name>`) plus `details.format`, `details.sections` and `details.truncated`. Word paragraphs join their text runs; Excel rows are tab-separated; PowerPoint slides are listed in slide order.
+One text summary block, then one `image` block per rendered page (`image/png`). `details` carries `format`, `pageCount`, `dpi`, and each image's `page`/`sheet`/`range`, `bytes`, `width`, and `height`.
+
+## Engine
+Rendering goes through the host's Office kit. The default engine converts Office documents to PDF with LibreOffice (`soffice`) and rasterizes pages with poppler's `pdftoppm`; a PDF source needs only `pdftoppm`. LibreOffice and `pdftoppm` are discovered at call time.
 
 ## Limits
-This is the text side of dsh's `office_render`. It reads package XML directly and does not render pages as images; that needs an Office converter service. Format conversion is `office_convert`; formula recalculation (`office_recalculate`) is not implemented.
+- A missing engine fails the call with an `unavailable` message; the tool never substitutes a text summary, `soffice`, `npx`, or another converter.
+- Worksheet-area rendering (`sheet` + `range`) needs a native engine that can render a cell range; the default engine rejects the selection instead of approximating it.
+- The image count (`Config.maxImages`, default 20) and total PNG bytes (`Config.maxBytes`, default 32 MiB) bound one render.

@@ -120,6 +120,7 @@ const BUNDLED_SKILL_NAMES: readonly string[] = [
 	"musepi-plugin-dev",
 	"ui-ux-pro-max",
 	"board-design",
+	"office",
 ];
 
 /** bundled 技能：ensureBundledSkills 落盘到 user 级 skills 目录，native

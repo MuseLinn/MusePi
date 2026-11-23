@@ -217,6 +217,7 @@ import { type AskToolDetails, type AskToolInput, recoverAskQuestions } from "../
 import { releaseTabsForOwner } from "../tools/browser/tab-supervisor";
 import type { CheckpointState, CompletedRewindState } from "../tools/checkpoint";
 import { releaseComputerSessionsForOwner } from "../tools/computer/supervisor";
+import { isOfficeActivationSkill, OFFICE_TOOL_NAMES } from "../tools/office-activation";
 import {
 	buildResolveReminderMessage,
 	isPreviewResolutionToolCall,
@@ -560,6 +561,8 @@ export class AgentSession {
 	readonly #models: ModelControls;
 	readonly #tools: SessionTools;
 	readonly #prewalk: PrewalkCoordinator;
+	/** Skills whose instructions this session has loaded. */
+	readonly #activatedSkills = new Set<string>();
 
 	readonly #providerBoundary: SessionProviderBoundary;
 	#promptTemplates: PromptTemplate[];
@@ -4964,6 +4967,29 @@ export class AgentSession {
 		return this.#tools.hasBuiltInTool(name);
 	}
 
+	/**
+	 * Record that `name`'s instructions entered this session (a `/skill:<name>`
+	 * invocation or a `skill://<name>` read) and admit the tools that skill owns.
+	 *
+	 * Office tools follow the activation skill set: registered from session start
+	 * but absent from the slate until an Office skill loads, then present from the
+	 * following step.
+	 */
+	async activateSkill(name: string): Promise<void> {
+		if (this.#activatedSkills.has(name)) return;
+		this.#activatedSkills.add(name);
+		if (!isOfficeActivationSkill(name)) return;
+		const enabled = this.getEnabledToolNames();
+		const additions = OFFICE_TOOL_NAMES.filter(tool => this.hasBuiltInTool(tool) && !enabled.includes(tool));
+		if (additions.length === 0) return;
+		await this.setActiveToolsByName([...new Set([...enabled, ...additions])]);
+	}
+
+	/** Whether `name`'s instructions have entered this session. */
+	isSkillActivated(name: string): boolean {
+		return this.#activatedSkills.has(name);
+	}
+
 	/** Updates source provenance when a live registry entry is replaced or restored. */
 	setToolBuiltIn(name: string, builtIn: boolean): void {
 		this.#tools.setToolBuiltIn(name, builtIn);
@@ -6499,6 +6525,16 @@ export class AgentSession {
 			queueOnly?: boolean;
 		},
 	): Promise<void> {
+		// A skill's instructions entering the session is the activation event: the
+		// tools that skill owns are admitted from the next step.
+		if (message.customType === SKILL_PROMPT_MESSAGE_TYPE) {
+			const details = message.details;
+			const skillName =
+				details && typeof details === "object" && "name" in details && typeof details.name === "string"
+					? details.name
+					: undefined;
+			if (skillName !== undefined) await this.activateSkill(skillName);
+		}
 		const textContent =
 			typeof message.content === "string"
 				? message.content

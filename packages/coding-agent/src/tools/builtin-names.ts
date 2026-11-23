@@ -25,6 +25,7 @@ export const BUILTIN_TOOL_NAMES = [
 	"present",
 	"office_render",
 	"office_convert",
+	"office_recalculate",
 	"workflow",
 	"request_secret",
 	"list_secrets",

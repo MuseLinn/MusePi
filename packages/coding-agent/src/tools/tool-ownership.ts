@@ -68,7 +68,7 @@ export function runWithToolProviderOwner<T>(scope: string, owner: string, run: (
  */
 const pluginLayer = new Map<string, PluginRegistration>();
 
-/** Per-generation layer (dsh's agent scope): scoped registrations shadow the
+/** Per-generation layer (the agent scope): scoped registrations shadow the
  *  process-global default. */
 const scopedLayer = new Map<string, Map<string, PluginRegistration>>();
 
@@ -107,7 +107,7 @@ export function providedToolNames(scope?: string): string[] {
  * A package may be mounted more than once (host preload, then a session): a
  * second mount by the same entry joins the registration, and the name leaves
  * the layer only when its last mount releases. A *different* mount claiming the
- * same name still fails — dsh's rule that a duplicate inside one layer is a
+ * same name still fails — the rule that a duplicate inside one layer is a
  * composition error, with a per-agent variant belonging in that agent's scope.
  * The returned disposer removes exactly this mount's hold.
  */
@@ -243,6 +243,7 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	present: { domain: "tool", id: "present" },
 	office_render: { domain: "tool", id: "office" },
 	office_convert: { domain: "tool", id: "office" },
+	office_recalculate: { domain: "tool", id: "office" },
 	workflow: { domain: "tool", id: "workflow" },
 	// Skill authoring and image inspection.
 	manage_skill: { domain: "tool", id: "manage_skill" },
@@ -287,7 +288,7 @@ export function toolOwnerOf(name: string, scope?: string): ToolOwner | undefined
  *
  * An unowned tool is allowed. An owned tool follows its component: active →
  * allowed, explicitly unloaded → not allowed. Availability also follows a
- * still-registered implementation in this scope (dsh: a scope's view of
+ * still-registered implementation in this scope (a scope's view of
  * registered tools), so a transient activation rollback cannot hide a tool.
  */
 export function isToolOwnerActive(name: string, scope?: string): boolean {

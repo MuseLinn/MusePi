@@ -3,27 +3,55 @@ import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import { strFromU8, unzipSync } from "fflate";
+import {
+	getOfficeKit,
+	isOfficeKitError,
+	isSpreadsheet,
+	type OfficeExtension,
+	type OfficeFileResult,
+	type OfficeImagesResult,
+	officeExtensionOf,
+} from "../office/office-kit";
+import officeConvertDescription from "../prompts/tools/office_convert.md" with { type: "text" };
+import officeRecalculateDescription from "../prompts/tools/office_recalculate.md" with { type: "text" };
+import officeRenderDescription from "../prompts/tools/office_render.md" with { type: "text" };
 import type { ToolSession } from "./contract";
 
 export const officeRenderSchema = type({
-	input: type("string").describe("Path to a .docx, .xlsx or .pptx file, relative to the session working directory."),
+	input: type("string").describe(
+		"Path to a doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf file, relative to the session working directory.",
+	),
 	pages: type("number")
 		.array()
-		.describe("pptx only: one-based slide numbers to render instead of every slide.")
+		.describe(
+			"Distinct one-based pages or slides to render; omit for every page. Spreadsheets use sheet and range instead.",
+		)
 		.optional(),
-	sheet: type("string").describe("xlsx only: worksheet name to render instead of every sheet.").optional(),
-	range: type("string").describe("xlsx only: A1 range such as A1:H40.").optional(),
-	maxChars: type("number").describe("Character ceiling for the extracted text (1000-500000).").optional(),
+	sheet: type("string").describe("Spreadsheet only: exact worksheet name to render; omit for every sheet.").optional(),
+	range: type("string").describe("Spreadsheet only: A1 range such as A1:H40; requires sheet.").optional(),
+	dpi: type("number").describe("Rendering resolution from 24 to 600; default 144.").optional(),
 });
 
 export const officeConvertSchema = type({
-	input: type("string").describe("Path to a .docx, .xlsx or .pptx file."),
-	format: type("'txt' | 'md' | 'csv'").describe(
-		"Target text format. docx/pptx: txt or md. xlsx: csv (a sheet name is required for a multi-sheet workbook), txt or md.",
+	input: type("string").describe("Path to a doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf file."),
+	format: type("'pdf' | 'docx' | 'odt' | 'txt' | 'md' | 'xlsx' | 'ods' | 'csv' | 'pptx' | 'odp'").describe(
+		"Target format. Word: pdf, docx, odt, txt, md. Excel: pdf, xlsx, ods, csv, txt, md. PowerPoint: pdf, pptx, odp, txt, md.",
 	),
-	sheet: type("string").describe("xlsx only: worksheet to convert.").optional(),
-	output: type("string").describe("Write the converted text to this path instead of returning it.").optional(),
-	maxChars: type("number").describe("Character ceiling for the returned text (1000-500000).").optional(),
+	sheet: type("string").describe("Spreadsheet only: worksheet to convert to csv or text.").optional(),
+	output: type("string")
+		.describe("Copy the result to this path instead of leaving it in the conversion store.")
+		.optional(),
+	maxChars: type("number")
+		.describe("Text targets only: character ceiling for the converted text (1000-500000).")
+		.optional(),
+});
+
+export const officeRecalculateSchema = type({
+	input: type("string").describe("Path to an xls, xlsx, or ods workbook."),
+	format: type("'xlsx' | 'ods'").describe("Output workbook format."),
+	output: type("string")
+		.describe("Copy the result to this path instead of leaving it in the conversion store.")
+		.optional(),
 });
 
 export interface OfficeSection {
@@ -31,17 +59,33 @@ export interface OfficeSection {
 	text: string;
 }
 
+export interface OfficeRenderImageDetails {
+	page?: number;
+	sheet?: string;
+	range?: string;
+	bytes: number;
+	width: number;
+	height: number;
+}
+
 export interface OfficeRenderDetails {
-	format: "docx" | "xlsx" | "pptx";
-	sections: OfficeSection[];
-	truncated: boolean;
+	format: OfficeExtension;
+	pageCount: number;
+	dpi: number;
+	images: OfficeRenderImageDetails[];
 }
 
 export interface OfficeConvertDetails {
-	format: "docx" | "xlsx" | "pptx";
-	target: "txt" | "md" | "csv";
+	format: OfficeExtension;
+	target: string;
 	output?: string;
-	truncated: boolean;
+	bytes?: number;
+}
+
+export interface OfficeRecalculateDetails {
+	format: "xlsx" | "ods";
+	output?: string;
+	bytes?: number;
 }
 
 function decodeXml(text: string): string {
@@ -79,19 +123,16 @@ function docxSections(files: Record<string, Uint8Array>): OfficeSection[] {
 	return paragraphs.length > 0 ? [{ title: "Paragraphs", text: paragraphs.join("\n") }] : [];
 }
 
-function pptxSections(files: Record<string, Uint8Array>, pages?: readonly number[]): OfficeSection[] {
-	const wanted = pages && pages.length > 0 ? new Set(pages) : null;
+function pptxSections(files: Record<string, Uint8Array>): OfficeSection[] {
 	const keys = Object.keys(files)
 		.filter(key => /^ppt\/slides\/slide\d+\.xml$/.test(key))
 		.sort((left, right) => Number(left.match(/(\d+)/)?.[1]) - Number(right.match(/(\d+)/)?.[1]));
 	const sections: OfficeSection[] = [];
 	for (const key of keys) {
 		const number = Number(key.match(/(\d+)/)?.[1]);
-		if (wanted && !wanted.has(number)) continue;
 		const text = textRuns(strFromU8(files[key]!)).trim();
 		if (text !== "") sections.push({ title: `Slide ${number}`, text });
 	}
-	if (wanted && sections.length === 0) throw new Error("none of the requested slides exist or have text");
 	return sections;
 }
 
@@ -136,8 +177,6 @@ function parseRange(range: string | undefined): CellRange | null {
 }
 
 function workbookSheets(files: Record<string, Uint8Array>): Array<{ name: string; key: string }> {
-	const sharedXml = files["xl/sharedStrings.xml"];
-	void sharedXml;
 	const workbookXml = files["xl/workbook.xml"];
 	const relsXml = files["xl/_rels/workbook.xml.rels"];
 	const targets = new Map<string, string>();
@@ -258,7 +297,7 @@ async function readPackage(resolved: string, raw: string): Promise<OfficePackage
 	if (!stat.isFile()) throw new Error(`not a regular file: ${raw}`);
 	const extension = path.extname(resolved).toLowerCase();
 	if (extension !== ".docx" && extension !== ".xlsx" && extension !== ".pptx") {
-		throw new Error(`unsupported format ${extension || "(none)"}; expected .docx, .xlsx or .pptx`);
+		throw new Error(`text conversion needs .docx, .xlsx or .pptx; "${raw}" needs the Office converter`);
 	}
 	const bytes = new Uint8Array(await Bun.file(resolved).arrayBuffer());
 	try {
@@ -271,73 +310,194 @@ async function readPackage(resolved: string, raw: string): Promise<OfficePackage
 	}
 }
 
+const CONVERSION_OUTPUTS: Readonly<Record<"text" | "spreadsheet" | "presentation", readonly string[]>> = {
+	text: ["pdf", "docx", "odt", "txt", "md"],
+	spreadsheet: ["pdf", "xlsx", "ods", "csv", "txt", "md"],
+	presentation: ["pdf", "pptx", "odp", "txt", "md"],
+};
+
+const TEXT_FORMATS = new Set(["txt", "md", "csv"]);
+
+function familyOf(extension: OfficeExtension): "text" | "spreadsheet" | "presentation" | "pdf" {
+	if (extension === "pdf") return "pdf";
+	if (extension === "doc" || extension === "docx" || extension === "odt") return "text";
+	if (extension === "xls" || extension === "xlsx" || extension === "ods") return "spreadsheet";
+	return "presentation";
+}
+
+/** Resolve the converter-input extension and refuse unsupported formats. */
+function inputExtension(
+	raw: string,
+	resolved: string,
+	operation: "render" | "convert" | "recalculate",
+): OfficeExtension {
+	const extension = officeExtensionOf(resolved);
+	if (extension === undefined) {
+		const accepted =
+			operation === "recalculate"
+				? "xls, xlsx or ods"
+				: `doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp${operation === "render" ? ", or pdf" : ""}`;
+		throw new Error(`cannot ${operation} "${raw}": ${operation} accepts ${accepted} files`);
+	}
+	if (operation !== "render" && extension === "pdf") {
+		throw new Error(`cannot ${operation} "${raw}": ${operation} does not accept PDF input`);
+	}
+	if (operation === "recalculate" && !isSpreadsheet(extension)) {
+		throw new Error(`cannot recalculate "${raw}": recalculate accepts xls, xlsx, or ods workbooks`);
+	}
+	return extension;
+}
+
+/** Map a classified kit failure onto a model-facing tool error. */
+function officeFailure(verb: string, displayPath: string, error: unknown): unknown {
+	if (!isOfficeKitError(error)) return error;
+	const hint =
+		error.code === "unavailable"
+			? " Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter."
+			: error.code === "busy"
+				? " Retry after other document operations finish."
+				: error.code === "output-too-large" && verb === "render"
+					? " Select fewer pages or a lower dpi."
+					: "";
+	return new Error(`cannot ${verb} "${displayPath}": ${error.message}${hint}`);
+}
+
+function outputOwner(session: ToolSession): string {
+	return session.getSessionId?.() ?? "session";
+}
+
+async function saveConverted(
+	session: ToolSession,
+	convertedPath: string,
+	output: string | undefined,
+): Promise<{ output?: string; bytes: number }> {
+	const bytes = (await fs.stat(convertedPath)).size;
+	if (output === undefined || output.trim() === "") return { bytes };
+	const target = path.resolve(session.cwd, output);
+	await fs.mkdir(path.dirname(target), { recursive: true });
+	await fs.copyFile(convertedPath, target);
+	return { output: target, bytes };
+}
+
 /**
- * Render the text structure of an Office Open XML file (dsh's `office_render`,
- * text side). Page/slide images need an Office converter service; this tool
- * reads the package XML and returns paragraphs, slide text or worksheet rows.
+ * Render document pages, slides, or worksheet areas as images . Rendering goes through the host's Office kit; a missing
+ * engine is reported as unavailable rather than replaced with a text summary.
  */
 export class OfficeRenderTool implements AgentTool<typeof officeRenderSchema, OfficeRenderDetails> {
 	readonly name = "office_render";
 	readonly approval = "read" as const;
 	readonly label = "Office";
-	readonly summary = "Render text and structure from docx, xlsx and pptx files";
-	readonly description =
-		"Render the text structure of an Office Open XML file: Word paragraphs, PowerPoint slide text, or Excel worksheet rows (and an A1 range). It reads the file's XML directly; page images, format conversion and formula recalculation are not part of this tool.";
+	readonly summary = "Render document pages, slides, or worksheet areas as images";
+	readonly description = officeRenderDescription.trim();
 	readonly parameters = officeRenderSchema;
-	readonly loadMode = "discoverable";
+	readonly loadMode = "essential";
+	readonly defaultInactive = true;
 
 	constructor(
 		private readonly session: ToolSession,
-		private readonly defaultMaxChars = 120_000,
+		private readonly maxImages = 20,
+		private readonly maxBytes = 32 * 1024 * 1024,
 	) {}
 
 	async execute(
 		_toolCallId: string,
 		params: typeof officeRenderSchema.infer,
+		signal?: AbortSignal,
 	): Promise<AgentToolResult<OfficeRenderDetails>> {
 		const raw = typeof params.input === "string" ? params.input.trim() : "";
 		if (raw === "") throw new Error("office_render: input must not be empty");
 		const resolved = path.resolve(this.session.cwd, raw);
-		const pkg = await readPackage(resolved, raw);
-		if (pkg.format === "docx" && params.pages && params.pages.length > 0) {
-			throw new Error("office_render: page selection needs the Office converter; omit pages for docx");
+		const extension = inputExtension(raw, resolved, "render");
+		const spreadsheet = isSpreadsheet(extension);
+		const pages = params.pages;
+		if (pages !== undefined) {
+			if (spreadsheet)
+				throw new Error("office_render: pages does not apply to spreadsheets; select sheet and range instead");
+			if (
+				pages.length === 0 ||
+				pages.some(page => !Number.isSafeInteger(page) || page < 1) ||
+				new Set(pages).size !== pages.length
+			) {
+				throw new Error("office_render: pages must list distinct one-based page numbers");
+			}
 		}
-		const sections =
-			pkg.format === "docx"
-				? docxSections(pkg.files)
-				: pkg.format === "pptx"
-					? pptxSections(pkg.files, params.pages)
-					: xlsxSections(pkg.files, params.sheet, params.range);
-		const maxChars =
-			typeof params.maxChars === "number" && params.maxChars >= 1000
-				? Math.min(500_000, Math.floor(params.maxChars))
-				: this.defaultMaxChars;
-		const limited = truncateSections(sections, maxChars);
-		const text =
-			limited.sections.length === 0
-				? `(${pkg.format}: no text found)`
-				: limited.sections.map(section => `## ${section.title}\n${section.text}`).join("\n\n");
+		if (!spreadsheet && params.sheet !== undefined) {
+			throw new Error("office_render: sheet applies only to spreadsheets");
+		}
+		if (params.range !== undefined && params.sheet === undefined) {
+			throw new Error("office_render: range requires sheet");
+		}
+		if (params.sheet !== undefined && params.sheet.trim() === "") {
+			throw new Error("office_render: sheet must be an exact worksheet name");
+		}
+		if (params.dpi !== undefined && (!Number.isSafeInteger(params.dpi) || params.dpi < 24 || params.dpi > 600)) {
+			throw new Error("office_render: dpi must be an integer from 24 to 600");
+		}
+		const stat = await fs.stat(resolved).catch(() => null);
+		if (stat === null) throw new Error(`office_render: file not found: ${raw}`);
+		if (!stat.isFile()) throw new Error(`office_render: not a regular file: ${raw}`);
+
+		let result: OfficeImagesResult;
+		try {
+			result = await getOfficeKit().renderImages(
+				{
+					input: resolved,
+					extension,
+					...(pages === undefined ? {} : { pages }),
+					...(params.sheet === undefined ? {} : { sheet: params.sheet.trim() }),
+					...(params.range === undefined ? {} : { range: params.range.trim() }),
+					...(params.dpi === undefined ? {} : { dpi: params.dpi }),
+					maxImages: this.maxImages,
+					maxBytes: this.maxBytes,
+				},
+				signal,
+			);
+		} catch (error) {
+			throw officeFailure("render", raw, error);
+		}
+		if (result.images.length === 0) {
+			throw new Error(`office_render: the converter returned no images for "${raw}"`);
+		}
+		const images: OfficeRenderImageDetails[] = result.images.map(image => ({
+			...(image.page === undefined ? {} : { page: image.page }),
+			...(image.sheet === undefined ? {} : { sheet: image.sheet }),
+			...(image.range === undefined ? {} : { range: image.range }),
+			bytes: image.png.byteLength,
+			width: image.width,
+			height: image.height,
+		}));
+		const summary = `Rendered ${result.images.length} of ${result.pageCount} page${
+			result.pageCount === 1 ? "" : "s"
+		} from ${raw} at ${result.dpi} dpi.`;
 		return {
-			content: [{ type: "text", text }],
-			details: { format: pkg.format, sections: limited.sections, truncated: limited.truncated },
+			content: [
+				{ type: "text", text: summary },
+				...result.images.map(image => ({
+					type: "image" as const,
+					data: Buffer.from(image.png).toString("base64"),
+					mimeType: "image/png",
+				})),
+			],
+			details: { format: extension, pageCount: result.pageCount, dpi: result.dpi, images },
 		};
 	}
 }
 
 /**
- * Convert an Office Open XML file to a text format (dsh's `office_convert`,
- * text-target subset). PDF/Office-format conversion needs an Office converter
- * service; this tool supports txt/md for docx/pptx/xlsx and csv for xlsx.
+ * Convert a document. Text targets keep the in-process
+ * OOXML reader; every other target goes through the host's Office kit and
+ * leaves the file in the conversion store for the model to copy with the shell
+ * (or, when `output` is given, is copied into the workspace directly).
  */
 export class OfficeConvertTool implements AgentTool<typeof officeConvertSchema, OfficeConvertDetails> {
 	readonly name = "office_convert";
 	readonly approval = "write" as const;
 	readonly label = "Office";
-	readonly summary = "Convert docx, xlsx and pptx to text or CSV";
-	readonly description =
-		"Convert an Office Open XML file to a text format: docx/pptx to txt or md, xlsx to csv (a sheet name is required for a multi-sheet workbook), txt or md. Writes the result when `output` is given, otherwise returns it. PDF and Office-format conversion need an Office converter service.";
+	readonly summary = "Convert an Office document to another format";
+	readonly description = officeConvertDescription.trim();
 	readonly parameters = officeConvertSchema;
-	readonly loadMode = "discoverable";
+	readonly loadMode = "essential";
+	readonly defaultInactive = true;
 
 	constructor(
 		private readonly session: ToolSession,
@@ -347,25 +507,31 @@ export class OfficeConvertTool implements AgentTool<typeof officeConvertSchema, 
 	async execute(
 		_toolCallId: string,
 		params: typeof officeConvertSchema.infer,
+		signal?: AbortSignal,
 	): Promise<AgentToolResult<OfficeConvertDetails>> {
 		const raw = typeof params.input === "string" ? params.input.trim() : "";
 		if (raw === "") throw new Error("office_convert: input must not be empty");
 		const resolved = path.resolve(this.session.cwd, raw);
-		const pkg = await readPackage(resolved, raw);
+		const extension = inputExtension(raw, resolved, "convert");
+		const family = familyOf(extension);
+		if (family === "pdf") throw new Error(`cannot convert "${raw}": convert does not accept PDF input`);
 		const target = params.format;
-		if (target === "csv" && pkg.format !== "xlsx") {
-			throw new Error("office_convert: csv is only supported for .xlsx");
+		const accepted = CONVERSION_OUTPUTS[family];
+		if (!accepted.includes(target)) {
+			throw new Error(`cannot convert "${raw}" to ${target}: this file converts to ${accepted.join(", ")}`);
 		}
-		let text: string;
-		if (target === "csv") {
-			const rows = xlsxRows(pkg.files, params.sheet);
-			if (rows.length > 1 && !params.sheet) {
-				throw new Error(
-					`office_convert: this workbook has ${rows.length} sheets; pass sheet to choose one for CSV`,
-				);
-			}
-			text = rows.map(entry => entry.rows.map(row => row.map(csvCell).join(",")).join("\n")).join("\n\n");
-		} else {
+		if (params.sheet !== undefined && target !== "csv") {
+			throw new Error("office_convert: sheet applies only to CSV conversion");
+		}
+		if (params.sheet !== undefined && params.sheet.trim() === "") {
+			throw new Error("office_convert: sheet must be an exact worksheet name");
+		}
+		const stat = await fs.stat(resolved).catch(() => null);
+		if (stat === null) throw new Error(`office_convert: file not found: ${raw}`);
+		if (!stat.isFile()) throw new Error(`office_convert: not a regular file: ${raw}`);
+
+		if (TEXT_FORMATS.has(target) && target !== "csv") {
+			const pkg = await readPackage(resolved, raw);
 			const sections =
 				pkg.format === "docx"
 					? docxSections(pkg.files)
@@ -377,20 +543,142 @@ export class OfficeConvertTool implements AgentTool<typeof officeConvertSchema, 
 					? Math.min(500_000, Math.floor(params.maxChars))
 					: this.defaultMaxChars;
 			const limited = truncateSections(sections, maxChars);
-			text = formatSections(limited.sections, target);
+			const text = formatSections(limited.sections, target as "txt" | "md");
+			return this.#textResult(pkg.format, target, text, params.output);
 		}
-		if (typeof params.output === "string" && params.output.trim() !== "") {
-			const output = path.resolve(this.session.cwd, params.output);
-			await fs.mkdir(path.dirname(output), { recursive: true });
-			await Bun.write(output, text);
+		if (target === "csv") {
+			const pkg = await readPackage(resolved, raw);
+			if (pkg.format !== "xlsx") throw new Error("office_convert: csv is only supported for .xlsx");
+			const rows = xlsxRows(pkg.files, params.sheet);
+			if (rows.length > 1 && !params.sheet) {
+				throw new Error(
+					`office_convert: this workbook has ${rows.length} sheets; pass sheet to choose one for CSV`,
+				);
+			}
+			const text = rows.map(entry => entry.rows.map(row => row.map(csvCell).join(",")).join("\n")).join("\n\n");
+			return this.#textResult(pkg.format, target, text, params.output);
+		}
+
+		let converted: OfficeFileResult;
+		try {
+			converted = await getOfficeKit().convertTo(
+				{
+					input: resolved,
+					extension,
+					format: target,
+					owner: outputOwner(this.session),
+					name: `${path.basename(resolved).replace(/\.[^.]*$/u, "")}.${target}`,
+				},
+				signal,
+			);
+		} catch (error) {
+			throw officeFailure("convert", raw, error);
+		}
+		const saved = await saveConverted(this.session, converted.path, params.output);
+		return {
+			content: [
+				{
+					type: "text",
+					text:
+						saved.output === undefined
+							? `Converted ${raw} -> ${converted.path} (${converted.bytes} bytes). Copy it with the shell when you need it in the workspace.`
+							: `Converted ${raw} -> ${saved.output} (${converted.bytes} bytes).`,
+				},
+			],
+			details: {
+				format: extension,
+				target,
+				bytes: converted.bytes,
+				...(saved.output === undefined ? {} : { output: saved.output }),
+			},
+		};
+	}
+
+	async #textResult(
+		format: "docx" | "xlsx" | "pptx",
+		target: string,
+		text: string,
+		output: string | undefined,
+	): Promise<AgentToolResult<OfficeConvertDetails>> {
+		const body = text === "" ? `(${format}: no text found)` : text;
+		if (output !== undefined && output.trim() !== "") {
+			const targetPath = path.resolve(this.session.cwd, output);
+			await fs.mkdir(path.dirname(targetPath), { recursive: true });
+			await Bun.write(targetPath, body);
 			return {
-				content: [{ type: "text", text: `Converted ${resolved} -> ${output}` }],
-				details: { format: pkg.format, target, output, truncated: false },
+				content: [
+					{ type: "text", text: `Converted ${format} -> ${targetPath} (${Buffer.byteLength(body)} bytes).` },
+				],
+				details: { format, target, output: targetPath },
 			};
 		}
 		return {
-			content: [{ type: "text", text: text === "" ? `(${pkg.format}: no text found)` : text }],
-			details: { format: pkg.format, target, truncated: false },
+			content: [{ type: "text", text: body }],
+			details: { format, target },
+		};
+	}
+}
+
+/**
+ * Recalculate every formula of a workbook.
+ * The operation needs a recalculation engine; without one the call fails as
+ * unavailable instead of returning a workbook with stale cached results.
+ */
+export class OfficeRecalculateTool implements AgentTool<typeof officeRecalculateSchema, OfficeRecalculateDetails> {
+	readonly name = "office_recalculate";
+	readonly approval = "write" as const;
+	readonly label = "Office";
+	readonly summary = "Recalculate spreadsheet formulas";
+	readonly description = officeRecalculateDescription.trim();
+	readonly parameters = officeRecalculateSchema;
+	readonly loadMode = "essential";
+	readonly defaultInactive = true;
+
+	constructor(private readonly session: ToolSession) {}
+
+	async execute(
+		_toolCallId: string,
+		params: typeof officeRecalculateSchema.infer,
+		signal?: AbortSignal,
+	): Promise<AgentToolResult<OfficeRecalculateDetails>> {
+		const raw = typeof params.input === "string" ? params.input.trim() : "";
+		if (raw === "") throw new Error("office_recalculate: input must not be empty");
+		const resolved = path.resolve(this.session.cwd, raw);
+		const extension = inputExtension(raw, resolved, "recalculate");
+		const stat = await fs.stat(resolved).catch(() => null);
+		if (stat === null) throw new Error(`office_recalculate: file not found: ${raw}`);
+		if (!stat.isFile()) throw new Error(`office_recalculate: not a regular file: ${raw}`);
+		let converted: OfficeFileResult;
+		try {
+			converted = await getOfficeKit().recalculate(
+				{
+					input: resolved,
+					extension,
+					format: params.format,
+					owner: outputOwner(this.session),
+					name: `${path.basename(resolved).replace(/\.[^.]*$/u, "")}.${params.format}`,
+				},
+				signal,
+			);
+		} catch (error) {
+			throw officeFailure("recalculate", raw, error);
+		}
+		const saved = await saveConverted(this.session, converted.path, params.output);
+		return {
+			content: [
+				{
+					type: "text",
+					text:
+						saved.output === undefined
+							? `Recalculated ${raw} -> ${converted.path} (${converted.bytes} bytes). Copy it with the shell when you need it in the workspace.`
+							: `Recalculated ${raw} -> ${saved.output} (${converted.bytes} bytes).`,
+				},
+			],
+			details: {
+				format: params.format,
+				bytes: converted.bytes,
+				...(saved.output === undefined ? {} : { output: saved.output }),
+			},
 		};
 	}
 }

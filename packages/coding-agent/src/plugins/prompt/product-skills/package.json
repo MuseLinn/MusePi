@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"license": "MIT",
-	"description": "Five built-in skills — board, interface, plugin development and using MusePi — with their resources.",
+	"description": "Six built-in skills — board, interface, plugin development, Office documents and using MusePi — with their resources.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",
 	"exports": {
@@ -32,7 +32,7 @@
 	},
 	"musepi": {
 		"label": "MusePi Product Skills",
-		"description": "Five built-in skills — board, interface, plugin development and using MusePi — with their resources.",
+		"description": "Six built-in skills — board, interface, plugin development, Office documents and using MusePi — with their resources.",
 		"icon": "✦",
 		"extensions": [
 			"./index.ts"

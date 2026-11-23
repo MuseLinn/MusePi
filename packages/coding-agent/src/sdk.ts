@@ -278,6 +278,7 @@ import { ToolContextStore } from "./tools/context";
 import { isIrcEnabled } from "./tools/hub";
 import { getImageGenTools } from "./tools/image-gen";
 import { registerExtensionMediaProvider } from "./tools/image-providers";
+import { isOfficeTool } from "./tools/office-activation";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
 import { isRegisteredToolEnabled } from "./tools/registered-tool-gate";
 import { isAutoQaEnabled } from "./tools/report-tool-issue";
@@ -1594,7 +1595,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const current = extensionRunnerRef ? extensionRunnerRef.getExtensionModes() : initialExtensionModes;
 		const match = current.find(s => s.mode.id === modeId);
 		if (match) return { ...match.mode } as ModeDefinition;
-		// Host-level registry (dsh's global preset roster): a preset declared by
+		// Host-level registry (the global preset roster): a preset declared by
 		// an extension is resolvable even when THIS session's discovery did not
 		// load that extension — otherwise `agentPresets.list` would show rows a
 		// different workspace cannot select.
@@ -2179,6 +2180,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				return session?.skills ?? skills;
 			},
 			refreshSkills: () => session.refreshSkills(),
+			activateSkill: name => session?.activateSkill(name) ?? Promise.resolve(),
+			isSkillActivated: name => session?.isSkillActivated(name) ?? false,
 			// LearnTool calls this after a lesson save: drop the frozen per-session
 			// memory-instruction snapshot, then rebuild the base prompt so the next
 			// turn carries the new lesson. `session` is unassigned until the
@@ -2598,7 +2601,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 		sessionExtensionRuntime = extensionsResult.runtime;
 		// The session's plugin generation is the scope its tool providers resolve
-		// through (dsh's agent scope). Set after the load, before any rebuild.
+		// through the joined agent scope. Set after the load, before any rebuild.
 		toolSession.pluginScope = extensionsResult.runtime.pluginScope;
 		// Forward the source-path list (NOT the loaded instances) so subagents
 		// rebuild their own session-scoped extensions.
@@ -3882,9 +3885,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 		const requestedToolNames = explicitlyRequestedToolNames ?? toolNamesFromRegistry;
 		const normalizedRequested = requestedToolNames.filter(name => toolRegistry.has(name));
-		const defaultInactiveToolNames = new Set(
-			registeredTools.filter(tool => tool.definition.defaultInactive).map(tool => tool.definition.name),
-		);
+		const defaultInactiveToolNames = new Set([
+			...registeredTools.filter(tool => tool.definition.defaultInactive).map(tool => tool.definition.name),
+			// Office tools are admitted by the Office skill (the activation skill set):
+			// registered for later activation, but never in the initial slate.
+			...builtInToolNames.filter(name => isOfficeTool(name)),
+		]);
 		const extensionMetaToolsRequested = settings.get("tools.extensionMetaTools") === true;
 		/** The preset's declared top-level surface: the
 		 *  default work profile uses the standard list, other profiles opt in. */
@@ -3933,9 +3939,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 		}
 		// Preset-declared top-level surface: these tools stay in the schema even
-		// when the xd:// partition would otherwise mount them as devices.
+		// when the xd:// partition would otherwise mount them as devices. A
+		// default-inactive tool is excluded: its preset entry says where it belongs
+		// once activated, not that it starts active (Office tools are admitted by a
+		// skill).
 		if (!options.toolNames) {
 			for (const name of presetTopLevelTools) {
+				if (defaultInactiveToolNames.has(name)) continue;
 				if (toolRegistry.has(name) && !initialToolNames.includes(name)) initialToolNames.push(name);
 			}
 		}

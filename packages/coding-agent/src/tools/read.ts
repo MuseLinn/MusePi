@@ -1989,6 +1989,19 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		});
 		const details: ReadToolDetails = { resolvedPath: resource.sourcePath, contentType: resource.contentType };
 
+		// A successful `skill://<name>` read is the skill-load event: the
+		// skills a skill owns become callable from the next step. A failed slate
+		// refresh must not turn a readable skill into a read error.
+		if (scheme === "skill") {
+			const host = decodeURIComponent(urlMeta.rawHost || urlMeta.hostname);
+			const skill = [...(this.session.skills ?? [])]
+				.sort((left, right) => right.name.length - left.name.length)
+				.find(candidate => host === candidate.name || host.startsWith(`${candidate.name}/`));
+			if (skill) {
+				await this.session.activateSkill?.(skill.name).catch(() => undefined);
+			}
+		}
+
 		// If extraction was used, return directly (no pagination)
 		if (hasExtraction) {
 			return toolResult(details).text(resource.content).sourceInternal(url).done();

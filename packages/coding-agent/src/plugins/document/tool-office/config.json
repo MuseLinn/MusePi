@@ -1,6 +1,19 @@
 {
 	"fields": [
 		{
+			"key": "activationSkills",
+			"type": "list",
+			"label": "activationSkills",
+			"restart": "session",
+			"default": [
+				"office",
+				"office-docx",
+				"office-xlsx",
+				"office-pptx"
+			],
+			"description": "Skills whose successful load admits the Office tools from the next step."
+		},
+		{
 			"key": "maxChars",
 			"type": "number",
 			"label": "maxChars",
@@ -8,7 +21,27 @@
 			"default": 120000,
 			"min": 1000,
 			"max": 500000,
-			"description": "Default character ceiling for extracted text."
+			"description": "Default character ceiling for converted text."
+		},
+		{
+			"key": "maxImages",
+			"type": "number",
+			"label": "maxImages",
+			"restart": "session",
+			"default": 20,
+			"min": 1,
+			"max": 10000,
+			"description": "Most images one render returns."
+		},
+		{
+			"key": "maxBytes",
+			"type": "number",
+			"label": "maxBytes",
+			"restart": "session",
+			"default": 33554432,
+			"min": 1,
+			"max": 9007199254740991,
+			"description": "Most PNG bytes across all images of one render."
 		}
 	]
 }

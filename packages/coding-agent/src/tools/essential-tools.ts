@@ -40,6 +40,9 @@ export const ESSENTIAL_BUILTIN_TOOL_NAMES: Record<string, true> = {
 	manage_skill: true,
 	present: true,
 	workflow: true,
+	office_render: true,
+	office_convert: true,
+	office_recalculate: true,
 };
 
 /**

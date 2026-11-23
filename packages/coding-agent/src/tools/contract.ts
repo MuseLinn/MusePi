@@ -6,7 +6,7 @@
  * tool's implementation and needs {@link ToolSession} to build it; importing
  * that from the `tools` barrel would pull in every other tool class and close
  * an import cycle (barrel → package → barrel). The reference harness solves the
- * same problem the same way: `dsh-tools` is a contract package with no tool
+ * same problem the same way: the tools contract package has no tool
  * implementations in it, and `tool-bash` depends on that, never on a peer tool.
  *
  * The barrel re-exports everything here, so callers outside `src/tools/` see
@@ -135,7 +135,7 @@ export interface DeferredDiagnosticsEntry {
 export interface ToolSession {
 	/** Current working directory */
 	cwd: string;
-	/** The plugin generation this session joined (dsh's agent scope for tool
+	/** The plugin generation this session joined (the agent scope for tool
 	 *  providers). Scoped registrations shadow the process-global default; a
 	 *  session built before its generation is known reads the default. */
 	pluginScope?: string;
@@ -180,6 +180,14 @@ export interface ToolSession {
 	skills?: readonly Skill[];
 	/** Rediscover live session skills after a tool mutates their backing files. */
 	refreshSkills?: () => Promise<void>;
+	/**
+	 * Record that a skill's instructions entered the session (a `/skill:` load or
+	 * a `skill://` read). The session admits the tools that skill owns from the
+	 * next step.
+	 */
+	activateSkill?: (name: string) => Promise<void>;
+	/** Whether a skill's instructions have entered this session. */
+	isSkillActivated?: (name: string) => boolean;
 	/** Pre-loaded prompt templates */
 	promptTemplates?: PromptTemplate[];
 	/** Pre-loaded rules (forwarded to subagents to skip re-discovery). */
