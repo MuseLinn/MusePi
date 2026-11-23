@@ -1,0 +1,10 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"rewriteRelativeImportExtensions": true,
+		"declaration": true,
+		"declarationMap": true,
+		"composite": true,
+		"noEmit": false
+	}
+}

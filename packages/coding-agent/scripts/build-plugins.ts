@@ -16,7 +16,7 @@
  *
  * `--check` verifies the expected outputs exist without rebuilding.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const pkgRoot = resolve(import.meta.dir, "..");
@@ -27,6 +27,16 @@ interface PackageInfo {
 	domain: string;
 	name: string;
 	dir: string;
+	main?: string;
+	types?: string;
+}
+
+function readPackageInfo(dir: string, domain: string, name: string): PackageInfo {
+	const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+		main?: string;
+		types?: string;
+	};
+	return { domain, name, dir, main: manifest.main, types: manifest.types };
 }
 
 /** Every plugin package, whether it sits at `<root>/<pkg>` or `<root>/<domain>/<pkg>`. */
@@ -36,13 +46,13 @@ function pluginPackages(root: string): PackageInfo[] {
 		const candidate = join(root, entry);
 		if (!statSync(candidate).isDirectory()) continue;
 		if (existsSync(join(candidate, "package.json"))) {
-			out.push({ domain: "", name: entry, dir: candidate });
+			out.push(readPackageInfo(candidate, "", entry));
 			continue;
 		}
 		for (const nested of readdirSync(candidate)) {
 			const pkgDir = join(candidate, nested);
 			if (statSync(pkgDir).isDirectory() && existsSync(join(pkgDir, "package.json"))) {
-				out.push({ domain: entry, name: nested, dir: pkgDir });
+				out.push(readPackageInfo(pkgDir, entry, nested));
 			}
 		}
 	}
@@ -58,8 +68,12 @@ if (!existsSync(hostProject)) throw new Error(`missing host project: ${hostProje
 const failures: Array<{ label: string; output: string }> = [];
 
 /** Run one build step, capturing both streams so a failure names its package. */
-function build(dir: string, label: string): boolean {
-	const result = Bun.spawnSync(["bunx", "tsgo", "-b"], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+function build(dir: string, label: string, project?: string): boolean {
+	const result = Bun.spawnSync(["bunx", "tsgo", "-b", ...(project ? [project] : [])], {
+		cwd: dir,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
 	const output = `${result.stdout.toString()}${result.stderr.toString()}`.trim();
 	if (result.exitCode === 0) return true;
 	failures.push({ label, output: output.slice(0, 800) });
@@ -69,7 +83,7 @@ function build(dir: string, label: string): boolean {
 if (!checkOnly) {
 	// The host first: every package references it, and an out-of-date host would
 	// make each package rebuild it in turn.
-	if (!build(pkgRoot, "<host declarations>")) {
+	if (!build(pkgRoot, "<host declarations>", hostProject)) {
 		report();
 		process.exit(1);
 	}
@@ -78,11 +92,20 @@ if (!checkOnly) {
 	process.exit(failures.length === 0 ? 0 : 1);
 }
 
-// --check: the declared entry must exist for every package.
-const missing = packages.filter(pkg => !existsSync(join(pkg.dir, "lib", "index.js")));
-for (const pkg of missing) {
-	failures.push({ label: pkg.domain ? `${pkg.domain}/${pkg.name}` : pkg.name, output: "missing lib/index.js" });
-}
+// --check: every declared runtime and type entry must exist.
+const missing = packages.flatMap(pkg => {
+	const entries = [
+		{ kind: "main", entry: pkg.main ?? "./lib/index.js" },
+		...(pkg.types ? [{ kind: "types", entry: pkg.types }] : []),
+	];
+	return entries
+		.filter(({ entry }) => !existsSync(join(pkg.dir, entry)))
+		.map(({ kind, entry }) => ({
+			label: pkg.domain ? `${pkg.domain}/${pkg.name}` : pkg.name,
+			output: `missing ${kind} entry: ${entry}`,
+		}));
+});
+failures.push(...missing);
 report();
 process.exit(failures.length === 0 ? 0 : 1);
 
@@ -95,5 +118,7 @@ function report(): void {
 	for (const failure of failures) {
 		process.stderr.write(`\nplugin ${failure.label} failed:\n${failure.output}\n`);
 	}
-	process.stderr.write(`\nplugin build failed for ${failures.length} of ${packages.length} package(s)\n`);
+	process.stderr.write(
+		`\nplugin build failed for ${new Set(failures.map(failure => failure.label)).size} of ${packages.length} package(s)\n`,
+	);
 }
