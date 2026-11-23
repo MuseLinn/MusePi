@@ -27,7 +27,7 @@ describe("plugin-owned bundled skill migration", () => {
 	it("removes only untouched legacy copies and preserves user edits", async () => {
 		const source = path.resolve(
 			import.meta.dir,
-			"../src/bundled-plugins/android-emulator/skills/android-emulator/SKILL.md",
+			"../src/plugins/capabilities/android-emulator/skills/android-emulator/SKILL.md",
 		);
 		const content = await Bun.file(source).text();
 		for (const [name, disk] of [
@@ -58,7 +58,7 @@ describe("plugin-owned bundled skill migration", () => {
 	});
 
 	it("migrates a product skill together with its resources", async () => {
-		const sourceDir = path.resolve(import.meta.dir, "../src/bundled-plugins/product-skills/skills/ui-ux-pro-max");
+		const sourceDir = path.resolve(import.meta.dir, "../src/plugins/prompt/product-skills/skills/ui-ux-pro-max");
 		const source = path.join(sourceDir, "SKILL.md");
 		const content = await Bun.file(source).text();
 		const script = await Bun.file(path.join(sourceDir, "scripts/search.py")).text();

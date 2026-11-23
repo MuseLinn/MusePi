@@ -2,8 +2,8 @@ import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import * as React from "react";
 import { act } from "react";
-import ActivityDockPill from "../src/bundled-plugins/stats-pills/ui/activity-pill";
-import UsageDockPill from "../src/bundled-plugins/stats-pills/ui/usage-pill";
+import ActivityDockPill from "../src/plugins/style/stats-pills/ui/activity-pill";
+import UsageDockPill from "../src/plugins/style/stats-pills/ui/usage-pill";
 
 interface Root {
 	render(node: React.ReactNode): void;
@@ -200,7 +200,7 @@ describe("stats row session data", () => {
 		vi.useFakeTimers();
 		const style = doc.createElement("style");
 		style.textContent = await Bun.file(
-			new URL("../src/bundled-plugins/stats-pills/ui/stats-pills.css", import.meta.url),
+			new URL("../src/plugins/style/stats-pills/ui/stats-pills.css", import.meta.url),
 		).text();
 		doc.head.appendChild(style);
 		const response = Promise.withResolvers<UsageResponse | null>();

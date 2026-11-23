@@ -25,7 +25,7 @@ import { getEvalToolDescription } from "@musepi/pi-coding-agent/tools/eval";
 import { GrepTool } from "@musepi/pi-coding-agent/tools/grep";
 import { isMountableUnderXdev } from "@musepi/pi-coding-agent/tools/xdev";
 import { prompt } from "@musepi/pi-utils";
-import { registerFileToolPrompts } from "../src/bundled-plugins/file-tools/prompts";
+import { registerFileToolPrompts } from "../src/plugins/fs/file-tools/prompts";
 import systemPromptTemplate from "../src/prompts/system/system-prompt.md" with { type: "text" };
 import bashDescription from "../src/prompts/tools/bash.md" with { type: "text" };
 import grepDescription from "../src/prompts/tools/grep.md" with { type: "text" };

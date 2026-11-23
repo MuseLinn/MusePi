@@ -4,7 +4,7 @@
  *
  * 能力缝声明（M2.4）：
  * - 名称+ns：asset-policy（daemon 侧素材策略选择状态；简报的文本与渲染由
- *   `bundled-plugins/design-guidance` 拥有，order 41 紧随 design-system 的
+ *   `plugins/prompt/design-guidance` 拥有，order 41 紧随 design-system 的
  *   40）。
  * - 输入：会话共享 project metadata 的 `assetPolicy` 键
  *   （`"ai-image" | "placeholder"`，值域由 daemon/creation.ts 的
@@ -18,7 +18,7 @@
  * - 启停：选择状态 always-on；简报随 design-guidance 插件卸载而消失。
  * - 冲突：区块 name/source 由插件固定为 `asset-policy`;扩展不得占用该
  *   name（composer 同 name 后加者替换,与既有区块同一契约）。
- * - 检视入口：本文件 + `bundled-plugins/design-guidance` + sdk.ts 的
+ * - 检视入口：本文件 + `plugins/prompt/design-guidance` + sdk.ts 的
  *   rebuildSystemPrompt 挂点。
  */
 

@@ -5,7 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
-import { BROWSER_PROMPT_OWNER, registerBrowserPrompts } from "../src/bundled-plugins/browser/prompts";
+import { BROWSER_PROMPT_OWNER, registerBrowserPrompts } from "../src/plugins/web/browser/prompts";
 
 function install(): { host: PromptHost; dispose: () => void } {
 	const host = new PromptHost();

@@ -47,7 +47,7 @@ describe("bundled magic-keywords package", () => {
 		// The bundled tree ships one package; its entry resolves to this repo's
 		// src (dev layout).
 		expect(paths.length).toBeGreaterThanOrEqual(1);
-		expect(paths.some(p => p.replaceAll("\\", "/").includes("bundled-plugins/magic-keywords"))).toBe(true);
+		expect(paths.some(p => p.replaceAll("\\", "/").includes("plugins/prompt/magic-keywords"))).toBe(true);
 	});
 
 	it("contributes exactly the three registry keywords, matched field for field", async () => {

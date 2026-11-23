@@ -36,7 +36,7 @@ export class BoardService implements DaemonService {
 
 	/** RPC board.resource.list：一张卡工作区里的文件（卡目录内，一层）。 */
 	async resourceList(params: { boardId?: unknown; widgetId?: unknown }): Promise<{ entries: unknown[] }> {
-		const { listCardResources } = await import("../../bundled-plugins/board/resources");
+		const { listCardResources } = await import("../../plugins/media/board/resources");
 		const boardId = typeof params?.boardId === "string" ? params.boardId : "";
 		const widgetId = typeof params?.widgetId === "string" ? params.widgetId : "";
 		return { entries: listCardResources(boardId, widgetId) };
@@ -45,7 +45,7 @@ export class BoardService implements DaemonService {
 	/** RPC board.resource.read：读卡内文本资源。越界、二进制、超限都抛错，
 	 *  错误文案就是模型/页面该读的那句。 */
 	async resourceRead(params: { boardId?: unknown; widgetId?: unknown; path?: unknown }): Promise<{ text: string }> {
-		const { readCardText } = await import("../../bundled-plugins/board/resources");
+		const { readCardText } = await import("../../plugins/media/board/resources");
 		const boardId = typeof params?.boardId === "string" ? params.boardId : "";
 		const widgetId = typeof params?.widgetId === "string" ? params.widgetId : "";
 		const rel = typeof params?.path === "string" ? params.path : "";
@@ -56,7 +56,7 @@ export class BoardService implements DaemonService {
 	 *  GUI、agent 与其他窗口共享一个存储（localStorage 只是离线 GUI 的
 	 *  兜底）。 */
 	async list(): Promise<{ boards: unknown[] }> {
-		const { readBoards } = await import("../../bundled-plugins/board/store");
+		const { readBoards } = await import("../../plugins/media/board/store");
 		return { boards: readBoards() };
 	}
 
@@ -70,8 +70,8 @@ export class BoardService implements DaemonService {
 		// thing the GUI calls after launch. Best-effort: a broken plugin must
 		// not block saving built-in cards.
 		await this.deps.extensionRuntimeLoad?.().catch(() => undefined);
-		const { readBoards, validateBoards, writeBoards } = await import("../../bundled-plugins/board/store");
-		const { widgetTypesWith } = await import("../../bundled-plugins/board/catalog");
+		const { readBoards, validateBoards, writeBoards } = await import("../../plugins/media/board/store");
+		const { widgetTypesWith } = await import("../../plugins/media/board/catalog");
 		const { getRegisteredWidgets } = await import("../registered-widgets");
 		// Plugin-declared types are process-registered by the loader; a
 		// session-less RPC has no tool context, so merge the process index.
@@ -92,7 +92,7 @@ export class BoardService implements DaemonService {
 	 *  types、fields、defaults 与卡片 tones，agent 写看板挂件无需硬编码形状。 */
 	async schema(): Promise<{ types: unknown; tones: unknown }> {
 		await this.deps.extensionRuntimeLoad?.().catch(() => undefined);
-		const { widgetTonesWith, widgetTypesWith } = await import("../../bundled-plugins/board/catalog");
+		const { widgetTonesWith, widgetTypesWith } = await import("../../plugins/media/board/catalog");
 		const { getRegisteredWidgets } = await import("../registered-widgets");
 		const widgets = getRegisteredWidgets();
 		return { types: widgetTypesWith(widgets), tones: widgetTonesWith(widgets) };

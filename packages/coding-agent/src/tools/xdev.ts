@@ -39,8 +39,11 @@ import { parseMCPToolName } from "../mcp/tool-bridge";
 import type { Theme } from "../modes/theme/theme";
 import { truncateHeadBytes } from "../session/streaming-output";
 import { resolveToolTier, type ToolTier } from "./approval";
+import type { Tool, XdevState } from "./contract";
+
+export type { XdevState } from "./contract";
+
 import { renderDefaultToolExecution } from "./default-renderer";
-import type { Tool } from "./index";
 import { replaceTabs } from "./render-utils";
 import type { ToolActivitySummary, ToolRenderer } from "./renderers";
 import { renderError, ToolAbortError, ToolError } from "./tool-errors";
@@ -242,20 +245,6 @@ function decodeInnerArgs(raw: unknown): Record<string, unknown> {
 
 /** Device-write content that requests docs instead of executing: empty, `?`, or `help`. */
 const HELP_CONTENT_RE = /^\s*(\?|help)?\s*$/i;
-
-/** Shared tool state consumed by the `xd://` presentation layer. */
-export interface XdevState {
-	/** Canonical session tool map; direct and device dispatch read the same instances. */
-	readonly tools: Map<string, Tool>;
-	/** Ordered names currently presented as mounted devices. */
-	readonly mountedNames: Set<string>;
-	/** Names originating from built-in factories, used only for prompt presentation. */
-	readonly builtInNames: Set<string>;
-	/** Whether a name is active at the top level. */
-	readonly isActive: (name: string) => boolean;
-	/** Optional execution-only decorator, such as the ACP permission gate. */
-	decorateExecution?(tool: Tool): Tool;
-}
 
 /** Full-doc character budget for system-prompt mounted-device sections. */
 export const XDEV_DOCS_TOTAL_BUDGET = 48_000;

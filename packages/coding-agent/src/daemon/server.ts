@@ -1407,7 +1407,7 @@ export class DaemonServer {
 		// subscription can resolve, so this waits for the host plugins rather
 		// than racing the constructor.
 		void (async () => {
-			const { ensureHostHalfPluginsLoaded } = await import("../bundled-plugins/loader");
+			const { ensureHostHalfPluginsLoaded } = await import("../plugins/host/loader");
 			await ensureHostHalfPluginsLoaded(this.#host.cwd());
 			const service = getHostService<HmrService>("hmr");
 			if (!service) {
@@ -6837,7 +6837,7 @@ export async function startDaemon(
 	// Host-half bundled plugins mount once per daemon process, before the first
 	// connection: what they register (memory backend providers, services) must
 	// exist for session-less RPC such as `memory.status`, not only for sessions.
-	const { ensureHostHalfPluginsLoaded } = await import("../bundled-plugins/loader");
+	const { ensureHostHalfPluginsLoaded } = await import("../plugins/host/loader");
 	await ensureHostHalfPluginsLoaded(host.cwd());
 
 	// Presets declared by extensions are host-level (dsh): warm the mode registry

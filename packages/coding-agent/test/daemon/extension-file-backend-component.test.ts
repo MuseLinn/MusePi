@@ -85,7 +85,7 @@ describe("file backend tool mapping", () => {
 		const host = new DaemonHostContext();
 		const runtime = new CordisDynamicPluginRuntime(host);
 		try {
-			await runtime.load(path.resolve(import.meta.dir, "../../src/bundled-plugins/file-tools"), process.cwd());
+			await runtime.load(path.resolve(import.meta.dir, "../../src/plugins/fs/file-tools"), process.cwd());
 			await runtime.setComponentEnabled("file-tools", "index", false);
 			expect(isFileIndexBackendEnabled()).toBe(false);
 			expect(isFileBackendToolAllowed("read")).toBe(true);

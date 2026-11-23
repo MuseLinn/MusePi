@@ -29,7 +29,7 @@ describe("MusePi plugin file skills", () => {
 
 		const design = product.find(skill => skill.name === "ui-ux-pro-max");
 		expect(design?.filePath).toBe(
-			path.resolve(import.meta.dir, "../src/bundled-plugins/product-skills/skills/ui-ux-pro-max/SKILL.md"),
+			path.resolve(import.meta.dir, "../src/plugins/prompt/product-skills/skills/ui-ux-pro-max/SKILL.md"),
 		);
 		expect(await Bun.file(path.join(design?.baseDir ?? "", "scripts/search.py")).exists()).toBe(true);
 

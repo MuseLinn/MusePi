@@ -12,7 +12,7 @@ import {
 	renderContextNotes,
 } from "@musepi/pi-coding-agent/session/context-notes";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
-import { apply as applyContextNotes } from "../src/bundled-plugins/context-notes/index";
+import { apply as applyContextNotes } from "../src/plugins/workspace/context-notes/index";
 
 const notesSettings = Settings.isolated({ "compaction.experimentalContextManagement": true });
 

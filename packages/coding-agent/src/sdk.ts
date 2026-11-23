@@ -77,11 +77,6 @@ import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-tas
 import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
-import {
-	discoverBundledSessionPromptPluginPaths,
-	ensureBundledPluginsLoaded,
-	ensureHostHalfPluginsLoaded,
-} from "./bundled-plugins/loader";
 import { initializeWithSettings } from "./discovery";
 import { discoverBundledPresetPluginPackages } from "./discovery/builtin";
 import { setInvocationConfiguredExtensions, withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
@@ -159,6 +154,11 @@ import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memor
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
 import { applyPendingMagicKeywords } from "./modes/magic-keyword-registry";
+import {
+	discoverBundledSessionPromptPluginPaths,
+	ensureBundledPluginsLoaded,
+	ensureHostHalfPluginsLoaded,
+} from "./plugins/host/loader";
 import { readAssetPolicy } from "./presets/asset-policy";
 import { readDesignSystemSelection, registerExtensionDesignSystem } from "./presets/design-systems";
 import {

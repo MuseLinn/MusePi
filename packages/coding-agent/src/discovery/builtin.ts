@@ -689,7 +689,7 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 		packagedRoots.length > 0
 			? packagedRoots
 			: [
-					path.resolve(import.meta.dir, "..", "bundled-plugins"),
+					path.resolve(import.meta.dir, "..", "plugins"),
 					// Desktop plugins (chat-view, capability center, panels, rail)
 					// live in the apps/ workspace; the daemon discovers them here so
 					// session-less RPCs and the GUI's slot host see them. Keep the
@@ -697,18 +697,20 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 					// root reads as empty.
 					path.resolve(import.meta.dir, "../../../../apps/desktop/src/plugins"),
 					path.resolve(import.meta.dir, "../../../desktop-app/src/plugins"),
-					path.resolve(process.cwd(), "bundled-plugins"),
+					path.resolve(process.cwd(), "plugins"),
 				];
 	const seen = new Set<string>();
 	const out: BundledPluginPackage[] = [];
 	for (const root of roots) {
-		// readDirEntries never throws (absent root reads as empty) and returns
-		// Dirents — only directories are packages; a stray file is not.
-		const entries = await readDirEntries(root);
-		for (const dirent of entries) {
-			if (!dirent.isDirectory()) continue;
-			const pkgDir = path.join(root, dirent.name);
-			const manifestPath = path.join(pkgDir, "package.json");
+		// Two layouts share this walk. The host's own tree groups packages by
+		// domain (`plugins/<domain>/<package>`), the way the reference harness
+		// lays out `packages/<domain>/<package>`; the desktop tree and any
+		// directory that already is a package keep packages one level down.
+		// A directory counts as a package when it holds a package.json, so the
+		// shape is decided by what is on disk rather than by which root it came
+		// from.
+		for (const packageDir of await findPackageDirs(root)) {
+			const manifestPath = path.join(packageDir, "package.json");
 			let manifest: {
 				name?: unknown;
 				musepi?: { extensions?: unknown; presetOnly?: unknown; scope?: unknown };
@@ -724,7 +726,7 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 			const resolvedEntries: string[] = [];
 			for (const entry of declared) {
 				if (typeof entry !== "string" || entry.length === 0) continue;
-				const resolved = path.resolve(pkgDir, entry);
+				const resolved = path.resolve(packageDir, entry);
 				if (seen.has(resolved)) continue;
 				seen.add(resolved);
 				resolvedEntries.push(resolved);
@@ -736,6 +738,26 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 				presetOnly: manifest.musepi?.presetOnly === true,
 				hostScope: manifest.musepi?.scope === "host",
 			});
+		}
+	}
+	return out;
+}
+
+/** Directories under `root` that hold a `package.json`, at either layout depth. */
+async function findPackageDirs(root: string): Promise<string[]> {
+	const out: string[] = [];
+	for (const dirent of await readDirEntries(root)) {
+		if (!dirent.isDirectory() || dirent.name.startsWith(".")) continue;
+		const candidate = path.join(root, dirent.name);
+		if (await Bun.file(path.join(candidate, "package.json")).exists()) {
+			out.push(candidate);
+			continue;
+		}
+		// Not a package: treat it as a domain directory and look one level down.
+		for (const nested of await readDirEntries(candidate)) {
+			if (!nested.isDirectory()) continue;
+			const pkgDir = path.join(candidate, nested.name);
+			if (await Bun.file(path.join(pkgDir, "package.json")).exists()) out.push(pkgDir);
 		}
 	}
 	return out;

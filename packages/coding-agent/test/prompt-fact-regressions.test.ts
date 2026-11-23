@@ -13,7 +13,7 @@ import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { LearnTool } from "@musepi/pi-coding-agent/tools/learn";
 import { ManageSkillTool } from "@musepi/pi-coding-agent/tools/manage-skill";
 import { prompt } from "@musepi/pi-utils";
-import widgetDescription from "../src/bundled-plugins/visuals/prompt.md" with { type: "text" };
+import widgetDescription from "../src/plugins/media/visuals/prompt.md" with { type: "text" };
 import customSystemPromptTemplate from "../src/prompts/system/custom-system-prompt.md" with { type: "text" };
 import subagentSystemPromptTemplate from "../src/prompts/system/subagent-system-prompt.md" with { type: "text" };
 import systemPromptTemplate from "../src/prompts/system/system-prompt.md" with { type: "text" };

@@ -13,10 +13,10 @@ import {
 	type SystemPromptToolMetadata,
 } from "@musepi/pi-coding-agent/system-prompt";
 import { createTools, type Tool, type ToolSession } from "@musepi/pi-coding-agent/tools";
-import { registerBrowserPrompts } from "../src/bundled-plugins/browser/prompts";
-import { registerComputerPrompts } from "../src/bundled-plugins/computer/prompts";
-import { registerDelegationPrompts } from "../src/bundled-plugins/delegation/prompts";
-import { registerHostIntegrationPrompts } from "../src/bundled-plugins/host-integrations/prompts";
+import { registerDelegationPrompts } from "../src/plugins/delegate/delegation/prompts";
+import { registerComputerPrompts } from "../src/plugins/io/computer/prompts";
+import { registerHostIntegrationPrompts } from "../src/plugins/prompt/host-integrations/prompts";
+import { registerBrowserPrompts } from "../src/plugins/web/browser/prompts";
 import { cleanupTempHome } from "./helpers/temp-home-cleanup";
 
 const EMPTY_TREE = {

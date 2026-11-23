@@ -24,8 +24,8 @@ import {
 	resolveMode,
 	validateMode,
 } from "@musepi/pi-coding-agent/presets/resolve";
-import { creatorPersonaSections } from "../src/bundled-plugins/preset-creator/index";
-import { designPersonaSections } from "../src/bundled-plugins/preset-design/index";
+import { creatorPersonaSections } from "../src/plugins/prompt/preset-creator/index";
+import { designPersonaSections } from "../src/plugins/prompt/preset-design/index";
 
 let dir: string;
 

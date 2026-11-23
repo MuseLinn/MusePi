@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { TempDir } from "@musepi/pi-utils";
-import { scanSkillRoot, skillFromMarkdown } from "../src/bundled-plugins/skill-filesystem/index";
 import { stringArrayFromRow } from "../src/extensibility/plugins/row-config";
+import { scanSkillRoot, skillFromMarkdown } from "../src/plugins/prompt/skill-filesystem/index";
 
 describe("musepi-skill-filesystem", () => {
 	it("parses roots as a JSON array and treats an empty field as no roots", () => {

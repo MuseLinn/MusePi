@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
-import { RENDER_PAGE_MAX_LOCAL_IMAGES, WidgetTool } from "../src/bundled-plugins/visuals/tool";
+import { RENDER_PAGE_MAX_LOCAL_IMAGES, WidgetTool } from "../src/plugins/media/visuals/tool";
 
 const tool = new WidgetTool();
 const text = (r: { content?: { type: string; text?: string }[] }): string =>

@@ -16,7 +16,7 @@ import {
 	HOST_INTEGRATIONS_PROMPT_OWNER,
 	HOST_RUNTIME_CONTEXT_ORDER,
 	registerHostIntegrationPrompts,
-} from "../src/bundled-plugins/host-integrations/prompts";
+} from "../src/plugins/prompt/host-integrations/prompts";
 
 const XDEV = [{ name: "web_search", summary: "Mounted web search." }];
 

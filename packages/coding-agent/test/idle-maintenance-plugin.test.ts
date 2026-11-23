@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { apply } from "../src/bundled-plugins/idle-maintenance/index";
+import { apply } from "../src/plugins/workspace/idle-maintenance/index";
 
 interface FakeTimer {
 	callback: () => void;

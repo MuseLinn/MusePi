@@ -5,8 +5,8 @@ import { DaemonHostContext } from "../../src/daemon/host-context";
 import { enabledSttModels, enabledTtsModels } from "../../src/voice/engine-denylist";
 import { resetVoiceEngineActivations } from "../../src/voice/engine-registry";
 
-const STT_PACKAGE = path.resolve(import.meta.dir, "../../src/bundled-plugins/stt");
-const TTS_PACKAGE = path.resolve(import.meta.dir, "../../src/bundled-plugins/tts");
+const STT_PACKAGE = path.resolve(import.meta.dir, "../../src/plugins/io/stt");
+const TTS_PACKAGE = path.resolve(import.meta.dir, "../../src/plugins/io/tts");
 
 describe("bundled voice engine component lifecycle", () => {
 	it("changes the usable model catalogs when engine fibers stop and restart", async () => {

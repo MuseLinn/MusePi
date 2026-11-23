@@ -80,7 +80,7 @@ describe("memory backend providers", () => {
 	});
 
 	it("registers the Sharpshooter engine through the host-half adapter", async () => {
-		const { apply } = await import("../src/bundled-plugins/memory-sharpshooter/index");
+		const { apply } = await import("../src/plugins/prompt/memory-sharpshooter/index");
 		let dispose: (() => void) | undefined;
 		apply({
 			memory: {

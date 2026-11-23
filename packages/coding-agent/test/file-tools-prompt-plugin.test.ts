@@ -9,7 +9,7 @@
 import { describe, expect, it } from "bun:test";
 import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
-import { FILE_TOOLS_OWNER, registerFileToolPrompts } from "../src/bundled-plugins/file-tools/prompts";
+import { FILE_TOOLS_OWNER, registerFileToolPrompts } from "../src/plugins/fs/file-tools/prompts";
 
 function install(): { host: PromptHost; dispose: () => void } {
 	const host = new PromptHost();

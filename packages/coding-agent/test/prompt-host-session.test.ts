@@ -221,7 +221,7 @@ describe("complete prompt conflicts", () => {
 });
 
 describe("core prompt packages mount per session", () => {
-	const delegationPlugin = path.resolve(import.meta.dir, "../src/bundled-plugins/delegation/index.ts");
+	const delegationPlugin = path.resolve(import.meta.dir, "../src/plugins/delegate/delegation/index.ts");
 	const countOf = (text: string, needle: string): number => text.split(needle).length - 1;
 
 	it("supplies the default batch/scout delegation gates to the host assembly", async () => {

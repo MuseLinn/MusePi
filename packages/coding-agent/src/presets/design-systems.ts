@@ -4,14 +4,14 @@
  * 能力缝声明（M2.4）：
  * - 名称+ns：design-systems（daemon 侧设计体系注册表；RPC 面经
  *   DesignSystemsService 的 `design.systems.list` 暴露；prompt 注入由
- *   `bundled-plugins/design-guidance` 的 registerPrompt 函数文本消费）。
+ *   `plugins/prompt/design-guidance` 的 registerPrompt 函数文本消费）。
  * - 输入：内置预设表 `BUILTIN_DESIGN_SYSTEMS`（id 稳定，会话已存引用，
  *   不得改名）+ 扩展经 `pi.registerDesignSystem()` 注册的配置
  *   （kebab-case id；撞内置/撞已注册即抛）。
  * - 输出：`listDesignSystems()`（builtin + extension 合并视图，带 source
  *   徽章）、`getDesignSystem(id)` 单体查询、`readDesignSystemSelection`
  *   从会话 metadata 读出当前选择。提示词简报的文本与渲染由
- *   `bundled-plugins/design-guidance` 拥有；宿主只把选择状态交给 prompt
+ *   `plugins/prompt/design-guidance` 拥有；宿主只把选择状态交给 prompt
  *   装配（source=design-system，order 40 位于 mode 预设区块之后；未命中/
  *   空 id 不注入不炸）。RPC 写通道 `session.setDesignSystem`（daemon
  *   server.ts）经 `AgentSession.setDesignSystemId` 热写会话共享 metadata
@@ -33,8 +33,8 @@
  *   检视入口：本文件 + `extensibility/extensions/types.ts`（DesignSystemConfig）。
  */
 
-import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../bundled-plugins/design-guidance/briefs";
 import type { DesignSystemConfig } from "../extensibility/extensions/types";
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../plugins/prompt/design-guidance/briefs";
 
 /**
  * Built-in design systems (stable ids — persisted sessions reference them).
@@ -42,7 +42,7 @@ import type { DesignSystemConfig } from "../extensibility/extensions/types";
  * (client-core tokens.css / docs/gui-design.md §5s); no new tokens.
  *
  * `promptSection.text` here is the `design.systems.list` metadata mirror of the
- * briefs owned by `bundled-plugins/design-guidance`; prompt injection uses the
+ * briefs owned by `plugins/prompt/design-guidance`; prompt injection uses the
  * plugin's function text, not this field.
  */
 export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [

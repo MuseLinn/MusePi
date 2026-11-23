@@ -11,6 +11,10 @@ import todoDescription from "../prompts/tools/todo.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
 import type { SessionEntry } from "../session/session-entries";
 import { framedBlock, renderStatusLine, renderTreeList } from "../tui";
+import type { TodoItem, TodoPhase, TodoStatus } from "./contract";
+
+export type { TodoItem, TodoPhase, TodoStatus } from "./contract";
+
 import { normalizePathLikeInput, resolveToCwd } from "./path-utils";
 import { formatErrorDetail, formatMoreItems, PREVIEW_LIMITS, pluralize, replaceTabs } from "./render-utils";
 
@@ -18,21 +22,8 @@ import { formatErrorDetail, formatMoreItems, PREVIEW_LIMITS, pluralize, replaceT
 // Types
 // =============================================================================
 
-export type TodoStatus = "pending" | "in_progress" | "completed" | "abandoned" | "blocked";
 /** Operation names accepted by the todo tool and echoed in successful result details. */
 export type TodoOperation = "init" | "start" | "done" | "rm" | "drop" | "block" | "unblock" | "append" | "view";
-
-export interface TodoItem {
-	content: string;
-	status: TodoStatus;
-	/** When `status === "blocked"`, an optional note on what the task is waiting for. */
-	blocker?: string;
-}
-
-export interface TodoPhase {
-	name: string;
-	tasks: TodoItem[];
-}
 
 /** Whether an unknown value is a persisted todo phase. */
 export function isTodoPhase(value: unknown): value is TodoPhase {

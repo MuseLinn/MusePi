@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { BoardTool } from "../src/bundled-plugins/board/tool";
+import { BoardTool } from "../src/plugins/media/board/tool";
 
 /**
  * A regenerated board must not overwrite one a user just edited. The board

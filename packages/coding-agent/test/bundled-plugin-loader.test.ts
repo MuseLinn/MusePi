@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { createBundledPluginLoader } from "../src/bundled-plugins/loader";
+import { createBundledPluginLoader } from "../src/plugins/host/loader";
 
 describe("bundled plugin loader attempts", () => {
 	it("retries a failed discovery without sharing state with another loader", async () => {

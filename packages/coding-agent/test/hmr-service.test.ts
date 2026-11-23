@@ -146,7 +146,7 @@ describe("hmr service", () => {
 	});
 
 	it("honors base/root/ignored/debounce from the plugin config", async () => {
-		const { apply } = await import("../src/bundled-plugins/hmr/index");
+		const { apply } = await import("../src/plugins/runtime/hmr/index");
 		const { mkdtemp, mkdir, rm } = await import("node:fs/promises");
 		const { tmpdir } = await import("node:os");
 		const path = await import("node:path");

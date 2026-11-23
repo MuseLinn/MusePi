@@ -5,7 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
-import { LSP_PROMPT_OWNER, registerLspPrompts } from "../src/bundled-plugins/lsp/prompts";
+import { LSP_PROMPT_OWNER, registerLspPrompts } from "../src/plugins/capabilities/lsp/prompts";
 
 function install(): { host: PromptHost; dispose: () => void } {
 	const host = new PromptHost();

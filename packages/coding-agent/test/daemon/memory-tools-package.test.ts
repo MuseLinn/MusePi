@@ -17,10 +17,7 @@ describe("memory-tools capability package", () => {
 	beforeAll(async () => {
 		agentDir = await isolateAgentDirForTest("memory-tools-package-");
 		bundled = createBundledPluginRuntime();
-		await bundled.runtime.load(
-			path.resolve(import.meta.dir, "../../src/bundled-plugins/memory-tools"),
-			process.cwd(),
-		);
+		await bundled.runtime.load(path.resolve(import.meta.dir, "../../src/plugins/prompt/memory-tools"), process.cwd());
 	}, 30_000);
 
 	afterAll(async () => {

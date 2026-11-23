@@ -4,7 +4,7 @@ import { CordisDynamicPluginRuntime } from "../../src/daemon/cordis-dynamic-plug
 import { DaemonHostContext } from "../../src/daemon/host-context";
 import { TerminalRegistry } from "../../src/daemon/terminal-registry";
 
-const TERMINAL_PACKAGE = path.resolve(import.meta.dir, "../../src/bundled-plugins/terminal");
+const TERMINAL_PACKAGE = path.resolve(import.meta.dir, "../../src/plugins/shell/terminal");
 
 describe("bundled terminal provider component lifecycle", () => {
 	it("mounts real backends and unregisters exactly the disabled component", async () => {

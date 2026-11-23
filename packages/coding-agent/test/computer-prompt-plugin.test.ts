@@ -5,7 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
-import { COMPUTER_PROMPT_OWNER, registerComputerPrompts } from "../src/bundled-plugins/computer/prompts";
+import { COMPUTER_PROMPT_OWNER, registerComputerPrompts } from "../src/plugins/io/computer/prompts";
 
 function install(): { host: PromptHost; dispose: () => void } {
 	const host = new PromptHost();

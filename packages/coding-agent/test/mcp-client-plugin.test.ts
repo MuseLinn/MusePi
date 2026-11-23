@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { serverConfigFromRow } from "../src/bundled-plugins/mcp-client/index";
+import { serverConfigFromRow } from "../src/plugins/web/mcp-client/index";
 
 describe("musepi-mcp-client row config", () => {
 	it("is inert without a server name (an accidental ambient mount invents nothing)", () => {

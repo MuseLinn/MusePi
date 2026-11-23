@@ -4,27 +4,12 @@ import { prompt } from "@musepi/pi-utils";
 import checkpointDescription from "../prompts/tools/checkpoint.md" with { type: "text" };
 import rewindDescription from "../prompts/tools/rewind.md" with { type: "text" };
 import type { ToolSession } from ".";
+
+export type { CheckpointState, CompletedRewindState } from "./contract";
+
 import type { OutputMeta } from "./output-meta";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-
-export interface CheckpointState {
-	/** Number of in-memory messages at checkpoint (AFTER checkpoint tool result is appended) */
-	checkpointMessageCount: number;
-	/** Session entry ID at checkpoint (for session tree branching) */
-	checkpointEntryId: string | null;
-	/** Timestamp */
-	startedAt: string;
-}
-
-export interface CompletedRewindState {
-	/** Report retained after a successful rewind. */
-	report: string;
-	/** Timestamp for the checkpoint that was rewound. */
-	startedAt: string;
-	/** Timestamp when the rewind completed. */
-	rewoundAt: string;
-}
 
 const checkpointSchema = type({
 	goal: type("string").describe("investigation goal"),

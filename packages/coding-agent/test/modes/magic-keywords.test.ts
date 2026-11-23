@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
 import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { hasMagicKeyword, highlightMagicKeywords } from "@musepi/pi-coding-agent/modes/magic-keywords";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins/host/loader";
 
 beforeAll(async () => {
 	// Gradient palettes read the active theme's color mode.

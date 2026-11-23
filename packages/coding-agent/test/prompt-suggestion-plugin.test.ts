@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { apply } from "../src/bundled-plugins/prompt-suggestion/index";
+import { apply } from "../src/plugins/interaction/prompt-suggestion/index";
 
 interface Quirks {
 	reply?: string;

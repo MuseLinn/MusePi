@@ -24,6 +24,9 @@ import type { Theme } from "../modes/theme/theme";
 import resolveReminderPrompt from "../prompts/system/resolve-device-reminder.md" with { type: "text" };
 import { Ellipsis, padToWidth, renderStatusLine, truncateToWidth } from "../tui";
 import type { ToolSession } from ".";
+
+export type { PlanProposalHandler } from "./contract";
+
 import { replaceTabs } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import type { XdevDispatch } from "./xdev";
@@ -105,9 +108,6 @@ export function writeDeviceDispatch(toolName: string, result: unknown): XdevDisp
 	// Envelope verified above; the write tool stored a real XdevDispatch here.
 	return xdev as XdevDispatch;
 }
-
-/** Handler installed by plan mode; `xd://propose` dispatches the written plan title to it. */
-export type PlanProposalHandler = (title: string) => Promise<AgentToolResult<unknown>>;
 
 type ResolveAction = "apply" | "discard";
 

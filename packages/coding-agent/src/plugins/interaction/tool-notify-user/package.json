@@ -1,0 +1,16 @@
+{
+	"name": "musepi-tool-notify-user",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Progress Update",
+		"description": "Post a progress update to the user without ending the turn.",
+		"icon": "📣",
+		"extensions": ["./index.ts"],
+		"host": {
+			"readonly": true
+		}
+	}
+}

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
-import { BoardTool } from "../src/bundled-plugins/board/tool";
-import { WidgetTool } from "../src/bundled-plugins/visuals/tool";
 import type { RegisteredTool, ToolDefinition } from "../src/extensibility/extensions/types";
+import { BoardTool } from "../src/plugins/media/board/tool";
+import { WidgetTool } from "../src/plugins/media/visuals/tool";
 import { isRegisteredToolEnabled } from "../src/tools/registered-tool-gate";
 
 /**

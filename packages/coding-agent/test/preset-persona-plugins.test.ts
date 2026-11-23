@@ -34,13 +34,13 @@ import {
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
-import { chatPersonaSections } from "../src/bundled-plugins/preset-chat/index";
-import { creatorPersonaSections } from "../src/bundled-plugins/preset-creator/index";
-import { designPersonaSections } from "../src/bundled-plugins/preset-design/index";
 import { discoverBundledPluginPaths, discoverBundledPresetPluginPackages } from "../src/discovery/builtin";
 import type { ExtensionAPI } from "../src/extensibility/extensions/types";
+import { chatPersonaSections } from "../src/plugins/prompt/preset-chat/index";
+import { creatorPersonaSections } from "../src/plugins/prompt/preset-creator/index";
+import { designPersonaSections } from "../src/plugins/prompt/preset-design/index";
 
-const PACKAGE_ROOT = path.resolve(import.meta.dir, "../src/bundled-plugins");
+const PACKAGE_ROOT = path.resolve(import.meta.dir, "../src/plugins/prompt");
 
 const CHAT_PERSONA_HEAD = "你是一名简洁的对话助手。";
 const DESIGN_ROLE_HEAD = "你是一名资深 UI/UX 设计师。";
@@ -134,7 +134,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 		// The discovery pass is shared; the manifest flag is what keeps a
 		// preset-only package from loading in every session.
 		for (const name of ["preset-chat", "preset-design", "preset-creator"]) {
-			expect(ambient.some(entry => entry.includes(`bundled-plugins/${name}/`))).toBe(false);
+			expect(ambient.some(entry => entry.includes(`plugins/prompt/${name}/`))).toBe(false);
 		}
 	});
 
@@ -163,7 +163,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 			logger: { info: () => {} },
 		} as unknown as ExtensionAPI;
 
-		const design = await import("../src/bundled-plugins/preset-design/index");
+		const design = await import("../src/plugins/prompt/preset-design/index");
 		await design.apply(api);
 		expect(registered.map(section => [section.name, section.order])).toEqual([
 			["mode:design:role", 25],
@@ -176,7 +176,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 		expect(registered[0]!.text).not.toContain("\n");
 
 		registered.length = 0;
-		const chat = await import("../src/bundled-plugins/preset-chat/index");
+		const chat = await import("../src/plugins/prompt/preset-chat/index");
 		await chat.apply(api);
 		expect(registered.map(section => section.name)).toEqual(["mode:chat:persona"]);
 		expect(registered[0]!.text).toBe(`${CHAT_PERSONA_HEAD}只回答结论,不做多余分析;优先给出最小可行的方案。`);

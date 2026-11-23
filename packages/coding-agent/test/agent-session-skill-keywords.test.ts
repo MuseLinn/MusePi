@@ -4,11 +4,11 @@ import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
 import { getBundledModel } from "@musepi/pi-catalog/models";
-import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { WORKFLOW_NOTICE } from "@musepi/pi-coding-agent/modes/workflow";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins/host/loader";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import {

@@ -1,12 +1,8 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import {
-	registerVisualPrompts,
-	renderVisualAnswers,
-	VISUAL_PROMPT_OWNER,
-} from "../src/bundled-plugins/visuals/prompts";
-import { WidgetTool } from "../src/bundled-plugins/visuals/tool";
-import { WIDGET_RENDER_WHEN } from "../src/bundled-plugins/visuals/when";
 import { Settings } from "../src/config/settings";
+import { registerVisualPrompts, renderVisualAnswers, VISUAL_PROMPT_OWNER } from "../src/plugins/media/visuals/prompts";
+import { WidgetTool } from "../src/plugins/media/visuals/tool";
+import { WIDGET_RENDER_WHEN } from "../src/plugins/media/visuals/when";
 import { PromptHost } from "../src/prompts/host";
 
 /**

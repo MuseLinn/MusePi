@@ -6,7 +6,7 @@
 import { describe, expect, it } from "bun:test";
 import { PromptHost } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
-import { DELEGATION_PROMPT_OWNER, registerDelegationPrompts } from "../src/bundled-plugins/delegation/prompts";
+import { DELEGATION_PROMPT_OWNER, registerDelegationPrompts } from "../src/plugins/delegate/delegation/prompts";
 
 function install(): { host: PromptHost; dispose: () => void } {
 	const host = new PromptHost();

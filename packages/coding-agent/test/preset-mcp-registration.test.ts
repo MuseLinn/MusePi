@@ -18,7 +18,7 @@ import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager"
 import { TempDir } from "@musepi/pi-utils";
 import { EventBus } from "../src/utils/event-bus";
 
-const PLUGIN_ENTRY = path.resolve(import.meta.dir, "../src/bundled-plugins/mcp-client/index.ts");
+const PLUGIN_ENTRY = path.resolve(import.meta.dir, "../src/plugins/web/mcp-client/index.ts");
 
 function fixtureHost(): { host: ExtensionMcpHost; connected: string[]; disconnected: string[] } {
 	const connected: string[] = [];

@@ -9,8 +9,8 @@ import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager"
 import { TempDir } from "@musepi/pi-utils";
 import { EventBus } from "../src/utils/event-bus";
 
-const CLAUDE_ENTRY = path.resolve(import.meta.dir, "../src/bundled-plugins/hooks-claude-code/index.ts");
-const CODEX_ENTRY = path.resolve(import.meta.dir, "../src/bundled-plugins/hooks-codex/index.ts");
+const CLAUDE_ENTRY = path.resolve(import.meta.dir, "../src/plugins/runtime/hooks-claude-code/index.ts");
+const CODEX_ENTRY = path.resolve(import.meta.dir, "../src/plugins/runtime/hooks-codex/index.ts");
 
 function hookCommand(script: string): string {
 	const file = path.join(os.tmpdir(), `musepi-hook-${Math.random().toString(36).slice(2)}.js`);

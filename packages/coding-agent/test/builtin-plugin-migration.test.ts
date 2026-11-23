@@ -56,7 +56,7 @@ describe("first-party subsystem plugin packages", () => {
 		const paths = await discoverBundledPluginPaths();
 		const byName = new Map<string, string>();
 		for (const entry of paths) {
-			const name = entry.replaceAll("\\", "/").match(/bundled-plugins\/([^/]+)\//)?.[1];
+			const name = entry.replaceAll("\\", "/").match(/plugins\/(?:[^/]+\/)?([^/]+)\//)?.[1];
 			if (name) byName.set(name, entry);
 		}
 		const stt = await readExtensionPluginMeta(byName.get("stt")!);

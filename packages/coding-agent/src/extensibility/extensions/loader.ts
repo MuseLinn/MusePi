@@ -1562,7 +1562,7 @@ export async function runFactoryInFiber(
 /** Whether an extension entry lives under the host's bundled plugin tree. */
 function isBundledPluginPath(resolvedPath: string): boolean {
 	const normalized = resolvedPath.replaceAll("\\", "/");
-	return normalized.includes("/src/bundled-plugins/") || normalized.includes("/bundled-plugins/");
+	return normalized.includes("/src/plugins/") || normalized.includes("/plugins/");
 }
 
 async function bindExtension(

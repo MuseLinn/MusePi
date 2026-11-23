@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
-import { WidgetTool } from "../../src/bundled-plugins/visuals/tool";
+import { WidgetTool } from "../../src/plugins/media/visuals/tool";
 
 const page = "<!doctype html><html><body><h1>Compare</h1></body></html>";
 

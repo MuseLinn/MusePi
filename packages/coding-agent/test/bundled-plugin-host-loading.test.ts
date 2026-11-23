@@ -6,7 +6,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { ensureHostHalfPluginsLoaded, resetHostHalfPluginsLoaded } from "../src/bundled-plugins/loader";
 import { discoverBundledPluginPaths } from "../src/discovery/builtin";
 import {
 	getPluginConfigPath,
@@ -17,6 +16,7 @@ import type { HmrService } from "../src/extensibility/plugins/hmr/service";
 import { reloadHostPlugins } from "../src/extensibility/plugins/runtime/host-runtime";
 import { getHostService } from "../src/extensibility/plugins/runtime/host-services";
 import { findMemoryBackendProvider } from "../src/memory-backend/providers";
+import { ensureHostHalfPluginsLoaded, resetHostHalfPluginsLoaded } from "../src/plugins/host/loader";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
 
 let agentDir: string;

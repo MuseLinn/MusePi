@@ -22,7 +22,6 @@ import {
 	VERSION,
 } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
-import { ensureHostHalfPluginsLoaded } from "./bundled-plugins/loader";
 import { reset as resetCapabilities } from "./capability";
 import { type Args, reportUnrecognizedFlags, validateToolNames } from "./cli/args";
 import { applyExtensionFlags, type ExtensionFlagSink } from "./cli/extension-flags";
@@ -72,6 +71,7 @@ import { CURRENT_SETUP_VERSION } from "./modes/setup-version";
 import { initTheme, stopThemeWatcher } from "./modes/theme/theme";
 import type { SubmittedUserInput } from "./modes/types";
 import { createWarpEventBridgeExtension } from "./modes/warp-events";
+import { ensureHostHalfPluginsLoaded } from "./plugins/host/loader";
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import {
 	type CreateAgentSessionOptions,
