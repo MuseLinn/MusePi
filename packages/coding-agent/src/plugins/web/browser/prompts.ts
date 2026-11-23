@@ -10,8 +10,8 @@
 import type { PromptHostSurface } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
 import type { PromptContributionContext } from "@musepi/pi-coding-agent/prompts/types";
+import { wireName } from "@musepi/pi-coding-agent/tools/plugin-context";
 import { prompt } from "@musepi/pi-utils";
-import { wireName } from "../../prompt/prompt-context";
 import browserTemplate from "./browser.md" with { type: "text" };
 
 export const BROWSER_PROMPT_OWNER = "bundled:browser";

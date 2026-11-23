@@ -39,7 +39,7 @@ import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager"
 import { TempDir } from "@musepi/pi-utils";
 import { DaemonServer, DaemonSessionHost, JOURNAL_DIR } from "../src/daemon/server";
 import { ViewStore, viewStorePath } from "../src/daemon/view-store";
-import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/plugins/prompt/design-guidance/briefs";
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/design/briefs";
 import { computeDefaultSessionDir } from "../src/session/session-paths";
 import { FileSessionStorage } from "../src/session/session-storage";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";

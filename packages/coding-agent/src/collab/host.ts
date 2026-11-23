@@ -23,6 +23,8 @@ import type {
 	ToolApprovalRequest,
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
+import { WIDGET_TYPES } from "../board/catalog.js";
+import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../board/store.js";
 import {
 	computeNextRun,
 	loadCronRuns,
@@ -40,8 +42,6 @@ import {
 } from "../daemon/fs-ops.js";
 import { t } from "../i18n/index.js";
 import type { InteractiveModeContext } from "../modes/types";
-import { WIDGET_TYPES } from "../plugins/media/board/catalog.js";
-import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../plugins/media/board/store.js";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry } from "../registry/agent-registry";
 import type { AgentSessionEvent } from "../session/agent-session";

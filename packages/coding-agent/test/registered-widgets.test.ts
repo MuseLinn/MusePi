@@ -5,6 +5,7 @@
  * build from their context.
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { widgetTypesWith } from "../src/board/catalog";
 import {
 	forgetRegisteredWidget,
 	getRegisteredWidgets,
@@ -12,7 +13,6 @@ import {
 	resetRegisteredWidgets,
 } from "../src/daemon/registered-widgets";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../src/extensibility/extensions/loader";
-import { widgetTypesWith } from "../src/plugins/media/board/catalog";
 import { EventBus } from "../src/utils/event-bus";
 
 const PROBE = {

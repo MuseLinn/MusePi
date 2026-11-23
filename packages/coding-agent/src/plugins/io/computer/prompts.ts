@@ -7,11 +7,11 @@
  * `computer.md`; this module only collects the template data and renders it.
  */
 
+import { wireName } from "@musepi/pi-coding-agent/tools/plugin-context";
 import { prompt } from "@musepi/pi-utils";
 import type { PromptHostSurface } from "../../../prompts/host";
 import { PROMPT_ORDERS } from "../../../prompts/orders";
 import type { PromptContributionContext } from "../../../prompts/types";
-import { wireName } from "../../prompt/prompt-context";
 import computerTemplate from "./computer.md" with { type: "text" };
 
 export const COMPUTER_PROMPT_OWNER = "bundled:computer";

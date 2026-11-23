@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { NotifyUserTool } from "../src/plugins/interaction/tool-notify-user";
 import { BUILTIN_TOOLS } from "../src/tools";
+import { NotifyUserTool } from "../src/tools/notify-user";
 
 function sessionWith(notifyUser: boolean): { settings: { get(key: string): unknown } } {
 	return { settings: { get: (key: string) => (key === "notifyUser" ? notifyUser : undefined) } };

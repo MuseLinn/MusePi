@@ -10,7 +10,7 @@ import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { AppendJournal } from "@musepi/pi-coding-agent/daemon/journal";
 import { type DaemonConnection, DaemonServer, DaemonSessionHost } from "@musepi/pi-coding-agent/daemon/server";
 import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
-import { resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins/host/loader";
+import { resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins-runtime/loader";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";

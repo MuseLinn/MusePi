@@ -7,11 +7,11 @@
  * it.
  */
 
+import { wireName } from "@musepi/pi-coding-agent/tools/plugin-context";
 import { prompt } from "@musepi/pi-utils";
 import type { PromptHostSurface } from "../../../prompts/host";
 import { PROMPT_ORDERS } from "../../../prompts/orders";
 import type { PromptContributionContext } from "../../../prompts/types";
-import { wireName } from "../../prompt/prompt-context";
 import lspTemplate from "./lsp.md" with { type: "text" };
 
 export const LSP_PROMPT_OWNER = "bundled:lsp";

@@ -16,14 +16,15 @@
  * `ctx.registerDesignSystem`; this plugin reads that registry only for ids it
  * does not own.
  */
-import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
-import { getDesignSystem } from "@musepi/pi-coding-agent/presets/design-systems";
+
 import {
 	ASSET_POLICY_BRIEFS,
 	type AssetPolicy,
 	BUILTIN_DESIGN_SYSTEM_BRIEFS,
 	isBuiltinDesignSystemBriefId,
-} from "./briefs";
+} from "@musepi/pi-coding-agent/design/briefs";
+import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { getDesignSystem } from "@musepi/pi-coding-agent/presets/design-systems";
 
 /** Plugin identity in the cordis runtime and the extension center. */
 export const name = "musepi-design-guidance";

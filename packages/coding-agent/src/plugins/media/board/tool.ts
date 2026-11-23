@@ -9,11 +9,16 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
+import { widgetTonesWith, widgetTypesWith } from "@musepi/pi-coding-agent/board/catalog";
+import {
+	listCardResources,
+	ResourceScopeError,
+	readCardText,
+	writeCardText,
+} from "@musepi/pi-coding-agent/board/resources";
+import { readBoards, validateBoards, writeBoards } from "@musepi/pi-coding-agent/board/store";
 import type { ExtensionWidget } from "@musepi/pi-coding-agent/extensibility/extensions/widget-types";
-import { widgetTonesWith, widgetTypesWith } from "./catalog";
 import boardDescription from "./prompt.md" with { type: "text" };
-import { listCardResources, ResourceScopeError, readCardText, writeCardText } from "./resources";
-import { readBoards, validateBoards, writeBoards } from "./store";
 
 const boardSchema = type({
 	action: type("string").describe("list | get | save | schema | resource.list | resource.read | resource.write"),

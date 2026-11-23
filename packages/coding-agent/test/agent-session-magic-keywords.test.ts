@@ -15,7 +15,7 @@ import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager"
 import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
 import { removeWithRetries } from "@musepi/pi-utils";
 import { resetMagicKeywordRegistry } from "../src/modes/magic-keyword-registry";
-import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "../src/plugins/host/loader";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "../src/plugins-runtime/loader";
 
 const mockTaskTool: AgentTool = {
 	name: "task",

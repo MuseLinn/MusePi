@@ -7,7 +7,7 @@
  * surface that renders a finished layout exactly as it will look.
  *
  * Owned by the `musepi-visuals` built-in plugin, which is the session's visual
- * surface and nothing else. Board card types moved to `plugins/media/board`:
+ * surface and nothing else. Board card types moved to `board`:
  * a board is a separate plugin that depends on this one.
  */
 import { type } from "@musepi/musepi-type";

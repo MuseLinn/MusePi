@@ -9,7 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../src/extensibility/extensions/loader";
 import { disposePluginPrimitives } from "../src/extensibility/plugins/runtime/cordis-primitives";
-import { createBundledPluginLoader } from "../src/plugins/host/loader";
+import { createBundledPluginLoader } from "../src/plugins-runtime/loader";
 import { EventBus } from "../src/utils/event-bus";
 
 function inlineRuntime(): ExtensionRuntime {

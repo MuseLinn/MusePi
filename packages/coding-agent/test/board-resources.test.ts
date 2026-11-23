@@ -8,7 +8,7 @@ import {
 	ResourceScopeError,
 	readCardText,
 	resolveCardPath,
-} from "../src/plugins/media/board/resources";
+} from "../src/board/resources";
 
 /**
  * A card's workspace is a folder, and a model writes the paths into it. These
@@ -99,7 +99,7 @@ describe("card resources", () => {
 
 describe("writing card resources", () => {
 	it("writes inside the card and reads it back", async () => {
-		const { writeCardText } = await import("../src/plugins/media/board/resources");
+		const { writeCardText } = await import("../src/board/resources");
 		const bytes = writeCardText("main", "w4", "data/rates.csv", "pair,value\nUSD/CNY,7.24\n");
 		expect(bytes).toBeGreaterThan(0);
 		expect(readCardText("main", "w4", "data/rates.csv")).toContain("USD/CNY");
@@ -108,19 +108,19 @@ describe("writing card resources", () => {
 	});
 
 	it("refuses to write outside the card", async () => {
-		const { writeCardText } = await import("../src/plugins/media/board/resources");
+		const { writeCardText } = await import("../src/board/resources");
 		expect(() => writeCardText("main", "w4", "../escape.txt", "x")).toThrow(ResourceScopeError);
 	});
 
 	it("refuses a write over the cap", async () => {
-		const { writeCardText } = await import("../src/plugins/media/board/resources");
+		const { writeCardText } = await import("../src/board/resources");
 		expect(() => writeCardText("main", "w4", "big.txt", "x".repeat(MAX_RESOURCE_BYTES + 1))).toThrow(/exceeds/);
 	});
 });
 
 describe("one card is one folder", () => {
 	it("the save moves a card's content into its folder and thins the index", async () => {
-		const { readBoards, writeBoards } = await import("../src/plugins/media/board/store");
+		const { readBoards, writeBoards } = await import("../src/board/store");
 		const source = 'root = Stack([Text("放在文件里")])';
 		writeBoards([
 			{
@@ -137,7 +137,7 @@ describe("one card is one folder", () => {
 	});
 
 	it("a page goes to page.html", async () => {
-		const { readBoards, writeBoards } = await import("../src/plugins/media/board/store");
+		const { readBoards, writeBoards } = await import("../src/board/store");
 		writeBoards([
 			{
 				id: "dir2",
@@ -158,7 +158,7 @@ describe("one card is one folder", () => {
 	});
 
 	it("a card whose file vanished still loads the board", async () => {
-		const { readBoards, writeBoards } = await import("../src/plugins/media/board/store");
+		const { readBoards, writeBoards } = await import("../src/board/store");
 		writeBoards([
 			{
 				id: "dir3",

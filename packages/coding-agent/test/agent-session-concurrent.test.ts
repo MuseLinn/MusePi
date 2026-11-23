@@ -22,7 +22,7 @@ import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-ag
 import { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
 import { GoalRuntime } from "@musepi/pi-coding-agent/goals/runtime";
 import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
-import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins/host/loader";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins-runtime/loader";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";

@@ -12,8 +12,8 @@
 import type { PromptHostSurface } from "@musepi/pi-coding-agent/prompts/host";
 import { PROMPT_ORDERS } from "@musepi/pi-coding-agent/prompts/orders";
 import type { PromptContributionContext } from "@musepi/pi-coding-agent/prompts/types";
+import { activeWireName, wireName } from "@musepi/pi-coding-agent/tools/plugin-context";
 import { prompt } from "@musepi/pi-utils";
-import { activeWireName, wireName } from "../../prompt/prompt-context";
 import astTemplate from "./ast.md" with { type: "text" };
 import editTemplate from "./edit.md" with { type: "text" };
 import globTemplate from "./glob.md" with { type: "text" };

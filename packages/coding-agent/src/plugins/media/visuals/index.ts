@@ -5,7 +5,7 @@
  * - 名称+ns：`musepi-visuals` 插件、`widget` Agent 工具、`provide: "genui"`
  *   服务（看板插件依赖它）。
  * - 职责边界：**只负责会话内的可视化**——回复里的 `ui` 块与 `widget` 页面。
- *   看板的卡片类型表（`WIDGET_TYPES`）已迁到 `plugins/media/board`，本插件
+ *   看板的卡片类型表（`WIDGET_TYPES`）已迁到 `board`，本插件
  *   不再知道看板的存在。
  * - 输入：`title` / `html` / `awaitAnswer`（一页自包含 HTML）。
  * - 输出：page 的 `details` 载荷（GUI 渲染成 html 卡面）。

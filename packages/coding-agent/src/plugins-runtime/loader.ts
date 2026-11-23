@@ -17,22 +17,19 @@
  * `apply` registers process-wide facts, so they run on the cordis host runtime
  * (`extensibility/plugins/runtime/host-runtime.ts`) once per process.
  *
- * @module plugins/host/loader
+ * @module plugins-runtime/loader
  */
 
 import * as path from "node:path";
-import { discoverBundledPluginPaths } from "@musepi/pi-coding-agent/discovery/builtin";
-import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
-import type { Extension } from "@musepi/pi-coding-agent/extensibility/extensions/types";
-import { resolvePluginEntry, toFactory } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-entry";
-import { disposePluginPrimitives } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-primitives";
-import {
-	ensureHostPlugins,
-	resetHostPlugins,
-} from "@musepi/pi-coding-agent/extensibility/plugins/runtime/host-runtime";
-import { registerMagicKeyword } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
-import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 import { logger } from "@musepi/pi-utils";
+import { discoverBundledPluginPaths } from "../discovery/builtin";
+import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
+import type { Extension } from "../extensibility/extensions/types";
+import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
+import { disposePluginPrimitives } from "../extensibility/plugins/runtime/cordis-primitives";
+import { ensureHostPlugins, resetHostPlugins } from "../extensibility/plugins/runtime/host-runtime";
+import { registerMagicKeyword } from "../modes/magic-keyword-registry";
+import { EventBus } from "../utils/event-bus";
 
 /**
  * Bundled packages whose prompt-host contributions are part of the core
@@ -78,10 +75,10 @@ async function readDeclaredConfig(entry: string): Promise<Record<string, unknown
 		{ coerceConfigValues },
 		{ getExtensionNameFromPath },
 	] = await Promise.all([
-		import("../../extensibility/extensions/plugin-manifest"),
-		import("../../extensibility/extensions-center/plugin-config-store"),
+		import("../extensibility/extensions/plugin-manifest"),
+		import("../extensibility/extensions-center/plugin-config-store"),
 		import("@musepi/pi-wire"),
-		import("../../discovery/helpers"),
+		import("../discovery/helpers"),
 	]);
 	const meta = await readExtensionPluginMeta(entry);
 	if (!meta || meta.fields.length === 0) return {};

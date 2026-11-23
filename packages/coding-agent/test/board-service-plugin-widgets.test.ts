@@ -6,9 +6,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { boardsFile } from "../src/board/store";
 import { rememberRegisteredWidget, resetRegisteredWidgets } from "../src/daemon/registered-widgets";
 import { BoardService } from "../src/daemon/services/board-service";
-import { boardsFile } from "../src/plugins/media/board/store";
 
 const file = boardsFile();
 let backup: string | null = null;

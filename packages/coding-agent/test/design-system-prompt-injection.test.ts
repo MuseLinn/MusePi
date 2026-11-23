@@ -20,7 +20,7 @@ import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
-import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/plugins/prompt/design-guidance/briefs";
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/design/briefs";
 
 const MODE_MARKER = "MODE-SECTION-MARKER-7f3a9c";
 const DESIGN_GUIDANCE_ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");

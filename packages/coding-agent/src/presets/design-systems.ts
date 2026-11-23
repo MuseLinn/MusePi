@@ -33,8 +33,8 @@
  *   检视入口：本文件 + `extensibility/extensions/types.ts`（DesignSystemConfig）。
  */
 
+import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../design/briefs";
 import type { DesignSystemConfig } from "../extensibility/extensions/types";
-import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../plugins/prompt/design-guidance/briefs";
 
 /**
  * Built-in design systems (stable ids — persisted sessions reference them).

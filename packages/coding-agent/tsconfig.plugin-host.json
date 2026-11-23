@@ -1,0 +1,14 @@
+{
+	"extends": "./tsconfig.publish.json",
+	"compilerOptions": {
+		"composite": true,
+		"incremental": true,
+		"tsBuildInfoFile": "./dist/types/.tsbuildinfo"
+	},
+	// The host project is what a plugin package references: it exposes the host's
+	// own declarations. Plugin packages are separate projects that reference THIS
+	// one, so their sources must not be compiled here — otherwise the host emits
+	// `dist/types/plugins/...` declarations for them and each plugin project then
+	// finds nothing of its own left to build.
+	"exclude": ["dist", "node_modules", "test", "tests", "scripts", "bench", "src/plugins"]
+}

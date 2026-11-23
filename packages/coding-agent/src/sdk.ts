@@ -158,7 +158,7 @@ import {
 	discoverBundledSessionPromptPluginPaths,
 	ensureBundledPluginsLoaded,
 	ensureHostHalfPluginsLoaded,
-} from "./plugins/host/loader";
+} from "./plugins-runtime/loader";
 import { readAssetPolicy } from "./presets/asset-policy";
 import { readDesignSystemSelection, registerExtensionDesignSystem } from "./presets/design-systems";
 import {

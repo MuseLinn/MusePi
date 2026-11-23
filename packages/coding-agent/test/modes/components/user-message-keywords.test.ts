@@ -9,7 +9,7 @@ import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-k
 import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
-import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins/host/loader";
+import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins-runtime/loader";
 import { Container } from "@musepi/pi-tui";
 
 beforeAll(async () => {
