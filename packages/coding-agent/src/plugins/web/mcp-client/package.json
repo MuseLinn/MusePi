@@ -1,15 +1,38 @@
 {
 	"name": "musepi-mcp-client",
-	"version": "1.0.0",
+	"version": "0.7.7",
 	"private": true,
 	"type": "module",
 	"license": "MIT",
+	"description": "Declare an MCP server as one line of a preset: stdio or HTTP/SSE; its tools join this session's tool surface and disconnect with the fiber when the preset unloads.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"label": "MCP Servers",
 		"description": "Declare an MCP server as one line of a preset: stdio or HTTP/SSE; its tools join this session's tool surface and disconnect with the fiber when the preset unloads.",
 		"icon": "M",
 		"presetOnly": true,
-		"extensions": ["./index.ts"],
+		"extensions": [
+			"./index.ts"
+		],
 		"config": [
 			{
 				"key": "serverName",
@@ -23,7 +46,11 @@
 				"type": "select",
 				"label": "传输方式",
 				"default": "stdio",
-				"options": ["stdio", "http", "sse"]
+				"options": [
+					"stdio",
+					"http",
+					"sse"
+				]
 			},
 			{
 				"key": "command",

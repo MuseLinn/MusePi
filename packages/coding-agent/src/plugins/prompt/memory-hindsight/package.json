@@ -1,14 +1,37 @@
 {
 	"name": "musepi-memory-hindsight",
-	"version": "0.1.0",
+	"version": "0.7.7",
 	"private": true,
 	"type": "module",
 	"license": "MIT",
+	"description": "Host-half adapter that registers the Hindsight remote memory backend as a provider.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"label": "Hindsight Memory Backend",
 		"description": "Host-half adapter that registers the Hindsight remote memory backend as a provider.",
 		"icon": "◈",
 		"scope": "host",
-		"extensions": ["./index.ts"]
+		"extensions": [
+			"./index.ts"
+		]
 	}
 }

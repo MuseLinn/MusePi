@@ -163,9 +163,15 @@ async function stagePlugin(sourceDir: string, destinationDir: string): Promise<v
 	}
 	const stagedManifest = {
 		...manifest,
+		// The built entry: staged plugins are bundled JavaScript, so the manifest
+		// points at the compiled file the way a published package points at
+		// `lib/index.js`, instead of at a TypeScript source that only the source
+		// tree can load.
+		main: typeof manifest.main === "string" ? javascriptEntry(manifest.main) : undefined,
+		types: undefined,
 		musepi: {
 			...manifest.musepi,
-			extensions: entries.map(javascriptEntry),
+			extensions: entries.map(entry => `./${javascriptEntry(entry)}`),
 			components: Array.isArray(manifest.musepi?.components)
 				? manifest.musepi.components.map((component: unknown) => {
 						if (!component || typeof component !== "object" || Array.isArray(component)) return component;

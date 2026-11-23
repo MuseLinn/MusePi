@@ -1,21 +1,66 @@
 {
 	"name": "musepi-subagent-kimi-code",
-	"version": "0.1.0",
+	"version": "0.7.7",
 	"private": true,
-	"description": "Kimi Code subagent for MusePi.",
-	"license": "MIT",
 	"type": "module",
+	"license": "MIT",
+	"description": "Run the native Kimi Code CLI through the existing task tool.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"icon": "K",
 		"label": "Kimi Code Subagent",
 		"description": "Run the native Kimi Code CLI through the existing task tool.",
 		"experimental": true,
-		"extensions": ["./index.ts"],
+		"extensions": [
+			"./index.ts"
+		],
 		"config": [
-			{ "key": "executable", "type": "path", "label": "Kimi Code 可执行文件", "description": "留空时从 PATH 查找 kimi。", "default": "" },
-			{ "key": "model", "type": "string", "label": "原生模型", "description": "可选的 Kimi Code 原生模型标识。", "default": "" },
-			{ "key": "env", "type": "string", "label": "环境变量 JSON", "description": "可选的字符串键值 JSON 对象。", "default": "" },
-			{ "key": "disposeGraceMs", "type": "number", "label": "退出宽限（毫秒）", "default": 3000 }
+			{
+				"key": "executable",
+				"type": "path",
+				"label": "Kimi Code 可执行文件",
+				"description": "留空时从 PATH 查找 kimi。",
+				"default": ""
+			},
+			{
+				"key": "model",
+				"type": "string",
+				"label": "原生模型",
+				"description": "可选的 Kimi Code 原生模型标识。",
+				"default": ""
+			},
+			{
+				"key": "env",
+				"type": "string",
+				"label": "环境变量 JSON",
+				"description": "可选的字符串键值 JSON 对象。",
+				"default": ""
+			},
+			{
+				"key": "disposeGraceMs",
+				"type": "number",
+				"label": "退出宽限（毫秒）",
+				"default": 3000
+			}
 		]
 	}
 }

@@ -1,13 +1,36 @@
 {
 	"name": "musepi-desktop-shell",
-	"version": "1.0.0",
+	"version": "0.7.7",
 	"private": true,
 	"type": "module",
 	"license": "MIT",
+	"description": "Compatibility bridge between the Electron shell and the daemon's render service.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"label": "MusePi Desktop Shell",
 		"description": "Compatibility bridge between the Electron shell and the daemon's render service.",
 		"icon": "🖥️",
-		"extensions": ["./index.ts"]
+		"extensions": [
+			"./index.ts"
+		]
 	}
 }

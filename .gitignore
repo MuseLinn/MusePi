@@ -167,3 +167,6 @@ apps/mobile/android/.android-build/
 perler-showcase/
 .openbitfun/
 system-downloads/
+
+# Plugin build output (per-package tsc emit)
+packages/coding-agent/src/plugins/**/lib/

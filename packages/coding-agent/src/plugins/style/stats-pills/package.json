@@ -1,14 +1,36 @@
 {
 	"name": "musepi-stats-pills",
-	"version": "0.1.0",
+	"version": "0.7.7",
 	"private": true,
-	"description": "MusePi composer performance and usage readout as a plugin.",
-	"license": "MIT",
 	"type": "module",
+	"license": "MIT",
+	"description": "Per-turn performance and usage readout above the composer: token totals, spend and cache-hit rate.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"icon": "📊",
 		"label": "Usage and Performance Stats",
 		"description": "Per-turn performance and usage readout above the composer: token totals, spend and cache-hit rate.",
-		"extensions": ["./index.ts"]
+		"extensions": [
+			"./index.ts"
+		]
 	}
 }

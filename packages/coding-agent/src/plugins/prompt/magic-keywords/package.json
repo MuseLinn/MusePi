@@ -1,14 +1,36 @@
 {
 	"name": "musepi-magic-keywords",
-	"version": "0.1.0",
+	"version": "0.7.7",
 	"private": true,
-	"description": "MusePi first-party magic keywords: ultrathink, orchestrate, workflowz.",
-	"license": "MIT",
 	"type": "module",
+	"license": "MIT",
+	"description": "First-party magic keywords: composer trigger words that append a hidden notice to the model.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"icon": "✨",
 		"label": "Magic Keywords",
 		"description": "First-party magic keywords: composer trigger words that append a hidden notice to the model.",
-		"extensions": ["./index.ts"]
+		"extensions": [
+			"./index.ts"
+		]
 	}
 }

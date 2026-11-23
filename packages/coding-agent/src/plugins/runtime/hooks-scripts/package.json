@@ -1,15 +1,38 @@
 {
 	"name": "musepi-hooks-scripts",
-	"version": "1.0.0",
+	"version": "0.7.7",
 	"private": true,
 	"type": "module",
 	"license": "MIT",
+	"description": "Declare command hooks under <root>/pre|post as one line of a preset: pre/<tool> maps PreToolUse, post/<tool> maps PostToolUse, and the file name is the tool name (* for every tool).",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"label": "Folder Hook Scripts",
 		"description": "Declare command hooks under <root>/pre|post as one line of a preset: pre/<tool> maps PreToolUse, post/<tool> maps PostToolUse, and the file name is the tool name (* for every tool).",
 		"icon": "H",
 		"presetOnly": true,
-		"extensions": ["./index.ts"],
+		"extensions": [
+			"./index.ts"
+		],
 		"config": [
 			{
 				"key": "roots",

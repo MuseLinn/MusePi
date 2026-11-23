@@ -1,14 +1,37 @@
 {
 	"name": "musepi-idle-maintenance",
-	"version": "0.1.0",
+	"version": "0.7.7",
 	"private": true,
-	"description": "Compact context and generate a recap after the session has been idle past the configured threshold.",
-	"license": "MIT",
 	"type": "module",
+	"license": "MIT",
+	"description": "Compact context and generate a recap while the session sits idle.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*",
+		"@musepi/pi-utils": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"icon": "◷",
 		"label": "Idle Maintenance",
 		"description": "Compact context and generate a recap while the session sits idle.",
-		"extensions": ["./index.ts"]
+		"extensions": [
+			"./index.ts"
+		]
 	}
 }

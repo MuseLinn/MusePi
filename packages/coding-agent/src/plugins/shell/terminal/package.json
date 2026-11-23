@@ -1,22 +1,79 @@
 {
 	"name": "musepi-terminal",
-	"version": "1.0.0",
+	"version": "0.7.7",
 	"private": true,
 	"type": "module",
 	"license": "MIT",
+	"description": "bun-pty and node-pty backends with automatic fallback, for the TUI and the GUI terminal.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./src/*": "./src/*",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"lib",
+		"src"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
 	"musepi": {
 		"label": "Terminal",
 		"description": "bun-pty and node-pty backends with automatic fallback, for the TUI and the GUI terminal.",
 		"icon": "⌨️",
-		"extensions": ["./index.ts"],
+		"extensions": [
+			"./index.ts"
+		],
 		"components": [
-			{ "id": "bun-pty", "entry": "./bun-pty.ts", "description": "Bun PTY 终端后端。" },
-			{ "id": "node-pty", "entry": "./node-pty.ts", "description": "Node PTY 终端后端。" }
+			{
+				"id": "bun-pty",
+				"entry": "./bun-pty.ts",
+				"description": "Bun PTY 终端后端。"
+			},
+			{
+				"id": "node-pty",
+				"entry": "./node-pty.ts",
+				"description": "Node PTY 终端后端。"
+			}
 		],
 		"config": [
-			{ "key": "terminal.provider", "type": "select", "options": ["auto", "bun-pty", "node-pty"], "default": "auto", "restart": "daemon", "label": "终端后端", "description": "自动选择或固定使用一个终端后端。" },
-			{ "key": "terminal.showImages", "type": "boolean", "default": true, "restart": "none", "label": "显示图片", "description": "在支持的终端中显示图片。" },
-			{ "key": "terminal.showProgress", "type": "boolean", "default": true, "restart": "none", "label": "显示进度", "description": "在终端中显示任务进度。" }
+			{
+				"key": "terminal.provider",
+				"type": "select",
+				"options": [
+					"auto",
+					"bun-pty",
+					"node-pty"
+				],
+				"default": "auto",
+				"restart": "daemon",
+				"label": "终端后端",
+				"description": "自动选择或固定使用一个终端后端。"
+			},
+			{
+				"key": "terminal.showImages",
+				"type": "boolean",
+				"default": true,
+				"restart": "none",
+				"label": "显示图片",
+				"description": "在支持的终端中显示图片。"
+			},
+			{
+				"key": "terminal.showProgress",
+				"type": "boolean",
+				"default": true,
+				"restart": "none",
+				"label": "显示进度",
+				"description": "在终端中显示任务进度。"
+			}
 		],
 		"host": {
 			"readonly": true,
