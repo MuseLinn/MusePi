@@ -10,12 +10,6 @@
  */
 
 export { AgentsPanel } from "./components/agents/AgentsPanel";
-export { BarChart, type BarChartProps, type BarChartSerie } from "./components/charts/BarChart";
-export { Donut, type DonutProps } from "./components/charts/Donut";
-export { Gauge, type GaugeProps } from "./components/charts/Gauge";
-export { KLine, type KLineCandle, type KLineProps } from "./components/charts/KLine";
-export { LineChart, type LineChartProps, type LineChartSerie } from "./components/charts/LineChart";
-export { Sparkline, type SparklineProps } from "./components/charts/Sparkline";
 /** One search field for every list filter (docs/gui-design.md § capability
  *  controls; geometry from the `--control-*` tokens). */
 export { SearchField, type SearchFieldProps } from "./components/common/SearchField";

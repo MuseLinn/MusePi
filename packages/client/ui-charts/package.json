@@ -1,0 +1,16 @@
+{
+	"type": "module",
+	"name": "@musepi/client-ui-charts",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "Zero-dependency responsive charts: bar, line, donut, gauge, K-line and sparkline.",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client/index.ts",
+		"./src/*": "./src/*"
+	},
+	"dependencies": {
+		"react": "19.2.7"
+	}
+}

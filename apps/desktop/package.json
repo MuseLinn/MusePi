@@ -209,7 +209,8 @@
 		"@musepi/client-ui-shell": "workspace:*",
 		"@musepi/client-ui-settings": "workspace:*",
 		"@musepi/client-ui-sidebar": "workspace:*",
-		"@musepi/client-ui-status": "workspace:*"
+		"@musepi/client-ui-status": "workspace:*",
+		"@musepi/client-ui-charts": "workspace:*"
 	},
 	"optionalDependencies": {
 		"@koromix/koffi-darwin-arm64": "3.3.1",

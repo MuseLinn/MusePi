@@ -56,6 +56,7 @@
         "@lobehub/icons": "^6.16.0",
         "@milkdown/crepe": "7.21.3",
         "@milkdown/kit": "7.21.3",
+        "@musepi/client-ui-charts": "workspace:*",
         "@musepi/client-ui-conversation": "workspace:*",
         "@musepi/client-ui-settings": "workspace:*",
         "@musepi/client-ui-shell": "workspace:*",
@@ -219,6 +220,13 @@
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
         "happy-dom": "^20.12.0",
+      },
+    },
+    "packages/client/ui-charts": {
+      "name": "@musepi/client-ui-charts",
+      "version": "0.7.7",
+      "dependencies": {
+        "react": "19.2.7",
       },
     },
     "packages/client/ui-conversation": {
@@ -1180,6 +1188,8 @@
     "@milkdown/utils": ["@milkdown/utils@7.21.3", "", { "dependencies": { "@milkdown/core": "7.21.3", "@milkdown/ctx": "7.21.3", "@milkdown/exception": "7.21.3", "@milkdown/prose": "7.21.3", "@milkdown/transformer": "7.21.3", "nanoid": "^5.0.9" } }, "sha512-pJxcEy1cJKRT4CsDLJ8OlokKww2PMBdlULCtFM4ccN+7EBc//fpR8ZnnOzoSnPxtgsbijaLzSSWiXBE5BdlolQ=="],
 
     "@musepi/client-core": ["@musepi/client-core@workspace:packages/client-core"],
+
+    "@musepi/client-ui-charts": ["@musepi/client-ui-charts@workspace:packages/client/ui-charts"],
 
     "@musepi/client-ui-conversation": ["@musepi/client-ui-conversation@workspace:packages/client/ui-conversation"],
 

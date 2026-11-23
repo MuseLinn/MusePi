@@ -1,4 +1,5 @@
-import { BarChart, LineChart, t } from "@musepi/client-core";
+import { t } from "@musepi/client-core";
+import { BarChart, LineChart } from "@musepi/client-ui-charts/client";
 import { LoaderCircle as LoaderCircleIconData, RefreshCw as RefreshCwIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
