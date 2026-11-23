@@ -12,12 +12,17 @@
 			"types": "./lib/types/index.d.ts",
 			"default": "./lib/index.js"
 		},
-		"./src/*": "./src/*",
-		"./package.json": "./package.json"
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
 	},
 	"files": [
 		"lib",
-		"src"
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json",
+		"locale",
+		"skills"
 	],
 	"peerDependencies": {
 		"@musepi/pi-coding-agent": "workspace:*"

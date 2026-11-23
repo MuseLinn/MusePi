@@ -20,7 +20,8 @@
 			"D:\\Projects\\Agents\\MusePi\\node_modules\\@types"
 		],
 		"rootDir": ".",
-		"outDir": "lib/types",
+		"outDir": "lib",
+		"tsBuildInfoFile": "node_modules/.cache/tsbuildinfo",
 		"declaration": true,
 		"declarationMap": true,
 		"composite": true,
