@@ -2858,6 +2858,10 @@ export interface ExtensionRuntime
 		ExtensionDesignRegistryState,
 		ExtensionMagicKeywordRegistryState,
 		ExtensionActions {
+	/** The plugin generation these registrations belong to (dsh's agent scope).
+	 *  A session copies it onto its ToolSession so scoped tool providers shadow
+	 *  the process-global default. */
+	pluginScope?: string;
 	/** Cordis event context owning the migrated lifecycle listeners. */
 	eventBus?: ExtensionEventBusSurface;
 	/** The host EventBus this runtime's session plugins were created with. */

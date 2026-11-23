@@ -300,7 +300,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		// Every other packaged tool follows the component that owns it: unloading
 		// or denying that component removes the tool, exactly like the file
 		// families above. Unowned tools stay implicitly available.
-		if (!isToolOwnerActive(name)) return false;
+		if (!isToolOwnerActive(name, session.pluginScope)) return false;
 		// Never in the default set. Explicitly activatable while goal.enabled and
 		// no goal record exists yet — /guided-goal enables it so the agent can
 		// finish the interview with `goal create`, which turns goal mode on. Once
@@ -313,7 +313,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		}
 		if (name === "lsp")
 			return (
-				(isCapabilityActive("tool", "lsp") || pluginProvidesTool("lsp")) &&
+				(isCapabilityActive("tool", "lsp") || pluginProvidesTool("lsp", session.pluginScope)) &&
 				enableLsp &&
 				session.settings.get("lsp.enabled")
 			);
@@ -340,7 +340,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "browser") return session.settings.get("browser.enabled");
 		if (name === "computer")
 			return (
-				(isCapabilityActive("tool", "computer") || pluginProvidesTool("computer")) &&
+				(isCapabilityActive("tool", "computer") || pluginProvidesTool("computer", session.pluginScope)) &&
 				session.settings.get("computer.enabled")
 			);
 		if (name === "checkpoint" || name === "rewind")

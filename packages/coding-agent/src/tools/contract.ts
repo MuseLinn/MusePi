@@ -135,6 +135,10 @@ export interface DeferredDiagnosticsEntry {
 export interface ToolSession {
 	/** Current working directory */
 	cwd: string;
+	/** The plugin generation this session joined (dsh's agent scope for tool
+	 *  providers). Scoped registrations shadow the process-global default; a
+	 *  session built before its generation is known reads the default. */
+	pluginScope?: string;
 	/** Freeze gate for this session's agent scope (GUI daemon per-session
 	 *  pause). Forwarded to subagents so a paused session's spawned loops
 	 *  stay frozen too. Absent ⇒ the process-global gate applies. */

@@ -115,8 +115,12 @@ describe("layered tool resolution", () => {
 	});
 
 	test("a re-mount by the same entry joins the existing registration", () => {
-		const releaseFirst = runWithToolProviderOwner("/pkg/tool-bash", () => registerToolProvider("bash", () => null));
-		const releaseSecond = runWithToolProviderOwner("/pkg/tool-bash", () => registerToolProvider("bash", () => null));
+		const releaseFirst = runWithToolProviderOwner("scope-1", "/pkg/tool-bash", () =>
+			registerToolProvider("bash", () => null),
+		);
+		const releaseSecond = runWithToolProviderOwner("scope-1", "/pkg/tool-bash", () =>
+			registerToolProvider("bash", () => null),
+		);
 		expect(toolProviderFor("bash")).toBeDefined();
 		releaseSecond();
 		expect(toolProviderFor("bash")).toBeDefined();
@@ -125,19 +129,37 @@ describe("layered tool resolution", () => {
 	});
 
 	test("a different mount claiming the same name still fails", () => {
-		const release = runWithToolProviderOwner("/pkg/first", () => registerToolProvider("grep", () => null));
-		expect(() => runWithToolProviderOwner("/pkg/second", () => registerToolProvider("grep", () => null))).toThrow(
-			/already provided by the plugin layer/,
-		);
+		const release = runWithToolProviderOwner("scope-1", "/pkg/first", () => registerToolProvider("grep", () => null));
+		expect(() =>
+			runWithToolProviderOwner("scope-1", "/pkg/second", () => registerToolProvider("grep", () => null)),
+		).toThrow(/already provided by the plugin layer/);
 		release();
 	});
 
 	test("the mount owner survives awaits inside apply", async () => {
-		await runWithToolProviderOwner("/pkg/async", async () => {
+		await runWithToolProviderOwner("scope-async", "/pkg/async", async () => {
 			await Promise.resolve();
 			releases.push(registerToolProvider("web_search", () => null));
 		});
 		expect(toolProviderFor("web_search")).toBeDefined();
+	});
+
+	test("a generation shadows the global default in its own scope", () => {
+		const implA = () => null;
+		const implB = () => null;
+		const releaseA = runWithToolProviderOwner("scope-a", "/pkg/a", () => registerToolProvider("web_search", implA));
+		const releaseB = runWithToolProviderOwner("scope-b", "/pkg/a", () => registerToolProvider("web_search", implB));
+		const scopeA = { pluginScope: "scope-a" } as never;
+		const scopeB = { pluginScope: "scope-b" } as never;
+		const unscoped = {} as never;
+		expect(resolveToolImplementation(scopeA, "web_search")).toBe(implA);
+		expect(resolveToolImplementation(scopeB, "web_search")).toBe(implB);
+		// A scope that never mounted the package sees the first generation's default.
+		expect(resolveToolImplementation(unscoped, "web_search")).toBe(implA);
+		releaseB();
+		expect(resolveToolImplementation(scopeB, "web_search")).toBe(implA);
+		releaseA();
+		expect(resolveToolImplementation(scopeA, "web_search")).toBeUndefined();
 	});
 
 	test("createTools keeps the owned tool after a released activation", async () => {

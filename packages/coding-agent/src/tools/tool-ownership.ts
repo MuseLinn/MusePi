@@ -45,6 +45,8 @@ interface PluginRegistration {
 	packageName?: string;
 	/** Mounts holding this registration, keyed by the mounting entry. */
 	mounts: Map<string, number>;
+	/** For the global default: the mount whose first registration created it. */
+	defaultOwner?: string;
 }
 
 /**
@@ -52,11 +54,11 @@ interface PluginRegistration {
  * Mounts are async, so a plain module variable could attribute one plugin's
  * registration to another; AsyncLocalStorage carries the owner across awaits.
  */
-const mountOwner = new AsyncLocalStorage<string>();
+const mountOwner = new AsyncLocalStorage<{ scope: string; owner: string }>();
 
-/** Attribute tool-provider registrations made by `run` to one mounting entry. */
-export function runWithToolProviderOwner<T>(owner: string, run: () => T): T {
-	return mountOwner.run(owner, run);
+/** Attribute tool-provider registrations made by `run` to one mount and scope. */
+export function runWithToolProviderOwner<T>(scope: string, owner: string, run: () => T): T {
+	return mountOwner.run({ scope, owner }, run);
 }
 
 /**
@@ -66,19 +68,37 @@ export function runWithToolProviderOwner<T>(owner: string, run: () => T): T {
  */
 const pluginLayer = new Map<string, PluginRegistration>();
 
-/** Whether a package currently provides `name` (the plugin layer). */
-export function pluginProvidesTool(name: string): boolean {
-	return pluginLayer.has(name);
+/** Per-generation layer (dsh's agent scope): scoped registrations shadow the
+ *  process-global default. */
+const scopedLayer = new Map<string, Map<string, PluginRegistration>>();
+
+function scopedRegistrations(scope: string): Map<string, PluginRegistration> {
+	let layer = scopedLayer.get(scope);
+	if (!layer) {
+		layer = new Map();
+		scopedLayer.set(scope, layer);
+	}
+	return layer;
 }
 
-/** The package-provided implementation for `name`, when the plugin layer has it. */
-export function toolProviderFor(name: string): ToolImplementation | undefined {
-	return pluginLayer.get(name)?.implementation;
+function registrationFor(name: string, scope?: string): PluginRegistration | undefined {
+	return (scope === undefined ? undefined : scopedLayer.get(scope)?.get(name)) ?? pluginLayer.get(name);
 }
 
-/** Names the plugin layer provides. */
-export function providedToolNames(): string[] {
-	return [...pluginLayer.keys()].sort();
+/** Whether a package currently provides `name` for `scope` (or globally). */
+export function pluginProvidesTool(name: string, scope?: string): boolean {
+	return registrationFor(name, scope) !== undefined;
+}
+
+/** The package-provided implementation for `name`, scoped first. */
+export function toolProviderFor(name: string, scope?: string): ToolImplementation | undefined {
+	return registrationFor(name, scope)?.implementation;
+}
+
+/** Names the plugin layer provides, for one scope when given. */
+export function providedToolNames(scope?: string): string[] {
+	const scoped = scope === undefined ? [] : [...(scopedLayer.get(scope)?.keys() ?? [])];
+	return [...new Set([...scoped, ...pluginLayer.keys()])].sort();
 }
 
 /**
@@ -96,8 +116,10 @@ export function registerToolProvider(
 	implementation: ToolImplementation,
 	options: { owner?: ToolOwner; packageName?: string } = {},
 ): () => void {
-	const owner = mountOwner.getStore() ?? `direct:${nextDirectOwner++}`;
-	const existing = pluginLayer.get(name);
+	const context = mountOwner.getStore();
+	const owner = context?.owner ?? `direct:${nextDirectOwner++}`;
+	const target = context === undefined ? pluginLayer : scopedRegistrations(context.scope);
+	const existing = target.get(name);
 	if (existing !== undefined) {
 		const held = existing.mounts.get(owner) ?? 0;
 		if (held === 0) {
@@ -108,21 +130,39 @@ export function registerToolProvider(
 			);
 		}
 		existing.mounts.set(owner, held + 1);
-		return () => releaseToolProvider(name, owner);
+	} else {
+		target.set(name, { implementation, ...options, mounts: new Map([[owner, 1]]) });
 	}
-	pluginLayer.set(name, { implementation, ...options, mounts: new Map([[owner, 1]]) });
-	return () => releaseToolProvider(name, owner);
+	// A generation's registration also establishes the process-global default,
+	// so a session that has not joined a generation yet still resolves the tool.
+	// Later generations register into their own scope and shadow this default.
+	if (context !== undefined && !pluginLayer.has(name)) {
+		pluginLayer.set(name, {
+			implementation,
+			...options,
+			mounts: new Map(),
+			defaultOwner: `${context.scope}\u0000${owner}`,
+		});
+	}
+	return () => releaseToolProvider(name, context?.scope, owner);
 }
 
 let nextDirectOwner = 0;
 
-function releaseToolProvider(name: string, owner: string): void {
-	const entry = pluginLayer.get(name);
+function releaseToolProvider(name: string, scope: string | undefined, owner: string): void {
+	const map = scope === undefined ? pluginLayer : scopedLayer.get(scope);
+	if (map === undefined) return;
+	const entry = map.get(name);
 	if (entry === undefined) return;
 	const held = entry.mounts.get(owner) ?? 0;
 	if (held <= 1) entry.mounts.delete(owner);
 	else entry.mounts.set(owner, held - 1);
-	if (entry.mounts.size === 0) pluginLayer.delete(name);
+	const removed = entry.mounts.size === 0;
+	if (removed) map.delete(name);
+	if (scope !== undefined && removed) {
+		if (map.size === 0) scopedLayer.delete(scope);
+		if (pluginLayer.get(name)?.defaultOwner === `${scope}\u0000${owner}`) pluginLayer.delete(name);
+	}
 }
 
 /**
@@ -154,14 +194,12 @@ export function toolIsRegistered(session: ToolSession, name: string): boolean {
 	return session.extensionRunner?.getAllRegisteredTools().some(tool => tool.definition.name === name) ?? false;
 }
 
-/**
- * The nearest layer providing `name`, or undefined when only the core table has
- * it. Track A plugin registrations and Track B extension registrations are both
- * the session layer; the process-wide package layer sits below them.
- */
+/** The nearest layer providing `name`, or undefined when only the core table has
+ *  it. Track A plugin registrations and Track B extension registrations are both
+ *  the session layer; the scoped or global package layer sits below them. */
 export function toolLayerOf(session: ToolSession, name: string): "plugin" | "session" | undefined {
 	if (toolIsRegistered(session, name)) return "session";
-	if (pluginProvidesTool(name)) return "plugin";
+	if (pluginProvidesTool(name, session.pluginScope)) return "plugin";
 	return undefined;
 }
 
@@ -172,7 +210,7 @@ export function toolLayerOf(session: ToolSession, name: string): "plugin" | "ses
  * the core factory table, which is the global layer.
  */
 export function resolveToolImplementation(session: ToolSession, name: string): ToolImplementation | undefined {
-	return toolLayerOf(session, name) === "plugin" ? toolProviderFor(name) : undefined;
+	return toolLayerOf(session, name) === "plugin" ? toolProviderFor(name, session.pluginScope) : undefined;
 }
 
 /**
@@ -202,9 +240,8 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	todo: { domain: "tool", id: "todo" },
 	notify_user: { domain: "tool", id: "notify" },
 	knowledge: { domain: "tool", id: "knowledge" },
-	present: { domain: "tool", id: "present" },
-	office_read: { domain: "tool", id: "office" },
-	workflow: { domain: "tool", id: "workflow" },
+	office_render: { domain: "tool", id: "office" },
+	office_convert: { domain: "tool", id: "office" },
 	// Skill authoring and image inspection.
 	manage_skill: { domain: "tool", id: "manage_skill" },
 	inspect_image: { domain: "tool", id: "inspect_image" },
@@ -239,28 +276,28 @@ export function registerToolOwner(name: string, owner: ToolOwner): () => void {
 }
 
 /** The effective owner of a tool: the plugin layer's declaration, then the table. */
-export function toolOwnerOf(name: string): ToolOwner | undefined {
-	return ownerOverrides.get(name) ?? pluginLayer.get(name)?.owner ?? TOOL_OWNERS[name];
+export function toolOwnerOf(name: string, scope?: string): ToolOwner | undefined {
+	return ownerOverrides.get(name) ?? registrationFor(name, scope)?.owner ?? TOOL_OWNERS[name];
 }
 
 /**
  * Whether a tool may enter the slate given its owner's activation state.
  *
  * An unowned tool is allowed. An owned tool follows its component: active →
- * allowed, explicitly unloaded → not allowed.
+ * allowed, explicitly unloaded → not allowed. Availability also follows a
+ * still-registered implementation in this scope (dsh: a scope's view of
+ * registered tools), so a transient activation rollback cannot hide a tool.
  */
-export function isToolOwnerActive(name: string): boolean {
-	const owner = toolOwnerOf(name);
+export function isToolOwnerActive(name: string, scope?: string): boolean {
+	const owner = toolOwnerOf(name, scope);
 	if (owner === undefined || isCapabilityActive(owner.domain, owner.id)) return true;
-	// A preload or re-mount can dispose the activation while the package still
-	// provides the implementation process-wide. Availability follows the
-	// registered implementation (dsh: a scope's view of registered tools); the
-	// explicit denylists (`tools.disabled`, `disabledExtensionComponents`) stay
-	// authoritative.
-	return pluginProvidesTool(name);
+	return pluginProvidesTool(name, scope);
 }
 
 /** Every tool name that currently has an owner (declared, claimed, or provided). */
 export function ownedToolNames(): string[] {
-	return [...new Set([...Object.keys(TOOL_OWNERS), ...ownerOverrides.keys(), ...pluginLayer.keys()])].sort();
+	const scoped = [...scopedLayer.values()].flatMap(layer => [...layer.keys()]);
+	return [
+		...new Set([...Object.keys(TOOL_OWNERS), ...ownerOverrides.keys(), ...pluginLayer.keys(), ...scoped]),
+	].sort();
 }

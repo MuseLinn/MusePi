@@ -115,6 +115,8 @@ export class PluginRuntimeNotInitializedError extends Error {
  * These are replaced with real implementations during initialization.
  */
 export class PluginRuntime implements IExtensionRuntime {
+	/** The generation this runtime's tool-provider registrations belong to. */
+	pluginScope?: string;
 	flagValues = new Map<string, boolean | string>();
 	/** Cordis event context for lifecycle events already migrated off the
 	 *  hand-written loops (`session_start`, `session_shutdown`). */

@@ -97,6 +97,13 @@ interface CachedSessionLoad {
 
 const sessionLoadCache = new Map<string, Promise<CachedSessionLoad>>();
 
+let nextPluginScope = 0;
+
+/** One identity per mounted plugin generation (dsh: the agent scope). */
+function mintPluginScope(): string {
+	return `plugin-scope-${++nextPluginScope}`;
+}
+
 /** Extensions owned by a cached generation. A per-session reload must not
  *  dispose one another live session is still using. */
 const sharedExtensions = new WeakSet<Extension>();
@@ -218,6 +225,8 @@ export async function loadSessionPlugins(
 	// it; a caller-injected runtime (preload path) replaces the fresh one so
 	// its pending queues and ledgers stay the session's single source.
 	const runtime = options.runtime ?? new PluginRuntime();
+	runtime.pluginScope ??= mintPluginScope();
+	const scope = runtime.pluginScope;
 	runtime.promptHost = options.promptHost;
 	runtime.sessionEventBus = eventBus;
 	const extensions: Extension[] = [];
@@ -239,6 +248,7 @@ export async function loadSessionPlugins(
 			runtime: runtime as unknown as MountContext["runtime"],
 			readConfig,
 			fresh: options.fresh === true,
+			scope,
 		});
 		if (!mounted.ok) {
 			errors.push({ path: entryPath, error: `${mounted.code}: ${mounted.message}` });
@@ -292,6 +302,7 @@ export async function reloadSessionPlugin(options: {
 	settings?: Settings;
 }): Promise<{ extension: Extension | null; errors: string[] }> {
 	const readConfig = await defaultSessionConfigReader(options.settings);
+	const scope = options.runtime.pluginScope ?? (options.runtime.pluginScope = mintPluginScope());
 	const mounted = await mountPlugin({
 		entryPath: options.entryPath,
 		cwd: options.cwd,
@@ -299,6 +310,7 @@ export async function reloadSessionPlugin(options: {
 		runtime: options.runtime as unknown as MountContext["runtime"],
 		readConfig,
 		fresh: true,
+		scope,
 	});
 	return mounted.ok
 		? { extension: mounted.extension, errors: [] }

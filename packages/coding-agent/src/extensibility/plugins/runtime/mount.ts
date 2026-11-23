@@ -143,6 +143,9 @@ export interface MountContext {
 	/** Tag this instance as part of one preset generation, so instance-level
 	 *  listeners are filtered to sessions that joined that preset. */
 	scopeTag?: object;
+	/** The plugin generation receiving this mount's tool-provider registrations
+	 *  (dsh's agent scope). Omitted mounts register into the global layer. */
+	scope?: string;
 }
 
 /**
@@ -378,7 +381,7 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		// the names in its `provide`, handed to consumers through
 		// `pi.service(name)`. A legacy factory's return is ignored — it predates
 		// the contract and returning something there is not a publish.
-		const returned = await runWithToolProviderOwner(extension.resolvedPath, () =>
+		const runFactory = () =>
 			runPluginInFiber(
 				extension,
 				ctx.runtime,
@@ -401,8 +404,13 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 				},
 				values,
 				ctx.scopeTag,
-			),
-		);
+			);
+		// Tool-provider registrations belong to the generation that mounted this
+		// entry, so a later generation shadows them instead of colliding.
+		const returned =
+			ctx.scope === undefined
+				? await runFactory()
+				: await runWithToolProviderOwner(ctx.scope, extension.resolvedPath, runFactory);
 		// Only a plain object is a publish. A string/number/array returned by a
 		// cordis entry is not one, and treating it as such would hand a consumer
 		// nonsense under a name it trusts.

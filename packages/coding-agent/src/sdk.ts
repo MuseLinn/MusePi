@@ -2597,6 +2597,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 		}
 		sessionExtensionRuntime = extensionsResult.runtime;
+		// The session's plugin generation is the scope its tool providers resolve
+		// through (dsh's agent scope). Set after the load, before any rebuild.
+		toolSession.pluginScope = extensionsResult.runtime.pluginScope;
 		// Forward the source-path list (NOT the loaded instances) so subagents
 		// rebuild their own session-scoped extensions.
 		toolSession.extensionPaths = extensionPaths;
