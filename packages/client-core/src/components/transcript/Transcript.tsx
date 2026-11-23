@@ -35,6 +35,7 @@ import { fmtDuration, fmtTokens } from "../../lib/format";
 import { ircPresentation } from "../../lib/irc";
 import { morphSurfaceBack, morphSurfaceFrom, sharedSurfaceTransitionAllowed } from "../../lib/view-transition";
 import type { ToolRenderHost } from "../../tool-render";
+import type { PresentedFile } from "../../tool-render/presented.js";
 import { ImageLightbox } from "../image-lightbox";
 import { AsyncJobResultCard } from "./async-job-result";
 import { BashCard } from "./bash-card";
@@ -94,8 +95,7 @@ import {
 import { TRANSCRIPT_PREFS_CHANGED_EVENT } from "./transcript-prefs.js";
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 import { collectTurnFiles, type TurnFileChange } from "./turn-files.js";
-import { collectTurnPresented } from "./turn-presented.js";
-import type { PresentedFile } from "../../tool-render/presented.js";
+import { collectTurnPresented, mergePresentedFiles, presentedEntryFiles } from "./turn-presented.js";
 import { collectTurnSources, type TurnSources } from "./turn-sources.js";
 
 export {
@@ -1594,6 +1594,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const resultOf = (id: string) => results.get(id);
 		let turn: AssistantMessage[] = [];
 		let finalId: string | null = null;
+		let delivered: PresentedFile[] = [];
 		const flush = (): void => {
 			if (finalId !== null && turn.length > 0) {
 				const blocks = turn.flatMap(m => m.content);
@@ -1606,13 +1607,22 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				if (changed.length > 0) files.set(finalId, changed);
 				const browsed = collectTurnSources(blocks, resultOf);
 				if (browsed.pages.length > 0) sources.set(finalId, browsed);
-				const delivered = collectTurnPresented(blocks, resultOf);
-				if (delivered.length > 0) presented.set(finalId, delivered);
+				// A durable declaration is authoritative; transcripts from before it
+				// existed still aggregate the successful `present` tool results.
+				const declared =
+					delivered.length > 0 ? mergePresentedFiles(delivered) : collectTurnPresented(blocks, resultOf);
+				if (declared.length > 0) presented.set(finalId, declared);
 			}
 			turn = [];
 			finalId = null;
+			delivered = [];
 		};
 		for (const entry of entries) {
+			if (entry.type === "custom") {
+				const files = presentedEntryFiles(entry);
+				if (files.length > 0) delivered.push(...files);
+				continue;
+			}
 			if (entry.type !== "message") continue;
 			const m = entry.message;
 			if (m.role === "user") {

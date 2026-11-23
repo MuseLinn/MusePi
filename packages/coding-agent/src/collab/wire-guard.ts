@@ -42,6 +42,7 @@ export const WIRE_AGENT_EVENT_TYPES: Record<WireAgentEvent["type"], true> = {
 export const WIRE_SESSION_ENTRY_TYPES: Record<WireSessionEntry["type"], true> = {
 	message: true,
 	custom_message: true,
+	custom: true,
 	compaction: true,
 	branch_summary: true,
 	model_change: true,

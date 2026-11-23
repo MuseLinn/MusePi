@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { collectTurnPresented } from "./turn-presented.js";
+import { PRESENTED_DELIVERABLES_TYPE } from "../../tool-render/presented.js";
+import { collectTurnPresented, mergePresentedFiles, presentedEntryFiles } from "./turn-presented.js";
 
 describe("collectTurnPresented", () => {
 	it("collects successful present results and keeps the last duplicate description", () => {
@@ -26,5 +27,31 @@ describe("collectTurnPresented", () => {
 		];
 		const results = new Map([["a", { isError: true, details: { files: [{ path: "/w/a.md" }] } }]]);
 		expect(collectTurnPresented(blocks, id => results.get(id))).toEqual([]);
+	});
+});
+
+describe("presentedEntryFiles", () => {
+	it("reads a durable declaration and ignores other custom entries", () => {
+		const entry = {
+			type: "custom",
+			customType: PRESENTED_DELIVERABLES_TYPE,
+			data: { files: [{ path: "/w/a.md", description: "Delivered" }] },
+		};
+		expect(presentedEntryFiles(entry)).toEqual([{ path: "/w/a.md", description: "Delivered" }]);
+		expect(presentedEntryFiles({ type: "custom", customType: "recap", data: { files: [] } })).toEqual([]);
+		expect(presentedEntryFiles({ type: "message" })).toEqual([]);
+	});
+
+	it("merges declarations across entries, keeping the last description", () => {
+		expect(
+			mergePresentedFiles([
+				{ path: "/w/a.md", description: "First" },
+				{ path: "/w/b.md" },
+				{ path: "/w/a.md", description: "Updated" },
+			]),
+		).toEqual([
+			{ path: "/w/a.md", description: "Updated" },
+			{ path: "/w/b.md" },
+		]);
 	});
 });

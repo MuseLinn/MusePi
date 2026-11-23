@@ -277,6 +277,17 @@ export interface CustomMessageEntry extends EntryBase {
 	display: boolean;
 }
 
+/**
+ * Payload-only journal entry. It never reaches the model context and no
+ * transcript row renders it; readers that need the payload (e.g. the turn-tail
+ * `deliverables/presented` declaration) scan it by `customType`.
+ */
+export interface CustomEntry extends EntryBase {
+	type: "custom";
+	customType: string;
+	data?: unknown;
+}
+
 export interface CompactionEntry extends EntryBase {
 	type: "compaction";
 	summary: string;
@@ -312,6 +323,7 @@ export interface ThinkingLevelChangeEntry extends EntryBase {
 export type SessionEntry =
 	| MessageEntry
 	| CustomMessageEntry
+	| CustomEntry
 	| CompactionEntry
 	| BranchSummaryEntry
 	| ModelChangeEntry

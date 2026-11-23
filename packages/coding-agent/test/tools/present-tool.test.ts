@@ -2,8 +2,9 @@ import { afterAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
-import { PresentTool } from "@musepi/pi-coding-agent/tools/present";
+import { PRESENTED_DELIVERABLES_TYPE, PresentTool } from "@musepi/pi-coding-agent/tools/present";
 
 const dirs: string[] = [];
 afterAll(async () => {
@@ -41,5 +42,24 @@ describe("present", () => {
 		await Bun.write(path.join(dir, "a.md"), "a");
 		const tool = new PresentTool(session(dir), 1);
 		await expect(tool.execute("call", { files: [{ path: "a.md" }, { path: "a.md" }] })).rejects.toThrow("1-1 files");
+	});
+
+	it("journals the declaration as a durable session entry", async () => {
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "present-tool-"));
+		dirs.push(dir);
+		await Bun.write(path.join(dir, "report.md"), "done");
+		const manager = SessionManager.inMemory(dir);
+		const tool = new PresentTool({ cwd: dir, hasUI: false, sessionManager: manager } as unknown as ToolSession, 4);
+		const result = await tool.execute("call", {
+			files: [{ path: "report.md", description: "Final report" }],
+		});
+		expect(result.details?.entryId).toBeDefined();
+		const entry = manager
+			.getBranch()
+			.find(candidate => candidate.type === "custom" && candidate.customType === PRESENTED_DELIVERABLES_TYPE);
+		expect(entry?.type).toBe("custom");
+		expect(entry && entry.type === "custom" ? entry.data : undefined).toEqual({
+			files: [{ path: path.join(dir, "report.md"), description: "Final report" }],
+		});
 	});
 });

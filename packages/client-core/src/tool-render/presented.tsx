@@ -9,6 +9,15 @@ export interface PresentedFile {
 	description?: string;
 }
 
+/** Custom-entry type of the durable declaration written by the `present` tool. */
+export const PRESENTED_DELIVERABLES_TYPE = "deliverables/presented";
+
+/** Files recorded in one `deliverables/presented` custom entry. */
+export function presentedFilesFromEntry(data: unknown): PresentedFile[] {
+	if (!isRecord(data) || !Array.isArray(data.files)) return [];
+	return parsePresentedFiles(data.files);
+}
+
 const COLLAPSED_FILES = 4;
 
 function basename(path: string): string {

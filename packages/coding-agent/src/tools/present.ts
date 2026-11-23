@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
+import presentDescription from "../prompts/tools/present.md" with { type: "text" };
 import type { ToolSession } from "./contract";
 
 const presentFileSchema = type({
@@ -26,23 +27,29 @@ export interface PresentedFile {
 
 export interface PresentToolDetails {
 	files: PresentedFile[];
+	/** Durable session entry recording the declaration, when one was written. */
+	entryId?: string;
 }
 
+/** Custom-entry type of the durable presented-files declaration. */
+export const PRESENTED_DELIVERABLES_TYPE = "deliverables/presented";
+
 /**
- * Declare existing files as final deliverables (dsh's `present`).
+ * Declare existing files as final deliverables.
  *
  * The tool records paths instead of copying contents; the host shows them only
  * after the turn ends. Every path is checked as a regular file before it is
  * recorded, so a missing or directory path fails the call instead of handing
- * the user a dead link.
+ * the user a dead link. A successful call also journals the declaration as a
+ * `deliverables/presented` custom entry, so a resumed or replayed transcript
+ * still shows the turn's deliveries.
  */
 export class PresentTool implements AgentTool<typeof presentSchema, PresentToolDetails> {
 	readonly name = "present";
 	readonly approval = "read" as const;
 	readonly label = "Present";
 	readonly summary = "Declare existing files as final deliverables";
-	readonly description =
-		"Declare existing files as final deliverables for the user. Hosts may show presented files only after your turn ends, so call it once the files are final. Files must exist as regular files; relative paths resolve against the session working directory. The contents are not copied.";
+	readonly description = presentDescription.trim();
 	readonly parameters = presentSchema;
 	readonly loadMode = "essential";
 
@@ -77,9 +84,20 @@ export class PresentTool implements AgentTool<typeof presentSchema, PresentToolD
 					: {}),
 			});
 		}
+		const entryId = await this.#journal(presented);
 		return {
 			content: [{ type: "text", text: presented.map(file => `Presented ${file.path}`).join("\n") }],
-			details: { files: presented },
+			details: { files: presented, ...(entryId === undefined ? {} : { entryId }) },
 		};
+	}
+
+	/** Journal the declaration; a session without a manager still presents files. */
+	async #journal(files: PresentedFile[]): Promise<string | undefined> {
+		const manager = this.session.sessionManager;
+		if (!manager) return undefined;
+		await manager.ensureOnDisk();
+		const entryId = manager.appendCustomEntry(PRESENTED_DELIVERABLES_TYPE, { files });
+		await manager.flush();
+		return entryId;
 	}
 }
