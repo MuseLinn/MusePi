@@ -44,7 +44,15 @@ import { computeDefaultSessionDir } from "../src/session/session-paths";
 import { FileSessionStorage } from "../src/session/session-storage";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
 
-const DESIGN_GUIDANCE_ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");
+const DESIGN_GUIDANCE_ENTRY = path.join(
+	import.meta.dir,
+	"..",
+	"src",
+	"plugins",
+	"prompt",
+	"design-guidance",
+	"index.ts",
+);
 const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEM_BRIEFS.glass;
 const GLASS_BRIEF_HEAD = GLASS_BRIEF.slice(0, 40);
 const MINIMAL_BRIEF_HEAD = BUILTIN_DESIGN_SYSTEM_BRIEFS.minimal.slice(0, 40);

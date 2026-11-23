@@ -43,7 +43,7 @@ describe("extension React host bindings", () => {
 	}, 60_000);
 
 	it("compiles and executes the Android tool view on host React", async () => {
-		const entry = path.resolve("../../packages/coding-agent/src/bundled-plugins/android-emulator/index.ts");
+		const entry = path.resolve("../../packages/coding-agent/src/plugins/capabilities/android-emulator/index.ts");
 		const previous = window.MusePiReact;
 		window.MusePiReact = hostReactBindings;
 		try {

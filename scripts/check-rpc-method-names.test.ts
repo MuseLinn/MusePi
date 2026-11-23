@@ -154,7 +154,7 @@ rpc.request(method, {});
 	test("scans the bundled plugin panels", () => {
 		const root = fixture(`rpc.request("session.setModel", {});`);
 		writeFile(
-			path.join(root, "packages/coding-agent/src/bundled-plugins/demo/ui/panel.tsx"),
+			path.join(root, "packages/coding-agent/src/plugins/demo/ui/panel.tsx"),
 			`host.request("settings.sessionSetmodel", {});`,
 		);
 		expect(unroutedMethods(root).map(entry => entry.method)).toEqual(["settings.sessionSetmodel"]);

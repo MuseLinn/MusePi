@@ -11,7 +11,7 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const PLUGINS_DIR = path.join(import.meta.dir, "..", "src", "bundled-plugins");
+const PLUGINS_DIR = path.join(import.meta.dir, "..", "src", "plugins");
 const FLAT_REGISTRATION = /\bpi\.register[A-Z]\w*\s*\(/;
 
 function pluginDirs(): string[] {

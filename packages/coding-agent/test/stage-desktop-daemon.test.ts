@@ -31,7 +31,7 @@ async function fixture(): Promise<{ repoRoot: string; outputDir: string; binaryP
 		"node native asset",
 	);
 	for (const [root, name] of [
-		["packages/coding-agent/src/bundled-plugins", "daemon-plugin"],
+		["packages/coding-agent/src/plugins", "daemon-plugin"],
 		["apps/desktop/src/plugins", "desktop-plugin"],
 	] as const) {
 		const pluginDir = path.join(repoRoot, root, name);
@@ -111,9 +111,9 @@ describe("desktop daemon staging", () => {
 				path.join(options.outputDir, "node_modules", "node-pty", "prebuilds", "win32-x64", "pty.node"),
 			).text(),
 		).toBe("node native asset");
-		expect(await Bun.file(path.join(options.outputDir, "bundled-plugins", "terminal", "pty-bridge.cjs")).text()).toBe(
-			"// staged PTY bridge\n",
-		);
+		expect(
+			await Bun.file(path.join(options.outputDir, "plugins", "shell", "terminal", "pty-bridge.cjs")).text(),
+		).toBe("// staged PTY bridge\n");
 		for (const [root, name] of [
 			["bundled-plugins", "daemon-plugin"],
 			["desktop-plugins", "desktop-plugin"],
@@ -190,7 +190,8 @@ describe("desktop daemon staging", () => {
 			"packages",
 			"coding-agent",
 			"src",
-			"bundled-plugins",
+			"plugins",
+			"prompt",
 			"product-skills",
 		);
 		await Bun.write(
@@ -208,7 +209,8 @@ describe("desktop daemon staging", () => {
 
 		const staged = path.join(
 			options.outputDir,
-			"bundled-plugins",
+			"plugins",
+			"prompt",
 			"product-skills",
 			"skills",
 			"ui-ux-pro-max",

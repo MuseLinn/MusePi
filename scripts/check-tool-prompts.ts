@@ -57,7 +57,7 @@ const SHARED_PROMPT: Readonly<Record<string, string>> = {
 
 /**
  * Plugin-shipped tools. Their descriptions come from the registering package
- * (`bundled-plugins/visuals`, `bundled-plugins/board`), which imports the
+ * (`plugins/media/visuals`, `plugins/media/board`), which imports the
  * package's own `prompts/tools/*.md`; they are not core tool classes.
  */
 const PLUGIN_TOOLS: ReadonlySet<string> = new Set(["widget", "board"]);

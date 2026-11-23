@@ -19,7 +19,7 @@ test("resolves both staged plugin trees from the installed daemon directory", as
 	try {
 		electronProcess.resourcesPath = resources;
 		const daemonRoot = path.join(resources, "app.asar.unpacked", "vendor", "daemon");
-		const expected = [path.join(daemonRoot, "bundled-plugins"), path.join(daemonRoot, "desktop-plugins")];
+		const expected = [path.join(daemonRoot, "plugins"), path.join(daemonRoot, "desktop-plugins")];
 		await Promise.all(expected.map(root => fs.mkdir(root, { recursive: true })));
 
 		expect(packagedPluginRoots()).toEqual(expected);

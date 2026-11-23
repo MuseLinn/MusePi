@@ -17,7 +17,7 @@ const entries = [
 	"subagent-codebuddy",
 	"subagent-kimi-code",
 	"subagent-opencode",
-].map(directory => path.join(import.meta.dir, "../src/bundled-plugins", directory, "index.ts"));
+].map(directory => path.join(import.meta.dir, "../src/plugins", directory, "index.ts"));
 
 async function taskDescription(load: LoadExtensionsResult): Promise<string> {
 	const runner = new ExtensionRunner(

@@ -25,7 +25,7 @@ const OUTPUT = "packages/collab-proto/src/slot-catalog.generated.ts";
 
 /** Where first-party plugins live; a `slots.register` here is a shipped occupant. */
 const PLUGIN_GLOBS = [
-	"packages/coding-agent/src/bundled-plugins/*/index.ts",
+	"packages/coding-agent/src/plugins/*/*/index.ts",
 	"apps/desktop/src/plugins/*/index.ts",
 	"packages/client-core/src/plugins/*/index.ts",
 ] as const;

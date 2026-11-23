@@ -26,7 +26,7 @@ import { type DeclaredSlot, type ManifestDeclaration, mergeDeclarations, parseDe
 const pkgDir = path.resolve(import.meta.dir, "..");
 const repoRoot = path.resolve(pkgDir, "..", "..");
 const pluginsDir = path.join(pkgDir, "src", "plugins");
-const bundledDir = path.join(repoRoot, "packages", "coding-agent", "src", "bundled-plugins");
+const bundledDir = path.join(repoRoot, "packages", "coding-agent", "src", "plugins");
 const outDir = path.join(pkgDir, "dist", "plugins");
 
 /** Every compiled component entry this app can serve.
@@ -53,8 +53,19 @@ async function entrypoints(): Promise<string[]> {
 	for (const dir of await readdir(pluginsDir, { withFileTypes: true })) {
 		if (dir.isDirectory()) await addDeclared(path.join(pluginsDir, dir.name));
 	}
+	// The host's plugin tree groups packages by domain
+	// (`plugins/<domain>/<package>`), so a package is any directory holding a
+	// `package.json`; a domain is a directory that holds those.
 	for (const dir of await readdir(bundledDir, { withFileTypes: true })) {
-		if (dir.isDirectory()) await addDeclared(path.join(bundledDir, dir.name));
+		if (!dir.isDirectory()) continue;
+		const candidate = path.join(bundledDir, dir.name);
+		if (await Bun.file(path.join(candidate, "package.json")).exists()) {
+			await addDeclared(candidate);
+			continue;
+		}
+		for (const nested of await readdir(candidate, { withFileTypes: true })) {
+			if (nested.isDirectory()) await addDeclared(path.join(candidate, nested.name));
+		}
 	}
 	return [...found].sort();
 }

@@ -72,7 +72,7 @@ function guiVersion() {
 function packagedPluginRoots() {
 	if (!process.resourcesPath) return [];
 	const daemonRoot = path.join(process.resourcesPath, "app.asar.unpacked", "vendor", "daemon");
-	return [path.join(daemonRoot, "bundled-plugins"), path.join(daemonRoot, "desktop-plugins")].filter(root =>
+	return [path.join(daemonRoot, "plugins"), path.join(daemonRoot, "desktop-plugins")].filter(root =>
 		fs.existsSync(root),
 	);
 }

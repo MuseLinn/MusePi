@@ -19,7 +19,7 @@
  * Callers are every GUI surface that speaks the host contract:
  * - `RpcClient.request` in `apps/desktop/src` and `packages/client-core/src`;
  * - `SessionClient.rpc` over the collab relay;
- * - the bundled plugin panels under `packages/coding-agent/src/bundled-plugins`,
+ * - the bundled plugin panels under `packages/coding-agent/src/plugins`,
  *   which draw their panels through the same daemon methods.
  * Only values that can become the method argument are read — a literal and the
  * arms of a selector, or a local `const method = …` the call passes through.
@@ -40,11 +40,7 @@ const ROUTE_SOURCES = [
 	["packages/coding-agent/src/collab/host.ts", "#rpcDispatch(method: string", "switch (method)"],
 ] as const;
 /** GUI surfaces that speak a host RPC contract. */
-export const CLIENT_ROOTS = [
-	"apps/desktop/src",
-	"packages/client-core/src",
-	"packages/coding-agent/src/bundled-plugins",
-];
+export const CLIENT_ROOTS = ["apps/desktop/src", "packages/client-core/src", "packages/coding-agent/src/plugins"];
 /** Route-name arrays a client relies on without sending them inline. */
 export const ROUTE_LISTS = [
 	{ file: "apps/desktop/src/lib/daemon-version.ts", exported: "REQUIRED_DAEMON_METHODS" },

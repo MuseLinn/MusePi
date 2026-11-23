@@ -3,8 +3,8 @@ import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import * as React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { fmtTokens } from "../../../packages/client-core/src/lib/format";
-import { apply } from "../../../packages/coding-agent/src/bundled-plugins/compaction-summary/index";
-import { CompactionSummaryPanel } from "../../../packages/coding-agent/src/bundled-plugins/compaction-summary/ui/summary-panel";
+import { apply } from "../../../packages/coding-agent/src/plugins/workspace/compaction-summary/index";
+import { CompactionSummaryPanel } from "../../../packages/coding-agent/src/plugins/workspace/compaction-summary/ui/summary-panel";
 
 const { act, createElement } = React;
 const previousReact = (globalThis as { React?: unknown }).React;

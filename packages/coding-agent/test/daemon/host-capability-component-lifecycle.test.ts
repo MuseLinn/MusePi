@@ -16,7 +16,7 @@ describe("bundled host capability component lifecycle", () => {
 		const session = { settings: Settings.isolated(), cwd: process.cwd() } as Parameters<typeof resolveBrowserKind>[1];
 		try {
 			for (const name of PACKAGES) {
-				await runtime.load(path.resolve(import.meta.dir, "../../src/bundled-plugins", name), process.cwd());
+				await runtime.load(path.resolve(import.meta.dir, "../../src/plugins", name), process.cwd());
 			}
 			await runtime.setComponentEnabled("file-tools", "write", false);
 			expect(isFileBackendToolAllowed("edit")).toBe(false);

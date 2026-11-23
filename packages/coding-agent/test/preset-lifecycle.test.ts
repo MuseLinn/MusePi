@@ -17,7 +17,7 @@ import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 
-const PACKAGE_ROOT = path.resolve(import.meta.dir, "../src/bundled-plugins");
+const PACKAGE_ROOT = path.resolve(import.meta.dir, "../src/plugins");
 const CHAT_PERSONA_HEAD = "你是一名简洁的对话助手。";
 const DESIGN_ROLE_HEAD = "你是一名资深 UI/UX 设计师。";
 

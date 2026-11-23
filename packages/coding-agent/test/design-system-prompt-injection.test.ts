@@ -23,7 +23,15 @@ import { TempDir } from "@musepi/pi-utils";
 import { BUILTIN_DESIGN_SYSTEM_BRIEFS } from "../src/design/briefs";
 
 const MODE_MARKER = "MODE-SECTION-MARKER-7f3a9c";
-const DESIGN_GUIDANCE_ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");
+const DESIGN_GUIDANCE_ENTRY = path.join(
+	import.meta.dir,
+	"..",
+	"src",
+	"plugins",
+	"prompt",
+	"design-guidance",
+	"index.ts",
+);
 const GLASS_BRIEF = BUILTIN_DESIGN_SYSTEM_BRIEFS.glass;
 const GLASS_BRIEF_HEAD = GLASS_BRIEF.slice(0, 40);
 

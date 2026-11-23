@@ -2,7 +2,7 @@ import "./happy-dom-shim";
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import * as React from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { AndroidEmulatorPanel } from "../../../packages/coding-agent/src/bundled-plugins/android-emulator/ui/emulator-panel";
+import { AndroidEmulatorPanel } from "../../../packages/coding-agent/src/plugins/capabilities/android-emulator/ui/emulator-panel";
 
 const { act, createElement } = React;
 const previousReact = (globalThis as { React?: unknown }).React;

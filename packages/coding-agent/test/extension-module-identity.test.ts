@@ -124,7 +124,7 @@ export default function (pi: any): void {
 		const dir = await mkdtemp(path.join(tmpdir(), "bundled-like-"));
 		// A path that RESEMBLES the bundled tree, to prove the check is gone
 		// rather than merely unused for real bundled entries.
-		const nested = path.join(dir, "src", "bundled-plugins", "demo");
+		const nested = path.join(dir, "src", "plugins", "demo");
 		await mkdirp(nested);
 		const entry = path.join(nested, "index.ts");
 		await writeFile(

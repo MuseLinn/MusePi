@@ -16,7 +16,7 @@ import { readExtensionPluginLabel } from "../src/extensibility/extensions/plugin
  * a second declaration free to drift (41 of 52 had drifted, 5 had none at all and
  * listed as bare directory names).
  */
-const PACKAGES = path.join(import.meta.dir, "..", "src", "bundled-plugins");
+const PACKAGES = path.join(import.meta.dir, "..", "src", "plugins");
 const temporaryDirs: string[] = [];
 
 afterEach(async () => {

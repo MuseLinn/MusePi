@@ -12,11 +12,26 @@ import { readExtensionPluginMeta } from "../src/extensibility/extensions/plugin-
  * showing bare module ids. This guard makes the inventory a contract: a package
  * that ships with the product declares a label and a zh-CN title.
  */
-const BUNDLED = path.join(import.meta.dir, "..", "src", "bundled-plugins");
+const BUNDLED = path.join(import.meta.dir, "..", "src", "plugins");
 
 async function pluginDirs(): Promise<string[]> {
-	const entries = await fs.readdir(BUNDLED, { withFileTypes: true });
-	return entries.filter(entry => entry.isDirectory()).map(entry => path.join(BUNDLED, entry.name));
+	// Packages are grouped by domain (`plugins/<domain>/<package>`), so a package
+	// is any directory holding a `package.json`; a domain holds them.
+	const out: string[] = [];
+	for (const entry of await fs.readdir(BUNDLED, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		const candidate = path.join(BUNDLED, entry.name);
+		if (await Bun.file(path.join(candidate, "package.json")).exists()) {
+			out.push(candidate);
+			continue;
+		}
+		for (const nested of await fs.readdir(candidate, { withFileTypes: true })) {
+			if (!nested.isDirectory()) continue;
+			const pkgDir = path.join(candidate, nested.name);
+			if (await Bun.file(path.join(pkgDir, "package.json")).exists()) out.push(pkgDir);
+		}
+	}
+	return out;
 }
 
 describe("bundled plugin display text", () => {

@@ -18,7 +18,7 @@ import { ExtensionRuntime } from "../src/extensibility/extensions/loader";
 import { mountPlugin } from "../src/extensibility/plugins/runtime/mount";
 import { EventBus } from "../src/utils/event-bus";
 
-const ENTRY = path.join(import.meta.dir, "..", "src", "bundled-plugins", "design-guidance", "index.ts");
+const ENTRY = path.join(import.meta.dir, "..", "src", "plugins", "prompt", "design-guidance", "index.ts");
 const SOURCE = "ext:design-guidance";
 const GLASS_HEAD = "设计体系「玻璃拟态」";
 const MINIMAL_HEAD = "设计体系「极简留白」";

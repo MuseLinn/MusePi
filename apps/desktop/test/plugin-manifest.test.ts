@@ -38,7 +38,7 @@ describe("plugin build manifest", () => {
 	});
 
 	it("carries availability through, so an on-demand tab stays off the rail", async () => {
-		const rows = await declare("../../packages/coding-agent/src/bundled-plugins/compaction-summary");
+		const rows = await declare("../../packages/coding-agent/src/plugins/workspace/compaction-summary");
 		expect(rows).toEqual([
 			{
 				slot: "panel.tab.compaction",
@@ -51,7 +51,7 @@ describe("plugin build manifest", () => {
 	});
 
 	it("keeps one dock entry per pill, with its id and order", async () => {
-		const rows = await declare("../../packages/coding-agent/src/bundled-plugins/stats-pills");
+		const rows = await declare("../../packages/coding-agent/src/plugins/style/stats-pills");
 		expect(
 			rows.filter(row => row.slot === "conversation.composer.dock").map(row => ({ id: row.id, order: row.order })),
 		).toEqual([
