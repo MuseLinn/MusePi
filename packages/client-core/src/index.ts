@@ -80,7 +80,6 @@ export { Segmented, type SegmentedOption } from "./components/shell/Segmented";
 export { ShinyText } from "./components/shell/ShinyText";
 export { SpotlightCard } from "./components/shell/SpotlightCard";
 /** Shared in-place cross-fade for state copy (docs/gui-design.md §3a). */
-export { StatusText } from "./components/shell/StatusText";
 export { ThemeToggle } from "./components/shell/ThemeToggle";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";

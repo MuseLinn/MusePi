@@ -1,0 +1,16 @@
+{
+	"type": "module",
+	"name": "@musepi/client-ui-status",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "StatusText: in-place cross-fade for state copy.",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client/index.ts",
+		"./src/*": "./src/*"
+	},
+	"dependencies": {
+		"react": "19.2.7"
+	}
+}

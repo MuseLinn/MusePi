@@ -1,4 +1,5 @@
-import { BlurText, StatusText, t } from "@musepi/client-core";
+import { BlurText, t } from "@musepi/client-core";
+import { StatusText } from "@musepi/client-ui-status/client";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ThinkingOrb } from "../vendor/thinking-orbs";

@@ -61,6 +61,7 @@
         "@musepi/client-ui-shell": "workspace:*",
         "@musepi/client-ui-sidebar": "workspace:*",
         "@musepi/client-ui-slots": "workspace:*",
+        "@musepi/client-ui-status": "workspace:*",
         "@musepi/pi-utils": "workspace:*",
         "chroma-js": "^3.2.0",
         "docx": "^9.15.0",
@@ -253,6 +254,13 @@
       "version": "0.7.7",
       "dependencies": {
         "@musepi/collab-proto": "workspace:*",
+      },
+    },
+    "packages/client/ui-status": {
+      "name": "@musepi/client-ui-status",
+      "version": "0.7.7",
+      "dependencies": {
+        "react": "19.2.7",
       },
     },
     "packages/coding-agent": {
@@ -1182,6 +1190,8 @@
     "@musepi/client-ui-sidebar": ["@musepi/client-ui-sidebar@workspace:packages/client/ui-sidebar"],
 
     "@musepi/client-ui-slots": ["@musepi/client-ui-slots@workspace:packages/client/ui-slots"],
+
+    "@musepi/client-ui-status": ["@musepi/client-ui-status@workspace:packages/client/ui-status"],
 
     "@musepi/collab-proto": ["@musepi/collab-proto@workspace:packages/collab-proto"],
 

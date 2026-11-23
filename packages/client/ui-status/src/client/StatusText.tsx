@@ -1,3 +1,4 @@
+import "./status.css";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 /** The two motion-off sources, matching BlurText's runtime check. A disabled
