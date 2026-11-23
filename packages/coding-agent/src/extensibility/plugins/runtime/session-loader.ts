@@ -302,7 +302,8 @@ export async function reloadSessionPlugin(options: {
 	settings?: Settings;
 }): Promise<{ extension: Extension | null; errors: string[] }> {
 	const readConfig = await defaultSessionConfigReader(options.settings);
-	const scope = options.runtime.pluginScope ?? (options.runtime.pluginScope = mintPluginScope());
+	const scope = options.runtime.pluginScope ?? mintPluginScope();
+	options.runtime.pluginScope = scope;
 	const mounted = await mountPlugin({
 		entryPath: options.entryPath,
 		cwd: options.cwd,
