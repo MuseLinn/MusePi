@@ -132,6 +132,14 @@ local 后端下，`learn` 把明确的持久经验写入项目的 `learned.md`�
 | `memories.phase1InputTokenLimit`      | `4000`  | 逐会话抽取输入上限                                                                                                |
 | `memories.fallbackTokenLimit`         | `16000` | 模型未声明有限上下文窗口时使用的 token 预算                                                                       |
 | `memories.summaryInjectionTokenLimit` | `5000`  | 摘要与已捕获经验注入系统提示的共享近似 token 上限                                                                 |
+| `memory.idleEnqueueEnabled`           | `false` | 会话安静一段时间后，执行当前记忆后端的整合（即 `/memory enqueue` 那一步）                                          |
+| `memory.idleEnqueueMinutes`           | `60`    | 会话安静多久后执行，夹在 1 分钟到 24 小时之间                                                                      |
+
+### 空闲整合
+
+各记忆后端本身已经知道哪些内容可以折叠、什么时候可以折叠：`local` 管线只领取闲置超过 `memories.minRolloutIdleHours` 的 rollout，Mnemopi 的 sleep 只取比 `MNEMOPI_WM_TTL_HOURS` 一半更旧的 working memory 行。它们缺的只是「什么时候去问」。`memory.idleEnqueueEnabled` 把这个决定交给内置的 idle-maintenance 插件——空闲压缩和回顾已经在用它的安静会话定时器：一次 `agent_end` 同时布种，任何活动都会取消，每个会话各自计时。定时器到点后调用与 `/memory enqueue` 相同的入口，所以不保存后台工作的后端会立即返回，没有可整合内容时也是一次空操作。
+
+默认关闭有两个理由：后端的整合过程可能调用模型；整合最有用的时机是让素材先「睡够」，而不是用户仍在其中的当前会话。长期存活的会话是常态时（守护进程、网关聊天、连续开着数天的 bot）再按配置文件打开。
 
 ## Hindsight 远端后端
 

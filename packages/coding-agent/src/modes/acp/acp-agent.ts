@@ -2391,6 +2391,7 @@ export class AcpAgent implements Agent {
 				getSystemPrompt: () => record.session.systemPrompt,
 				compact: instructionsOrOptions => runExtensionCompact(record.session, instructionsOrOptions),
 				runIdleCompaction: () => record.session.runIdleCompaction(),
+				runMemoryEnqueue: () => record.session.runMemoryEnqueue(),
 				runEphemeralTurn: options => record.session.runEphemeralTurn(options),
 				getGoalModeState: () => record.session.getGoalModeState(),
 				getTodoPhases: () => record.session.getTodoPhases(),

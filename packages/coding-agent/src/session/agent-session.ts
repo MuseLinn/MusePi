@@ -168,6 +168,7 @@ import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-ur
 import type { IrcMessage } from "../irc/bus";
 import type { DaemonCompletionNotification } from "../launch/protocol";
 import { MEMORY_RECALL_CHANGES_MESSAGE_TYPE } from "../memory-backend/recall-entry";
+import { resolveMemoryBackend } from "../memory-backend/resolve";
 import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsMagicKeyword, listMagicKeywords } from "../modes/magic-keyword-registry";
@@ -5603,6 +5604,17 @@ export class AgentSession {
 	/** Trigger idle compaction through the automatic maintenance flow. */
 	async runIdleCompaction(): Promise<void> {
 		await this.#maintenance.runIdleCompaction();
+	}
+
+	/**
+	 * Force the active memory backend's consolidation — the `/memory enqueue`
+	 * pass, exposed so idle maintenance can run it without a user command. A
+	 * backend that keeps no background work returns immediately; failures are
+	 * logged by the backend and never reach the turn.
+	 */
+	async runMemoryEnqueue(): Promise<void> {
+		const backend = await resolveMemoryBackend(this.settings);
+		await backend.enqueue(this.settings.getAgentDir(), this.sessionManager.getCwd(), this);
 	}
 
 	/** Toggle automatic compaction. */

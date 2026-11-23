@@ -120,6 +120,7 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 			getSystemPrompt: () => session.systemPrompt,
 			compact: instructionsOrOptions => runExtensionCompact(session, instructionsOrOptions),
 			runIdleCompaction: () => session.runIdleCompaction(),
+			runMemoryEnqueue: () => session.runMemoryEnqueue(),
 			runEphemeralTurn: options => session.runEphemeralTurn(options),
 			getGoalModeState: () => session.getGoalModeState(),
 			getTodoPhases: () => session.getTodoPhases(),

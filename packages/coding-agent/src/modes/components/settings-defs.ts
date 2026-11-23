@@ -213,6 +213,13 @@ const CONDITIONS: Record<string, () => boolean> = {
 			return false;
 		}
 	},
+	memoryIdleEnqueueEnabled: () => {
+		try {
+			return Settings.instance.get("memory.idleEnqueueEnabled") === true;
+		} catch {
+			return false;
+		}
+	},
 	compactionModelOverrides: () => {
 		try {
 			return Settings.instance.get("compaction.modelThresholdsEnabled") !== false;

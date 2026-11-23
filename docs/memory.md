@@ -132,6 +132,14 @@ If the requested memory role is not configured, memory model resolution falls ba
 | `memories.phase1InputTokenLimit`      | `4000`  | Per-session extraction input cap                                                                                                         |
 | `memories.fallbackTokenLimit`         | `16000` | Model token budget used when the model has no finite declared context window                                                             |
 | `memories.summaryInjectionTokenLimit` | `5000`  | Shared approximate token cap for the summary and captured lessons injected into the system prompt                                        |
+| `memory.idleEnqueueEnabled`           | `false` | Run the active backend's consolidation (the `/memory enqueue` pass) after the session has been quiet for a while                          |
+| `memory.idleEnqueueMinutes`           | `60`    | How long the session stays quiet before that pass runs; clamped to 1 minute – 24 hours                                                     |
+
+### Idle consolidation
+
+The memory backends already know what may be folded and when: the `local` pipeline claims only rollouts idle for `memories.minRolloutIdleHours`, and Mnemopi's sleep pass takes only working-memory rows older than half its `MNEMOPI_WM_TTL_HOURS`. What none of them did was decide *when* to ask. `memory.idleEnqueueEnabled` adds that decision to the bundled idle-maintenance plugin, which already owns the quiet-session timers used by idle compaction and the recap: one `agent_end` arms them together, any activity disarms them, and each session keeps its own timers. When the timer fires it calls the same entry point as `/memory enqueue`, so a backend that keeps no background work returns immediately and a run with nothing eligible is a no-op.
+
+It is off by default for two reasons: a backend's consolidation pass can call a model, and consolidation is most useful when it runs on material that has had time to settle, not on the session the user is still in. Turn it on per profile when long-lived sessions are normal — a daemon, a gateway chat, or a bot that stays open for days.
 
 ## Hindsight remote backend
 

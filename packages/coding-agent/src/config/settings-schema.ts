@@ -3448,7 +3448,11 @@ export const SETTINGS_SCHEMA = {
 			description: "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
 			options: [
 				{ value: "off", label: "Off", description: "No memory subsystem runs" },
-				{ value: "local", label: "Local", description: "Local rollout summarisation pipeline (memory_summary.md)" },
+				{
+					value: "local",
+					label: "Local (recommended)",
+					description: "Recommended: rollout summaries on this machine, consolidated in the background",
+				},
 				{ value: "hindsight", label: "Hindsight", description: "Vectorize Hindsight remote memory service" },
 				{
 					value: "mnemopi",
@@ -3461,6 +3465,40 @@ export const SETTINGS_SCHEMA = {
 					description:
 						"Friction-gated project decision files (architecture/product/style), consolidated in the background",
 				},
+			],
+		},
+	},
+
+	// Idle consolidation: after a quiet spell, ask the active backend to fold its
+	// aged working memory into durable summaries. Off by default; the backend's own
+	// cutoff decides what is eligible, so a run with nothing old enough is a no-op.
+	"memory.idleEnqueueEnabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "memory",
+			group: "General",
+			label: "settings.memory.idleEnqueue.title",
+			description: "settings.memory.idleEnqueue.desc",
+		},
+	},
+
+	"memory.idleEnqueueMinutes": {
+		type: "number",
+		default: 60,
+		ui: {
+			tab: "memory",
+			group: "General",
+			label: "settings.memory.idleEnqueueMinutes.title",
+			description: "settings.memory.idleEnqueueMinutes.desc",
+			condition: "memoryIdleEnqueueEnabled",
+			options: [
+				{ value: "15", label: "settings.memory.idleEnqueueMinutes.option.15m" },
+				{ value: "30", label: "settings.memory.idleEnqueueMinutes.option.30m" },
+				{ value: "60", label: "settings.memory.idleEnqueueMinutes.option.1h" },
+				{ value: "180", label: "settings.memory.idleEnqueueMinutes.option.3h" },
+				{ value: "720", label: "settings.memory.idleEnqueueMinutes.option.12h" },
+				{ value: "1440", label: "settings.memory.idleEnqueueMinutes.option.24h" },
 			],
 		},
 	},

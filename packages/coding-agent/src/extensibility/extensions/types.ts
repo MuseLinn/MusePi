@@ -533,6 +533,8 @@ export interface ExtensionContext {
 	settings: { get(key: string): unknown };
 	/** Run the idle-maintenance compaction pass for this session. */
 	runIdleCompaction?: () => Promise<void>;
+	/** Force the active memory backend's consolidation (the `/memory enqueue` pass). */
+	runMemoryEnqueue?: () => Promise<void>;
 	/** Whether the host's composer holds unsubmitted text (terminal hosts only). */
 	hasDraftInput?: () => boolean;
 	/** Run one ephemeral side-channel turn over the current conversation. */
@@ -2807,6 +2809,7 @@ export interface ExtensionContextActions {
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
 	runIdleCompaction?: () => Promise<void>;
+	runMemoryEnqueue?: () => Promise<void>;
 	hasDraftInput?: () => boolean;
 	runEphemeralTurn?: (options: {
 		promptText: string;

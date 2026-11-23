@@ -561,6 +561,7 @@ export class ExtensionRunner {
 	#getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	#compactFn: (instructionsOrOptions?: string | CompactOptions) => Promise<void> = async () => {};
 	#runIdleCompactionFn: () => Promise<void> = async () => {};
+	#runMemoryEnqueueFn?: () => Promise<void>;
 	#hasDraftInputFn?: () => boolean;
 	#runEphemeralTurnFn?: ExtensionContextActions["runEphemeralTurn"];
 	#getGoalModeStateFn?: ExtensionContextActions["getGoalModeState"];
@@ -938,6 +939,7 @@ export class ExtensionRunner {
 		this.#shutdownHandler = contextActions.shutdown;
 		this.#getSystemPromptFn = contextActions.getSystemPrompt;
 		this.#runIdleCompactionFn = contextActions.runIdleCompaction ?? (async () => {});
+		this.#runMemoryEnqueueFn = contextActions.runMemoryEnqueue;
 		this.#hasDraftInputFn = contextActions.hasDraftInput;
 		this.#runEphemeralTurnFn = contextActions.runEphemeralTurn;
 		this.#getGoalModeStateFn = contextActions.getGoalModeState;
@@ -1752,6 +1754,7 @@ export class ExtensionRunner {
 			sessionManager: this.sessionManager,
 			settings: this.settings ?? { get: () => undefined },
 			runIdleCompaction: () => this.#runIdleCompactionFn(),
+			runMemoryEnqueue: this.#runMemoryEnqueueFn,
 			hasDraftInput: this.#hasDraftInputFn,
 			runEphemeralTurn: this.#runEphemeralTurnFn,
 			getGoalModeState: this.#getGoalModeStateFn,

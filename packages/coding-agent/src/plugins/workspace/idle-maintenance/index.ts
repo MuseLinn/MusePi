@@ -11,6 +11,7 @@ interface IdleState {
 	generation: number;
 	compaction?: ReturnType<ExtensionContext["setTimeout"]>;
 	recap?: ReturnType<ExtensionContext["setTimeout"]>;
+	memory?: ReturnType<ExtensionContext["setTimeout"]>;
 	recapAbort?: AbortController;
 }
 
@@ -18,6 +19,8 @@ const COMPACTION_MIN_SECONDS = 60;
 const COMPACTION_MAX_SECONDS = 3600;
 const RECAP_MIN_SECONDS = 1;
 const RECAP_MAX_SECONDS = 3600;
+const MEMORY_MIN_SECONDS = 60;
+const MEMORY_MAX_SECONDS = 86_400;
 
 /**
  * Idle session maintenance, modelled on the upstream `IdleMaintenance` unit:
@@ -58,6 +61,10 @@ export function apply(pi: PluginAPI): void {
 		if (state.recap) {
 			ctx.clearTimer(state.recap);
 			state.recap = undefined;
+		}
+		if (state.memory) {
+			ctx.clearTimer(state.memory);
+			state.memory = undefined;
 		}
 		state.recapAbort?.abort();
 		state.recapAbort = undefined;
@@ -131,12 +138,40 @@ export function apply(pi: PluginAPI): void {
 		}, seconds * 1000);
 	};
 
+	/**
+	 * Force the active memory backend's consolidation once the session has been
+	 * quiet long enough. The backends fold only rows that have slept past their
+	 * own cutoff, so a run with nothing eligible is a cheap no-op; the timer only
+	 * decides when to ask.
+	 */
+	const armMemory = (ctx: ExtensionContext, state: IdleState, scheduledFor: number): void => {
+		if (!ctx.runMemoryEnqueue) return;
+		if (ctx.settings.get("memory.idleEnqueueEnabled") !== true) return;
+		if (!isQuiet(ctx)) return;
+
+		const minutes = Math.min(
+			MEMORY_MAX_SECONDS / 60,
+			Math.max(MEMORY_MIN_SECONDS / 60, Number(ctx.settings.get("memory.idleEnqueueMinutes") ?? 60)),
+		);
+		state.memory = ctx.setTimeout(
+			() => {
+				state.memory = undefined;
+				if (scheduledFor !== state.generation || !isQuiet(ctx)) return;
+				void ctx.runMemoryEnqueue?.().catch(error => {
+					logger.debug("Idle memory consolidation failed", { error: String(error) });
+				});
+			},
+			minutes * 60 * 1000,
+		);
+	};
+
 	const arm = (ctx: ExtensionContext): void => {
 		cancel(ctx);
 		const state = stateFor(ctx);
 		const scheduledFor = state.generation;
 		armCompaction(ctx, state, scheduledFor);
 		armRecap(ctx, state, scheduledFor);
+		armMemory(ctx, state, scheduledFor);
 	};
 
 	pi.on("agent_end", (_event, ctx) => {

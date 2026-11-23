@@ -197,6 +197,32 @@ describe("idle maintenance plugin", () => {
 		expect(harnessed.timers.size).toBe(0);
 	});
 
+	it("consolidates memory on the idle delay when the switch is on", async () => {
+		const harnessed = harness({ "memory.idleEnqueueEnabled": true, "memory.idleEnqueueMinutes": 15 });
+		const runs: number[] = [];
+		(harnessed.ctx as Record<string, unknown>).runMemoryEnqueue = async () => {
+			runs.push(1);
+		};
+		harnessed.emit("agent_end");
+		expect([...harnessed.timers].map(timer => timer.ms)).toContain(900_000);
+		harnessed.fire(900_000);
+		await Bun.sleep(1);
+		expect(runs.length).toBe(1);
+	});
+
+	it("does not arm memory consolidation by default", () => {
+		const harnessed = harness();
+		harnessed.emit("agent_end");
+		expect([...harnessed.timers].map(timer => timer.ms).sort((a, b) => a - b)).toEqual([240_000, 300_000]);
+	});
+
+	it("drops a pending memory consolidation when the session becomes busy", () => {
+		const harnessed = harness({ "memory.idleEnqueueEnabled": true });
+		harnessed.emit("agent_end");
+		harnessed.emit("turn_start");
+		expect(harnessed.timers.size).toBe(0);
+	});
+
 	it("cancels both timers on turn start or host maintenance", () => {
 		for (const event of ["turn_start", "input", "auto_compaction_start", "session_switch", "session_shutdown"]) {
 			const harnessed = harness();
