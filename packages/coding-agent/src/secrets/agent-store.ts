@@ -27,7 +27,9 @@ export const AGENT_SECRET_ENV_PREFIX = "MUSEPI_SECRET_";
  * Matches the obfuscator's plain-secret floor: a saved value always enters the
  * provider-boundary obfuscator, so a shorter value would be silently skipped.
  */
-export const MIN_AGENT_SECRET_VALUE_LENGTH = 8;
+/** The shortest value the store accepts. Values this short are redacted only
+ *  where they stand alone, so a PIN is usable without redacting inside words. */
+export const MIN_AGENT_SECRET_VALUE_LENGTH = 4;
 
 const METADATA_FILE = "metadata.json";
 const METADATA_VERSION = 1;
@@ -64,12 +66,65 @@ export function validateSecretValue(value: unknown): string {
 	return value;
 }
 
-export function normalizeSecretScope(scope: unknown): SecretScope {
-	if (scope === undefined || scope === null) return "all";
-	if (scope !== "all") {
-		logger.warn('Unknown agent secret scope; using "all"', { scope: String(scope) });
+const MAX_SCOPE_ROOTS = 32;
+
+function scopeRoot(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	if (trimmed === "" || !path.isAbsolute(trimmed)) return undefined;
+	return path.resolve(trimmed);
+}
+
+function uniqueScopeRoots(scope: readonly unknown[]): string[] {
+	const roots = new Set<string>();
+	for (const value of scope) {
+		const root = scopeRoot(value);
+		if (root === undefined) continue;
+		roots.add(root);
+		if (roots.size >= MAX_SCOPE_ROOTS) break;
 	}
-	return "all";
+	return [...roots];
+}
+
+/**
+ * Scope from a card/page choice. Omitted keeps `fallback`, so replacing a value
+ * never widens what it was narrowed to. An unrecognized shape also keeps the
+ * previous scope rather than granting every session.
+ */
+export function normalizeSecretScope(scope: unknown, fallback: SecretScope = "all"): SecretScope {
+	if (scope === undefined || scope === null) return fallback;
+	if (scope === "all") return "all";
+	if (Array.isArray(scope)) return uniqueScopeRoots(scope);
+	logger.warn("Unknown agent secret scope; keeping the previous value", { scope: String(scope) });
+	return fallback;
+}
+
+/** Metadata read: an unrecognized stored scope narrows to nobody, never widens. */
+export function parseStoredSecretScope(scope: unknown): SecretScope {
+	if (scope === "all") return "all";
+	if (Array.isArray(scope)) return uniqueScopeRoots(scope);
+	logger.warn("Unrecognized stored agent secret scope; treating it as no workspace", {
+		scope: String(scope),
+	});
+	return [];
+}
+
+/**
+ * Whether a session working in `cwd` may use this secret. A directory scope
+ * covers its own subdirectories; comparison is case-insensitive on Windows.
+ */
+export function secretScopeIncludes(scope: SecretScope, cwd: string): boolean {
+	if (scope === "all") return true;
+	if (typeof cwd !== "string" || cwd.length === 0) return false;
+	const fold = (value: string): string => (process.platform === "win32" ? value.toLowerCase() : value);
+	const target = path.resolve(cwd);
+	for (const root of scope) {
+		const resolvedRoot = path.resolve(root);
+		if (fold(resolvedRoot) === fold(target)) return true;
+		const relative = path.relative(fold(resolvedRoot), fold(target));
+		if (relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)) return true;
+	}
+	return false;
 }
 
 export function agentSecretEnvName(name: string): string {
@@ -146,7 +201,7 @@ export class AgentSecretStore {
 				}
 				entries[name] = {
 					purpose: typeof value.purpose === "string" ? value.purpose : "",
-					scope: normalizeSecretScope(value.scope),
+					scope: parseStoredSecretScope(value.scope),
 					createdAt: value.createdAt,
 					updatedAt: value.updatedAt,
 					...(typeof value.lastUsedAt === "number" ? { lastUsedAt: value.lastUsedAt } : {}),
@@ -193,14 +248,14 @@ export class AgentSecretStore {
 	async set(name: string, value: string, purpose?: string, scope?: unknown): Promise<SecretEntryView> {
 		validateSecretName(name);
 		validateSecretValue(value);
-		const resolvedScope = normalizeSecretScope(scope);
 		return await withWriteLock(this.metadataFile, async () => {
 			const metadata = await this.#readMetadata();
 			const previous = metadata.entries[name];
 			const now = Date.now();
 			const next = {
 				purpose: typeof purpose === "string" ? purpose : (previous?.purpose ?? ""),
-				scope: resolvedScope,
+				// Replacing a value must not widen an entry the user narrowed.
+				scope: normalizeSecretScope(scope, previous?.scope ?? "all"),
 				createdAt: previous?.createdAt ?? now,
 				updatedAt: now,
 				...(previous?.lastUsedAt !== undefined ? { lastUsedAt: previous.lastUsedAt } : {}),
@@ -209,6 +264,20 @@ export class AgentSecretStore {
 			metadata.entries[name] = next;
 			await this.#writeMetadata(metadata);
 			return this.#toView(name, next);
+		});
+	}
+
+	/** Change who may use a stored value without touching the value itself. */
+	async setScope(name: string, scope: SecretScope): Promise<SecretEntryView> {
+		validateSecretName(name);
+		return await withWriteLock(this.metadataFile, async () => {
+			const metadata = await this.#readMetadata();
+			const entry = metadata.entries[name];
+			if (!entry) throw new Error(`Secret ${name} is not stored`);
+			entry.scope = normalizeSecretScope(scope, entry.scope);
+			entry.updatedAt = Date.now();
+			await this.#writeMetadata(metadata);
+			return this.#toView(name, entry);
 		});
 	}
 
@@ -298,6 +367,8 @@ export interface AgentSecretRequest {
 	name: string;
 	purpose: string;
 	kind: AgentSecretRequestKind;
+	/** The asking session's working directory; `allow` extends the scope to it. */
+	workspace?: string;
 }
 
 /**

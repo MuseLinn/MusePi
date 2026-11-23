@@ -15,7 +15,13 @@
 
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
-import { agentSecretEnvName, getAgentSecretStore, type SecretEntryView, type SecretScope } from "./agent-store";
+import {
+	agentSecretEnvName,
+	getAgentSecretStore,
+	type SecretEntryView,
+	type SecretScope,
+	secretScopeIncludes,
+} from "./agent-store";
 import type { SecretEntry, SecretObfuscator } from "./obfuscator";
 
 /** A live obfuscator per session, weakly held so a disposed session is collectable. */
@@ -88,6 +94,42 @@ export interface AgentSecretSnapshot {
 	redact(text: string): string;
 }
 
+/** Matches the reversible plain-secret floor: below it a value is only matched
+ *  where it stands alone, so a short PIN never redacts part of a word. */
+const WHOLE_VALUE_SECRET_LEN = 8;
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * One-pass output scrubber. A `[secret:NAME]` label already in the text is kept
+ * verbatim, so a short value that spells part of a name cannot nest markers on a
+ * second pass, and values shorter than the reversible floor match only when no
+ * letter or digit sits on either side.
+ */
+function buildSecretRedactor(entries: ReadonlyArray<{ name: string; value: string }>): (text: string) => string {
+	const pairs = entries
+		.filter(({ value }) => value.length > 0)
+		.sort((a, b) => b.value.length - a.value.length)
+		.map(({ name, value }) => ({
+			value,
+			marker: `[secret:${name}]`,
+			short: value.length < WHOLE_VALUE_SECRET_LEN,
+		}));
+	if (pairs.length === 0) return text => text;
+	const byValue = new Map(pairs.map(pair => [pair.value, pair.marker]));
+	const alternatives = pairs.map(pair => {
+		const escaped = escapeRegExp(pair.value);
+		return pair.short ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])` : escaped;
+	});
+	const pattern = new RegExp(`(\\[secret:[A-Z][A-Z0-9_]{0,63}\\])|${alternatives.join("|")}`, "gu");
+	return text =>
+		text.length === 0
+			? text
+			: text.replace(pattern, (match: string, label: string | undefined) => label ?? byValue.get(match) ?? match);
+}
+
 /**
  * Read the stored values once per bash call: the env map plus a synchronous
  * redactor. The synchronous part matters because output streaming callbacks
@@ -115,32 +157,27 @@ export async function agentSecretSnapshot(agentDir: string, cwd: string): Promis
 	}
 	return {
 		env,
-		redact(text: string): string {
-			if (text.length === 0) return text;
-			let output = text;
-			for (const { name, value } of sorted) {
-				if (value.length === 0) continue;
-				output = output.split(value).join(`[secret:${name}]`);
-			}
-			return output;
-		},
+		redact: buildSecretRedactor(sorted),
 	};
 }
 
 /** Names that are available right now (decryptable), for `list_secrets`. */
 export async function listAvailableAgentSecrets(
 	agentDir: string,
-): Promise<Array<{ entry: SecretEntryView; available: boolean }>> {
+	cwd?: string,
+): Promise<Array<{ entry: SecretEntryView; available: boolean; usable: boolean }>> {
 	const store = getAgentSecretStore(agentDir);
 	const entries = await store.list();
-	const out: Array<{ entry: SecretEntryView; available: boolean }> = [];
+	const out: Array<{ entry: SecretEntryView; available: boolean; usable: boolean }> = [];
 	for (const entry of entries) {
-		out.push({ entry, available: await store.available(entry.name) });
+		const available = await store.available(entry.name);
+		const usable = available && (cwd === undefined || secretScopeIncludes(entry.scope, cwd));
+		out.push({ entry, available, usable });
 	}
 	return out;
 }
 
-/** P0 filter seam: every stored entry is injected in every session. */
-export function scopeMatches(scope: SecretScope, _cwd: string): boolean {
-	return scope === "all";
+/** Scope filter: every entry is injected in a session whose workspace it covers. */
+export function scopeMatches(scope: SecretScope, cwd: string): boolean {
+	return secretScopeIncludes(scope, cwd);
 }

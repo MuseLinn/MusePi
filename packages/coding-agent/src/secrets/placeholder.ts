@@ -16,6 +16,11 @@ const MAX_FRIENDLY_NAME_LEN = 32;
 // Plain/regex obfuscate matches shorter than this are toned down (never placed
 // behind a reversible placeholder) to avoid redacting small words/fragments.
 export const MIN_OBFUSCATE_SECRET_LEN = 8;
+// Plain values in [this, MIN_OBFUSCATE_SECRET_LEN) get a one-way replacement
+// only where they stand alone (no letter or digit on either side), so a short
+// PIN or passphrase never reaches the provider while a value that happens to be
+// a substring of a longer word is left intact.
+export const MIN_WORD_BOUNDED_SECRET_LEN = 4;
 
 // Per-process fallback key used when a caller does not supply a persisted
 // per-install key. It is random (never shipped in source), so model-visible

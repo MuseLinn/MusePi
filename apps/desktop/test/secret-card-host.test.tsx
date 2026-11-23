@@ -182,7 +182,7 @@ describe("SecretCard host 并发请求", () => {
 		const first = cards(host)[0]!;
 		await act(async () => buttonIn(first, "允许").click());
 		await flush();
-		expect(answers).toEqual([{ requestId: "r1", action: "allow", scope: "all" }]);
+		expect(answers).toEqual([{ requestId: "r1", action: "allow" }]);
 		// 第一张已决，第二张仍在等待自己的回答。
 		expect(cards(host)).toHaveLength(2);
 		expect(cards(host)[1]!.textContent).toContain("$MUSEPI_SECRET_SECOND_KEY");
@@ -191,8 +191,8 @@ describe("SecretCard host 并发请求", () => {
 		await act(async () => buttonIn(cards(host)[1]!, "允许").click());
 		await flush();
 		expect(answers).toEqual([
-			{ requestId: "r1", action: "allow", scope: "all" },
-			{ requestId: "r2", action: "allow", scope: "all" },
+			{ requestId: "r1", action: "allow" },
+			{ requestId: "r2", action: "allow" },
 		]);
 		expect(host.textContent).toContain("已允许 FIRST_KEY");
 		expect(host.textContent).toContain("已允许 SECOND_KEY");

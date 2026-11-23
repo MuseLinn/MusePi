@@ -142,14 +142,14 @@ the name but never the value.
 | `request_secret` | `name`, `purpose`    | Environment variable name and a status; never the value   |
 | `list_secrets`   | none                 | Name, purpose, scope and availability; never the value    |
 
-`name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. A stored, decryptable value
-answers immediately with the environment variable name; the only card the tool
-ever pushes is a `secret-request` with `kind:"fill"`. `kind:"allow"` remains an
-accepted action at the wire/service level for future hosts that add a consent
-policy. A card times out as a cancel after ten minutes. Interactive collection
-requires a host that implements the `requestSecret` UI channel (the daemon
-approval bridge); a headless/TUI host returns an error telling the user to add
-the secret from Settings → Secrets.
+`name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. A stored value answers immediately
+only when it is readable and its scope covers the session's working directory. A
+value stored for other workspaces opens a `kind:"allow"` card: the answer extends
+the scope to that workspace without retyping the value. A missing or unreadable
+value opens `kind:"fill"`. A card times out as a cancel after ten minutes.
+Interactive collection requires a host that implements the `requestSecret` UI
+channel (the daemon approval bridge); a headless/TUI host returns an error
+telling the user to add the secret from Settings → Secrets.
 
 ### Storage
 
@@ -165,14 +165,16 @@ AES-256-GCM envelopes derived with HKDF from the profile master key, reusing
 the connector vault envelope implementation. The metadata sidecar never
 contains a value, and the encrypted file never contains one either.
 
-`scope` is `"all"` in P0: every stored secret is available to every session.
-Workspace/bot scopes are a future union extension, not a current field.
+`scope` is `"all"` or a list of absolute workspace roots. A root covers its own
+subdirectories; comparison is case-insensitive on Windows. An unrecognized
+stored value narrows to an empty list (nobody may use it), never widening to
+`"all"`. Replacing a value without a new choice keeps the stored scope.
 
 ### Bash injection
 
 Every bash child process receives `MUSEPI_SECRET_<NAME>`, for every decryptable
-stored entry whose scope matches the session (P0: `"all"`). The value is only
-in that child's environment:
+stored entry whose scope covers the session's working directory. The value is
+only in that child's environment:
 
 - `process.env` is never modified.
 - A model-supplied `env` entry of the same name is overridden by the stored
@@ -187,11 +189,12 @@ in that child's environment:
 ### Provider boundary
 
 At session start, stored agent secrets join the session's `SecretObfuscator` as
-plain obfuscate-mode entries with `friendlyName` = the secret name. A save
-mid-session registers the value into every live session's obfuscator
-immediately, including the session that performed the first save when the store
-was empty at startup. Provider requests therefore carry a reversible
-placeholder such as `#GITHUBTOKEN_AB12:L#`, never the value.
+plain obfuscate-mode entries with `friendlyName` = the secret name. Values
+shorter than 8 characters join as one-way, word-bounded replacements instead of
+reversible placeholders. A save mid-session registers the value into every live
+session's obfuscator immediately, including the session that performed the first
+save when the store was empty at startup. Provider requests therefore carry a
+reversible placeholder such as `#GITHUBTOKEN_AB12:L#`, never the value.
 
 Agent secrets are **always** covered: a value the user explicitly saved in the
 safety card is a separate grant from the generic scanning feature. The session
@@ -206,24 +209,28 @@ while agent-card values still are.
 | ---------------- | ------------------------------------------------ | ------------------------------------------ |
 | `secret.status`  | `{}`                                             | `{ mode: "encrypted", count }`             |
 | `secret.list`    | `{}`                                             | `{ entries: SecretEntryView[], count }`    |
-| `secret.set`     | `{ name, value, purpose?, scope? }`              | `{ entry }`                                |
+| `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace" }` | `{ entry }`                       |
+| `secret.update`  | `{ name, scope: "all" }`                         | `{ entry }`                                |
 | `secret.delete`  | `{ name }`                                       | `{ ok: true }` (idempotent)                |
-| `secret.answer`  | `{ requestId, action, value?, scope? }`          | `{ ok: true }`                             |
+| `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace" }` | `{ ok: true }`                    |
 
 Timestamps in `SecretEntryView` are epoch milliseconds. `secret.answer` saves
 the value in the daemon before resolving the tool's promise, so the tool only
-sees which action won. Unknown or expired request ids fail with
-`Unknown secret request: <id>`. No response, push, log or transcript contains a
-value.
+sees which action won. `"workspace"` resolves to the pending request's session
+directory; `secret.set` refuses it because the settings page has no session
+context, and `secret.update` only widens a narrowed entry to `"all"`. Unknown
+or expired request ids fail with `Unknown secret request: <id>`. No response,
+push, log or transcript contains a value.
 
 ### Known limitations
 
-- Values shorter than 8 characters are rejected (`Secret value must be at least
-  8 characters`). The obfuscator only mints reversible placeholders for plain
-  values of at least 8 characters, so allowing a 4-digit PIN would send it to
-  the model unredacted. Supporting short secrets requires a separate
-  replace-mode implementation, not a threshold bypass.
-- P0 scope is `"all"`; per-workspace and per-bot scoping are future extensions.
+- Values need at least 4 characters. A value shorter than 8 is redacted with a
+  one-way marker and only where it stands alone (no letter or digit on either
+  side): it is never restored in display context, and a value that appears
+  inside a longer word is left intact on purpose. Values below 4 are rejected.
+- Scope is `"all"` or workspace directories. A session outside every scoped
+  root gets the allow card; narrowing an entry again needs saving it with the
+  "this workspace" choice, because the settings page only widens.
 - An entry whose envelope cannot be decrypted stays listed as unavailable.
   Save the value again through `request_secret` or Settings → Secrets to repair
   it; do not edit the sidecar by hand.

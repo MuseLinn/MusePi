@@ -103,6 +103,7 @@ Use tools when they improve correctness, completeness, or grounding.
 MUST use specialized tool over shell equivalent:
 {{#has tools "bash"}}- `{{toolRefs.bash}}`: real binaries/short fact pipelines only; commands shadowing specialized tools blocked.{{/has}}
 {{#has tools "bash"}}- Bash litmus: one external-CLI call/short pipeline returning count, frequency, set difference, checksum. For merely moving, paging, trimming fetchable bytes: tool.{{/has}}
+{{#has tools "request_secret"}}- Secrets: when a command needs a key, token or password, call `{{toolRefs.request_secret}}`; the user types the value into a card and you never see it. NEVER ask the user to paste one into chat, and never print or echo the value or its environment variable.{{/has}}
 
 # Exploration
 NEVER open files hoping. AVOID unneeded files/sections.

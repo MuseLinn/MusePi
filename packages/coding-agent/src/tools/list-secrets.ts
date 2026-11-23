@@ -19,6 +19,7 @@ export interface ListedSecret {
 	purpose: string;
 	scope: SecretScope;
 	available: boolean;
+	usable: boolean;
 }
 
 export interface ListSecretsDetails {
@@ -39,23 +40,29 @@ export class ListSecretsTool implements AgentTool<typeof listSecretsSchema, List
 
 	async execute(): Promise<AgentToolResult<ListSecretsDetails>> {
 		const agentDir = this.session.settings.getAgentDir();
-		const entries = (await listAvailableAgentSecrets(agentDir)).map(({ entry, available }) => ({
-			name: entry.name,
-			purpose: entry.purpose,
-			scope: entry.scope,
-			available,
-		}));
+		const entries = (await listAvailableAgentSecrets(agentDir, this.session.cwd)).map(
+			({ entry, available, usable }) => ({
+				name: entry.name,
+				purpose: entry.purpose,
+				scope: entry.scope,
+				available,
+				usable,
+			}),
+		);
 		if (entries.length === 0) {
 			return toolResult<ListSecretsDetails>({ entries })
 				.text("No agent secrets are stored. Use request_secret when a command needs a credential.")
 				.done();
 		}
-		const lines = entries.map(
-			entry =>
-				`- ${entry.name} — ${entry.purpose || "(no purpose recorded)"} [scope: ${entry.scope}, ${
-					entry.available ? `available as $${agentSecretEnvName(entry.name)}` : "unavailable: value unreadable"
-				}]`,
-		);
+		const lines = entries.map(entry => {
+			const scope = entry.scope === "all" ? "every session" : `${entry.scope.length} workspace(s)`;
+			const reach = !entry.available
+				? "unavailable: value unreadable"
+				: entry.usable
+					? `available as $${agentSecretEnvName(entry.name)}`
+					: "stored, but not usable in this workspace; ask with request_secret";
+			return `- ${entry.name} — ${entry.purpose || "(no purpose recorded)"} [scope: ${scope}; ${reach}]`;
+		});
 		return toolResult<ListSecretsDetails>({ entries })
 			.text([`Stored agent secrets (${entries.length}):`, ...lines].join("\n"))
 			.done();

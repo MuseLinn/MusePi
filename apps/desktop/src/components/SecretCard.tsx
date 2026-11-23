@@ -21,17 +21,20 @@ export interface SecretRequest {
 
 type SecretAction = "save" | "allow" | "cancel";
 
+/** Every session, or only the asking session's workspace. */
+type SecretScopeChoice = "all" | "workspace";
+
 export interface SecretAnswer {
 	requestId: string;
 	action: SecretAction;
 	value?: string;
-	/** P0 has exactly one scope: every session may use the secret. */
-	scope?: "all";
+	/** Chosen scope for `save`; `allow` uses the request's own workspace. */
+	scope?: SecretScopeChoice;
 }
 
-/** The obfuscator collects env-var secrets of 8+ characters; the card holds
- *  the same floor so a saved value is never too short to be usable. */
-const MIN_SECRET_VALUE_LENGTH = 8;
+/** Values this short are redacted only where they stand alone; the card holds
+ *  the store's floor so a saved value is never rejected after the fact. */
+const MIN_SECRET_VALUE_LENGTH = 4;
 
 /** How long the one-line outcome stays before the host drops the request. */
 const SETTLED_LINGER_MS = 2400;
@@ -74,6 +77,7 @@ export function SecretCard({
 	onSettled?(requestId: string): void;
 }): ReactNode {
 	const [value, setValue] = useState("");
+	const [scope, setScope] = useState<SecretScopeChoice>("all");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [settled, setSettled] = useState<SecretAction | null>(null);
@@ -87,6 +91,7 @@ export function SecretCard({
 	// A fresh request starts clean — never carry a previous value over.
 	useEffect(() => {
 		setValue("");
+		setScope("all");
 		setBusy(false);
 		setError("");
 		setSettled(null);
@@ -104,8 +109,10 @@ export function SecretCard({
 		setBusy(true);
 		setError("");
 		const answer: SecretAnswer = { requestId: request.requestId, action };
-		if (action !== "cancel") answer.scope = "all";
-		if (action === "save") answer.value = value;
+		if (action === "save") {
+			answer.value = value;
+			answer.scope = scope;
+		}
 		try {
 			await onAnswer(answer);
 			// Drop the value from component state as soon as the daemon has
@@ -153,6 +160,11 @@ export function SecretCard({
 
 	const isFill = request.kind === "fill";
 	const envVar = envVarName(request.name);
+	const scopeNote = !isFill
+		? t("tools.secretAllowWorkspace")
+		: scope === "all"
+			? t("tools.secretScopeAll")
+			: t("tools.secretScopeWorkspaceNote");
 	const tooShort = value.length > 0 && value.length < MIN_SECRET_VALUE_LENGTH;
 	const canSave = !tooShort && value.length >= MIN_SECRET_VALUE_LENGTH && !busy;
 
@@ -225,7 +237,31 @@ export function SecretCard({
 				) : (
 					<p className="gui-note">{t("tools.secretAlreadySaved", { env: envVar })}</p>
 				)}
-				<p className="gui-note">{t("tools.secretScopeAll")}</p>
+				{isFill ? (
+					<div className="gui-secret-scope" role="radiogroup" aria-label={t("tools.secretScope")}>
+						<button
+							type="button"
+							role="radio"
+							aria-checked={scope === "workspace"}
+							className={`gui-btn${scope === "workspace" ? " gui-btn-primary" : ""}`}
+							disabled={busy}
+							onClick={() => setScope("workspace")}
+						>
+							{t("tools.secretScopeWorkspace")}
+						</button>
+						<button
+							type="button"
+							role="radio"
+							aria-checked={scope === "all"}
+							className={`gui-btn${scope === "all" ? " gui-btn-primary" : ""}`}
+							disabled={busy}
+							onClick={() => setScope("all")}
+						>
+							{t("tools.secretScopeAllSessions")}
+						</button>
+					</div>
+				) : null}
+				<p className="gui-note">{scopeNote}</p>
 				{error ? (
 					<p className="gui-error" role="alert">
 						{error}

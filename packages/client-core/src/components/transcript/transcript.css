@@ -5227,3 +5227,55 @@ a.tr-tool-search-title:hover {
 		animation: none;
 	}
 }
+
+/* Secret request outcome (request_secret): one permanent line where the card
+ * stood. The typing surface is the card above the composer; this is what the
+ * transcript keeps after it settles. */
+.tr-secret-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	margin: 4px 0 8px;
+	padding: 6px 10px;
+	border: 1px solid var(--border, var(--line));
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised, var(--bg-raised)) 55%, transparent);
+	font-size: 12px;
+	line-height: 1.4;
+}
+.tr-secret-label {
+	flex: none;
+	color: var(--color-text-faint, var(--fg-faint));
+}
+.tr-secret-name {
+	flex: none;
+	font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+	color: var(--color-text, var(--fg));
+}
+.tr-secret-scope {
+	flex: none;
+	padding: 0 6px;
+	border-radius: var(--radius-full);
+	background: var(--color-surface-sunken, var(--bg-sunken));
+	color: var(--color-text-secondary, var(--fg-soft));
+	font-size: 11px;
+	line-height: 16px;
+}
+.tr-secret-purpose {
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-tertiary, var(--fg-faint));
+}
+.tr-secret-state {
+	flex: none;
+	margin-left: auto;
+	color: var(--color-text-secondary, var(--fg-soft));
+}
+.tr-secret-line[data-status="cancelled"] .tr-secret-state,
+.tr-secret-line[data-status="interrupted"] .tr-secret-state {
+	color: var(--color-text-faint, var(--fg-faint));
+}

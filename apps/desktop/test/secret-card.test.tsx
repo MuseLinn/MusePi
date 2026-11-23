@@ -139,8 +139,22 @@ describe("SecretCard 提交与已决态", () => {
 		expect(host.querySelector("input")).toBeNull();
 		await act(async () => button(host, "允许").click());
 		await flush();
-		expect(calls).toEqual([{ requestId: "r1", action: "allow", scope: "all" }]);
+		expect(calls).toEqual([{ requestId: "r1", action: "allow" }]);
 		expect(host.textContent).toContain("已允许 EXAMPLE_KEY");
+	});
+
+	test("选择仅本工作区时把 scope 一起提交", async () => {
+		const calls: SecretAnswer[] = [];
+		const { host } = await renderCard({}, async answer => {
+			calls.push(answer);
+		});
+		const secret = "s3cret-value-xyz";
+		await typeSecret(host, secret);
+		await act(async () => button(host, "仅本工作区").click());
+		await flush();
+		await act(async () => button(host, "保存").click());
+		await flush();
+		expect(calls).toEqual([{ requestId: "r1", action: "save", value: secret, scope: "workspace" }]);
 	});
 
 	test("保存中显示明确态：按钮禁用并显示保存中", async () => {
@@ -164,20 +178,20 @@ describe("SecretCard 提交与已决态", () => {
 });
 
 describe("SecretCard 校验与错误", () => {
-	test("长度不足：保存禁用并显示至少 8 个字符，不发请求", async () => {
+	test("长度不足：保存禁用并显示至少 4 个字符，不发请求", async () => {
 		const calls: SecretAnswer[] = [];
 		const { host } = await renderCard({}, async answer => {
 			calls.push(answer);
 		});
-		await typeSecret(host, "short");
+		await typeSecret(host, "abc");
 		expect(button(host, "保存").disabled).toBe(true);
-		expect(host.querySelector(".gui-error")?.textContent).toContain("至少 8 个字符");
+		expect(host.querySelector(".gui-error")?.textContent).toContain("至少 4 个字符");
 		expect(calls).toHaveLength(0);
 	});
 
 	test("daemon 错误原样显示，输入保持遮罩可重试", async () => {
 		const secret = "s3cret-value-xyz";
-		const message = "Secret value must be at least 8 characters";
+		const message = "Secret value must be at least 4 characters";
 		const { host } = await renderCard({}, () => rejectWith(message));
 		await typeSecret(host, secret);
 		await act(async () => button(host, "保存").click());

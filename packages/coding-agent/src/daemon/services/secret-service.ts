@@ -1,15 +1,25 @@
+import * as path from "node:path";
 import type {
 	SecretAnswerParams,
 	SecretAnswerResult,
 	SecretDeleteParams,
 	SecretDeleteResult,
 	SecretListResult,
+	SecretScope,
+	SecretScopeChoice,
 	SecretSetParams,
 	SecretSetResult,
 	SecretStatus,
+	SecretUpdateParams,
+	SecretUpdateResult,
 } from "@musepi/pi-wire";
 import { notifyAgentSecretSaved } from "../../secrets/agent-runtime";
-import { getAgentSecretStore, validateSecretName, validateSecretValue } from "../../secrets/agent-store";
+import {
+	getAgentSecretStore,
+	normalizeSecretScope,
+	validateSecretName,
+	validateSecretValue,
+} from "../../secrets/agent-store";
 import type { ApprovalBridge, PendingSecret } from "../approval-bridge";
 import type { DaemonService } from "./types";
 
@@ -47,6 +57,7 @@ export class SecretService implements DaemonService {
 		"secret.status": "status",
 		"secret.list": "list",
 		"secret.set": "set",
+		"secret.update": "update",
 		"secret.delete": "delete",
 		"secret.answer": "answer",
 	} as const;
@@ -70,9 +81,27 @@ export class SecretService implements DaemonService {
 		const p = (params ?? {}) as Partial<SecretSetParams>;
 		const name = validateSecretName(p.name);
 		const value = validateSecretValue(p.value);
-		const entry = await getAgentSecretStore(this.#deps.agentDir()).set(name, value, p.purpose, p.scope);
+		// The settings page has no session context, so it cannot ask for workspace
+		// scope; only a card answer resolves one from the asking session.
+		if (p.scope === "workspace") {
+			throw new Error("Workspace scope can only be chosen from a secret request card.");
+		}
+		const entry = await getAgentSecretStore(this.#deps.agentDir()).set(
+			name,
+			value,
+			p.purpose,
+			p.scope === "all" ? "all" : undefined,
+		);
 		// Immediate provider-boundary coverage for every live session.
 		notifyAgentSecretSaved(this.#deps.agentDir(), name, value);
+		return { entry };
+	}
+
+	async update(params: SecretUpdateParams): Promise<SecretUpdateResult> {
+		const p = (params ?? {}) as Partial<SecretUpdateParams>;
+		const name = validateSecretName(p.name);
+		if (p.scope !== "all") throw new Error("Only widening to every session is supported here.");
+		const entry = await getAgentSecretStore(this.#deps.agentDir()).setScope(name, "all");
 		return { entry };
 	}
 
@@ -90,14 +119,22 @@ export class SecretService implements DaemonService {
 			throw new Error("Invalid secret action: must be save, allow or cancel");
 		}
 		const { live, pending } = this.#findPending(p.requestId, p.sessionId);
+		const store = getAgentSecretStore(this.#deps.agentDir());
 		if (action === "save") {
 			const value = validateSecretValue(p.value);
-			await getAgentSecretStore(this.#deps.agentDir()).set(pending.name, value, pending.purpose, p.scope);
+			const scope = resolveScopeChoice(p.scope, pending.workspace);
+			// `undefined` keeps what the entry already had; a new entry defaults to
+			// every session, which is the pre-scope behaviour.
+			await store.set(pending.name, value, pending.purpose, scope);
 			notifyAgentSecretSaved(this.#deps.agentDir(), pending.name, value);
 		} else if (action === "allow") {
-			const store = getAgentSecretStore(this.#deps.agentDir());
-			if (!(await store.available(pending.name))) {
+			const entry = await store.getEntry(pending.name);
+			if (!entry || !(await store.available(pending.name))) {
 				throw new Error(`No stored value for ${pending.name}; the user must save one first.`);
+			}
+			if (entry.scope !== "all") {
+				if (!pending.workspace) throw new Error("This secret request has no workspace to allow.");
+				await store.setScope(pending.name, normalizeSecretScope([...entry.scope, pending.workspace]));
 			}
 			await store.touch(pending.name);
 		}
@@ -129,4 +166,17 @@ export class SecretService implements DaemonService {
 		}
 		throw new Error(`Unknown secret request: ${requestId}`);
 	}
+}
+
+/** Card choice → stored scope. `undefined` keeps what the entry already had. */
+function resolveScopeChoice(
+	choice: SecretScopeChoice | undefined,
+	workspace: string | undefined,
+): SecretScope | undefined {
+	if (choice === "all") return "all";
+	if (choice === "workspace") {
+		if (!workspace) throw new Error("This secret request has no workspace to scope to.");
+		return [path.resolve(workspace)];
+	}
+	return undefined;
 }

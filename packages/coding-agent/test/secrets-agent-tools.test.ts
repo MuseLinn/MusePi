@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { ExtensionUIContext } from "../src/extensibility/extensions/types";
 import { buildSecretObfuscator } from "../src/secrets";
 import { notifyAgentSecretSaved, registerAgentSecretObfuscator } from "../src/secrets/agent-runtime";
@@ -110,6 +110,64 @@ describe("request_secret tool", () => {
 		expect(textOf(result)).not.toContain(VALUE);
 	});
 
+	it("asks to allow a stored secret scoped to another workspace", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		const foreign = resolve(dir, "other-workspace");
+		const workspace = resolve(dir, "this-workspace");
+		await store.set("API_TOKEN", VALUE, "curl", [foreign]);
+
+		let askedKind = "";
+		let askedWorkspace = "";
+		const ui = secretUi(async request => {
+			askedKind = request.kind;
+			askedWorkspace = request.workspace ?? "";
+			await store.setScope("API_TOKEN", [foreign, workspace]);
+			return { action: "allow" };
+		});
+		const tool = new RequestSecretTool({ ...makeSession(dir, ui), cwd: workspace } as unknown as ToolSession);
+
+		const result = await tool.execute("call-allow", { name: "API_TOKEN", purpose: "curl" });
+		expect(askedKind).toBe("allow");
+		expect(askedWorkspace).toBe(workspace);
+		expect(result.details?.status).toBe("saved");
+		expect(result.details?.scope).toEqual([foreign, workspace]);
+	});
+
+	it("does not reuse a stored secret outside this workspace", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		await store.set("API_TOKEN", VALUE, "curl", [resolve(dir, "other-workspace")]);
+		const tool = new RequestSecretTool({
+			...makeSession(
+				dir,
+				secretUi(async () => ({ action: "cancel" })),
+			),
+			cwd: resolve(dir, "this-workspace"),
+		} as unknown as ToolSession);
+
+		const result = await tool.execute("call-outside", { name: "API_TOKEN", purpose: "curl" });
+		expect(result.details?.status).toBe("cancelled");
+	});
+
+	it("accepts a four-character value and reports it as saved", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		const tool = new RequestSecretTool(
+			makeSession(
+				dir,
+				secretUi(async request => {
+					await store.set(request.name, "1234", request.purpose);
+					return { action: "save" };
+				}),
+			),
+		);
+		const result = await tool.execute("call-pin", { name: "PIN", purpose: "unlock the vault" });
+		expect(result.details?.status).toBe("saved");
+		expect(await store.getValue("PIN")).toBe("1234");
+		expect(JSON.stringify(result)).not.toContain("1234");
+	});
+
 	it("refuses a host with no interactive secret channel", async () => {
 		const dir = makeDir();
 		const tool = new RequestSecretTool(makeSession(dir));
@@ -130,12 +188,12 @@ describe("list_secrets tool", () => {
 
 		expect(text).toContain("API_TOKEN");
 		expect(text).toContain("curl the API");
-		expect(text).toContain("scope: all");
+		expect(text).toContain("scope: every session");
 		expect(text).toContain("$MUSEPI_SECRET_API_TOKEN");
 		expect(text).not.toContain(VALUE);
 		expect(JSON.stringify(result)).not.toContain(VALUE);
 		expect(result.details?.entries).toEqual([
-			{ name: "API_TOKEN", purpose: "curl the API", scope: "all", available: true },
+			{ name: "API_TOKEN", purpose: "curl the API", scope: "all", available: true, usable: true },
 		]);
 	});
 

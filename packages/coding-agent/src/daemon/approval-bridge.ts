@@ -61,9 +61,10 @@ export interface PendingSecret {
 	requestId: string;
 	name: string;
 	purpose: string;
-	/** `"fill"` is the only kind the tool sends today. `"allow"` remains in the
-	 *  wire contract for future consent hosts; nothing pushes it now. */
+	/** `fill` collects a value; `allow` extends an existing entry to `workspace`. */
 	kind: "fill" | "allow";
+	/** Asking session's working directory, in the tool's own form. */
+	workspace?: string;
 	resolve(answer: AgentSecretAnswer): void;
 }
 
@@ -387,6 +388,7 @@ export function createApprovalBridge(
 				name: request.name,
 				purpose: request.purpose,
 				kind: request.kind,
+				...(request.workspace ? { workspace: request.workspace } : {}),
 				resolve: answer => {
 					if (!pendingSecrets.has(requestId)) return;
 					pendingSecrets.delete(requestId);

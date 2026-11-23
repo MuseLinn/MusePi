@@ -25,7 +25,7 @@ import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 
 /** Wire contract for the daemon's `secret.*` methods. Timestamps are epoch ms. */
-type SecretScope = "all";
+type SecretScope = "all" | string[];
 
 interface SecretEntryView {
 	name: string;
@@ -47,7 +47,7 @@ interface SecretListResult {
 }
 
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
-const MIN_SECRET_VALUE_LENGTH = 8;
+const MIN_SECRET_VALUE_LENGTH = 4;
 
 interface SecretFormState {
 	mode: "add" | "replace";
@@ -64,6 +64,12 @@ function lastUsedText(entry: SecretEntryView): string {
 	return entry.lastUsedAt && entry.lastUsedAt > 0
 		? t("settings.secretsLastUsed", { when: formatWhen(entry.lastUsedAt) })
 		: t("settings.secretsNeverUsed");
+}
+
+function scopeLabel(scope: SecretScope): string {
+	return scope === "all"
+		? t("settings.secretsScopeAll")
+		: t("settings.secretsScopeWorkspaces", { count: scope.length });
 }
 
 function WarningLine({ message, onRetry }: { message: string; onRetry?: () => void }): ReactNode {
@@ -247,6 +253,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const [formError, setFormError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);
+	const [widening, setWidening] = useState<string | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
 
 	const reload = useCallback((): void => {
@@ -354,6 +361,28 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		}
 	};
 
+	const widen = async (entry: SecretEntryView): Promise<void> => {
+		if (!rpc || widening) return;
+		setWidening(entry.name);
+		setActionError(null);
+		try {
+			const result = await rpc.request<{ entry?: SecretEntryView }>("secret.update", {
+				name: entry.name,
+				scope: "all",
+			});
+			if (result?.entry) {
+				const updated = result.entry;
+				setEntries(current => current.map(item => (item.name === updated.name ? updated : item)));
+			} else {
+				reload();
+			}
+		} catch (error) {
+			setActionError(t("settings.secretsUpdateFailed", { error: errorText(error) }));
+		} finally {
+			setWidening(null);
+		}
+	};
+
 	const remove = async (entry: SecretEntryView): Promise<void> => {
 		if (!rpc || deleting) return;
 		const accepted = await confirm(
@@ -435,12 +464,23 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 							<div className="gui-secret-row-main">
 								<div className="gui-secret-row-head">
 									<span className="gui-secret-name">{entry.name}</span>
-									<span className="gui-provider-chip">{t("settings.secretsScopeAll")}</span>
+									<span className="gui-provider-chip">{scopeLabel(entry.scope)}</span>
 								</div>
 								<div className="gui-secret-row-purpose">{entry.purpose || t("settings.secretsNoPurpose")}</div>
 							</div>
 							<span className="gui-secret-row-meta">{lastUsedText(entry)}</span>
 							<div className="gui-secret-row-actions">
+								{entry.scope !== "all" && (
+									<button
+										type="button"
+										className="gui-btn gui-btn-ghost"
+										data-secret-action="widen"
+										disabled={widening === entry.name}
+										onClick={() => void widen(entry)}
+									>
+										{t("settings.secretsAllowAll")}
+									</button>
+								)}
 								<button
 									type="button"
 									className="gui-btn gui-btn-ghost"

@@ -37,6 +37,52 @@ export function hoistToolMedia(
 	};
 }
 
+/** `request_secret` settles into one permanent transcript line. While the card is
+ *  above the composer there is nothing to draw here (the card IS the surface);
+ *  after the answer, the name, outcome and any narrowing stay readable. */
+function SecretLine({
+	args,
+	result,
+	running,
+}: {
+	args: unknown;
+	result?: ToolResultMessage;
+	running?: boolean;
+}): ReactNode {
+	if (running && !result) return null;
+	const details = detailsRecord(result) ?? {};
+	const argsRecord = typeof args === "object" && args !== null ? (args as Record<string, unknown>) : {};
+	const read = (key: string): string =>
+		typeof details[key] === "string"
+			? (details[key] as string)
+			: typeof argsRecord[key] === "string"
+				? (argsRecord[key] as string)
+				: "";
+	const status = typeof details.status === "string" ? details.status : undefined;
+	const narrowed = Array.isArray(details.scope) && details.scope.length > 0;
+	const state =
+		status === "saved"
+			? t("tools.secretLineSaved")
+			: status === "available"
+				? t("tools.secretLineAvailable")
+				: status === "cancelled"
+					? t("tools.secretLineCancelled")
+					: t("tools.secretLineInterrupted");
+	return (
+		<section
+			className="tr-secret-line"
+			data-status={status ?? "interrupted"}
+			aria-label={`${t("tools.secretLineLabel")} ${read("name")}`}
+		>
+			<span className="tr-secret-label">{t("tools.secretLineLabel")}</span>
+			<span className="tr-secret-name">{read("name") || t("tools.secretLineAnonymous")}</span>
+			{narrowed ? <span className="tr-secret-scope">{t("tools.secretScopeWorkspace")}</span> : null}
+			{read("purpose") ? <span className="tr-secret-purpose">{read("purpose")}</span> : null}
+			<span className="tr-secret-state">{state}</span>
+		</section>
+	);
+}
+
 /** Posting time in the viewer's locale, right-aligned on the title row. */
 function progressTime(timestamp: number | undefined): { label: string; iso: string } | null {
 	if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) return null;
@@ -171,6 +217,11 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// A progress update is prose, not a tool card; no fold, no "using" chrome.
 	if (name === "notify_user" && !mediaOnly) {
 		return <ProgressUpdate args={args} running={running} timestamp={timestamp} />;
+	}
+	// A secret request keeps one settled line; the typing surface is the card
+	// above the composer, not a transcript row.
+	if (name === "request_secret" && !mediaOnly) {
+		return <SecretLine args={args} result={result} running={running} />;
 	}
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";

@@ -45,6 +45,7 @@ import type {
 	SecretAnswerParams,
 	SecretDeleteParams,
 	SecretSetParams,
+	SecretUpdateParams,
 	SessionEntry,
 	AgentEvent as WireAgentEvent,
 	WireMessage,
@@ -6696,6 +6697,9 @@ export class DaemonServer {
 			}
 			case "secret.set": {
 				return this.#services.get<SecretService>("secrets").set((params ?? {}) as SecretSetParams);
+			}
+			case "secret.update": {
+				return this.#services.get<SecretService>("secrets").update((params ?? {}) as SecretUpdateParams);
 			}
 			case "secret.delete": {
 				return this.#services.get<SecretService>("secrets").delete((params ?? {}) as SecretDeleteParams);

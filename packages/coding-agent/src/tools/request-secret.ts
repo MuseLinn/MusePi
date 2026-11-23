@@ -15,6 +15,8 @@ import {
 	type AgentSecretUIContext,
 	agentSecretEnvName,
 	getAgentSecretStore,
+	type SecretScope,
+	secretScopeIncludes,
 	validateSecretName,
 } from "../secrets/agent-store";
 import type { ToolSession } from ".";
@@ -31,6 +33,8 @@ type RequestSecretParams = typeof requestSecretSchema.infer;
 export interface RequestSecretDetails {
 	name: string;
 	envName: string;
+	purpose: string;
+	scope: SecretScope;
 	status: "available" | "saved" | "cancelled";
 	meta?: import("./output-meta").OutputMeta;
 }
@@ -54,11 +58,17 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		const agentDir = this.session.settings.getAgentDir();
 		const store = getAgentSecretStore(agentDir);
 		const envName = agentSecretEnvName(name);
+		const cwd = this.session.cwd;
 
-		// A saved, decryptable value is immediately usable: the user's save WAS the
-		// consent, and bash injection does not gate on a second per-session grant.
+		// A saved, decryptable value this workspace may use is immediately usable:
+		// the user's save WAS the consent, and bash injection does not gate on a
+		// second per-session grant. A value saved for another workspace still
+		// needs the user's permission here, so it gets the `allow` card instead.
 		const existing = await store.getEntry(name);
-		if (existing && (await store.available(name))) return this.#success(name, envName, "available");
+		const readable = existing !== undefined && (await store.available(name));
+		if (existing && readable && secretScopeIncludes(existing.scope, cwd)) {
+			return this.#success(name, envName, purpose, existing.scope, "available");
+		}
 
 		const ui = this.session.uiContext as (ExtensionUIContext & AgentSecretUIContext) | undefined;
 		if (!ui?.requestSecret) {
@@ -70,34 +80,48 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		const request: AgentSecretRequest = {
 			name,
 			purpose,
-			// Stored metadata with an unreadable envelope needs a fresh fill.
-			kind: "fill",
+			// A readable value outside this workspace asks to extend its scope; a
+			// missing or unreadable one needs a fresh fill.
+			kind: existing && readable ? "allow" : "fill",
+			workspace: cwd,
 		};
 		const answer: AgentSecretAnswer | undefined = await ui.requestSecret(request);
 		if (!answer || answer.action === "cancel") {
-			return toolResult<RequestSecretDetails>({ name, envName, status: "cancelled" })
+			return toolResult<RequestSecretDetails>({
+				name,
+				envName,
+				purpose,
+				scope: existing?.scope ?? "all",
+				status: "cancelled",
+			})
 				.text(
 					`Secret request for ${envName} was cancelled by the user. Nothing was saved or injected for this session.`,
 				)
 				.done();
 		}
-		// `save` is persisted by the host before the answer resolves, so the tool
-		// only verifies reachability. `allow` remains accepted at the wire level
-		// for hosts that add a consent policy, but a plain save needs no grant.
-		if (!(await store.available(name))) {
+		// `save`/`allow` are persisted by the host before the answer resolves, so
+		// the tool only verifies reachability — both the value and this workspace.
+		const saved = await store.getEntry(name);
+		if (!saved || !(await store.available(name))) {
 			throw new ToolError(`The secret ${name} was not saved; the value is still unavailable.`);
 		}
-		return this.#success(name, envName, "saved");
+		if (!secretScopeIncludes(saved.scope, cwd)) {
+			throw new ToolError(`The secret ${name} is not allowed in this workspace.`);
+		}
+		return this.#success(name, envName, purpose, saved.scope, "saved");
 	}
 
 	#success(
 		name: string,
 		envName: string,
+		purpose: string,
+		scope: SecretScope,
 		status: RequestSecretDetails["status"],
 	): AgentToolResult<RequestSecretDetails> {
-		return toolResult<RequestSecretDetails>({ name, envName, status })
+		const where = scope === "all" ? "" : " in this workspace";
+		return toolResult<RequestSecretDetails>({ name, envName, purpose, scope, status })
 			.text(
-				`Secret ${name} is available to bash as $${envName}. The value stays on this machine and is never returned to the model.`,
+				`Secret ${name} is available to bash as $${envName}${where}. The value stays on this machine and is never returned to the model.`,
 			)
 			.done();
 	}

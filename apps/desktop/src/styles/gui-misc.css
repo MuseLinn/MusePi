@@ -896,6 +896,16 @@
 	pointer-events: none;
 }
 
+/* Secret card scope pick: every session or just the asking workspace. */
+.gui-secret-scope {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
+}
+.gui-secret-scope .gui-btn {
+	justify-content: center;
+}
+
 @keyframes gui-ask-pop-out {
 	from {
 		opacity: 1;

@@ -3643,3 +3643,39 @@ describe("deobfuscateAgentMessages (display restore)", () => {
 		expect(image.type === "image" && image.data).toBe(imageData);
 	});
 });
+
+describe("short plain secrets (4–7 characters)", () => {
+	it("redacts a standalone short value and leaves it inside words alone", () => {
+		const obfuscator = new SecretObfuscator([{ type: "plain", content: "1234" }]);
+		expect(obfuscator.obfuscate("vault 1234 opened")).not.toContain("1234");
+		expect(obfuscator.obfuscate("abc1234def")).toContain("abc1234def");
+	});
+
+	it("is a fixed point across repeated passes", () => {
+		const obfuscator = new SecretObfuscator([{ type: "plain", content: "a1b2" }]);
+		const once = obfuscator.obfuscate("pin a1b2 end");
+		expect(once).not.toContain("a1b2");
+		expect(obfuscator.obfuscate(once)).toBe(once);
+	});
+
+	it("registers a short value saved mid-session", () => {
+		const obfuscator = new SecretObfuscator([]);
+		obfuscator.addSecret("9876", "PIN");
+		expect(obfuscator.obfuscate("code 9876")).not.toContain("9876");
+	});
+
+	it("does not touch values below the floor", () => {
+		const obfuscator = new SecretObfuscator([{ type: "plain", content: "123" }]);
+		expect(obfuscator.obfuscate("code 123")).toBe("code 123");
+	});
+
+	it("keeps a longer secret intact when a short one is its prefix", () => {
+		const obfuscator = new SecretObfuscator([
+			{ type: "plain", content: "12345678" },
+			{ type: "plain", content: "1234" },
+		]);
+		const output = obfuscator.obfuscate("token 12345678 and pin 1234");
+		expect(output).not.toContain("12345678");
+		expect(output).not.toContain("1234");
+	});
+});

@@ -24,17 +24,21 @@ The full contract lives in [`docs/secrets.md`](../secrets.md).
 None.
 
 ## Outputs
-- `content[0].text`: one line per entry with name, purpose, scope and
-  availability (`$MUSEPI_SECRET_<NAME>`), or an empty-store sentence.
-- `details.entries`: `{ name, purpose, scope, available }[]`.
+- `content[0].text`: one line per entry with name, purpose, scope and whether it
+  is usable in the current workspace (`$MUSEPI_SECRET_<NAME>`), or an
+  empty-store sentence.
+- `details.entries`: `{ name, purpose, scope, available, usable }[]`.
 - Values never appear in either field; `available` is a boolean derived from
-  successful decryption, not the decrypted string.
+  successful decryption, not the decrypted string, and `usable` means the entry
+  is decryptable and its scope covers this session's working directory.
 
 ## Flow
 1. Reads the metadata sidecar and attempts to decrypt each listed entry.
 2. An entry whose envelope cannot be decrypted stays listed as
    `unavailable: value unreadable` so the user can save the value again via
    [`request_secret`](./request_secret.md) or Settings → Secrets.
+3. An entry scoped to other workspaces is listed as stored but not usable here;
+   [`request_secret`](./request_secret.md) opens the allow card for it.
 
 ## See also
 - [`docs/secrets.md`](../secrets.md) — storage layout, RPCs, scope, limitations

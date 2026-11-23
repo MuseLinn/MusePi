@@ -6,6 +6,7 @@ import {
 	inferCaseHint,
 	lookupFriendlyPlaceholderAlias,
 	MIN_OBFUSCATE_SECRET_LEN,
+	MIN_WORD_BOUNDED_SECRET_LEN,
 	PLACEHOLDER_RE,
 	placeholderWithoutFriendlyName,
 	resumePlaceholderScanAfterRejectedCandidate,
@@ -38,6 +39,10 @@ import {
 	regexHasUnresolvableShortMatchFallback,
 	regexRematchesInContext,
 } from "./replacement";
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -72,6 +77,9 @@ export class SecretObfuscator {
 
 	/** Replace-mode plain mappings: secret → replacement */
 	#replaceMappings = new Map<string, string>();
+
+	/** Short plain secrets (4–7 chars): word-bounded, one-way replacement. */
+	#shortReplaceMappings = new Map<string, string>();
 
 	/** Reverse lookup for LIVE deobfuscation (provider output, tool-call args):
 	 *  keyed placeholder → secret plus recursion policy. Only placeholders this
@@ -170,7 +178,12 @@ export class SecretObfuscator {
 			const mode = entry.mode ?? "obfuscate";
 			if (mode === "obfuscate") {
 				if (entry.content.length < MIN_OBFUSCATE_SECRET_LEN) {
-					// Tone down short plain secret obfuscation to avoid false matches on small words like "esp".
+					// Short values get a word-bounded one-way replacement instead of a
+					// reversible placeholder; below the floor they are left alone.
+					if (entry.content.length >= MIN_WORD_BOUNDED_SECRET_LEN) {
+						this.#registerShortSecret(entry.content);
+						hasRealSec = true;
+					}
 					continue;
 				}
 				const placeholder = this.#createPlaceholder(entry.content, entry.friendlyName);
@@ -242,16 +255,44 @@ export class SecretObfuscator {
 	 */
 	addSecret(content: string, friendlyName?: string): void {
 		if (content.length === 0) return;
-		if (this.#plainMappings.has(content) || this.#replaceMappings.has(content)) return;
+		if (
+			this.#plainMappings.has(content) ||
+			this.#replaceMappings.has(content) ||
+			this.#shortReplaceMappings.has(content)
+		) {
+			return;
+		}
+		this.#configuredSecretValues.add(content);
+		if (content.length < MIN_OBFUSCATE_SECRET_LEN) {
+			// Same rule as the constructor: a short value is redacted one-way where it
+			// stands alone, so a saved PIN never needs a reversible placeholder.
+			if (content.length >= MIN_WORD_BOUNDED_SECRET_LEN) this.#registerShortSecret(content);
+			return;
+		}
 		// Pass the RAW label, exactly like the constructor path:
 		// `#createPlaceholder` both sanitizes it and checks the raw string against
 		// configured secrets/regexes. Pre-sanitizing here would hide collisions.
-		this.#configuredSecretValues.add(content);
 		const placeholder = this.#createPlaceholder(content, friendlyName);
 		const index = this.#nextIndex++;
 		this.#plainMappings.set(content, index);
 		this.#obfuscateMappings.set(index, { secret: content, placeholder });
 		this.#generatedPlaceholders.add(placeholder);
+		this.#hasAny = true;
+	}
+
+	/** Short plain secret → word-bounded one-way marker, stable across restarts. */
+	#registerShortSecret(secret: string): void {
+		if (this.#shortReplaceMappings.has(secret)) return;
+		const length = secret.length;
+		let marker = ensureDistinctReplacement(generateDeterministicReplacement(secret), secret);
+		for (let salt = 1; this.#configuredSecretValues.has(marker); salt++) {
+			marker = ensureDistinctReplacement(
+				generateDeterministicReplacement(`${secret}\u0000${salt}`).slice(0, length),
+				secret,
+			);
+		}
+		this.#shortReplaceMappings.set(secret, marker);
+		this.#generatedReplaceChunks.add(marker);
 		this.#hasAny = true;
 	}
 
@@ -280,6 +321,12 @@ export class SecretObfuscator {
 		// Tracking by RANGE (not token value) keeps a fresh placeholder that happens
 		// to equal a prior one (same secret seen raw again) eligible for cross-match.
 		let origin = "I".repeat(text.length);
+		// 0. Short plain secrets (4–7 chars): one-way, word-bounded replacement.
+		// They never mint a reversible placeholder; the marker is stable across
+		// restarts so the provider-visible prefix does not drift.
+		if (this.#shortReplaceMappings.size > 0) {
+			({ text: result, origin } = this.#replaceShortOutsidePlaceholders(result, origin));
+		}
 		// 1. Process replace-mode plain secrets
 		for (const [secret, replacement] of [...this.#replaceMappings].sort((a, b) => b[0].length - a[0].length)) {
 			({ text: result, origin } = this.#replaceOutsidePlaceholdersTracked(result, origin, secret, replacement, "I"));
@@ -1025,6 +1072,59 @@ export class SecretObfuscator {
 		if (match === null) return false;
 		if (this.#prefixIsSecretShaped(match[1]!)) return false;
 		return this.#deobfuscateMap.has(`$$${match[2]}$$`);
+	}
+
+	/** A word-bounded pattern over every short plain secret, longest first. */
+	#shortPattern(): RegExp {
+		const values = [...this.#shortReplaceMappings.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp);
+		return new RegExp(`(?<![\\p{L}\\p{N}])(?:${values.join("|")})(?![\\p{L}\\p{N}])`, "gu");
+	}
+
+	/**
+	 * Replace short plain secrets where they stand alone, outside generated
+	 * placeholders, keeping the parallel origin tags. A marker is alphanumeric and
+	 * distinct from every configured value, so a later pass cannot re-match it.
+	 */
+	#replaceShortOutsidePlaceholders(text: string, origin: string): { text: string; origin: string } {
+		const pattern = this.#shortPattern();
+		PLACEHOLDER_RE.lastIndex = 0;
+		let outText = "";
+		let outOrigin = "";
+		let pending = 0;
+		const emitChunk = (from: number, to: number): void => {
+			if (from >= to) return;
+			const chunk = text.slice(from, to);
+			pattern.lastIndex = 0;
+			let last = 0;
+			for (;;) {
+				const match = pattern.exec(chunk);
+				if (match === null) break;
+				if (match[0].length === 0) {
+					pattern.lastIndex++;
+					continue;
+				}
+				const marker = this.#shortReplaceMappings.get(match[0]) ?? match[0];
+				outText += chunk.slice(last, match.index) + marker;
+				outOrigin += origin.slice(from + last, from + match.index) + "I".repeat(marker.length);
+				last = match.index + match[0].length;
+			}
+			outText += chunk.slice(last);
+			outOrigin += origin.slice(from + last, to);
+		};
+		for (;;) {
+			const match = PLACEHOLDER_RE.exec(text);
+			if (match === null) break;
+			if (!this.#isGeneratedPlaceholder(match[0])) {
+				resumePlaceholderScanAfterRejectedCandidate(match);
+				continue;
+			}
+			emitChunk(pending, match.index);
+			outText += match[0];
+			outOrigin += origin.slice(match.index, match.index + match[0].length);
+			pending = match.index + match[0].length;
+		}
+		emitChunk(pending, text.length);
+		return { text: outText, origin: outOrigin };
 	}
 
 	// Replace `search` with `replacement` outside known generated placeholders while

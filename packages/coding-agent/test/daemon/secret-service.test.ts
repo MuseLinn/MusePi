@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { type ApprovalBridge, createApprovalBridge, secretRequestPayload } from "../../src/daemon/approval-bridge";
 import { SecretService } from "../../src/daemon/services/secret-service";
 import type { AgentSecretUIContext } from "../../src/secrets/agent-store";
@@ -31,9 +31,15 @@ function setup(): {
 async function startRequest(
 	bridge: ApprovalBridge,
 	kind: "fill" | "allow" = "fill",
+	workspace?: string,
 ): Promise<{ requestId: string; pending: Promise<{ action: string } | undefined> }> {
 	const ui = bridge.uiContext as unknown as AgentSecretUIContext;
-	const pending = ui.requestSecret!({ name: "API_TOKEN", purpose: "curl the API", kind });
+	const pending = ui.requestSecret!({
+		name: "API_TOKEN",
+		purpose: "curl the API",
+		kind,
+		...(workspace ? { workspace } : {}),
+	});
 	const requestId = [...bridge.pendingSecrets.keys()][0]!;
 	return { requestId, pending };
 }
@@ -109,14 +115,65 @@ describe("SecretService RPC", () => {
 		expect(await pending).toEqual({ action: "allow" });
 	});
 
-	it("rejects a short saved value without consuming the request", async () => {
+	it("rejects a value below the floor without consuming the request", async () => {
 		const { bridge, service } = setup();
 		const { requestId, pending } = await startRequest(bridge);
 
-		await expect(service.answer({ requestId, action: "save", value: "short" })).rejects.toThrow(/at least 8/u);
+		await expect(service.answer({ requestId, action: "save", value: "abc" })).rejects.toThrow(/at least 4/u);
 		expect(bridge.pendingSecrets.has(requestId)).toBe(true);
 		await service.answer({ requestId, action: "cancel" });
 		expect(await pending).toEqual({ action: "cancel" });
+	});
+
+	it("a four-character value is accepted now that short values are word-bounded", async () => {
+		const { bridge, service, store } = setup();
+		const { requestId } = await startRequest(bridge);
+
+		expect(await service.answer({ requestId, action: "save", value: "1234" })).toEqual({ ok: true });
+		expect(await store.getValue("API_TOKEN")).toBe("1234");
+	});
+
+	it("workspace scope saves only that directory", async () => {
+		const { bridge, service, store } = setup();
+		const workspace = join(tmpdir(), "musepi-workspace-a");
+		const { requestId } = await startRequest(bridge, "fill", workspace);
+
+		expect(await service.answer({ requestId, action: "save", value: VALUE, scope: "workspace" })).toEqual({
+			ok: true,
+		});
+		expect((await store.getEntry("API_TOKEN"))?.scope).toEqual([resolve(workspace)]);
+	});
+
+	it("allow extends an existing entry to the asking workspace", async () => {
+		const { bridge, service, store } = setup();
+		const first = join(tmpdir(), "musepi-workspace-a");
+		const second = join(tmpdir(), "musepi-workspace-b");
+		await store.set("API_TOKEN", VALUE, "curl the API", [first]);
+		const { requestId, pending } = await startRequest(bridge, "allow", second);
+
+		expect(await service.answer({ requestId, action: "allow" })).toEqual({ ok: true });
+		expect(await pending).toEqual({ action: "allow" });
+		expect((await store.getEntry("API_TOKEN"))?.scope).toEqual(
+			expect.arrayContaining([resolve(first), resolve(second)]),
+		);
+	});
+
+	it("allow without a workspace fails and keeps the request open", async () => {
+		const { bridge, service, store } = setup();
+		await store.set("API_TOKEN", VALUE, "curl the API", [join(tmpdir(), "musepi-workspace-a")]);
+		const { requestId } = await startRequest(bridge, "allow");
+
+		await expect(service.answer({ requestId, action: "allow" })).rejects.toThrow(/no workspace/u);
+		expect(bridge.pendingSecrets.has(requestId)).toBe(true);
+	});
+
+	it("update widens a narrowed entry to every session", async () => {
+		const { service, store } = setup();
+		await store.set("API_TOKEN", VALUE, "curl the API", [join(tmpdir(), "musepi-workspace-a")]);
+
+		const result = await service.update({ name: "API_TOKEN", scope: "all" });
+		expect(result.entry.scope).toBe("all");
+		expect((await store.getEntry("API_TOKEN"))?.scope).toBe("all");
 	});
 
 	it("times out a parked request as cancel", async () => {
