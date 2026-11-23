@@ -310,6 +310,29 @@ const dispose = pi.registerSearchProvider({
 
 **Boundary**: the registry is process-wide, so a provider registered by one live session is visible to the automatic chain of another live session in the same process. Per-session visibility is not implemented; use `availability` to gate on session-independent facts only.
 
+## 8.2 Extension-contributed compaction methods (registerCompactionMethodProvider, 2026-11-23)
+
+A plugin can contribute one compaction method to `compaction.methodOrder`. It joins the same registry the five built-ins use, so it appears in the ordered picker and in every availability scan without a second selection path.
+
+```ts
+const dispose = pi.registerCompactionMethodProvider({
+	id: "acme-summarize",                  // conflicts throw; must not shadow a built-in id
+	label: "settings.compaction.method.soft.title",   // settings copy keys, not sentences
+	description: "settings.compaction.method.soft.desc",
+	available: ctx => ctx.model?.input.includes("text") === true,
+	async run(ctx) {
+		const summary = await summarize(ctx);           // ctx carries model, settings, trigger, signal
+		return { summary, firstKeptEntryId, tokensBefore };
+	},
+});
+```
+
+**Availability**: the host asks `available(ctx)` for the automatic pass and for manual `/compact`, so both agree on which methods can run. `ctx.trigger` is `pressure` / `overflow` / `idle` / `manual`; a method that cannot honor manual focus text returns `false` when `ctx.hasFocusInstructions` is set. Returning `{ decline: reason }` from `run` advances to the next method instead of failing the pass.
+
+**Ownership and degradation**: the registration belongs to the plugin instance and is released on unload or hot reload. An id with no registered provider is dropped from `compaction.methodOrder`, so uninstalling a method degrades to the built-in order instead of breaking every pass. Registering an id already owned by someone else throws instead of shadowing.
+
+**Boundary**: the provider owns only the condensation step. Committing the compaction entry, journaling spend (`compaction:<method>`) and re-anchoring context stay in the session maintenance host — a plugin cannot bypass the commit path, and it does not need to reimplement it.
+
 ## 9. 扩展注册魔术关键词(registerMagicKeyword,2026-10-11)
 
 扩展贡献一个**魔术关键词**:输入框里单独出现的词,提交时向模型追加一条隐藏提示。

@@ -299,6 +299,29 @@ const dispose = pi.registerSearchProvider({
 
 **边界**：注册表是进程级的，因此某个存活会话注册的 provider 也会出现在同进程另一个存活会话的自动链里。按会话隔离尚未实现；`availability` 只应用于与会话无关的判断。
 
+## 8.2 扩展贡献压缩方法（registerCompactionMethodProvider，2026-11-23）
+
+插件可以向 `compaction.methodOrder` 贡献一种压缩方法。它与内置五种共用同一个注册表，因此无需第二条选择路径就会出现在有序选择器和每一次可用性扫描里。
+
+```ts
+const dispose = pi.registerCompactionMethodProvider({
+	id: "acme-summarize",                  // 冲突会抛错；不得覆盖内置 id
+	label: "settings.compaction.method.soft.title",   // 设置文案键，不是英文句子
+	description: "settings.compaction.method.soft.desc",
+	available: ctx => ctx.model?.input.includes("text") === true,
+	async run(ctx) {
+		const summary = await summarize(ctx);           // ctx 带 model / settings / trigger / signal
+		return { summary, firstKeptEntryId, tokensBefore };
+	},
+});
+```
+
+**可用性**：自动压缩与手动 `/compact` 都问同一个 `available(ctx)`，两者不会对「哪种方法能跑」给出不同答案。`ctx.trigger` 取 `pressure` / `overflow` / `idle` / `manual`；无法利用手动焦点文本的方法，在 `ctx.hasFocusInstructions` 为真时返回 `false`。`run` 返回 `{ decline: 原因 }` 会推进到下一种方法，而不是让整趟失败。
+
+**所有权与降级**：注册归属插件实例，卸载或热重载时释放。没有注册 provider 的 id 会从 `compaction.methodOrder` 中丢弃，因此卸载一种方法会退回内置顺序，而不是让每趟压缩都失败。注册他人已占用的 id 会抛错，而不是静默覆盖。
+
+**边界**：provider 只负责压缩这一步。提交压缩条目、记账花费（`compaction:<method>`）与重锚上下文仍归会话维护宿主——插件既不能绕过提交路径，也不需要重写它。
+
 ## 9. 扩展注册魔术关键词（registerMagicKeyword，2026-10-11）
 
 扩展贡献一个**魔术关键词**：输入框里单独出现的词，提交时向模型追加一条隐藏提示。

@@ -48,6 +48,7 @@
 | 应用目录 provider seam | `packages/coding-agent/src/tools/computer/app-provider.ts`（`ApplicationProvider` / `ApplicationProviderRegistry` / `registerApplicationProvider`） | 同文件头部；宿主注册后 worker 经 `provider-call`/`provider-reply` 桥回调，`ComputerSessionSnapshot.applicationProvider` 声明本次运行由谁回答；disposer 释放即回退内置原生/文件系统目录 |
 | computer-use provider 槽位 | `packages/coding-agent/src/tools/computer/provider-slot.ts`（`ComputerProvider` / `ComputerProviderSlot` / `registerComputerProvider`） | 同文件头部；槽位只锁 provider 名，工具面由 provider 自己注册，disposer 先停止接单再等待其自有工作（owner 释放上限 3s）；`ComputerSessionSnapshot.computerProvider` 记接单中的 provider，空槽或释放中为 `builtin` |
 | Web 搜索 provider 注册表 | `packages/coding-agent/src/web/search/registry.ts`（`registerSearchProvider` / `unregisterSearchProvider` / 内置 18 项同表登记） | 同文件头部；候选链为「显式 → 用户 order → 内置顺序 → 注册顺序」，扩展注册随实例生命周期释放；`docs/extensions-dev.md` §8.1 |
+| 压缩方法 provider seam | `packages/coding-agent/src/session/compaction-method-provider.ts`（`CompactionMethodProvider` / `registerCompactionMethodProvider`）+ 内置五方法 `compaction-builtin-methods.ts` | 同文件头部；`compaction.methodOrder` 的可用性判定与选择项由 provider 回答，`settings.schema` 合并插件贡献的方法（同 `memory.backend` 规则），未注册 id 在配置里被丢弃并回退内置顺序；执行体仍归会话维护（提交、花费记账、上下文重锚不外包） |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。
 
