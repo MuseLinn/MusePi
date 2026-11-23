@@ -1,0 +1,43 @@
+{
+	"name": "musepi-tool-workflow",
+	"version": "0.7.7",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"description": "Run a JavaScript orchestration across subagents.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
+	},
+	"files": [
+		"lib",
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json",
+		"locale"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
+	"musepi": {
+		"label": "Workflow",
+		"description": "Run a JavaScript orchestration across subagents.",
+		"icon": "🕸",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}

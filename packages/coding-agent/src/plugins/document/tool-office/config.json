@@ -1,0 +1,14 @@
+{
+	"fields": [
+		{
+			"key": "maxChars",
+			"type": "number",
+			"label": "maxChars",
+			"restart": "session",
+			"default": 120000,
+			"min": 1000,
+			"max": 500000,
+			"description": "Default character ceiling for extracted text."
+		}
+	]
+}

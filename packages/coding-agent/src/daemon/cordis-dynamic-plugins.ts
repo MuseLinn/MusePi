@@ -27,7 +27,7 @@
  *   cordis ctx，无需再包一层 vm。但这只收窄 API 面，**不是进程隔离**：
  * - 扩展与 daemon 同进程全权限运行（环境变量、文件系统、网络都可达）。
  *   零信任前提我们不具备——代码是用户自己装的，不是模型现场生成的。
- * - API 面与生产会话装载**同源**（loader.ts 的 createConcreteExtensionAPI
+ * - API 面与生产会话装载**同源**（loader.ts 的 createPluginAPI
  *   唯一工厂 + importAndBindExtension 同一条 import/bind 管线），本文件只
  *   加两样东西：ctx.effect 效果账本壳（ledgerApi，每登记 verb 一条带
  *   标签 effect + dispose 反向撤销）与跨扩展命令名碰撞守卫。
@@ -695,8 +695,8 @@ export class CordisDynamicPluginRuntime {
 
 	async #sharedRuntime(): Promise<LoadExtensionsResult["runtime"]> {
 		if (!this.#runtime) {
-			const { ExtensionRuntime } = await import("../extensibility/plugin-runtime/extension-api");
-			this.#runtime = new ExtensionRuntime();
+			const { PluginRuntime } = await import("../extensibility/plugin-runtime/plugin-api");
+			this.#runtime = new PluginRuntime();
 		}
 		return this.#runtime;
 	}

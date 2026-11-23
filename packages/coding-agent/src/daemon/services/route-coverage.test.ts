@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExtensionRuntime } from "../../extensibility/plugin-runtime/extension-api";
+import { PluginRuntime } from "../../extensibility/plugin-runtime/plugin-api";
 import { BlobStore } from "../../session/blob-store";
 import { ViewStore } from "../view-store";
 import { AgentsService } from "./agents-service";
@@ -118,7 +118,7 @@ function buildRegistry(): HostServices {
 	// DesignSystemsService 只认领路由（design.systems.list），stub 掉宿主运行时加载。
 	services.register(
 		new DesignSystemsService({
-			extensionRuntimeLoad: async () => ({ extensions: [], errors: [], runtime: new ExtensionRuntime() }),
+			extensionRuntimeLoad: async () => ({ extensions: [], errors: [], runtime: new PluginRuntime() }),
 		}),
 	);
 	services.register(

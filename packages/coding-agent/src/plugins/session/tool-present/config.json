@@ -1,0 +1,14 @@
+{
+	"fields": [
+		{
+			"key": "maxFiles",
+			"type": "number",
+			"label": "maxFiles",
+			"restart": "session",
+			"default": 8,
+			"min": 1,
+			"max": 32,
+			"description": "Maximum files one present call may declare."
+		}
+	]
+}

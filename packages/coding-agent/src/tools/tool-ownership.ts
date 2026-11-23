@@ -168,6 +168,9 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	todo: { domain: "tool", id: "todo" },
 	notify_user: { domain: "tool", id: "notify" },
 	knowledge: { domain: "tool", id: "knowledge" },
+	present: { domain: "tool", id: "present" },
+	office_read: { domain: "tool", id: "office" },
+	workflow: { domain: "tool", id: "workflow" },
 	// Skill authoring and image inspection.
 	manage_skill: { domain: "tool", id: "manage_skill" },
 	inspect_image: { domain: "tool", id: "inspect_image" },

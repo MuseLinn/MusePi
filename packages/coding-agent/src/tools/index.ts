@@ -38,13 +38,16 @@ import { MemoryRecallTool } from "./memory-recall";
 import { MemoryReflectTool } from "./memory-reflect";
 import { MemoryRetainTool } from "./memory-retain";
 import { NotifyUserTool } from "./notify-user";
+import { OfficeReadTool } from "./office";
 import { wrapToolWithMetaNotice } from "./output-meta";
+import { PresentTool } from "./present";
 import { ReadTool } from "./read";
 import { RequestSecretTool } from "./request-secret";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
 import { TodoTool } from "./todo";
 import { isToolOwnerActive, resolveToolImplementation } from "./tool-ownership";
+import { WorkflowTool } from "./workflow";
 import { WriteTool } from "./write";
 import { isMountableUnderXdev } from "./xdev";
 import { YieldTool } from "./yield";
@@ -93,6 +96,7 @@ export * from "./todo";
 export * from "./tool-ownership";
 export * from "./tts";
 export * from "./vibe";
+export * from "./workflow";
 export * from "./write";
 export * from "./xdev";
 export * from "./yield";
@@ -124,6 +128,9 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	hub: s => new HubTool(s),
 	todo: s => new TodoTool(s),
 	knowledge: s => new KnowledgeTool(s),
+	present: s => new PresentTool(s),
+	office_read: s => new OfficeReadTool(s),
+	workflow: s => new WorkflowTool(s),
 	request_secret: s => new RequestSecretTool(s),
 	list_secrets: s => new ListSecretsTool(s),
 	// Session-creation gate: the prompt and tool schema are fixed once a

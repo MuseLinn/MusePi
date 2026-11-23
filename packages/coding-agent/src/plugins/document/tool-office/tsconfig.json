@@ -1,0 +1,22 @@
+{
+	"extends": "../../../../tsconfig.plugin-package.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"outDir": "lib",
+		"tsBuildInfoFile": "node_modules/.cache/tsbuildinfo",
+		"declarationDir": "lib/types"
+	},
+	"references": [
+		{
+			"path": "../../../../tsconfig.plugin-host.json"
+		}
+	],
+	"include": [
+		"*.ts",
+		"*.tsx"
+	],
+	"exclude": [
+		"lib",
+		"node_modules"
+	]
+}

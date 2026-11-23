@@ -24,5 +24,7 @@ export const STANDARD_TOP_LEVEL_TOOL_NAMES: readonly string[] = [
 	"manage_skill",
 	"todo",
 	"ask",
+	"present",
+	"workflow",
 	"web_search",
 ] as const;

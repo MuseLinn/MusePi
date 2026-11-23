@@ -1,0 +1,43 @@
+{
+	"name": "musepi-tool-office",
+	"version": "0.7.7",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"description": "Read text and structure from Word, Excel and PowerPoint files.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
+	},
+	"files": [
+		"lib",
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json",
+		"locale"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
+	"musepi": {
+		"label": "Office",
+		"description": "Read text and structure from Word, Excel and PowerPoint files.",
+		"icon": "📄",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"fields": [
+		{
+			"key": "maxResultChars",
+			"type": "number",
+			"label": "maxResultChars",
+			"restart": "session",
+			"default": 50000,
+			"min": 1000,
+			"max": 500000,
+			"description": "Rendered workflow result ceiling; longer values are truncated with a notice."
+		}
+	]
+}

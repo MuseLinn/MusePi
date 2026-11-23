@@ -1,0 +1,43 @@
+{
+	"name": "musepi-tool-present",
+	"version": "0.7.7",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"description": "Declare existing files as final deliverables for the user.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
+	},
+	"files": [
+		"lib",
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json",
+		"locale"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
+	"musepi": {
+		"label": "Present",
+		"description": "Declare existing files as final deliverables for the user.",
+		"icon": "📎",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}
