@@ -1,0 +1,25 @@
+{
+  "name": "musepi-tool-security-scan",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Security Scan",
+    "description": "Workspace security scanning.",
+    "icon": "🛡️",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "scan",
+        "entry": "./scan.ts",
+        "description": "Security Scan"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}

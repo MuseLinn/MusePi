@@ -1,0 +1,15 @@
+{
+	"name": "musepi-tool-debug",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Debug",
+		"description": "Session diagnostics and inspection.",
+		"icon": "🐞",
+		"extensions": ["./index.ts"],
+		"components": [{ "id": "debug", "entry": "./debug.ts", "description": "调试工具。" }],
+		"host": { "readonly": true }
+	}
+}

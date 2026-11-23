@@ -1,0 +1,15 @@
+{
+	"name": "musepi-tool-checkpoint",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "checkpoint",
+		"description": "检查点工具。",
+		"icon": "⏱️",
+		"extensions": ["./index.ts"],
+		"components": [{ "id": "checkpoint", "entry": "./checkpoint.ts", "description": "检查点工具。" }],
+		"host": { "readonly": true }
+	}
+}

@@ -1,0 +1,25 @@
+{
+  "name": "musepi-tool-manage-skill",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Manage Skill",
+    "description": "Author managed skills.",
+    "icon": "🧩",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "manage",
+        "entry": "./manage.ts",
+        "description": "Manage Skill"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}

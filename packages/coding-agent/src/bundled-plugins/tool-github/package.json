@@ -1,0 +1,25 @@
+{
+  "name": "musepi-tool-github",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "GitHub",
+    "description": "Issues, PRs and search via the gh CLI.",
+    "icon": "🐙",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "github",
+        "entry": "./github.ts",
+        "description": "GitHub 操作工具。"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}

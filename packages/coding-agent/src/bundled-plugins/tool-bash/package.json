@@ -1,0 +1,25 @@
+{
+  "name": "musepi-tool-bash",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Shell",
+    "description": "Shell command execution.",
+    "icon": "⌨️",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "bash",
+        "entry": "./bash.ts",
+        "description": "Shell"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}

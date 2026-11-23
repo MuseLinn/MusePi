@@ -1,0 +1,25 @@
+{
+  "name": "musepi-tool-task",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Subagent",
+    "description": "Delegate work to subagents.",
+    "icon": "🧭",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "task",
+        "entry": "./task.ts",
+        "description": "Subagent"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}

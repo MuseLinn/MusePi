@@ -1,0 +1,25 @@
+{
+  "name": "musepi-tool-eval",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Code Evaluation",
+    "description": "Run Python/JS/Ruby/Julia cells.",
+    "icon": "⚡",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "eval",
+        "entry": "./run.ts",
+        "description": "Code Evaluation"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}
