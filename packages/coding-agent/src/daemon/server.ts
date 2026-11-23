@@ -1663,8 +1663,11 @@ export class DaemonServer {
 								defaultVersion:
 									entry.version === undefined
 										? null
-										: { version: entry.version, installSpec: `${entry.name}@${entry.version}` },
+										: { version: entry.version, install: { target: `${entry.name}@${entry.version}` } },
+								// The catalog row carries one resolved version; the full set needs the
+								// repository tag read that `list_versions` performs on demand.
 								versionCount: entry.version === undefined ? 0 : 1,
+								updateAvailable: entry.updateAvailable === true,
 							})),
 							total: matched.length,
 							nextOffset: input.offset + slice.length < matched.length ? input.offset + slice.length : null,
@@ -1676,10 +1679,19 @@ export class DaemonServer {
 						const { entries } = await found.list();
 						const entry = entries.find(item => item.marketplace === input.target && item.name === input.name);
 						if (!entry) throw new Error(`${input.name} is not listed in ${input.target}`);
+						// Version discovery reads the repository's tags; a source without a
+						// repository (a relative path, a bare npm package) has nothing to choose
+						// between, so the catalog version stands alone.
+						const choices = await found.versionChoices(input.name, input.target).catch(() => null);
 						const versions =
-							entry.version === undefined
-								? []
-								: [{ version: entry.version, installSpec: `${entry.name}@${entry.version}` }];
+							choices !== null && choices.versions.length > 0
+								? choices.versions.map(candidate => ({
+										version: candidate.version,
+										install: { target: `${entry.name}@${candidate.version}` },
+									}))
+								: entry.version === undefined
+									? []
+									: [{ version: entry.version, install: { target: `${entry.name}@${entry.version}` } }];
 						const slice = versions.slice(input.offset, input.offset + input.limit);
 						return {
 							name: entry.name,

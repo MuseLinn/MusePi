@@ -12,13 +12,7 @@ const DISABLE_THIRD_PARTY_SKILLS = {
 	enableAgentsProject: false,
 } as const;
 
-const PRODUCT_SKILLS = [
-	"board-design",
-	"musepi-extension-dev",
-	"musepi-help",
-	"ui-ux-pro-max",
-	"widget-design",
-] as const;
+const PRODUCT_SKILLS = ["board-design", "musepi-plugin-dev", "musepi-help", "ui-ux-pro-max", "widget-design"] as const;
 const PRODUCT_SKILL_NAMES = new Set<string>(PRODUCT_SKILLS);
 
 describe("MusePi plugin file skills", () => {

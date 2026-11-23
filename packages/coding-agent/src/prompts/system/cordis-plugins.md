@@ -1,6 +1,6 @@
 # Cordis 插件（创造模式的默认机制）
 
-动态 Cordis 插件是 MusePi 的插件形态：它临时扩展**当前会话**的能力，用 `apply(ctx)` 消费服务、监听事件、注册模型工具。用户说「给我做个插件」时，默认就是这一种；`extension_*` 那套 Track B 旧扩展不是默认目标（见文末边界）。
+Cordis 插件是 MusePi 的插件形态：它扩展宿主或**当前会话**的能力，用 `apply(ctx)` 消费服务、监听事件、注册模型工具。用户说「给我做个插件」时，默认就是这一种。
 
 - 插件与版本只存在于当前会话的进程内，**define 不写盘**，进程或会话结束后不保留。
 - 沙箱限制意外误用，不是对恶意代码的安全边界。
@@ -43,11 +43,10 @@
 ## 从原型到交付
 
 - **原型**：用 `cordis_*` 在会话内定义并运行，先验证交互与工具语义。它不写盘、不跨会话，适合试错。
-- **交付**：把同一份能力写成 MusePi 的 Track A 插件包——入口 `index.ts` 具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect` 注册。包放在工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager` 管理：`list_bundles` / `install_bundle` / `set_bundle` 管包与 profile 组合，`list_plugins` / `set_plugin` 按组合条目启停，`list_version_exemptions` / `set_version_exemption` 处理精确版本豁免。非自动批准会话里安装/卸载会被拒绝，让用户在扩展页完成。安装/启用才是插件的持久入口；原型只做临时验证。
-- `extension_load` / `extension_reload` 等 `extension_*` 是 **Track B 兼容加载器**，用于把其他 agent 的旧扩展格式加载进当前会话。它们不属于创造工具集，创建模式不会自动激活，也不要用它们验证新插件。
-- 两层的代码契约不同：动态 `hostCode` 是沙箱函数体（只有 `defineTool` / timers / console）；插件包入口拿到的是宿主 `ExtensionAPI`（`ctx.tools` / `ctx.slots` / …）。不要把沙箱代码直接贴进插件包，也不要反过来。
+- **交付**：把同一份能力写成 MusePi 的插件包——入口具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.tools` / `ctx.slots` / `ctx.commands` / `ctx.on` / `ctx.effect` 注册。包放在工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager` 管理：`list_bundles` / `install_bundle` / `set_bundle` 管包与 profile 组合，`list_plugins` / `set_plugin` 按组合条目启停，`list_version_exemptions` / `set_version_exemption` 处理精确版本豁免；要装市场里的包时先用 `plugin_market` 查 `install.target`。非自动批准会话里安装/卸载会被拒绝，让用户在插件页完成。安装/启用才是插件的持久入口；原型只做临时验证。
+- 两层的代码契约不同：动态 `hostCode` 是沙箱函数体（只有 `defineTool` / timers / console）；插件包入口拿到的是宿主 `PluginAPI`（`ctx.tools` / `ctx.slots` / …）。不要把沙箱代码直接贴进插件包，也不要反过来。
 
 ## 默认与边界
 
-- 新插件一律用 **Track A 入口**：具名导出 `name` / `inject` / `provide` / `apply`，通过 `ctx.*` 注册能力。`export default function (pi)` + 平铺 `pi.register*` 是 Track B 兼容入口，只用于既有旧扩展；不要用它创建新插件，也不要把其他 agent 的扩展格式带进来。
-- 没有额外上下文时，「创建插件」= 当前会话里的 Cordis 原型 + 可安装的 Track A 插件包（按上面的交付路径）。不要因为讨论到 Cordis 就认定请求是插件任务；只有当成果属于当前运行时、并应作为插件交付时才用它。实现机制由你选择，不要让用户选择内部概念。
+- 新插件一律用具名导出入口：`name` / `inject` / `provide` / `apply`，通过 `ctx.*` 注册能力。
+- 没有额外上下文时，「创建插件」= 当前会话里的 Cordis 原型 + 可安装的插件包（按上面的交付路径）。不要因为讨论到 Cordis 就认定请求是插件任务；只有当成果属于当前运行时、并应作为插件交付时才用它。实现机制由你选择，不要让用户选择内部概念。

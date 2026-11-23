@@ -402,6 +402,17 @@ export class MarketplaceService implements DaemonService {
 	/** RPC marketplace.detail：读取完整插件介绍与技能，复用持久化源码缓存。
 	 *  同时给出可选版本（仓库 tag + catalog/已装版本），详情页据此提供选择升级；
 	 *  版本列表读取失败按空处理——它只是升级入口，不该拦住宿主读详情。 */
+	/**
+	 * Versions offered for one catalog plugin, read the same way the detail
+	 * dialog reads them: the repository's tags plus the catalog version. Exposed
+	 * so the model-facing `plugin_market` reports the set a person would choose
+	 * from, not just the single version the catalog row resolved.
+	 */
+	async versionChoices(name: string, marketplace: string): Promise<PluginVersionChoices> {
+		const manager = await this.#buildMarketplaceManager();
+		return manager.pluginVersionChoices(name, marketplace);
+	}
+
 	async detail(params: unknown) {
 		const p = (params ?? {}) as { name?: unknown; marketplace?: unknown };
 		if (typeof p.name !== "string" || typeof p.marketplace !== "string") {
