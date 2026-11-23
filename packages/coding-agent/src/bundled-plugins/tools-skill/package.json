@@ -1,0 +1,17 @@
+{
+	"name": "musepi-tools-skill",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Skill Tools",
+		"description": "Managed-skill authoring for the auto-learn loop.",
+		"icon": "🧩",
+		"extensions": ["./index.ts"],
+		"components": [{ "id": "manage", "entry": "./manage.ts", "description": "托管技能管理。" }],
+		"host": {
+			"readonly": true
+		}
+	}
+}

@@ -163,6 +163,23 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	task: { domain: "tool", id: "task" },
 	hub: { domain: "tool", id: "hub" },
 	web_search: { domain: "tool", id: "web_search" },
+	// Session interaction: each is its own component in `tools-session`.
+	ask: { domain: "tool", id: "ask" },
+	todo: { domain: "tool", id: "todo" },
+	notify_user: { domain: "tool", id: "notify" },
+	knowledge: { domain: "tool", id: "knowledge" },
+	// Skill authoring and image inspection.
+	manage_skill: { domain: "tool", id: "manage_skill" },
+	inspect_image: { domain: "tool", id: "inspect_image" },
+	// External-dependency and session-state tools, each its own component.
+	github: { domain: "tool", id: "github" },
+	security_scan: { domain: "tool", id: "scan" },
+	checkpoint: { domain: "tool", id: "checkpoint" },
+	rewind: { domain: "tool", id: "rewind" },
+	request_secret: { domain: "tool", id: "request" },
+	list_secrets: { domain: "tool", id: "list" },
+	debug: { domain: "tool", id: "debug" },
+	connector_catalog: { domain: "tool", id: "catalog" },
 	// Memory tools: each is its own component in the memory-tools package, so a
 	// deployment can ship the read side without the write side.
 	retain: { domain: "memory", id: "retain" },

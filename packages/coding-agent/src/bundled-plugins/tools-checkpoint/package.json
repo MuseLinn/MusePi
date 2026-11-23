@@ -1,0 +1,30 @@
+{
+  "name": "musepi-tools-checkpoint",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Checkpoints",
+    "description": "Session checkpoint and rewind.",
+    "icon": "⏱️",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "checkpoint",
+        "entry": "./checkpoint.ts",
+        "description": "检查点工具。"
+      },
+      {
+        "id": "rewind",
+        "entry": "./rewind.ts",
+        "description": "回滚检查点工具。"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}

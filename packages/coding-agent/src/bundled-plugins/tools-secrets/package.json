@@ -1,0 +1,30 @@
+{
+  "name": "musepi-tools-secrets",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "musepi": {
+    "label": "Secret Requests",
+    "description": "Ask the user for a secret without seeing its value.",
+    "icon": "🔑",
+    "extensions": [
+      "./index.ts"
+    ],
+    "components": [
+      {
+        "id": "request",
+        "entry": "./request.ts",
+        "description": "索取密钥工具。"
+      },
+      {
+        "id": "list",
+        "entry": "./list.ts",
+        "description": "列出密钥工具。"
+      }
+    ],
+    "host": {
+      "readonly": true
+    }
+  }
+}
