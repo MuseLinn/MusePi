@@ -93,7 +93,7 @@ describe("host-scope bundled plugins", () => {
 			await ensureHostHalfPluginsLoaded(process.cwd());
 			const service = getHostService<HmrService>("hmr");
 			expect(service?.restartRequired).toBeNull();
-			await writePluginConfigValue("extension-module:hmr", "debounce", 321);
+			await writePluginConfigValue("hmr", "debounce", 321);
 
 			await reloadHostPlugins([storePath]);
 

@@ -34,6 +34,7 @@ import type { Extension, LoadExtensionsResult } from "../../extensions/types";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
 import { disposePluginPrimitives } from "./cordis-primitives";
+import { readDeclaredPluginConfig } from "./declared-config";
 import type { MountContext } from "./mount";
 import { mountPlugin } from "./mount";
 
@@ -268,24 +269,7 @@ async function sessionAdmissiblePaths(
 	return admissible;
 }
 
-/** The default config reader: the plugin's declared fields, filled from the store. */
+/** The default config reader: the shared Track A reader (one store, one id). */
 export async function defaultSessionConfigReader(): Promise<MountContext["readConfig"]> {
-	const [
-		{ readPluginConfigStore },
-		{ coerceConfigValues },
-		{ readExtensionPluginMeta },
-		{ getExtensionNameFromPath },
-	] = await Promise.all([
-		import("../../extensions-center/plugin-config-store"),
-		import("@musepi/pi-wire"),
-		import("../../extensions/plugin-manifest"),
-		import("../../../discovery/helpers"),
-	]);
-	return async entryPath => {
-		const meta = await readExtensionPluginMeta(entryPath);
-		const store = await readPluginConfigStore();
-		const id = `extension-module:${getExtensionNameFromPath(entryPath)}`;
-		const fields = meta?.fields ?? [];
-		return { fields, values: coerceConfigValues(fields, store[id]) };
-	};
+	return readDeclaredPluginConfig;
 }

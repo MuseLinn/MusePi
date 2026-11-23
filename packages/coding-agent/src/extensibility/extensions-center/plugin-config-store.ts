@@ -1,8 +1,8 @@
 /**
  * 插件配置存储:扩展中心管理页表单的写入落点。
  *
- * 形态:`<agentDir>/extensions/plugin-config.json` = `{ [extensionId]:
- * { [key]: value } }`。键空间与 disabledExtensions 一致(`kind:name`),
+ * 形态:`<agentDir>/extensions/plugin-config.json` = `{ [packageName]:
+ * { [key]: value } }`。身份是包名(`pluginEntryId`,与启停同一键空间);
  * 值是已经过 `coerceConfigFieldValue` 钳制的合法值——钳制在 RPC 处理
  * 里做,本模块只负责忠实地读写字节(fail-soft:文件损坏按空存储处理,
  * 绝不抛错阻断扩展登记)。

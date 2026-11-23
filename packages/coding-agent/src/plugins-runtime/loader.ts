@@ -27,6 +27,7 @@ import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/ext
 import type { Extension } from "../extensibility/extensions/types";
 import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
 import { disposePluginPrimitives } from "../extensibility/plugins/runtime/cordis-primitives";
+import { readDeclaredPluginConfig } from "../extensibility/plugins/runtime/declared-config";
 import { ensureHostPlugins, resetHostPlugins } from "../extensibility/plugins/runtime/host-runtime";
 import { registerMagicKeyword } from "../modes/magic-keyword-registry";
 import { EventBus } from "../utils/event-bus";
@@ -65,26 +66,12 @@ export async function discoverBundledSessionPromptPluginPaths(): Promise<string[
 }
 
 /**
- * Coerce the values of one bundled package's declared `musepi.config` fields,
- * the same read `ctx.config` performs (one store, one id scheme).
+ * Coerce the values of one bundled package's declared `musepi.config` fields
+ * through the shared Track A reader (`ctx.config` reads the same values from
+ * the same store and key).
  */
 async function readDeclaredConfig(entry: string): Promise<Record<string, unknown>> {
-	const [
-		{ readExtensionPluginMeta },
-		{ readPluginConfigStore },
-		{ coerceConfigValues },
-		{ getExtensionNameFromPath },
-	] = await Promise.all([
-		import("../extensibility/extensions/plugin-manifest"),
-		import("../extensibility/extensions-center/plugin-config-store"),
-		import("@musepi/pi-wire"),
-		import("../discovery/helpers"),
-	]);
-	const meta = await readExtensionPluginMeta(entry);
-	if (!meta || meta.fields.length === 0) return {};
-	const store = await readPluginConfigStore();
-	const id = `extension-module:${getExtensionNameFromPath(entry)}`;
-	return coerceConfigValues(meta.fields, store[id]);
+	return (await readDeclaredPluginConfig(entry)).values;
 }
 
 export interface BundledPluginLoader {

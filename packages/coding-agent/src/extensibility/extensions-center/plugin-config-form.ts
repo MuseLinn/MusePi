@@ -119,7 +119,7 @@ function baseOf(fields: readonly ConfigFieldDesc[] | undefined): PluginConfigVal
 /**
  * Build a form over one namespace.
  *
- * @param namespace - the extension id (`kind:name`) owning the values.
+ * @param namespace - the plugin package identity owning the values.
  * @param fields - the namespace's declared config fields, when the caller has
  *   them; their defaults become the composition base.
  * @param storePath - overrides the store file (tests inject a temp path).

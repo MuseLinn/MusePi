@@ -553,7 +553,7 @@ export default async function (pi: ExtensionAPI) {
 
 - 取值与扩展中心表单、`extensions.setConfig` 写入共用同一条 `coerceConfigValues` 钳制链路（daemon/GUI 单一权威在 `@musepi/pi-wire`）：存储坏值回退声明默认，未声明键 `get` 返回 `undefined`、`getAll` 被过滤。
 - 生效语义：`restart: "none"` 字段每次调用现读——GUI 表单改完立即可见；`session` 字段在扩展加载时快照，新会话/重载后生效；`daemon` 字段约定需重启 daemon。
-- 存储落点：`<agentDir>/extensions/plugin-config.json`，键空间与 `disabledExtensions` 一致（`extension-module:<name>`）。
+- 存储落点：`<agentDir>/extensions/plugin-config.json`，键空间与 `disabledExtensions` 一致（包名，`pluginEntryId`；Track A 运行时读取与表单写入共用这一身份）。
 
 ### 13.1 插件名字的本地化（`locale/<tag>.json`，dsh parity，2026-11-15）
 

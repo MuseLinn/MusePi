@@ -62,6 +62,7 @@ import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from ".
 import type { HmrService } from "../plugins/hmr/service";
 import { type PluginEntryModule, resolvePluginEntry, toFactory } from "../plugins/runtime/cordis-entry";
 import { registerEffect } from "../plugins/runtime/cordis-primitives";
+import { pluginConfigStoreKey } from "../plugins/runtime/declared-config";
 import { getHostService } from "../plugins/runtime/host-services";
 import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
@@ -610,21 +611,6 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly config: ExtensionAPI["config"] = {
 		get: async <T>(key: string): Promise<T | undefined> => (await this.#configValues())[key] as T | undefined,
 		getAll: async (): Promise<Record<string, unknown>> => ({ ...(await this.#configValues()) }),
-		set: async (key: string, value: unknown): Promise<unknown> => {
-			const fields = await this.#configFields();
-			const field = fields.find(candidate => candidate.key === key);
-			if (field === undefined) {
-				throw new Error(
-					`"${key}" is not a declared config field; declare it in the package manifest's musepi.config before writing it`,
-				);
-			}
-			// Coerce before writing, not after reading: a value that does not fit its
-			// declared type would be stored verbatim and then fall back to the default
-			// on the next read — a write that reports success and changes nothing.
-			const coerced = coerceConfigFieldValue(field, value);
-			await writePluginConfigValue(this.#configStoreId(), key, coerced);
-			return coerced;
-		},
 	};
 
 	#configFieldsPromise: Promise<ConfigFieldDesc[]> | null = null;
@@ -637,17 +623,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 
 	async #configValues(): Promise<Record<string, unknown>> {
 		const [fields, store] = await Promise.all([this.#configFields(), readPluginConfigStore()]);
-		const id = `extension-module:${getExtensionNameFromPath(this.extension.path)}`;
-		return coerceConfigValues(fields, store[id]);
-	}
-
-	/**
-	 * This extension's own key in the plugin config store — the same id
-	 * {@link #configValues} reads with, so a write and the next read address
-	 * one entry instead of two.
-	 */
-	#configStoreId(): string {
-		return `extension-module:${getExtensionNameFromPath(this.extension.path)}`;
+		return coerceConfigValues(fields, store[pluginConfigStoreKey(this.extension.path)]);
 	}
 
 	/** Register a cleanup owned by this extension (dsh `ctx.effect`); the

@@ -44,21 +44,6 @@ function settings(overrides: Partial<CompactionSettings> = {}): CompactionSettin
 const premium = { provider: "acme", id: "wide", cost: { longContext: { inputThreshold: 272_000 } } };
 const flat = { provider: "acme", id: "small", cost: {} };
 
-function mount(capPercent?: number): void {
-	const host = pluginHost();
-	apply(host.api, capPercent === undefined ? undefined : { capPercent });
-	for (const strategy of host.registered) disposers.push(() => {});
-	// Registration returned a disposer through the host wrapper; drop it after the test.
-	disposers.push(() => {
-		const strategy = host.registered[0];
-		if (strategy) {
-			// The seam refuses a duplicate, so removal goes through its own disposer.
-			// `registerCompactionThresholdStrategy` was called inside the wrapper, and
-			// the returned disposer is captured below.
-		}
-	});
-}
-
 describe("compaction-tiers plugin", () => {
 	test("caps a premium long-context model at the configured percentage", () => {
 		const dispose = applyPlugin();

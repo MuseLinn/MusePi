@@ -899,9 +899,7 @@ export class CordisDynamicPluginRuntime {
 			name: `dynamic-extension:${record.key}`,
 			apply: async ctx => {
 				const { mountPlugin } = await import("../extensibility/plugins/runtime/mount");
-				const { readPluginConfigStore } = await import("../extensibility/extensions-center/plugin-config-store");
-				const { coerceConfigValues } = await import("@musepi/pi-wire");
-				const { readExtensionPluginMeta } = await import("../extensibility/extensions/plugin-manifest");
+				const { readDeclaredPluginConfig } = await import("../extensibility/plugins/runtime/declared-config");
 				// Track A owns its own import + bind, so the entry's declared shape
 				// (`inject` / `Config`) is honoured here instead of in the legacy
 				// loader that Track B keeps byte-identical to upstream.
@@ -916,13 +914,10 @@ export class CordisDynamicPluginRuntime {
 					additionalInject: target.additionalInject,
 					wrapApi: (api, extension) => this.#ledgerApi(record.key, api, extension, ctx),
 					readConfig: async entryPath => {
-						const meta = await readExtensionPluginMeta(entryPath);
-						const store = await readPluginConfigStore();
-						const id = getExtensionNameFromPath(entryPath);
-						const base = coerceConfigValues(meta?.fields ?? [], store[id]);
+						const base = await readDeclaredPluginConfig(entryPath);
 						return {
-							fields: meta?.fields ?? [],
-							values: { ...base, ...(target.config ?? {}) },
+							fields: base.fields,
+							values: { ...base.values, ...(target.config ?? {}) },
 						};
 					},
 				});
@@ -1040,16 +1035,8 @@ export class CordisDynamicPluginRuntime {
 					serviceRegistry: this.#serviceRegistry(),
 					wrapApi: (api, extension) => this.#ledgerApi(owner, api, extension, cctx),
 					readConfig: async entryPath => {
-						const { readPluginConfigStore } = await import(
-							"../extensibility/extensions-center/plugin-config-store"
-						);
-						const { coerceConfigValues } = await import("@musepi/pi-wire");
-						const { readExtensionPluginMeta } = await import("../extensibility/extensions/plugin-manifest");
-						const meta = await readExtensionPluginMeta(entryPath);
-						const store = await readPluginConfigStore();
-						const id = getExtensionNameFromPath(entryPath);
-						const fields = meta?.fields ?? [];
-						return { fields, values: coerceConfigValues(fields, store[id]) };
+						const { readDeclaredPluginConfig } = await import("../extensibility/plugins/runtime/declared-config");
+						return readDeclaredPluginConfig(entryPath);
 					},
 				});
 				if (!mounted.ok) {

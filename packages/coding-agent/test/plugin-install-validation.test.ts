@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getExtensionNameFromPath } from "@musepi/pi-coding-agent/discovery/helpers";
 import { resetPluginConfigStoreCache } from "@musepi/pi-coding-agent/extensibility/extensions-center/plugin-config-store";
 import { PluginManager } from "@musepi/pi-coding-agent/extensibility/plugins/management/manager";
+import { pluginConfigStoreKey } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/declared-config";
 import * as piUtils from "@musepi/pi-utils";
 import { removeWithRetries } from "@musepi/pi-utils";
 import type { Subprocess } from "bun";
@@ -134,7 +134,7 @@ describe("PluginManager.install load validation", () => {
 
 	test("installs a pure Cordis entry through the production mount pipeline", async () => {
 		const entryPath = path.join(pluginsNodeModules, "cordis-only-plugin", "dist", "extension.ts");
-		const configId = `extension-module:${getExtensionNameFromPath(entryPath)}`;
+		const configId = pluginConfigStoreKey(entryPath);
 		await Bun.write(
 			path.join(tmpRoot, "extensions", "plugin-config.json"),
 			JSON.stringify({ [configId]: { retries: 99, unknown: "discard me" } }),

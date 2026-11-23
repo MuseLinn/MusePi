@@ -90,7 +90,7 @@ describe("pi.config 运行时读取", () => {
 		await Bun.write(
 			storePath,
 			JSON.stringify({
-				"extension-module:voice-input": { threshold: 0.8, model: "turbo", rogue: "x" },
+				"voice-input": { threshold: 0.8, model: "turbo", rogue: "x" },
 			}),
 		);
 		resetPluginConfigStoreCache();
@@ -112,7 +112,7 @@ describe("pi.config 运行时读取", () => {
 		await loadAndRead(entry, cwd);
 		// 模拟 GUI 表单写入(setConfig 的落点)。
 		const { writePluginConfigValue } = await import("../src/extensibility/extensions-center/plugin-config-store");
-		await writePluginConfigValue("extension-module:voice-input", "threshold", 0.3);
+		await writePluginConfigValue("voice-input", "threshold", 0.3);
 		const probe = await loadAndRead(entry, cwd);
 		expect(probe.threshold).toBe(0.3);
 	});
