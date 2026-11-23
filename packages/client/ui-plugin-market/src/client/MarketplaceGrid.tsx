@@ -1,11 +1,10 @@
-import { useScrollShadow } from "@musepi/client-ui-primitives/client";
+import { t } from "@musepi/client-locale/client";
+import { SearchField, useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { PackageOpen, RefreshCw, SearchX } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { t } from "../../i18n/index.js";
-import { loadMarketplaceViewPreferences, saveMarketplaceViewPreferences } from "../../lib/marketplace-preferences";
-import { SearchField } from "../common/SearchField.js";
 import { MarketplaceCard } from "./MarketplaceCard";
+import { loadMarketplaceViewPreferences, saveMarketplaceViewPreferences } from "./marketplace-preferences";
 import type { MarketplaceCardAction, MarketplaceCardEntry, MarketplaceSource } from "./types";
 import "./marketplace.css";
 import "./marketplace-visual.css";

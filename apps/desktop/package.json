@@ -212,6 +212,7 @@
 		"@musepi/client-ui-status": "workspace:*",
 		"@musepi/client-ui-charts": "workspace:*",
 		"@musepi/client-ui-primitives": "workspace:*",
+		"@musepi/client-ui-plugin-market": "workspace:*",
 		"@musepi/client-locale": "workspace:*"
 	},
 	"optionalDependencies": {

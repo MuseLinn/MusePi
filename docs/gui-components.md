@@ -16,9 +16,9 @@ English | [中文](gui-components.zh-CN.md)
 
 ## How to use this catalog
 
-1. **Check here before writing a component.** `AGENTS.md` requires convergence: the same interaction in a second place is a signal, a third is a defect, and a fourth copy must be preceded by extracting a named primitive. If it is listed, use it.
-2. **Ownership decides how you change it.** `client-core` components are shared by desktop and mobile, so both need verifying; `desktop` components serve the desktop shell only.
-3. **No styles inside components.** Geometry, colour and motion read from `tokens.css`; a component file carries structure and behaviour only.
+1. **Check here before writing a component.** Convergence is required: a second appearance is a signal, a third is a defect; extract a named primitive before a fourth. If it is listed, use it.
+2. **Ownership decides how you change it.** `client-core` serves desktop and mobile; `desktop` serves the shell.
+3. **No styles inside components.** Geometry, colour and motion come from `tokens.css`; a component carries structure and behaviour only.
 
 ## Tokens (single source of truth)
 
@@ -33,7 +33,7 @@ English | [中文](gui-components.zh-CN.md)
 | `--radius-*` | Six-step radius ladder | **Literals are banned**; enforced by `scripts/check-radius-tokens.ts` |
 | `--space-*` | 4px spacing rhythm | |
 | `--spring-*` / `--gui-motion-*` | Motion curves and durations | Both `prefers-reduced-motion` and the motion toggle must switch off together |
-| `--ease-appear` / `--ease-dismiss` / `--ease-one-take`, `--duration-one-take`, `--one-take-offset`, `--one-take-exit`, `--one-take-enter` | Arrival/exit fades and shared-surface (one-take) timing | `::view-transition-group` takes `--ease-one-take` + `--duration-one-take` (280ms); its old/new snapshots take `--one-take-exit` (120ms) / `--one-take-enter` (180ms) with the appear/dismiss pair and `--one-take-offset`. WAAPI flights read the same pair through `oneTakeMotion()` |
+| `--ease-appear` / `--ease-dismiss` / `--ease-one-take`, `--duration-one-take`, `--one-take-offset`, `--one-take-exit`, `--one-take-enter` | Arrival/exit fades and shared-surface (one-take) timing | View-transition groups and snapshots take the documented pair; WAAPI flights read the same pair through `oneTakeMotion()`. Values live in `tokens.css` |
 | `--z-*` | Stacking levels | Floats, modals and tips have their own tiers |
 | `--gui-grip-*` | Splitter grip geometry and three states | See `SplitterGrip` below |
 | `--gui-slider-*` | Slider hit pad, groove, fill, detents, knob, focus, hover and disabled states | Declared in `gui-chat.css` (this family's authority); one family for the in-scope sliders — see `LadderSlider` below and the exception list under it |
@@ -51,22 +51,22 @@ The floating pane is one primitive. `gui-base.css` paints it, `tokens.css` owns 
 | Lift | `--glass-pane-shadow` | 18px, 30% | 18px, 6% |
 | Spill length | `--glass-pane-spill` | radius × 1.5 (default 18px) | same |
 
-- **Anatomy.** `::before` carries the backdrop blur and the SVG warp. `::after` paints the spill (2px band plateau + flare), the two lit bands, the side lines and the outer hairlines. Nothing runs around the corners; every edge tapers through the arcs.
-- **States.** Focus changes nothing. An interactive or hue-tinted pane swaps `--glass-pane-tint` (and, for hue variants, `--glass-pane-band`) on the host. A thicker surface overrides the tint only — the recap row sets it to 84% so it stays readable over moving text.
+- **Anatomy.** `::before` carries the backdrop blur and SVG warp; `::after` paints the spill (2px plateau + flare), lit bands, side lines and outer hairlines. Every edge tapers through the arcs; nothing runs around the corners.
+- **States.** Focus changes nothing. An interactive or hue-tinted pane swaps `--glass-pane-tint` (hue variants also `--glass-pane-band`) on the host. A thicker surface overrides only the tint — the recap row sets 84% to stay readable over moving text.
 - **Thickness.** Tint alpha and blur move together; never raise one alone. There is no public step ladder yet — add one to the token family before a call site picks a number.
-- **Fallbacks.** The tint, edges and lift paint without `backdrop-filter`, so the pane stays delimited; win32/linux take the blur from the window material. Reduced transparency follows the same rule: solid surface, same edges.
-- **Consumers.** Composer and welcome composer, the top-bar project and open-in capsules, the settings translucent-panel preview, the session recap row. A surface that wants only the warp (the capability toolbars) keeps the class and zeroes fill, shadow and `::after` in its own scoped rule.
-- **Contract.** `apps/desktop/test/glass-pane.test.ts` reads the real cascade in Chromium: single tint, lit bands and dark sides, spill above the warp layer, light polarity, one offset-free shadow.
-- **Decision record.** `docs/adr/0005-floating-glass-pane.md` holds the rationale and the rejected alternatives; this section states the current contract.
+- **Fallbacks.** The tint, edges and lift paint without `backdrop-filter`, so the pane stays delimited; win32/linux take the blur from the window material. Reduced transparency keeps the solid surface and edges.
+- **Consumers.** Composer and welcome composer, top-bar capsules, settings preview and session recap; capability toolbars keep the class with fill, shadow and `::after` zeroed.
+- **Contract.** `apps/desktop/test/glass-pane.test.ts` reads the real Chromium cascade: one tint, lit bands, dark sides, spill above the warp, light polarity, one offset-free shadow.
+- **Decision record.** `docs/adr/0005-floating-glass-pane.md` holds rationale and rejected alternatives; this section states the contract.
 
 ## UI capability packages
 
-A UI capability owns one `@musepi/ui-*` package. Its `src/contract/slots.ts` names the seats; the desktop host registers a component for each seat, and Cordis contributions arrive by slot id. A package declares a seat only when a real consumer exists, and components move into the package once their seats and tests do.
+A UI capability owns one package at `packages/client/<capability>`, named `@musepi/client-<capability>` (dsh's `dsh-client-<capability>` collapses into our product scope). Components and their CSS Modules live in `src/client/`, seats are declared in `src/client/contract/slots.ts`, and the desktop host renders one adapter per seat. Declare a seat only with a real consumer; components move in with their seats and tests.
 
 | Package | Owns | Status |
 | --- | --- | --- |
-| `@musepi/client-ui-slots` | `defineSlot` and the declaration authority re-export | landed |
-| `@musepi/client-ui-conversation` | composer, input, hero, chat-node and session-info seats | contract landed; components still in `apps/desktop` |
+| `@musepi/client-ui-slots` | `defineSlot` and the declaration authority | landed |
+| `@musepi/client-ui-conversation` | composer, input, hero, chat-node and session-info seats | contract only; components still in `apps/desktop` |
 | `@musepi/client-ui-shell` | main, panel, rail, shell-overlay and browser-host seats | contract landed |
 | `@musepi/client-ui-settings` | settings extension, section and item seats | contract landed |
 | `@musepi/client-ui-sidebar` | sidebar-panel seats | contract landed |
@@ -74,9 +74,10 @@ A UI capability owns one `@musepi/ui-*` package. Its `src/contract/slots.ts` nam
 | `@musepi/client-ui-primitives` | `FoldRegion`, `SearchField`, and scroll-edge feathering (`useScrollShadow` / `useDeepScrollShadow`) | landed |
 | `@musepi/client-ui-charts` | zero-dependency responsive charts | landed |
 | `@musepi/client-ui-status` | `StatusText` and its cross-fade stylesheet | landed |
-| `@musepi/client-ui-chat`, `client-ui-panel`, `client-ui-marketplace`, `client-ui-agents` | their components and CSS | pending |
+| `@musepi/client-ui-plugin-market` | `MarketplaceGrid`, `MarketplaceCard`, `MarketplaceVersionChoice`, entry types and market preferences | landed |
+| `@musepi/client-ui-chat`, `client-ui-panel`, `client-ui-agents` | their components and CSS | pending |
 
-**Naming.** `client-ui-charts` holds the app's own charts (settings → usage). Model-authored ```ui answer blocks belong to a separate `client-ui-answer-blocks` package: the block catalog's `BarChart`/`LineChart` are model-visible block types, not these React components. A settings usage page, if extracted, is `client-ui-usage`, not a Cordis plugin.
+**Naming.** `client-ui-plugin-market` is dsh's `ui-plugin-market` and holds the plugin catalog grid; the guest binding (`MarketplacePanel` → `SessionClient`) stays in `client-core` as the host adapter. `client-ui-charts` holds the app's own charts (settings → usage). Model-authored ```ui answer blocks belong to a separate `client-ui-answer-blocks` package: the block catalog's `BarChart`/`LineChart` are model-visible block types, not these React components. A settings usage page, if extracted, is `client-ui-usage`, not a Cordis plugin.
 
 The desktop host re-exports the moved seat constants from `slot-host.tsx` during migration, so existing imports keep working; new code imports the capability package directly.
 
@@ -121,7 +122,7 @@ Shared by desktop and mobile; changes must be verified on both.
 | `common/` | `SearchField` | One search field for every list filter (`field` 34px / `compact` 28px / `touch` 44px); surface from `--control-*` tokens |
 | `panels/` | `BoardPanel` / `FilePanel` / `ScheduledPanel` / `VoicePanel` / `WorkspacePanel` | Right-panel surfaces |
 | `agents/` | `AgentsPanel` / `AgentDrawer` | Subagent HUD and detail |
-| `marketplace/` | `MarketplaceGrid` / `MarketplaceCard` / `MarketplacePanel` | Marketplace grid (the capability page re-skins it, never copies it) |
+| `marketplace/` | `MarketplacePanel` | Guest adapter to `SessionClient`; the market grid/card surfaces live in `@musepi/client-ui-plugin-market` (the capability page re-skins it, never copies it) |
 | `charts/` | `BarChart` / `LineChart` / `Donut` / `Gauge` / `KLine` / `Sparkline` | Charts |
 | `progress/` | `ProgressMeter` | Progress |
 | `transcript/` | `BranchSummaryDivider` | The inherited-history boundary; leads with the shared `GitFork` glyph and keeps the label as its accessible name |
@@ -200,13 +201,6 @@ The guard fails on: a rule that declares one axis alone, a horizontal scroller t
 - Every dialog goes through `DialogFrame`; rules in `docs/gui-dialog-spec.md` (size tiers, scroll container, focus, modifier specificity).
 - Board and inline card geometry, registration parity and source text rules are in `docs/gui-widget-spec.md`.
 - **Location rows (`ConnectionLocationRow`, `.gui-loc-row`)**: the one row anatomy for both connection axes — rendered by the instance list in `InstanceManagerDialog` and the host list in `ConnectDialog` from the **same component**, so the cells land at the same x in both. The differences are props, not layout: `leading` is `"dot"` (a presence mark) or `"glyph"` (a kind icon), and both sit in a **fixed-width `.gui-loc-lead` box**, so the name starts at one offset either way. `status` is **always rendered**, which is what puts the trailing slot at the same offset from the row's trailing edge on every row; `action` is an optional trailing control rendered as a **sibling** of the row button, inside an always-reserved fixed-width `.gui-loc-action` slot so a row without a control does not widen its button. The row box itself is a `<button>` (`.gui-loc-row-main`) — the wash and the hit area are one rectangle (M86) — and a destructive control is never nested inside the target it destroys. The name column is a **fixed share** of the row (`--gui-loc-name-w`), not content-sized: a content-sized name pushed `where` right by its own length, so the location column started at a different x in each list. `where` states a machine, never a tunnel's loopback address. Lists are `<ul class="gui-loc-list">`; `.gui-loc-list--scroll` exists only for the wizard's standalone dialog — inside the manager the dialog body is the one scroller (see *Overflow contract*). The geometry contract renders rows **through the component** (`renderToStaticMarkup`) rather than hand-written markup, so the fixture cannot drift from what ships; it compares name/where x exactly across both lists and the status slot's offset from each row's trailing edge exactly. Contracts: `apps/desktop/test/instance-manager-axes.test.tsx` and the real-Chromium `apps/desktop/test/connection-locations-geometry.test.tsx`.
-
-## Known gaps (recorded, not resolved)
-
-Building this catalog surfaced two places that are still not converged. Keep them in mind when changing things:
-
-1. **Interaction-state naming is not unified.** `--glass-hover*` covers generic hover, while component-specific three-state sets like `--gui-grip-*` are newer; a new component must decide whether to reuse the former or open a family by the naming rule.
-2. **CSS contract tests cover only radius, the grip and the slider family.** Outside `scripts/check-radius-tokens.ts`, `test/splitter-grip.test.ts` and `test/slider-tokens.test.ts`, most component styles have no guard.
 
 When adding a component, update its row here and record the contract it follows in `docs/gui-design.md`.
 

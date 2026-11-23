@@ -1,6 +1,6 @@
+import { t } from "@musepi/client-locale/client";
 import { Check, Download, RefreshCw, Star } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { t } from "../../i18n/index.js";
 import {
 	hasDesignSystemContent,
 	type MarketplaceCardAction,

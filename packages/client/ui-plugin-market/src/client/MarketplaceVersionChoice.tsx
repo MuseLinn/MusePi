@@ -1,5 +1,5 @@
+import { t } from "@musepi/client-locale/client";
 import type { ReactNode } from "react";
-import { t } from "../../i18n/index.js";
 import "./marketplace.css";
 
 /**

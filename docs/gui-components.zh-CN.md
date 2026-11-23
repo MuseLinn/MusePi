@@ -59,7 +59,7 @@ scope:
 
 ## UI 能力包
 
-每个 UI 能力拥有一个 `@musepi/ui-*` 包。包内 `src/contract/slots.ts` 声明座位；桌面宿主按座位注册组件，Cordis 贡献按槽位 id 进入。只有存在真实消费者时才声明座位；组件在座位与测试迁入时一起迁入。
+每个 UI 能力拥有一个 `packages/client/<能力>` 目录下的包，名为 `@musepi/client-<能力>`（dsh 的 `dsh-client-<能力>` 在这里折叠成产品 scope）。组件与 CSS Modules 在 `src/client/`，座位在 `src/client/contract/slots.ts` 声明，桌面宿主按座位渲染宿主适配器。只有存在真实消费者时才声明座位；组件在座位与测试迁入时一起迁入。
 
 | 包 | 负责 | 状态 |
 | --- | --- | --- |
@@ -72,9 +72,10 @@ scope:
 | `@musepi/client-ui-primitives` | `FoldRegion`、`SearchField` 与滚动边缘羽化（`useScrollShadow` / `useDeepScrollShadow`） | 已落地 |
 | `@musepi/client-ui-charts` | 零依赖响应式图表 | 已落地 |
 | `@musepi/client-ui-status` | `StatusText` 与交叉淡化样式 | 已落地 |
-| `@musepi/client-ui-chat`、`client-ui-panel`、`client-ui-marketplace`、`client-ui-agents` | 各自的组件与 CSS | 待迁 |
+| `@musepi/client-ui-plugin-market` | `MarketplaceGrid`、`MarketplaceCard`、`MarketplaceVersionChoice`、条目类型与市场偏好 | 已落地 |
+| `@musepi/client-ui-chat`、`client-ui-panel`、`client-ui-agents` | 各自的组件与 CSS | 待迁 |
 
-**命名。** `client-ui-charts` 是软件自己的图表（设置 → 用量）。模型写的 ```ui 回答块属于独立的 `client-ui-answer-blocks` 包：块目录里的 `BarChart`/`LineChart` 是模型可见的块类型，不是这些 React 组件。若把设置里的用量页抽出来，它是 `client-ui-usage`，不是 Cordis 插件。
+**命名。** `client-ui-plugin-market` 对应 dsh 的 `ui-plugin-market`，持有插件目录网格；guest 绑定（`MarketplacePanel` → `SessionClient`）留在 `client-core` 作为宿主适配器。`client-ui-charts` 是软件自己的图表（设置 → 用量）。模型写的 ```ui 回答块属于独立的 `client-ui-answer-blocks` 包：块目录里的 `BarChart`/`LineChart` 是模型可见的块类型，不是这些 React 组件。若把设置里的用量页抽出来，它是 `client-ui-usage`，不是 Cordis 插件。
 
 迁移期间桌面宿主在 `slot-host.tsx` 里再导出已搬走的座位常量，现有 import 不变；新代码直接引用能力包。
 
@@ -118,7 +119,7 @@ scope:
 | `common/` | `FoldRegion` | 可折叠区域 |
 | `panels/` | `BoardPanel` / `FilePanel` / `ScheduledPanel` / `VoicePanel` / `WorkspacePanel` | 右面板各视图 |
 | `agents/` | `AgentsPanel` / `AgentDrawer` | 子代理 HUD 与详情 |
-| `marketplace/` | `MarketplaceGrid` / `MarketplaceCard` / `MarketplacePanel` | 市场网格（能力中心只重皮肤，不复制） |
+| `marketplace/` | `MarketplacePanel` | guest 侧 `SessionClient` 适配器；市场网格与卡片在 `@musepi/client-ui-plugin-market`（能力中心只重皮肤，不复制） |
 | `charts/` | `BarChart` / `LineChart` / `Donut` / `Gauge` / `KLine` / `Sparkline` | 图表 |
 | `progress/` | `ProgressMeter` | 进度 |
 | `transcript/` | `BranchSummaryDivider` | 继承历史的分界行；以共享 `GitFork` 图标打头，文案仍是可访问名 |
@@ -142,14 +143,6 @@ scope:
 - 对话框统一走 `DialogFrame`，规则见 `docs/gui-dialog-spec.md`（尺寸档位、滚动容器、焦点、修饰类特异度）。
 - 看板与内联卡片的几何、注册对等、源文本规则见 `docs/gui-widget-spec.md`。
 - **位置行（`ConnectionLocationRow`，`.gui-loc-row`）**：连接两条轴共用的唯一行结构——`InstanceManagerDialog` 的实例列表与 `ConnectDialog` 的主机列表由**同一个组件**渲染，所以两边的单元格落在同一横坐标。差异是 props 而不是布局：`leading` 为 `"dot"`（在线状态点）或 `"glyph"`（类型图标），两者都放在**固定宽度的 `.gui-loc-lead` 盒子**里，因此名称的起始偏移完全一致。`status` **始终渲染**，这正是让每一行的尾部槽位距行尾保持同一偏移的原因；`action` 是可选的尾部控件，作为行按钮的**兄弟节点**渲染在始终预留、固定宽度的 `.gui-loc-action` 槽位中，因此没有控件的行不会把按钮撑宽。行本身是 `<button>`（`.gui-loc-row-main`）——悬停底色与命中区是同一个矩形（M86）——删除类控件绝不嵌套在它要删除的目标内部。名称列占行的**固定份额**（`--gui-loc-name-w`）而非按内容宽度：按内容宽度时，名称自身的长短会把 `where` 推右，导致两个列表的位置列起始 x 不同。`where` 说明的是机器，绝不是隧道的回环地址。列表是 `<ul class="gui-loc-list">`；`.gui-loc-list--scroll` 只用于向导的独立对话框——在管理器里正文才是唯一的滚动容器（见「溢出契约」）。几何契约**通过组件**（`renderToStaticMarkup`）渲染行，而不是手写标记，因此夹具无法与真实产物漂移；它精确比较两个列表中名称/位置列的 x，以及状态槽位距各自行尾的偏移。契约：`apps/desktop/test/instance-manager-axes.test.tsx` 与真实 Chromium 的 `apps/desktop/test/connection-locations-geometry.test.tsx`。
-
-## 已知缺口（记录在案，不是已完成）
-
-这份目录暴露了三处还没收敛的地方，改动时注意：
-
-1. **控制高度没有 token。** 搜索框在基础规则是 32px、在 `.gui-capability-page` 覆盖为 34px，各自写死；没有 `--control-h-*`。
-2. **交互态命名未统一。** `--glass-hover*` 覆盖了通用悬停，但握柄这类「组件自有三态」是新加的 `--gui-grip-*`；新组件需要先判断该复用前者还是按命名规则新开一族。
-3. **CSS 契约测试只覆盖了圆角、握柄与滑块族。** `scripts/check-radius-tokens.ts` + `test/splitter-grip.test.ts` + `test/slider-tokens.test.ts` 之外，多数组件的样式没有守护。
 
 新增组件时，请同时更新本目录的这一行，并在 `docs/gui-design.md` 记录它遵守的契约。
 

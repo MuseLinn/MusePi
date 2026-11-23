@@ -9,6 +9,18 @@
  * chrome.
  */
 
+export type { MarketplaceCardAction, MarketplaceCardEntry } from "@musepi/client-ui-plugin-market/client";
+/** Marketplace plugin store (GUI ↔ guest-client shared). The Marketplace
+ *  panel itself stays in-app (it binds to SessionClient); the market
+ *  surfaces live in `@musepi/client-ui-plugin-market`. */
+export {
+	hasDesignSystemContent,
+	loadMarketplaceDetailPreference,
+	MarketplaceCard,
+	MarketplaceGrid,
+	resolveCardIcon,
+	saveMarketplaceDetailPreference,
+} from "@musepi/client-ui-plugin-market/client";
 export { attachScrollShadow, useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
 export { AgentsPanel } from "./components/agents/AgentsPanel";
 /** One search field for every list filter (docs/gui-design.md § capability
@@ -31,13 +43,6 @@ export {
 	stepImageScale,
 	wheelZoomFactor,
 } from "./components/image-zoom";
-/** Marketplace plugin store (GUI ↔ guest-client shared). The Marketplace
- *  panel itself stays in-app (it binds to SessionClient); the Grid + Card
- *  + Entry types are host-agnostic so the Electron GUI reuses them. */
-export { MarketplaceCard } from "./components/marketplace/MarketplaceCard";
-export { MarketplaceGrid } from "./components/marketplace/MarketplaceGrid";
-export type { MarketplaceCardAction, MarketplaceCardEntry } from "./components/marketplace/types";
-export { hasDesignSystemContent, resolveCardIcon } from "./components/marketplace/types";
 export {
 	ProgressMeter,
 	type ProgressMeterProps,
@@ -172,7 +177,6 @@ export {
 export { type ComposerPlaceholderInput, composerPlaceholder } from "./lib/composer-placeholder";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
-export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";
 export * from "./lib/modal-focus";
 export { motionDisabled } from "./lib/motion-tokens";
 export {

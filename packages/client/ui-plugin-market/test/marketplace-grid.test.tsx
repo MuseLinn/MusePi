@@ -3,8 +3,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MarketplaceGrid } from "../src/components/marketplace/MarketplaceGrid";
-import type { MarketplaceCardEntry } from "../src/components/marketplace/types";
+import { MarketplaceGrid } from "../src/client/MarketplaceGrid";
+import type { MarketplaceCardEntry } from "../src/client/types";
 
 // The mount-fetch and install busy flows below need a real effect-driven
 // render (bun:test has no DOM), so register happy-dom globally for this file.

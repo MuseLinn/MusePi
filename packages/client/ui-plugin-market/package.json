@@ -1,0 +1,27 @@
+{
+	"type": "module",
+	"name": "@musepi/client-ui-plugin-market",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "Plugin market surfaces: catalog grid, cards, source segments and version rows.",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client/index.ts",
+		"./src/*": "./src/*"
+	},
+	"dependencies": {
+		"react": "19.2.7",
+		"lucide-react": "^1.24.0",
+		"@musepi/client-locale": "workspace:*",
+		"@musepi/client-ui-primitives": "workspace:*"
+	},
+	"devDependencies": {
+		"@happy-dom/global-registrator": "^20.12.0",
+		"@types/bun": "^1.4.4",
+		"@types/react": "^19.2.17",
+		"@types/react-dom": "^19.2.3",
+		"happy-dom": "^20.12.0",
+		"react-dom": "19.2.7"
+	}
+}

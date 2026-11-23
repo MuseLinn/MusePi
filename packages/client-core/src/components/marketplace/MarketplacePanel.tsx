@@ -1,10 +1,9 @@
+import { t } from "@musepi/client-locale/client";
+import type { MarketplaceCardAction, MarketplaceGridProps } from "@musepi/client-ui-plugin-market/client";
+import { MarketplaceGrid as Grid } from "@musepi/client-ui-plugin-market/client";
 import type { ReactNode } from "react";
-import { t } from "../../i18n/index.js";
 import { pushActionToast } from "../../lib/action-toast";
 import type { SessionClient } from "../../lib/client";
-import { MarketplaceGrid } from "./MarketplaceGrid";
-import type { MarketplaceCardAction } from "./types";
-import "./marketplace.css";
 
 /**
  * Marketplace panel — guest-side plugin catalog browser. Wired through
@@ -21,7 +20,7 @@ import "./marketplace.css";
 export interface MarketplacePanelProps {
 	client: SessionClient;
 	/** Optional initial entries (storybook / tests / pre-fetched cache). */
-	initialEntries?: Parameters<typeof MarketplaceGrid>[0]["entries"];
+	initialEntries?: MarketplaceGridProps["entries"];
 }
 
 async function handleAction(client: SessionClient, action: MarketplaceCardAction): Promise<void> {
@@ -55,7 +54,5 @@ async function handleAction(client: SessionClient, action: MarketplaceCardAction
 }
 
 export function MarketplacePanel({ client, initialEntries }: MarketplacePanelProps): ReactNode {
-	return (
-		<MarketplaceGrid client={client} entries={initialEntries} onAction={action => handleAction(client, action)} />
-	);
+	return <Grid client={client} entries={initialEntries} onAction={action => handleAction(client, action)} />;
 }

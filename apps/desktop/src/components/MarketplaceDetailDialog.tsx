@@ -1,6 +1,6 @@
 import type { MarketplaceCardAction, MarketplaceCardEntry } from "@musepi/client-core";
 import { t, useScrollShadow } from "@musepi/client-core";
-import { MarketplaceVersionChoice, upgradableVersions } from "@musepi/client-core/src/components/marketplace";
+import { MarketplaceVersionChoice, upgradableVersions } from "@musepi/client-ui-plugin-market/client";
 import { type ReactNode, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { DialogFrame } from "./DialogFrame";

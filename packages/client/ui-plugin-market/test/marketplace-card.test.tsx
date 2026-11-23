@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { Container, Cpu, FlaskConical, GitBranch, MonitorPlay, Package, ShieldCheck, Wrench } from "lucide-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MarketplaceCard } from "../src/components/marketplace/MarketplaceCard";
-import { MarketplaceGrid } from "../src/components/marketplace/MarketplaceGrid";
-import { type MarketplaceCardEntry, resolveCardIcon } from "../src/components/marketplace/types";
+import { MarketplaceCard } from "../src/client/MarketplaceCard";
+import { MarketplaceGrid } from "../src/client/MarketplaceGrid";
+import { type MarketplaceCardEntry, resolveCardIcon } from "../src/client/types";
 
 /** Build a minimal entry with sensible defaults; tests override only fields
  *  they care about so the suite stays readable. */

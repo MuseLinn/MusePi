@@ -1,10 +1,18 @@
-export type { MarketplaceCardProps } from "./MarketplaceCard";
-export { MarketplaceCard } from "./MarketplaceCard";
-export type { MarketplaceGridProps } from "./MarketplaceGrid";
-export { MarketplaceGrid } from "./MarketplaceGrid";
+export type {
+	MarketplaceCardAction,
+	MarketplaceCardEntry,
+	MarketplaceCardProps,
+	MarketplaceGridProps,
+	MarketplaceSource,
+	MarketplaceVersionChoiceProps,
+} from "@musepi/client-ui-plugin-market/client";
+export {
+	hasDesignSystemContent,
+	MarketplaceCard,
+	MarketplaceGrid,
+	MarketplaceVersionChoice,
+	resolveCardIcon,
+	upgradableVersions,
+} from "@musepi/client-ui-plugin-market/client";
 export type { MarketplacePanelProps } from "./MarketplacePanel";
 export { MarketplacePanel } from "./MarketplacePanel";
-export type { MarketplaceVersionChoiceProps } from "./MarketplaceVersionChoice";
-export { MarketplaceVersionChoice } from "./MarketplaceVersionChoice";
-export type { MarketplaceCardAction, MarketplaceCardEntry, MarketplaceSource } from "./types";
-export { resolveCardIcon, upgradableVersions } from "./types";
