@@ -104,16 +104,24 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const backend = status?.status?.backend;
 	return (
 		<>
-			<SchemaTabSection
-				rpc={rpc}
-				tabs={["memory"]}
-				onChanged={key => {
-					if (/^(memory|mnemopi|hindsight|sharpshooter)\./.test(key)) {
-						// Let the daemon finish its backend transition before re-reading.
-						setTimeout(loadStatus, 200);
-					}
-				}}
-			/>
+			<div className="gui-settings-section">
+				<div className="gui-memory-workspace-head">
+					<div className="min-w-0">
+						<div className="gui-settings-section-title">{t("settings.memoryBackends")}</div>
+						<div className="gui-settings-row-desc">{t("settings.memoryBackendsDescription")}</div>
+					</div>
+				</div>
+				<SchemaTabSection
+					rpc={rpc}
+					tabs={["memory"]}
+					onChanged={key => {
+						if (/^(memory|mnemopi|hindsight|sharpshooter)\./.test(key)) {
+							// Let the daemon finish its backend transition before re-reading.
+							setTimeout(loadStatus, 200);
+						}
+					}}
+				/>
+			</div>
 			{backend === "local" && <WorkspaceMemory rpc={rpc} />}
 			<MemoryMaintenance
 				rpc={rpc}

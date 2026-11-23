@@ -385,6 +385,87 @@ function DemoContent({
 	);
 }
 
+/**
+ * Memory setup for the done step: one choice between the recommended on-device
+ * pipeline and no memory, and an optional idle pass that stays off until the
+ * person opts in. Missing preferences are written only when the user changes
+ * them, so a skipped branch leaves the profile's memory settings untouched.
+ */
+export function MemorySetup({
+	rpc,
+	memoryBackend,
+	onMemoryBackend,
+	idleEnqueue,
+	onIdleEnqueue,
+}: {
+	rpc: RpcClient | null;
+	memoryBackend: string;
+	onMemoryBackend(backend: string): void;
+	idleEnqueue: boolean;
+	onIdleEnqueue(enabled: boolean): void;
+}): ReactNode {
+	const write = (key: string, value: unknown): void => {
+		if (!rpc) return;
+		void rpc.request("settings.set", { key, value }).catch(() => {});
+	};
+	const enabled = memoryBackend !== "off";
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="gui-obo-preference">
+				<div className="gui-obo-preference-copy">
+					<div className="gui-obo-preference-label">
+						<span>{t("settings.onboardingMemoryBackend")}</span>
+						<span className="gui-obo-recommended">{t("settings.onboardingRecommended")}</span>
+					</div>
+					<div className="gui-obo-preference-description">{t("settings.onboardingMemoryBackendDescription")}</div>
+				</div>
+				<button
+					type="button"
+					role="switch"
+					aria-checked={enabled}
+					aria-label={t("settings.onboardingMemoryBackend")}
+					className={`gui-toggle${enabled ? " gui-toggle--on" : ""}`}
+					onClick={() => {
+						tapFeedback();
+						// Turning memory on selects the recommended backend; off keeps
+						// the stored choice so toggling back restores it.
+						const next = enabled ? "off" : "local";
+						onMemoryBackend(next);
+						write("memory.backend", next);
+					}}
+				>
+					<span className="gui-toggle-knob" />
+				</button>
+			</div>
+			{enabled && (
+				<div className="gui-obo-preference">
+					<div className="gui-obo-preference-copy">
+						<div className="gui-obo-preference-label">
+							<span>{t("settings.onboardingMemoryIdle")}</span>
+						</div>
+						<div className="gui-obo-preference-description">{t("settings.onboardingMemoryIdleDescription")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={idleEnqueue}
+						aria-label={t("settings.onboardingMemoryIdle")}
+						className={`gui-toggle${idleEnqueue ? " gui-toggle--on" : ""}`}
+						onClick={() => {
+							tapFeedback();
+							const next = !idleEnqueue;
+							onIdleEnqueue(next);
+							write("memory.idleEnqueueEnabled", next);
+						}}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+			)}
+		</div>
+	);
+}
+
 /** Feature bullets shown under promo-step bodies (steps 3–5). */
 function FeatureList({ keys }: { keys: readonly TranslationKey[] }): ReactNode {
 	return (
@@ -1291,7 +1372,32 @@ export function OnboardingOverlay({
 	// The completion step opens on the feature tour so current workflows are
 	// visible without hunting through the optional setup accordions. The Enter
 	// spine still goes straight to finish; branch controls keep their own Enter.
-	const [branch, setBranch] = useState<"import" | "personalize" | "features" | "design" | null>("features");
+	const [branch, setBranch] = useState<"import" | "personalize" | "features" | "design" | "memory" | null>("features");
+	// Memory choices made in the done step's branch. They start from the daemon's
+	// current values and are written on change only, so opening and closing the
+	// branch never rewrites a profile the person did not touch.
+	const [memoryBackend, setMemoryBackend] = useState("off");
+	const [memoryIdleEnqueue, setMemoryIdleEnqueue] = useState(false);
+	useEffect(() => {
+		if (!open || !rpc) return;
+		let alive = true;
+		void rpc
+			.request<Record<string, unknown>>("settings.get", {
+				keys: ["memory.backend", "memory.idleEnqueueEnabled"],
+			})
+			.then(values => {
+				if (!alive) return;
+				const backend = values?.["memory.backend"];
+				if (typeof backend === "string") setMemoryBackend(backend);
+				if (typeof values?.["memory.idleEnqueueEnabled"] === "boolean") {
+					setMemoryIdleEnqueue(values["memory.idleEnqueueEnabled"]);
+				}
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [open, rpc]);
 	// Pet display mode shared by the personalize step's controls (left) and
 	// the chat preview (right): "desktop" hides the pet from the preview's
 	// composer — it lives in its own desktop window there.
@@ -1540,6 +1646,36 @@ export function OnboardingOverlay({
 													{t("settings.onboardingBranchDesignEntries")}
 												</p>
 											</div>
+										</Reveal>
+									</div>
+									{/* Memory — offered here rather than as its own spine step: most people
+									 *  never need to look at it on day one, and the recommended default
+									 *  is one toggle away. */}
+									<div className="gui-obo-branch">
+										<button
+											type="button"
+											className="gui-obo-branch-head"
+											aria-expanded={branch === "memory"}
+											onClick={() => {
+												tapFeedback();
+												setBranch(b => (b === "memory" ? null : "memory"));
+											}}
+										>
+											<Icon name="brain" className="h-4 w-4" />
+											<span className="flex-1 text-left">{t("settings.onboardingBranchMemory")}</span>
+											<Icon
+												name="arrow-down-s"
+												className={`h-4 w-4 opacity-60${branch === "memory" ? " rotate-180" : ""}`}
+											/>
+										</button>
+										<Reveal open={branch === "memory"}>
+											<MemorySetup
+												rpc={rpc}
+												memoryBackend={memoryBackend}
+												onMemoryBackend={setMemoryBackend}
+												idleEnqueue={memoryIdleEnqueue}
+												onIdleEnqueue={setMemoryIdleEnqueue}
+											/>
 										</Reveal>
 									</div>
 									<div className="gui-obo-branch">

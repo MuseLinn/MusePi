@@ -37,7 +37,7 @@ gui-main (flex ROW)
 - **内容列**:840px 居中,左右留白对称;内边距 `calc(32px * density) / calc(48px * density)`。
 - **分区**:`.gui-settings-section`(border-t 1px 分隔线,首区无分隔线)+ 标题/描述;字段行 `.gui-settings-field`(224px 标签列 grid,控件右对齐);开关行 `.gui-settings-row`。
 - 侧栏导航项、分组标题、下拉控件均按 openchamber 1.18 样式移植。
-- **一页多组**:「会话与记忆」是第一个合并页。它的导航项(`session-memory`)用分段控件切换三组——会话行为与候选输入建议、记忆后端、预设提示词。记忆独占一屏,因为它带着后端、计数与维护操作。退役的 `sessions` / `memory` / `suggestions` 仍作为能力别名有效(`lib/settings-nav.ts`),扩展 slot `settings.tab.sessions` / `settings.tab.memory` 渲染在自己那一组里,而不是占满整页。
+- **一页多组**:「会话与记忆」是第一个合并页。它的导航项(`session-memory`)用分段控件切换三组——会话行为与候选输入建议、记忆后端、预设提示词。记忆独占一屏,因为它带着后端、计数与维护操作;这一屏从上到下是同级的三个小节∶**后端**(先选后端,再把它自己的设置作为分组列在其下)、**工作区记忆**(`local` 后端的文件)与状态/维护。空闲整合开关位于**记忆维护**之下,而不是与后端选择并列——两者的依赖关系由分组表达,而不是靠文字说明。退役的 `sessions` / `memory` / `suggestions` 仍作为能力别名有效(`lib/settings-nav.ts`),扩展 slot `settings.tab.sessions` / `settings.tab.memory` 渲染在自己那一组里,而不是占满整页。
 
 ## 3. 主题体系(三个正交轴)
 
