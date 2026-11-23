@@ -5,6 +5,8 @@ import { installCommandHookBridge } from "@musepi/pi-coding-agent/extensibility/
 import { scanScriptHookRoots } from "@musepi/pi-coding-agent/extensibility/hooks/command/scripts";
 import { stringArrayFromRow } from "@musepi/pi-coding-agent/extensibility/plugins/row-config";
 
+export { Config } from "./config";
+
 /**
  * Directory-shaped hooks, mounted as a preset row.
  *

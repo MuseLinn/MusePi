@@ -1,0 +1,36 @@
+{
+	"fields": [
+		{
+			"key": "configPath",
+			"type": "string",
+			"label": "configPath",
+			"restart": "session",
+			"default": "",
+			"description": "Claude Code 的 hooks.json，或含 hooks 键的 settings 文件；相对路径按会话工作目录解析。"
+		},
+		{
+			"key": "projectDir",
+			"type": "string",
+			"label": "projectDir",
+			"restart": "session",
+			"default": "",
+			"description": "替换 ${CLAUDE_PROJECT_DIR}；留空时使用会话工作目录。"
+		},
+		{
+			"key": "pluginRoot",
+			"type": "string",
+			"label": "pluginRoot",
+			"restart": "session",
+			"default": "",
+			"description": "替换 ${CLAUDE_PLUGIN_ROOT}。"
+		},
+		{
+			"key": "defaultTimeoutMs",
+			"type": "number",
+			"label": "defaultTimeoutMs",
+			"restart": "session",
+			"default": 600000,
+			"description": "钩子未设置 timeout 时的预算。"
+		}
+	]
+}

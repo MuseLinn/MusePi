@@ -1,0 +1,89 @@
+{
+	"fields": [
+		{
+			"key": "serverName",
+			"type": "string",
+			"label": "serverName",
+			"restart": "session",
+			"default": "",
+			"description": "工具命名空间 mcp__<serverName>__<tool>；同一会话内唯一。"
+		},
+		{
+			"key": "transport",
+			"type": "select",
+			"label": "transport",
+			"restart": "session",
+			"default": "stdio",
+			"options": [
+				"stdio",
+				"http",
+				"sse"
+			],
+			"description": "传输方式"
+		},
+		{
+			"key": "command",
+			"type": "string",
+			"label": "command",
+			"restart": "session",
+			"default": "",
+			"description": "仅 transport=stdio：可执行文件。"
+		},
+		{
+			"key": "args",
+			"type": "string",
+			"label": "args",
+			"restart": "session",
+			"default": "",
+			"description": "例如 [\"-y\",\"@modelcontextprotocol/server-github\"]"
+		},
+		{
+			"key": "env",
+			"type": "string",
+			"label": "env",
+			"restart": "session",
+			"default": "",
+			"description": "例如 {\"GITHUB_TOKEN\":\"...\"}；与进程环境合并。"
+		},
+		{
+			"key": "cwd",
+			"type": "string",
+			"label": "cwd",
+			"restart": "session",
+			"default": "",
+			"description": "留空时使用会话工作目录。"
+		},
+		{
+			"key": "url",
+			"type": "string",
+			"label": "url",
+			"restart": "session",
+			"default": "",
+			"description": "仅 transport=http 或 sse。"
+		},
+		{
+			"key": "headers",
+			"type": "string",
+			"label": "headers",
+			"restart": "session",
+			"default": "",
+			"description": "例如 {\"Authorization\":\"Bearer ...\"}"
+		},
+		{
+			"key": "timeout",
+			"type": "number",
+			"label": "timeout",
+			"restart": "session",
+			"default": 30000,
+			"description": "请求超时（毫秒）"
+		},
+		{
+			"key": "enabled",
+			"type": "boolean",
+			"label": "enabled",
+			"restart": "session",
+			"default": true,
+			"description": "关闭后保留该行但不连接。"
+		}
+	]
+}

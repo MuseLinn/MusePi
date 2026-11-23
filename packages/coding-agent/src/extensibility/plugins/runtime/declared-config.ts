@@ -27,8 +27,11 @@ export function pluginConfigStoreKey(entryPath: string): string {
 /** Read the declared fields with stored values coerced over their defaults. */
 export async function readDeclaredPluginConfig(entryPath: string): Promise<DeclaredPluginConfig> {
 	const [meta, store] = await Promise.all([readExtensionPluginMeta(entryPath), readPluginConfigStore()]);
-	const { fields } = meta ?? { fields: [] };
-	return { fields, values: coerceConfigValues(fields, store[pluginConfigStoreKey(entryPath)]) };
+	const fields = meta?.fields ?? [];
+	const stored = store[pluginConfigStoreKey(entryPath)] ?? {};
+	// A Config-only package has no manifest field table to coerce against; the
+	// schema is the authority, so raw stored values reach it unchanged.
+	return { fields, values: fields.length > 0 ? coerceConfigValues(fields, stored) : stored };
 }
 
 /** A Standard Schema V1 validator (`Config["~standard"].validate`). */

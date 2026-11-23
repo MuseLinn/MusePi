@@ -4,6 +4,8 @@ import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions
 import { installCommandHookBridge } from "@musepi/pi-coding-agent/extensibility/hooks/command/bridge";
 import { loadHookConfigFile } from "@musepi/pi-coding-agent/extensibility/hooks/command/load";
 
+export { Config } from "./config";
+
 /**
  * Claude Code command hooks, mounted as a preset row.
  *

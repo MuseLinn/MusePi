@@ -2860,6 +2860,8 @@ export interface ExtensionRuntime
 		ExtensionActions {
 	/** Cordis event context owning the migrated lifecycle listeners. */
 	eventBus?: ExtensionEventBusSurface;
+	/** The host EventBus this runtime's session plugins were created with. */
+	sessionEventBus?: EventBus;
 	/** Live listener counts per migrated event, so `hasHandlers` stays exact. */
 	eventHandlerCounts?: Map<string, number>;
 	/** The runner's error channel for migrated listeners (timeout / throw). */
@@ -2945,6 +2947,8 @@ export interface Extension {
 	 */
 	track?: "plugin" | "extension";
 	label?: string;
+	/** Host EventBus this instance was created with; a reload remounts on it. */
+	eventBus?: EventBus;
 	tools: Map<string, RegisteredTool<any, any>>;
 	toolRegistrationListeners?: Set<ToolRegistrationListener>;
 	assistantThinkingRenderers: AssistantThinkingRenderer[];

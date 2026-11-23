@@ -37,22 +37,6 @@
 		"presetOnly": true,
 		"extensions": [
 			"./index.ts"
-		],
-		"config": [
-			{
-				"key": "configPath",
-				"type": "path",
-				"label": "hooks.json 路径",
-				"description": "Codex 的 hooks.json；相对路径按会话工作目录解析。",
-				"default": ""
-			},
-			{
-				"key": "defaultTimeoutMs",
-				"type": "number",
-				"label": "默认超时（毫秒）",
-				"description": "钩子未设置 timeout 时的预算。",
-				"default": 600000
-			}
 		]
 	}
 }

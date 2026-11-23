@@ -216,6 +216,7 @@ export async function loadSessionPlugins(
 	// its pending queues and ledgers stay the session's single source.
 	const runtime = options.runtime ?? new ExtensionRuntime();
 	runtime.promptHost = options.promptHost;
+	runtime.sessionEventBus = eventBus;
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 
@@ -272,4 +273,30 @@ async function sessionAdmissiblePaths(
 /** The default config reader: the shared Track A reader (one store, one id). */
 export async function defaultSessionConfigReader(): Promise<MountContext["readConfig"]> {
 	return readDeclaredPluginConfig;
+}
+
+/**
+ * Remount one Track A entry in place, through the same pipeline as its first
+ * mount: the inject gate, the declared `Config` (validated and defaulted), and
+ * the fiber ledger all apply again. Used by a session's hot reload so a config
+ * edit replaces the plugin instead of leaving the old instance running.
+ */
+export async function reloadSessionPlugin(options: {
+	entryPath: string;
+	cwd: string;
+	runtime: LoadExtensionsResult["runtime"];
+	eventBus: EventBus;
+}): Promise<{ extension: Extension | null; errors: string[] }> {
+	const readConfig = await defaultSessionConfigReader();
+	const mounted = await mountPlugin({
+		entryPath: options.entryPath,
+		cwd: options.cwd,
+		eventBus: options.eventBus,
+		runtime: options.runtime as unknown as MountContext["runtime"],
+		readConfig,
+		fresh: true,
+	});
+	return mounted.ok
+		? { extension: mounted.extension, errors: [] }
+		: { extension: null, errors: [`${mounted.code}: ${mounted.message}`] };
 }

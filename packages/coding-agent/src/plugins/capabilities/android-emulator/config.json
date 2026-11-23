@@ -1,0 +1,20 @@
+{
+	"fields": [
+		{
+			"key": "adbPath",
+			"type": "string",
+			"label": "adbPath",
+			"restart": "session",
+			"default": "",
+			"description": "Optional absolute path to adb. Uses PATH when empty."
+		},
+		{
+			"key": "emulatorPath",
+			"type": "string",
+			"label": "emulatorPath",
+			"restart": "session",
+			"default": "",
+			"description": "Optional absolute path to emulator. Uses PATH when empty."
+		}
+	]
+}

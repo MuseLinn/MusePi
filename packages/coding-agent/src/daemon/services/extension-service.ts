@@ -8,7 +8,7 @@ import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDecl, PluginC
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import { invalidateCapabilityCache } from "../../capability";
 import { isModuleEntryKind, LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../../capability/extension-module";
-import { pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
+import { pluginEntryId, pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult, Extension as RuntimeExtension } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -163,6 +163,8 @@ export interface ExtensionServiceDeps {
 	 * (package enable/disable). Absent → the change lands with the next session.
 	 */
 	applyLive?(target: LiveApplyTarget): Promise<{ errors: string[] }>;
+	/** Reload process-level host plugins whose effective config changed. */
+	reloadHostPluginConfigs?(): Promise<unknown>;
 	/**
 	 * A namespace's declared config fields, when the caller can supply them
 	 * without a full extension scan (tests, or a host that already has the
@@ -275,6 +277,7 @@ export class ExtensionService implements DaemonService {
 	async #hostDeclaration(id: string): Promise<
 		| {
 				name: string;
+				path: string;
 				host?: Extension["host"];
 				config: ConfigFieldDesc[];
 				components: PluginComponentDecl[];
@@ -292,7 +295,7 @@ export class ExtensionService implements DaemonService {
 			if (name !== id) continue;
 			const meta = await readExtensionPluginMeta(entryPath);
 			if (!meta) return undefined;
-			return { name, host: meta.host, config: meta.fields, components: meta.components ?? [] };
+			return { name, path: entryPath, host: meta.host, config: meta.fields, components: meta.components ?? [] };
 		}
 		return undefined;
 	}
@@ -1371,14 +1374,45 @@ export class ExtensionService implements DaemonService {
 				for (const field of cached.config) stored[field.key] = settings.getRaw(field.key);
 				cached.configValues = coerceConfigValues([...cached.config], stored);
 			}
+			const apply = await this.#applyConfigChange(ext);
 			this.#deps.onChanged();
-			return { ok: true as const, restart: desc.restart ?? ("none" as const), values: undefined };
+			return {
+				ok: true as const,
+				restart: desc.restart ?? ("none" as const),
+				values: undefined,
+				...(apply?.errors.length ? { apply } : {}),
+			};
 		}
 		const { writePluginConfigValue } = await import("../../extensibility/extensions-center/plugin-config-store");
 		const values = await writePluginConfigValue(ext.name, p.key, coerced);
 		this.invalidateExtensionsCache();
+		const apply = await this.#applyConfigChange(ext);
 		this.#deps.onChanged();
-		return { ok: true as const, restart: desc.restart ?? ("none" as const), values };
+		return {
+			ok: true as const,
+			restart: desc.restart ?? ("none" as const),
+			values,
+			...(apply?.errors.length ? { apply } : {}),
+		};
+	}
+
+	/**
+	 * Replace running instances after a config write (dsh: a config edit reloads
+	 * the plugin). Host-scope records reload through their own runtime; live
+	 * sessions remount the entry through the Track A mount pipeline, which
+	 * revalidates `Config` and keeps the old instance on failure.
+	 */
+	async #applyConfigChange(ext: { path: string }): Promise<{ errors: string[] } | undefined> {
+		await this.#deps.reloadHostPluginConfigs?.().catch(error => {
+			logger.warn("host plugin config reload failed", { path: ext.path, error: String(error) });
+		});
+		const applied = await this.#deps
+			.applyLive?.({ reload: [ext.path] })
+			.catch(error => ({ errors: [String(error)] }));
+		if (applied?.errors.length) {
+			logger.warn("plugin config did not reach every live session", { path: ext.path, errors: applied.errors });
+		}
+		return applied;
 	}
 
 	/**
@@ -1408,12 +1442,13 @@ export class ExtensionService implements DaemonService {
 		if (typeof p.namespace !== "string" || p.namespace === "") {
 			throw new Error("pluginConfig.form: namespace required");
 		}
-		const fields = await this.#configFieldsFor(p.namespace);
+		const namespace = await this.#resolveConfigNamespace(p.namespace);
+		const fields = await this.#configFieldsFor(namespace);
 		const { createPluginConfigForm } = await import("../../extensibility/extensions-center/plugin-config-form");
-		const form = await createPluginConfigForm(p.namespace, fields, this.#pluginConfigStorePath());
+		const form = await createPluginConfigForm(namespace, fields, this.#pluginConfigStorePath());
 		const snap = form.getSnapshot();
 		return {
-			namespace: p.namespace,
+			namespace,
 			snapshot: {
 				status: snap.status,
 				value: snap.value,
@@ -1453,9 +1488,10 @@ export class ExtensionService implements DaemonService {
 			if (op.kind === "unset") parsed.push({ kind: "unset", field: op.field });
 			else parsed.push({ kind: "set", field: op.field, value: op.value });
 		}
-		const fields = await this.#configFieldsFor(p.namespace);
+		const namespace = await this.#resolveConfigNamespace(p.namespace);
+		const fields = await this.#configFieldsFor(namespace);
 		const { createPluginConfigForm } = await import("../../extensibility/extensions-center/plugin-config-form");
-		const form = await createPluginConfigForm(p.namespace, fields, this.#pluginConfigStorePath());
+		const form = await createPluginConfigForm(namespace, fields, this.#pluginConfigStorePath());
 		const applied = await form.mutate(
 			parsed,
 			typeof p.expectedRevision === "number" ? p.expectedRevision : undefined,
@@ -1473,6 +1509,19 @@ export class ExtensionService implements DaemonService {
 		if (injected) return await injected;
 		const extensions = await this.getExtensions();
 		return extensions.find(e => e.id === namespace)?.config ?? [];
+	}
+
+	/**
+	 * The package identity a form namespace names. A slot component carries its
+	 * entry path, while the config store and the declared fields are keyed by
+	 * the package name — the one identity enablement uses.
+	 */
+	async #resolveConfigNamespace(namespace: string): Promise<string> {
+		if (!namespace.includes("/") && !namespace.includes("\\")) return pluginEntryId(namespace);
+		const resolved = path.resolve(namespace);
+		const extensions = await this.getExtensions();
+		const extension = extensions.find(candidate => path.resolve(candidate.path) === resolved);
+		return extension ? pluginEntryId(extension.name) : namespace;
 	}
 
 	/** Where a form's values are stored: the host's own config directory

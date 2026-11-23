@@ -201,7 +201,7 @@
 |---|---|
 | `setLabel` | `types.ts:1463` |
 | `getFlag` | `types.ts:1466` |
-| `pi.config.get` / `pi.config.getAll` | `types.ts:1483-1488`，实现 `loader.ts:241-257` |
+| `pi.config.get` / `pi.config.getAll`（仅 Track B） | `types.ts` `ExtensionAPI.config`，实现 `plugin-runtime/extension-api.ts`；Track A 用 `apply(ctx, config)` |
 | `sendMessage` | `types.ts:1548` |
 | `sendUserMessage` | `types.ts:1554` |
 | `appendEntry` | `types.ts:1560` |
@@ -567,13 +567,14 @@ plugins.list / plugins.packages / plugins.setEnabled
 - CRUD：`manager.ts:918-949`（全局 `musepi-plugins.lock.json` 的 `settings[name]` 与项目覆写 `settings` 合并，项目覆盖全局 — `manager.ts:920-925`）
 - TUI 渲染：`modes/components/plugin-settings.ts:235`, `542`
 
-**② 新 `ConfigFieldDesc`（manifest 声明式，GUI 扩展中心用）**
-- 类型：`packages/wire/src/plugin-config.ts:12-30`
+**② `Config` Standard Schema（运行时契约）+ 生成的 `ConfigFieldDesc`（GUI 扩展中心用）**
+- 类型：`packages/wire/src/plugin-config.ts`（`ConfigFieldDesc`）
 - 解析 `parseConfigFields`：`packages/wire/src/plugin-config.ts:130`（逐字段 fail-soft）
 - 解析 `parsePluginResources` / `parsePluginComponents`：`plugin-manifest.ts:49-50`（实现在 `wire/src/plugin-config.ts:198` 等）
 - 钳制 `coerceConfigValues`：`packages/wire/src/plugin-config.ts:275`（daemon 与 GUI 单一权威）
-- manifest 读取：`extensions/plugin-manifest.ts:45-60`（从入口向上找最多 4 层 package.json，`plugin-manifest.ts:24`；坏 JSON 按「无插件声明」处理，`plugin-manifest.ts:80-83`）
-- 运行时读取 `pi.config`：`extensions/loader.ts:241-257`
+- 运行时校验：`plugins/runtime/mount.ts` 调 `validateDeclaredPluginConfig`，走 `Config["~standard"].validate`，失败为 `config-invalid`
+- 表单 sidecar：`plugins/runtime/declared-config.ts` 读包内 `config.json`（`scripts/gen-plugin-config.ts` 从 `toJsonSchema()` 生成，`verify-generated` 门禁）；旧 `musepi.config` 仅作回退
+- 运行时读取：Track A 由 `apply(ctx, config)` 收到有效值；`pi.config` 仅 Track B（`plugin-runtime/extension-api.ts`）
 
 ### 8.2 `ConfigFormRenderer`
 
@@ -586,7 +587,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 | 配置 | 路径 | 依据 |
 |---|---|---|
 | 插件 manifest 配置值 | `<agentDir>/extensions/plugin-config.json` | `extensions-center/plugin-config-store.ts:20-22` |
-| 形状 | `{ [extensionId]: { [key]: value } }`，键空间与 `disabledExtensions` 一致（`extension-module:<name>`） | `plugin-config-store.ts:4-5`；键构造 `extensions/loader.ts:255` |
+| 形状 | `{ [packageName]: { [key]: value } }`，键空间与 `disabledExtensions` 一致（`pluginEntryId`） | `plugin-config-store.ts`；键构造 `plugins/runtime/declared-config.ts` |
 | 写入 | 逐键写穿透 + 进程内缓存 | `plugin-config-store.ts:54-65` |
 | 损坏处理 | 损坏/缺席 → 空表，绝不抛错阻断扩展登记（fail-soft） | `plugin-config-store.ts:36-42`，注释 `:6-8` |
 | 旧 PluginManager 配置 | `musepi-plugins.lock.json` 的 `settings[name]` | `manager.ts:918-938` |

@@ -1,5 +1,7 @@
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 
+export { Config } from "./config";
+
 export const name = "musepi-stt";
 export const inject = [] as const;
 export const provide = [] as const;

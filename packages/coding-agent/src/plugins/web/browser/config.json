@@ -1,0 +1,20 @@
+{
+	"fields": [
+		{
+			"key": "browser.headless",
+			"type": "boolean",
+			"label": "browser.headless",
+			"restart": "session",
+			"default": true,
+			"description": "无桌面内置浏览器时以无头 Chromium 兜底。"
+		},
+		{
+			"key": "browser.cdpUrl",
+			"type": "string",
+			"label": "browser.cdpUrl",
+			"restart": "session",
+			"default": "",
+			"description": "连接已有 Chromium 调试端点；留空时使用默认启动方式。"
+		}
+	]
+}

@@ -33,7 +33,7 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **与 dsh `standard` 的对照**：dsh 有而 MusePi 已对齐的——`tool-bash`、`tool-fs`、`tool-fs-search`、`tool-todo`、`tool-ask-user`、`tool-web`、`tool-skill`、`tool-goal`、`tool-jobs`、`tool-schedule`、`tool-subagent`、`tool-cordis`。dsh 没有而 MusePi 有的——`notify_user`（进展更新）、`knowledge`（项目知识库）、`checkpoint`/`rewind`（会话检查点）、`security_scan`、`connector_catalog`、`request_secret`/`list_secrets`（密钥）、`inspect_image`、`computer`（桌面控制）、`browser`（受管浏览器）、`memory_*`（记忆后端与工具）。dsh 有而 MusePi 无对应物——`tool-office`（Office 文档）、`tool-present`（演示）、`tool-workflow`（PTC 工作流编排）、`tool-plugin-manager`/`tool-plugin-market`（由 `plugin_manager` 部分覆盖）。
 
-**Track A 类型名是 `PluginAPI`**：第一方插件声明 `apply(ctx: PluginAPI)`，拿到的是插件面（`ctx.*` 命名空间、`effect`、`on`、`state`、`service`、`cwd`、`logger`、`config` 等）。`ExtensionAPI` 是 Track B 兼容面，在其上多出平铺 `pi.register*` 别名与 `sendMessage`/`exec`/`getActiveTools` 这类会话动作方法——只有确实要维持旧 `export default (pi)` 扩展工作的包才用它。当前 154 处第一方引用用 `PluginAPI`，10 处因调用这些方法保留 `ExtensionAPI`。
+**Track A 类型名是 `PluginAPI`**：第一方插件声明 `apply(ctx: PluginAPI, config)`，拿到的是插件面（`ctx.*` 命名空间、`effect`、`on`、`state`、`service`、`cwd`、`logger` 等）；配置是第二个参数，不是 `ctx.config`。`ExtensionAPI` 是 Track B 兼容面，在其上多出平铺 `pi.register*` 别名、`sendMessage`/`exec`/`getActiveTools` 这类会话动作方法以及 `pi.config` 读取面——只有确实要维持旧 `export default (pi)` 扩展工作的包才用它。
 
 不叫 `Context` 的原因：该名字已被 `@deepseek-ai/cordis` 的 `Context`（本宿主挂载 fiber 用的真实 Cordis 上下文）与 `@musepi/pi-ai` 的 `Context`（LLM 请求的消息列表）占用，另有多处本地类型同名，插件别名无法在不遮蔽它们的前提下使用。
 
@@ -65,17 +65,19 @@ RPC 与设置不走接管：`memory.*` 这类方法是核心契约，路由只�
 ```
 src/extensibility/
 ├── plugins/          ← Track A。cordis 插件系统的一切
-│   ├── cordis-entry.ts        入口三件套 + inject 依赖门
-│   ├── mount.ts               Track A 自己的 import + bind
+│   ├── api.ts                  PluginAPI 类型归属（Omit 掉 config）
+│   ├── runtime/                cordis-entry / mount / declared-config / session-loader / host-runtime
 │   ├── dsh-*.ts               dsh 装配面解析（bundle/patch/layers）
 │   ├── loader.ts              清单发现（读 lockfile、找入口路径）
 │   ├── manager.ts             安装/卸载
 │   ├── marketplace/           插件市场
 │   └── legacy-pi-compat.ts    模块装载机制（两条轨道共用）
+├── plugin-runtime/   ← 两条轨道共用的机制
+│   └── extension-api.ts       Extension 账本 + ConcreteExtensionAPI + fiber 工厂
 └── extensions/       ← Track B。与 omp 同源，勿改语义
     ├── loader.ts              import + bind（Track B 自己的）
-    ├── runner.ts              ExtensionRunner
-    └── types.ts               ExtensionAPI / Extension 形状
+    ├── runner.ts              ExtensionRunner（会话编排；Track A 重载走自己的 mount）
+    └── types.ts               ExtensionAPI / Extension 形状（PluginAPI 兼容再导出）
 ```
 
 ### 2.2 文件名必须说实话

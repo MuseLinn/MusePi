@@ -17,6 +17,8 @@ import type { ExtensionRpcHandler, PluginAPI } from "@musepi/pi-coding-agent/ext
 import { AndroidDeviceService } from "./android-service";
 import { createAndroidEmulatorTool } from "./tools";
 
+export { Config } from "./config";
+
 export const name = "musepi-android-emulator";
 export const inject = [] as const;
 export const provide = [] as const;

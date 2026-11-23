@@ -1,6 +1,8 @@
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 
+export { Config } from "./config";
+
 /**
  * One MCP server, declared by ONE preset row.
  *
@@ -114,11 +116,9 @@ export function serverConfigFromRow(config: RowConfig): { serverName: string; co
 	};
 }
 
-// The second parameter is what makes the row's `config` reach this plugin:
-// `mountPlugin` reads a row's config only for an `apply` that declares it (or a
-// module `Config`), and hands it over as this argument. `ctx.config` is the
-// per-extension settings store — the right source for an ambient plugin, not
-// for a preset row.
+// The second parameter is the plugin's effective config: manifest/schema
+// defaults plus this row's overrides, validated through the module's `Config`
+// and handed over by `mountPlugin`.
 export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
 	ctx.on("session_start", async (_event, session) => {
 		const server = serverConfigFromRow((config ?? {}) as RowConfig);

@@ -98,7 +98,17 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 	const manifest = await readPackageManifestNear(entryPath);
 	const raw = manifest?.pkg.musepi ?? manifest?.pkg.omp ?? manifest?.pkg.pi ?? null;
 	if (!raw || !manifest) return null;
-	const { fields, errors } = parseConfigFields(raw.config);
+	// `config.json` is generated from the plugin's `Config` schema; the manifest
+	// block remains readable for packages that have not migrated yet.
+	let configSource: unknown = raw.config;
+	try {
+		const sidecar = (await Bun.file(path.join(manifest.root, "config.json")).json()) as { fields?: unknown };
+		if (Array.isArray(sidecar.fields)) configSource = sidecar.fields;
+	} catch (error) {
+		if (!isEnoent(error))
+			logger.warn("plugin config sidecar unreadable, falling back to the manifest", { path: manifest.root });
+	}
+	const { fields, errors } = parseConfigFields(configSource);
 	const resources = parsePluginResources(raw.resources);
 	const { components } = parsePluginComponents(raw.components);
 	const experimental = parsePluginExperimental(raw.experimental);

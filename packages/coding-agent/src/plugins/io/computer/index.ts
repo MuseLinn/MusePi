@@ -4,6 +4,8 @@ import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions
 import { ComputerTool } from "@musepi/pi-coding-agent/tools/computer";
 import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
+export { Config } from "./config";
+
 /** The computer package provides `computer`. */
 export function apply(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("tool", "computer"), "tool:computer");

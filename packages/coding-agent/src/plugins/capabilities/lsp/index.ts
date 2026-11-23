@@ -4,6 +4,8 @@ import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions
 import { LspTool } from "@musepi/pi-coding-agent/lsp/tool";
 import { registerToolProvider } from "@musepi/pi-coding-agent/tools/tool-ownership";
 
+export { Config } from "./config";
+
 /** The lsp package provides `lsp`. */
 export function apply(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("tool", "lsp"), "tool:lsp");

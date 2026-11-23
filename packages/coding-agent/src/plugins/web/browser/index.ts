@@ -1,6 +1,8 @@
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { registerBrowserPrompts } from "./prompts";
 
+export { Config } from "./config";
+
 export const name = "musepi-browser";
 export const inject = [] as const;
 export const provide = [] as const;

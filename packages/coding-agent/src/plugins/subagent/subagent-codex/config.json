@@ -1,0 +1,49 @@
+{
+	"fields": [
+		{
+			"key": "executable",
+			"type": "string",
+			"label": "executable",
+			"restart": "session",
+			"default": "",
+			"description": "留空时从 PATH 查找 codex。"
+		},
+		{
+			"key": "model",
+			"type": "string",
+			"label": "model",
+			"restart": "session",
+			"default": "",
+			"description": "可选的 Codex 原生模型标识。"
+		},
+		{
+			"key": "permissionMode",
+			"type": "select",
+			"label": "permissionMode",
+			"restart": "session",
+			"default": "never",
+			"options": [
+				"never",
+				"approve-for-me",
+				"dangerously-bypass-approvals-and-sandbox"
+			],
+			"description": "权限模式"
+		},
+		{
+			"key": "env",
+			"type": "string",
+			"label": "env",
+			"restart": "session",
+			"default": "",
+			"description": "可选的字符串键值 JSON 对象。"
+		},
+		{
+			"key": "disposeGraceMs",
+			"type": "number",
+			"label": "disposeGraceMs",
+			"restart": "session",
+			"default": 3000,
+			"description": "退出宽限（毫秒）"
+		}
+	]
+}

@@ -1,0 +1,28 @@
+{
+	"fields": [
+		{
+			"key": "roots",
+			"type": "string",
+			"label": "roots",
+			"restart": "session",
+			"default": "",
+			"description": "每个根包含 pre/ 与 post/ 子目录；相对路径按会话工作目录解析。"
+		},
+		{
+			"key": "python",
+			"type": "string",
+			"label": "python",
+			"restart": "session",
+			"default": "",
+			"description": "用于 .py 钩子；留空时不运行 Python 脚本。"
+		},
+		{
+			"key": "defaultTimeoutMs",
+			"type": "number",
+			"label": "defaultTimeoutMs",
+			"restart": "session",
+			"default": 600000,
+			"description": "默认超时（毫秒）"
+		}
+	]
+}

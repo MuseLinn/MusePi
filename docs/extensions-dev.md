@@ -48,7 +48,7 @@ musepi-omp 是 oh-my-pi 的 fork,扩展运行时同源,但 musepi 在**加载、
 
 An ordinary plugin package declares its entries, configuration, and resources in `package.json`'s `musepi` block and uses the runtime lock for enablement. The application profile selects bundles through `musepi.profile.bundles`, with row overrides in its `cordis.patch.yml`; Only `musepi.profile.bundles` is supported; DSH profile fields are ignored. Agent presets are declared as plugin rows inside that same composition and resolve in file > profile > extension order. Their new-session default lives in the profile's `agent-preset-registry.config.selectedDefault`; once a session starts, its preset is locked and its existing composition is retained. Component switches remain independent of the parent switch: a component selection is preserved while its parent is off, but the component is not active until both gates allow it.
 
-Preset rows are also the composition unit for per-session MCP servers and file skills. A row's `config` reaches its plugin as the second argument of `apply(ctx, config)` (or an exported `Config`); `ctx.config` is the per-extension settings store and is not the row config. `musepi-mcp-client` is a `presetOnly` row package: each row names one server (`serverName`, `transport`, stdio `command`/`args`/`env`/`cwd` or `url`/`headers`, `timeout`, `enabled`) and connects it inside the session's `session_start` through `registerMcpServer`, so the server is released by the same runner. `musepi-skill-filesystem` registers the skills under its `roots` (`<name>/SKILL.md` or flat `<name>.md`, frontmatter required) at mount through `registerSkill`; discovery is a snapshot of that mount, not a watcher, because a preset generation is disposable. Neither package loads ambiently, and neither has a global config surface. Command hooks follow the same row shape: `musepi-hooks-claude-code` and `musepi-hooks-codex` mount an external `hooks.json` (`configPath`) and map its five command-hook points onto session events through the shared engine in `extensibility/hooks/command`; they differ only in matcher mode and `${…}` substitution. The directory convention is a third row package, `musepi-hooks-scripts`: scripts under `roots/pre/<tool>` and `roots/post/<tool>` are scanned into the same config (`pre` → PreToolUse, `post` → PostToolUse, file stem is the tool name, `*`/`all` means every tool), so it shares matching, exit-code, context and merge semantics rather than adding a second protocol.
+Preset rows are also the composition unit for per-session MCP servers and file skills. A row's `config` reaches its plugin as the second argument of `apply(ctx, config)`, validated and defaulted by the exported `Config`; Track A has no `ctx.config` reader (`pi.config` remains on Track B). `musepi-mcp-client` is a `presetOnly` row package: each row names one server (`serverName`, `transport`, stdio `command`/`args`/`env`/`cwd` or `url`/`headers`, `timeout`, `enabled`) and connects it inside the session's `session_start` through `registerMcpServer`, so the server is released by the same runner. `musepi-skill-filesystem` registers the skills under its `roots` (`<name>/SKILL.md` or flat `<name>.md`, frontmatter required) at mount through `registerSkill`; discovery is a snapshot of that mount, not a watcher, because a preset generation is disposable. Neither package loads ambiently, and neither has a global config surface. Command hooks follow the same row shape: `musepi-hooks-claude-code` and `musepi-hooks-codex` mount an external `hooks.json` (`configPath`) and map its five command-hook points onto session events through the shared engine in `extensibility/hooks/command`; they differ only in matcher mode and `${…}` substitution. The directory convention is a third row package, `musepi-hooks-scripts`: scripts under `roots/pre/<tool>` and `roots/post/<tool>` are scanned into the same config (`pre` → PreToolUse, `post` → PostToolUse, file stem is the tool name, `*`/`all` means every tool), so it shares matching, exit-code, context and merge semantics rather than adding a second protocol.
 
 The Plugins view manages packages and profile bundles at one card granularity. Ordinary package switches use the runtime lock; bundle switches update `musepi.profile.bundles`, and selected-but-unreadable bundles stay visible. Detailed layer and row composition remains available through `bundles.composition` without a separate Composition tab. Preset rows mount as real Cordis fibers in each session: `isolate` creates service-specific child realms, and switching modes disposes the old preset fibers before mounting the new composition. Plugin-owned skills are declared with `registerSkill` beside the plugin's other resources and disappear with that plugin; the Android emulator uses this lifecycle.
 
@@ -521,49 +521,40 @@ pi.unregisterDesignSystem("my-brand");
 - 生命周期:随扩展加载注册、reload/unload 按来源整源清除,下一次 prompt 重建即生效。
 - 类型:`DesignSystemConfig` 见 `packages/coding-agent/src/extensibility/extensions/types.ts`。
 
-## 13. 插件清单配置(manifest config/resources + pi.config,dsh 插件管理页 parity,2026-09-30)
+## 13. 插件配置(Config Standard Schema + 生成表单,dsh parity,2026-11-24)
 
-扩展的 package.json 可在 `musepi` 块下声明**配置字段表**与**资源占用卡**(`musepi` 为权威清单字段;旧上游的 `omp`/`pi` 块继续可读,新扩展一律写 `musepi`):扩展中心详情页据此渲染 dsh 式管理视图(配置表单 + 资源卡),扩展运行时经 `pi.config` 读取同一份值。
-
-### 清单声明
-
-```json
-{
-  "name": "voice-input",
-  "musepi": {
-    "extensions": ["index.ts"],
-    "experimental": true,
-    "config": [
-      { "key": "enabled", "type": "boolean", "default": true, "description": "启用语音输入" },
-      { "key": "threshold", "type": "number", "default": 0.5, "min": 0, "max": 1, "step": 0.05 },
-      { "key": "model", "type": "select", "default": "base", "options": ["base", "large"], "restart": "session" },
-      { "key": "prompt", "type": "string", "default": "你好" },
-      { "key": "bin", "type": "path", "default": "" }
-    ],
-    "resources": { "disk": "120MB", "memory": "350MB", "setupMinutes": 2, "models": [{ "name": "stt-base", "size": "75MB" }] }
-  }
-}
-```
-
-- `experimental` 只接受字面值 `true`，会沿 daemon 条目传到普通包和模块卡片并显示本地化「实验性」标签；缺省和其他值不标记。
-- `icon` 是插件自己的标记:emoji、文字字形或 `http(s)://`/`file://` URI。插件列表与详情优先使用它,图片按 `contain` 缩放,解码失败回退名字字形。
-- `presetOnly` 只接受字面值 `true`:`true` 的 persona 包只在 Agent 预设里按会话提供,不出现于能力中心的插件列表;完整库存仍在 设置 → 扩展与插件。
-- 字段类型:`boolean | number | string | select | path`;number 可带 `min/max/step`,select 必须给 `options`。
-- `restart` 生效域:`none`(默认,立即) / `session`(新会话) / `daemon`(重启 daemon)。
-- fail-soft:manifest 是用户可写 JSON,坏字段逐个被丢弃进结构化 errors(详情页有可见警告),好字段照常生效,绝不拖垮扩展登记。
-
-### 运行时读取
+Track A 的配置事实源是插件导出的 `Config`(Standard Schema),该类型同时承载校验、默认值与表单描述。写成 `config.ts`,入口再导出:
 
 ```ts
-export default async function (pi: ExtensionAPI) {
-  const threshold = await pi.config.get<number>("threshold"); // 钳制后的值,未写过 = 声明默认
-  const all = await pi.config.getAll(); // 完整值表(只含声明键)
+// config.ts
+import { z } from "@musepi/pi-coding-agent/plugin-config";
+
+export interface Config {
+  threshold: number;
+  model: "base" | "large";
+}
+export const Config = z.object({
+  threshold: z.number().min(0).max(1).default(0.5).describe("触发阈值"),
+  model: z.enum(["base", "large"]).default("base").describe("模型档位"),
+});
+```
+
+```ts
+// index.ts
+export { Config } from "./config";
+
+export function apply(ctx: PluginAPI, config: Config): void {
+  // config 已由宿主按 Config 校验并填好默认值；这是唯一的配置读取面。
 }
 ```
 
-- 取值与扩展中心表单、`extensions.setConfig` 写入共用同一条 `coerceConfigValues` 钳制链路(daemon/GUI 单一权威在 `@musepi/pi-wire`):存储坏值回退声明默认,未声明键 `get` 返回 `undefined`、`getAll` 被过滤。
-- 生效语义:`restart: "none"` 字段每次调用现读——GUI 表单改完立即可见;`session` 字段在扩展加载时快照,新会话/重载后生效;`daemon` 字段约定需重启 daemon。
+- `mountPlugin` 用 `Config["~standard"].validate` 校验有效值(存储值 + 组合行覆盖),返回 schema 输出；校验失败以 `config-invalid` 拒绝挂载，旧实例保留。导出一个不是 Standard Schema 的 `Config` 也会被拒绝，不会静默跳过。
+- 管理页表单由 `Config.toJsonSchema()` 生成到包内的 `config.json`(字段、默认值、边界、枚举、描述)；不要手改该文件。生成命令 `bun --cwd=packages/coding-agent run gen:plugin-config`，`verify-generated` 会拦截过期产物。
+- `musepi.config` 不再是 Track A 的配置声明；遗留清单字段仍可读，供 Track B / 未迁移包回退。`pi.config.get/getAll` 只保留在 `ExtensionAPI`(Track B)，Track A 通过 `apply(ctx, config)` 拿到配置。
+- 配置写出后宿主重载运行实例：进程级宿主插件按有效配置批次重载；活动会话通过 Track A 挂载管线重挂载并重放 `session_start`；失败保留旧实例并返回错误。管理页把字段标为 `session`，因为值在挂载时读取。
+- 取值仍与 `extensions.setConfig` 写入共用 `@musepi/pi-wire` 的钳制链路(坏存储值回退 schema 默认)。
 - 存储落点:`<agentDir>/extensions/plugin-config.json`,键空间与 `disabledExtensions` 一致(包名,`pluginEntryId`;Track A 运行时读取与表单写入共用这一身份)。
+- `musepi` 块继续承载 `extensions` / `resources` / `components` / `label` / `description` / `icon` / `experimental` / `presetOnly` 等非配置清单字段。
 
 ### 13.1 插件名字的本地化(`locale/<tag>.json`,dsh parity,2026-11-15)
 

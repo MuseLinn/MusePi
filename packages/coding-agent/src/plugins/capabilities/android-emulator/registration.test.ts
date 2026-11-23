@@ -65,10 +65,10 @@ describe("Cordis plugin registration", () => {
 	afterEach(() => vi.restoreAllMocks());
 
 	test("declares valid executable path settings in the plugin manifest", async () => {
-		const manifest = (await Bun.file(new URL("./package.json", import.meta.url)).json()) as {
-			musepi: { config: unknown };
+		const manifest = (await Bun.file(new URL("./config.json", import.meta.url)).json()) as {
+			fields: unknown;
 		};
-		const parsed = parseConfigFields(manifest.musepi.config);
+		const parsed = parseConfigFields(manifest.fields);
 		expect(parsed.errors).toEqual([]);
 		expect(parsed.fields.map(field => field.key)).toEqual(["adbPath", "emulatorPath"]);
 	});

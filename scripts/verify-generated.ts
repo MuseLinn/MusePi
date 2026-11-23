@@ -12,7 +12,8 @@
  * a machine without those; it stays a local step.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
+import { buildPluginConfigArtifacts } from "../packages/coding-agent/scripts/gen-plugin-config";
 import { buildToolViews } from "../packages/client-core/scripts/build-tool-views";
 import { buildSlotCatalog } from "./gen-slot-catalog";
 
@@ -62,7 +63,9 @@ export function describeDrift(expected: string, actual: string): string | null {
 
 async function main(): Promise<number> {
 	const stale: string[] = [];
+	let verified = 0;
 	for (const artifact of ARTIFACTS) {
+		verified += 1;
 		const absolute = join(ROOT, artifact.path);
 		if (!existsSync(absolute)) {
 			stale.push(`${artifact.path}: missing — run \`${artifact.command}\``);
@@ -73,8 +76,21 @@ async function main(): Promise<number> {
 		const drift = describeDrift(expected, actual);
 		if (drift) stale.push(`${artifact.path}: stale — run \`${artifact.command}\`\n${drift}`);
 	}
+	// Plugin config sidecars are one artifact per package, generated from the
+	// plugin's `Config` schema; a stale one means the schema changed without a
+	// regeneration.
+	for (const artifact of await buildPluginConfigArtifacts()) {
+		verified += 1;
+		const path = relative(ROOT, artifact.path).split(sep).join("/");
+		if (!existsSync(artifact.path)) {
+			stale.push(`${path}: missing — run \`bun --cwd=packages/coding-agent run gen:plugin-config\``);
+			continue;
+		}
+		const drift = describeDrift(artifact.content, readFileSync(artifact.path, "utf8"));
+		if (drift) stale.push(`${path}: stale — run \`bun --cwd=packages/coding-agent run gen:plugin-config\`\n${drift}`);
+	}
 	if (stale.length === 0) {
-		console.log(`generated artifacts ok (${ARTIFACTS.length} verified)`);
+		console.log(`generated artifacts ok (${verified} verified)`);
 		return 0;
 	}
 	console.error("generated artifacts are stale:");

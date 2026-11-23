@@ -1332,25 +1332,47 @@ export class ExtensionRunner {
 		const oldLedger = sessionHost ? this.#sessionScope?.promptHostLedgers.get(hostOwner) : undefined;
 		if (sessionHost && oldLedger) removeScopedPromptHostLedger(sessionHost, hostOwner, oldLedger);
 		else if (sessionHost) sessionHost.removeByOwner(hostOwner);
-		// `fresh: true` — a reload MUST re-evaluate the entry module. Bun caches
-		// ESM by specifier and a cached copy never sees the new bytes, so the only
-		// way new code takes effect is a query-tagged import. The resulting new
-		// module instance is fine HERE (the old one is being replaced); a first
-		// load shares identity so plugin state is not split between loaders.
-		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd, undefined, {
-			fresh: true,
-			promptHost: sessionHost,
-			// The replacement registers into the SAME runtime so migrated
-			// lifecycle listeners land on the event bus this runner dispatches to.
-			runtime: this.runtime,
-		});
-		const replacement = loadResult.extensions[0];
+		// Track A reloads through its own mount pipeline so the inject gate, the
+		// declared Config (validated and defaulted), and the fiber ledger apply
+		// again; Track B keeps the legacy loader. `fresh: true` re-evaluates the
+		// entry module — Bun caches ESM by specifier and a cached copy never sees
+		// new bytes.
+		let replacement: Extension | undefined;
+		let reloadErrors: string[] = [];
+		let replacementLedgers = this.runtime.promptHostLedgers;
+		if (oldExt.track === "plugin") {
+			const eventBus = this.runtime.sessionEventBus ?? oldExt.eventBus;
+			if (!eventBus) {
+				if (sessionHost && oldLedger) replayPromptHostLedger(sessionHost, hostOwner, oldLedger);
+				return { removedTools: [], errors: ["Track A reload requires the session event bus"] };
+			}
+			const { reloadSessionPlugin } = await import("../plugins/runtime/session-loader");
+			const reloaded = await reloadSessionPlugin({
+				entryPath: oldExt.path,
+				cwd: cwd ?? this.cwd,
+				runtime: this.runtime,
+				eventBus,
+			});
+			replacement = reloaded.extension ?? undefined;
+			reloadErrors = reloaded.errors;
+		} else {
+			const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd, undefined, {
+				fresh: true,
+				promptHost: sessionHost,
+				// The replacement registers into the SAME runtime so migrated
+				// lifecycle listeners land on the event bus this runner dispatches to.
+				runtime: this.runtime,
+			});
+			replacement = loadResult.extensions[0];
+			reloadErrors = loadResult.errors.map(e => e.error);
+			replacementLedgers = loadResult.runtime.promptHostLedgers;
+		}
 		if (!replacement) {
 			// Failed load: keep the old instance untouched (no rollback needed —
 			// nothing was mutated yet), restore its prompt-host contributions from
 			// the retained ledger, and surface the errors to the caller.
 			if (sessionHost && oldLedger) replayPromptHostLedger(sessionHost, hostOwner, oldLedger);
-			return { removedTools: [], errors: loadResult.errors.map(e => e.error) };
+			return { removedTools: [], errors: reloadErrors };
 		}
 		// Sync the replacement factory's ledger into the session runtime so a
 		// later disable/enable replays the NEW registrations, not stale ones.
@@ -1363,7 +1385,7 @@ export class ExtensionRunner {
 				sessionLedger = { entries: [] };
 				this.#sessionScope?.promptHostLedgers.set(hostOwner, sessionLedger);
 			}
-			const freshLedger = loadResult.runtime.promptHostLedgers.get(hostOwner);
+			const freshLedger = replacementLedgers.get(hostOwner);
 			sessionLedger.entries = freshLedger ? [...freshLedger.entries] : [];
 		}
 		const removedTools = [...oldExt.tools.keys()];
@@ -1391,7 +1413,7 @@ export class ExtensionRunner {
 		this.startServices();
 		this.applyThemeTokens();
 		logger.info("Extension hot-reloaded", { extensionPath: oldExt.path, removedTools: removedTools.length });
-		return { removedTools, errors: loadResult.errors.map(e => e.error) };
+		return { removedTools, errors: reloadErrors };
 	}
 
 	/**

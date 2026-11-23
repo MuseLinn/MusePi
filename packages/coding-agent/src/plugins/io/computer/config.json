@@ -1,0 +1,20 @@
+{
+	"fields": [
+		{
+			"key": "computer.display",
+			"type": "string",
+			"label": "computer.display",
+			"restart": "session",
+			"default": "all",
+			"description": "选择截图与操作使用的显示器。"
+		},
+		{
+			"key": "computer.maxWidth",
+			"type": "number",
+			"label": "computer.maxWidth",
+			"restart": "session",
+			"default": 3840,
+			"description": "限制电脑操作截图的最大宽度。"
+		}
+	]
+}

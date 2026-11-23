@@ -1,0 +1,36 @@
+{
+	"fields": [
+		{
+			"key": "base",
+			"type": "string",
+			"label": "base",
+			"restart": "session",
+			"default": "",
+			"description": "Base directory for relative root entries. Defaults to the host process cwd."
+		},
+		{
+			"key": "root",
+			"type": "list",
+			"label": "root",
+			"restart": "session",
+			"default": [],
+			"description": "Comma-separated roots, resolved against base. Empty keeps the native extension/plugin roots."
+		},
+		{
+			"key": "ignored",
+			"type": "list",
+			"label": "ignored",
+			"restart": "session",
+			"default": [],
+			"description": "Comma-separated globs excluded on top of .git and the module cache."
+		},
+		{
+			"key": "debounce",
+			"type": "number",
+			"label": "debounce",
+			"restart": "session",
+			"default": 120,
+			"description": "How long file changes are coalesced before one reload batch is emitted."
+		}
+	]
+}

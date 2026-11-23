@@ -11,6 +11,8 @@ import { resolveExtensionWatchRoots } from "@musepi/pi-coding-agent/extensibilit
 import { createHmrService, type HmrService } from "@musepi/pi-coding-agent/extensibility/plugins/hmr/service";
 import { getPluginsDir } from "@musepi/pi-utils";
 
+export { Config } from "./config";
+
 export const name = "musepi-hmr";
 export const inject = [] as const;
 export const provide = ["hmr"] as const;

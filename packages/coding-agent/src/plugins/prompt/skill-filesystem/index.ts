@@ -6,6 +6,8 @@ import type { ExtensionSkillDeclaration, PluginAPI } from "@musepi/pi-coding-age
 import { stringArrayFromRow } from "@musepi/pi-coding-agent/extensibility/plugins/row-config";
 import { parseFrontmatter } from "@musepi/pi-utils";
 
+export { Config } from "./config";
+
 /**
  * File skills, scoped by a preset row.
  *

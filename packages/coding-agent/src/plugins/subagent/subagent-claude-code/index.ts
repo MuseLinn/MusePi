@@ -13,6 +13,8 @@ import {
 import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/external-executable-probe";
 import type { ExternalSubagentExecutor } from "@musepi/pi-coding-agent/task/types";
 
+export { Config } from "./config";
+
 export const name = "musepi-subagent-claude-code";
 export const inject = [] as const;
 export const provide = [] as const;

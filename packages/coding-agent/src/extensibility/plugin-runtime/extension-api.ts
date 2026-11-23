@@ -119,6 +119,8 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	/** Cordis event context for lifecycle events already migrated off the
 	 *  hand-written loops (`session_start`, `session_shutdown`). */
 	readonly eventBus: IExtensionRuntime["eventBus"] = new Context() as unknown as IExtensionRuntime["eventBus"];
+	/** The host EventBus this runtime's session plugins were created with. */
+	sessionEventBus?: EventBus;
 	readonly eventHandlerCounts = new Map<string, number>();
 	readonly beforeEventResults = new WeakMap<object, unknown>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
@@ -449,6 +451,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		public readonly events: EventBus,
 		private readonly ownContext?: Context,
 	) {
+		this.extension.eventBus = this.events;
 		const self = this;
 		this.tools = {
 			register: this.registerTool.bind(this),

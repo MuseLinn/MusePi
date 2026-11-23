@@ -1,0 +1,12 @@
+{
+	"fields": [
+		{
+			"key": "roots",
+			"type": "string",
+			"label": "roots",
+			"restart": "session",
+			"default": "",
+			"description": "相对路径按会话工作目录解析，例如 [\"./skills\",\"~/.agents/skills/pack\"]"
+		}
+	]
+}

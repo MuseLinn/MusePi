@@ -38,24 +38,6 @@
 		"extensions": [
 			"./index.ts"
 		],
-		"config": [
-			{
-				"key": "computer.display",
-				"type": "string",
-				"default": "all",
-				"restart": "none",
-				"label": "显示器",
-				"description": "选择截图与操作使用的显示器。"
-			},
-			{
-				"key": "computer.maxWidth",
-				"type": "number",
-				"default": 3840,
-				"restart": "none",
-				"label": "最大截图宽度",
-				"description": "限制电脑操作截图的最大宽度。"
-			}
-		],
 		"host": {
 			"configStorage": "settings"
 		}

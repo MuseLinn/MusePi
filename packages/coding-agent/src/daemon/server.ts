@@ -782,6 +782,13 @@ export class DaemonServer {
 				runtimeTargets: () => this.#services.get<BundleService>("bundles").runtimeTargets(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				applyLive: target => this.applyPluginEntriesLive(target),
+				reloadHostPluginConfigs: async () => {
+					const [{ reloadHostPlugins }, { getPluginConfigPath }] = await Promise.all([
+						import("../extensibility/plugins/runtime/host-runtime"),
+						import("../extensibility/extensions-center/plugin-config-store"),
+					]);
+					await reloadHostPlugins([getPluginConfigPath()]);
+				},
 			}),
 		);
 		this.#services.register(

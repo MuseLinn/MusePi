@@ -12,6 +12,8 @@ import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/ex
 import type { ExternalSubagentExecutor } from "@musepi/pi-coding-agent/task/types";
 import { runCodexAppServer } from "./app-server";
 
+export { Config } from "./config";
+
 export const name = "musepi-subagent-codex";
 export const inject = [] as const;
 export const provide = [] as const;

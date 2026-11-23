@@ -38,15 +38,6 @@
 		"presetOnly": true,
 		"extensions": [
 			"./index.ts"
-		],
-		"config": [
-			{
-				"key": "roots",
-				"type": "string",
-				"label": "技能根目录（JSON 数组）",
-				"description": "相对路径按会话工作目录解析，例如 [\"./skills\",\"~/.agents/skills/pack\"]",
-				"default": ""
-			}
 		]
 	}
 }

@@ -1,11 +1,13 @@
 import type { Model } from "@musepi/pi-ai";
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 
+export { Config } from "./config";
+
 export const name = "musepi-compaction-tiers";
 export const inject = [] as const;
 export const provide = [] as const;
 
-/** Fallback when the plugin declares no `musepi.config.capPercent`. */
+/** Fallback for a direct `apply` call; a mounted plugin receives the schema default. */
 const DEFAULT_CAP_PERCENT = 70;
 
 /**

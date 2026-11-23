@@ -1,0 +1,70 @@
+{
+	"fields": [
+		{
+			"key": "tts.localModel",
+			"type": "select",
+			"label": "tts.localModel",
+			"restart": "session",
+			"default": "kokoro",
+			"options": [
+				"kokoro",
+				"melotts-zh"
+			],
+			"description": "选择默认的本地语音合成模型。"
+		},
+		{
+			"key": "tts.localVoice",
+			"type": "select",
+			"label": "tts.localVoice",
+			"restart": "session",
+			"default": "af_heart",
+			"options": [
+				"af_heart",
+				"af_bella",
+				"af_nicole",
+				"af_aoede",
+				"af_kore",
+				"af_sarah",
+				"am_michael",
+				"am_fenrir",
+				"am_puck",
+				"bf_emma",
+				"bm_george",
+				"bm_fable",
+				"default"
+			],
+			"description": "选择合成语音的默认音色。"
+		},
+		{
+			"key": "tts.rate",
+			"type": "number",
+			"label": "tts.rate",
+			"restart": "session",
+			"default": 1,
+			"min": 0.5,
+			"max": 2,
+			"description": "调整朗读速度，范围为 0.5 至 2 倍。"
+		},
+		{
+			"key": "tts.inputMode",
+			"type": "select",
+			"label": "tts.inputMode",
+			"restart": "session",
+			"default": "sanitize",
+			"options": [
+				"raw",
+				"sanitize",
+				"summarize"
+			],
+			"description": "选择朗读前保留、清理或总结文本。"
+		},
+		{
+			"key": "tts.autoRead",
+			"type": "boolean",
+			"label": "tts.autoRead",
+			"restart": "session",
+			"default": false,
+			"description": "助手回复完成后自动开始朗读。"
+		}
+	]
+}

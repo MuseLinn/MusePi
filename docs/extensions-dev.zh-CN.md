@@ -44,7 +44,7 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 暂存树只放运行时内容。维护者专用文件留在源码包（`DEV_ONLY_PLUGIN_FILES`，例如 `ui-ux-pro-max` 的数据校验脚本），暂存时丢弃；随后 `assertStagedPluginLayout` 在暂存插件里发现测试、source map、声明文件或嵌套 `node_modules` 时直接让发布失败。`musepi-contributing` 这类维护者规范不是随包技能：它放在仓库的 `.agents/skills`，只在本仓库 clone 内可见。
 
-行的 `config` 通过 `apply(ctx, config)` 的第二个参数（或导出的 `Config`）送达插件；`ctx.config` 是扩展自己的设置存储，不是行配置。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。目录型约定由第三个行包 `musepi-hooks-scripts` 承担：`roots` 下 `pre/<tool>` / `post/<tool>` 的脚本扫描成同一份配置（`pre` → PreToolUse，`post` → PostToolUse，文件名为工具名，`*`/`all` 表示全部），因此它与其他两个方言共用匹配、退出码、上下文与合并语义，而不是第二套协议。
+行的 `config` 通过 `apply(ctx, config)` 的第二个参数送达插件，并由导出的 `Config` 校验与填默认；Track A 没有 `ctx.config` 读取面（`pi.config` 只保留在 Track B）。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。目录型约定由第三个行包 `musepi-hooks-scripts` 承担：`roots` 下 `pre/<tool>` / `post/<tool>` 的脚本扫描成同一份配置（`pre` → PreToolUse，`post` → PostToolUse，文件名为工具名，`*`/`all` 表示全部），因此它与其他两个方言共用匹配、退出码、上下文与合并语义，而不是第二套协议。
 
 发现的 JavaScript／TypeScript hooks 使用生产扩展链：`discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`。旧 `HookRunner` 导出仅为公开 API 兼容及其直接消费者保留，不是第二条生产执行链。TUI 的设置与插件入口读取和桌面客户端相同的 schema、发现结果及 Cordis 启停状态，不引入独立安装器或插件状态存储。
 
@@ -511,49 +511,40 @@ pi.unregisterDesignSystem("my-brand");
 - 生命周期：随扩展加载注册、reload/unload 按来源整源清除，下一次 prompt 重建即生效。
 - 类型：`DesignSystemConfig` 见 `packages/coding-agent/src/extensibility/extensions/types.ts`。
 
-## 14. 插件清单配置（manifest config/resources + pi.config，dsh 插件管理页 parity，2026-09-30）
+## 14. 插件配置（Config Standard Schema + 生成表单，dsh parity，2026-11-24）
 
-扩展的 package.json 可在 `musepi` 块下声明**配置字段表**与**资源占用卡**（`musepi` 为权威清单字段；旧上游的 `omp`/`pi` 块继续可读，新扩展一律写 `musepi`）：扩展中心详情页据此渲染 dsh 式管理视图（配置表单 + 资源卡），扩展运行时经 `pi.config` 读取同一份值。
-
-### 清单声明
-
-```json
-{
-  "name": "voice-input",
-  "musepi": {
-    "extensions": ["index.ts"],
-    "experimental": true,
-    "config": [
-      { "key": "enabled", "type": "boolean", "default": true, "description": "启用语音输入" },
-      { "key": "threshold", "type": "number", "default": 0.5, "min": 0, "max": 1, "step": 0.05 },
-      { "key": "model", "type": "select", "default": "base", "options": ["base", "large"], "restart": "session" },
-      { "key": "prompt", "type": "string", "default": "你好" },
-      { "key": "bin", "type": "path", "default": "" }
-    ],
-    "resources": { "disk": "120MB", "memory": "350MB", "setupMinutes": 2, "models": [{ "name": "stt-base", "size": "75MB" }] }
-  }
-}
-```
-
-- `experimental` 只接受字面值 `true`，会沿 daemon 条目传到普通包和模块卡片并显示本地化「实验性」标签；缺省和其他值不标记。
-- `icon` 是插件自己的标记：emoji、文字字形或 `http(s)://`/`file://` URI。插件列表与详情优先使用它，图片按 `contain` 缩放，解码失败回退名字字形。
-- `presetOnly` 只接受字面值 `true`：`true` 的 persona 包只在 Agent 预设里按会话提供，不出现于能力中心的插件列表；完整库存仍在 设置 → 扩展与插件。
-- 字段类型：`boolean | number | string | select | path`；number 可带 `min/max/step`，select 必须给 `options`。
-- `restart` 生效域：`none`（默认，立即） / `session`（新会话） / `daemon`（重启 daemon）。
-- fail-soft：manifest 是用户可写 JSON，坏字段逐个被丢弃进结构化 errors（详情页有可见警告），好字段照常生效，绝不拖垮扩展登记。
-
-### 运行时读取
+Track A 的配置事实源是插件导出的 `Config`（Standard Schema），该类型同时承载校验、默认值与表单描述。写成 `config.ts`，入口再导出：
 
 ```ts
-export default async function (pi: ExtensionAPI) {
-  const threshold = await pi.config.get<number>("threshold"); // 钳制后的值，未写过 = 声明默认
-  const all = await pi.config.getAll(); // 完整值表（只含声明键）
+// config.ts
+import { z } from "@musepi/pi-coding-agent/plugin-config";
+
+export interface Config {
+  threshold: number;
+  model: "base" | "large";
+}
+export const Config = z.object({
+  threshold: z.number().min(0).max(1).default(0.5).describe("触发阈值"),
+  model: z.enum(["base", "large"]).default("base").describe("模型档位"),
+});
+```
+
+```ts
+// index.ts
+export { Config } from "./config";
+
+export function apply(ctx: PluginAPI, config: Config): void {
+  // config 已由宿主按 Config 校验并填好默认值；这是唯一的配置读取面。
 }
 ```
 
-- 取值与扩展中心表单、`extensions.setConfig` 写入共用同一条 `coerceConfigValues` 钳制链路（daemon/GUI 单一权威在 `@musepi/pi-wire`）：存储坏值回退声明默认，未声明键 `get` 返回 `undefined`、`getAll` 被过滤。
-- 生效语义：`restart: "none"` 字段每次调用现读——GUI 表单改完立即可见；`session` 字段在扩展加载时快照，新会话/重载后生效；`daemon` 字段约定需重启 daemon。
+- `mountPlugin` 用 `Config["~standard"].validate` 校验有效值（存储值 + 组合行覆盖），返回 schema 输出；校验失败以 `config-invalid` 拒绝挂载，旧实例保留。导出一个不是 Standard Schema 的 `Config` 也会被拒绝，不会静默跳过。
+- 管理页表单由 `Config.toJsonSchema()` 生成到包内的 `config.json`（字段、默认值、边界、枚举、描述）；不要手改该文件。生成命令 `bun --cwd=packages/coding-agent run gen:plugin-config`，`verify-generated` 会拦截过期产物。
+- `musepi.config` 不再是 Track A 的配置声明；遗留清单字段仍可读，供 Track B / 未迁移包回退。`pi.config.get/getAll` 只保留在 `ExtensionAPI`（Track B），Track A 通过 `apply(ctx, config)` 拿到配置。
+- 配置写出后宿主重载运行实例：进程级宿主插件按有效配置批次重载；活动会话通过 Track A 挂载管线重挂载并重放 `session_start`；失败保留旧实例并返回错误。管理页把字段标为 `session`，因为值在挂载时读取。
+- 取值仍与 `extensions.setConfig` 写入共用 `@musepi/pi-wire` 的钳制链路（坏存储值回退 schema 默认）。
 - 存储落点：`<agentDir>/extensions/plugin-config.json`，键空间与 `disabledExtensions` 一致（包名，`pluginEntryId`；Track A 运行时读取与表单写入共用这一身份）。
+- `musepi` 块继续承载 `extensions` / `resources` / `components` / `label` / `description` / `icon` / `experimental` / `presetOnly` 等非配置清单字段。
 
 ### 13.1 插件名字的本地化（`locale/<tag>.json`，dsh parity，2026-11-15）
 

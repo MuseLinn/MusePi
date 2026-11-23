@@ -39,22 +39,6 @@
 		"description": "View and operate Android emulators, install APKs, inspect UI trees and read logcat.",
 		"extensions": [
 			"./index.ts"
-		],
-		"config": [
-			{
-				"key": "adbPath",
-				"type": "path",
-				"label": "ADB executable",
-				"description": "Optional absolute path to adb. Uses PATH when empty.",
-				"default": ""
-			},
-			{
-				"key": "emulatorPath",
-				"type": "path",
-				"label": "Android emulator executable",
-				"description": "Optional absolute path to emulator. Uses PATH when empty.",
-				"default": ""
-			}
 		]
 	}
 }

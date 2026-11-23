@@ -1,0 +1,49 @@
+{
+	"fields": [
+		{
+			"key": "stt.modelName",
+			"type": "select",
+			"label": "stt.modelName",
+			"restart": "session",
+			"default": "balanced",
+			"options": [
+				"fast",
+				"balanced",
+				"turbo",
+				"parakeet",
+				"sensevoice"
+			],
+			"description": "选择默认的本地语音转写模型。"
+		},
+		{
+			"key": "stt.language",
+			"type": "string",
+			"label": "stt.language",
+			"restart": "session",
+			"default": "",
+			"description": "留空时自动检测语言。"
+		},
+		{
+			"key": "stt.vadEndMs",
+			"type": "number",
+			"label": "stt.vadEndMs",
+			"restart": "session",
+			"default": 700,
+			"description": "连续静音达到该毫秒数后结束录音。"
+		},
+		{
+			"key": "stt.submitTrigger",
+			"type": "select",
+			"label": "stt.submitTrigger",
+			"restart": "session",
+			"default": "never",
+			"options": [
+				"never",
+				"release",
+				"release-complete",
+				"say-submit"
+			],
+			"description": "选择听写完成后是否以及如何提交。"
+		}
+	]
+}

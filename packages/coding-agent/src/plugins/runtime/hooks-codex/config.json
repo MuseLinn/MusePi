@@ -1,0 +1,20 @@
+{
+	"fields": [
+		{
+			"key": "configPath",
+			"type": "string",
+			"label": "configPath",
+			"restart": "session",
+			"default": "",
+			"description": "Codex 的 hooks.json；相对路径按会话工作目录解析。"
+		},
+		{
+			"key": "defaultTimeoutMs",
+			"type": "number",
+			"label": "defaultTimeoutMs",
+			"restart": "session",
+			"default": 600000,
+			"description": "钩子未设置 timeout 时的预算。"
+		}
+	]
+}
