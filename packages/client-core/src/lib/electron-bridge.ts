@@ -14,6 +14,8 @@ export interface ElectronBridge {
 	readFileDataUrl?(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
 	/** Open a local path with a specific app, e.g. "textedit" (desktop only). */
 	openWith?(app: string, path: string): Promise<boolean>;
+	/** Open a local path with the OS default application (desktop only). */
+	openPath?(path: string): Promise<{ ok: boolean; error?: string }>;
 	/** Tap the macOS Taptic Engine (desktop only). */
 	haptic?(p?: number): Promise<unknown>;
 }

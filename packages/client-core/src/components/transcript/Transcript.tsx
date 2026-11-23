@@ -94,6 +94,8 @@ import {
 import { TRANSCRIPT_PREFS_CHANGED_EVENT } from "./transcript-prefs.js";
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 import { collectTurnFiles, type TurnFileChange } from "./turn-files.js";
+import { collectTurnPresented } from "./turn-presented.js";
+import type { PresentedFile } from "../../tool-render/presented.js";
 import { collectTurnSources, type TurnSources } from "./turn-sources.js";
 
 export {
@@ -766,6 +768,8 @@ interface EntryRowProps {
 	artifacts?: FileCardItem[];
 	/** Turn-wide file changes (undefined = no change card). */
 	turnFiles?: TurnFileChange[];
+	/** Turn-delivered files from `present` (undefined = no delivery card). */
+	presented?: PresentedFile[];
 	/** Turn-wide browsed pages (undefined = no sources card). */
 	sources?: TurnSources;
 	/** Attempt count for a failed turn, merged in from the transcript-wide error
@@ -916,7 +920,8 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	)
 		return false;
 	if (prev.artifacts !== next.artifacts) return false;
-	if (prev.turnFiles !== next.turnFiles || prev.sources !== next.sources) return false;
+	if (prev.turnFiles !== next.turnFiles || prev.sources !== next.sources || prev.presented !== next.presented)
+		return false;
 	if (prev.thinkingLevel !== next.thinkingLevel) return false;
 	if (prev.ircContinued !== next.ircContinued) return false;
 	if (prev.onRevert !== next.onRevert || prev.onFork !== next.onFork) return false;
@@ -1222,6 +1227,7 @@ const EntryRow = memo(function EntryRow({
 	taskCardStyle = "swarm",
 	artifacts,
 	turnFiles,
+	presented,
 	sources,
 	thinkingLevel,
 	onQuote,
@@ -1342,6 +1348,7 @@ const EntryRow = memo(function EntryRow({
 									taskCardStyle={taskCardStyle}
 									artifacts={artifacts}
 									turnFiles={turnFiles}
+									presented={presented}
 									sources={sources}
 									thinkingLevel={thinkingLevel}
 									onPreviewImage={onPreviewImage}
@@ -1583,6 +1590,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const artifacts = new Map<string, FileCardItem[]>();
 		const files = new Map<string, TurnFileChange[]>();
 		const sources = new Map<string, TurnSources>();
+		const presented = new Map<string, PresentedFile[]>();
 		const resultOf = (id: string) => results.get(id);
 		let turn: AssistantMessage[] = [];
 		let finalId: string | null = null;
@@ -1598,6 +1606,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				if (changed.length > 0) files.set(finalId, changed);
 				const browsed = collectTurnSources(blocks, resultOf);
 				if (browsed.pages.length > 0) sources.set(finalId, browsed);
+				const delivered = collectTurnPresented(blocks, resultOf);
+				if (delivered.length > 0) presented.set(finalId, delivered);
 			}
 			turn = [];
 			finalId = null;
@@ -1613,7 +1623,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			}
 		}
 		flush();
-		return { artifacts, files, sources };
+		return { artifacts, files, sources, presented };
 	}, [entries, results]);
 	const turnArtifactsByFinal = turnSurfacesByFinal.artifacts;
 
@@ -2816,6 +2826,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							taskCardStyle={taskCardStyle}
 							artifacts={turnArtifactsByFinal.get(entry.id)}
 							turnFiles={turnSurfacesByFinal.files.get(entry.id)}
+							presented={turnSurfacesByFinal.presented.get(entry.id)}
 							sources={turnSurfacesByFinal.sources.get(entry.id)}
 							errorAttempt={
 								entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined

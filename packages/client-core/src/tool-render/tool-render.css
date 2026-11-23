@@ -2268,3 +2268,36 @@
 	color: var(--tv-faint);
 	font-size: 10px;
 }
+
+.tv-present-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 2px;
+}
+
+.tv-present-action {
+	padding: 1px 6px;
+	border: 1px solid var(--tv-border);
+	border-radius: 4px;
+	background: var(--tv-raised);
+	color: var(--tv-muted);
+	font: inherit;
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.tv-present-action:hover:not(:disabled),
+.tv-present-action:focus-visible {
+	color: var(--tv-fg);
+	border-color: var(--tv-ring);
+}
+
+.tv-present-action:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.tv-present-error {
+	color: var(--tv-err);
+	font-size: 10px;
+}

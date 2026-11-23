@@ -40,6 +40,7 @@ import { GuestClient } from "./lib/client";
 import { isCompatShell } from "./lib/compat-shell";
 import { CompatSlotHost } from "./lib/compat-slot-host";
 import { useConnectionHealth } from "./lib/connection-health";
+import { electronBridge } from "./lib/electron-bridge";
 import { HostClient } from "./lib/host-client";
 import { loadResolvedHosts, rememberHost } from "./lib/hosts";
 import { enableNativeGlass } from "./lib/native-glass";
@@ -1033,12 +1034,22 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 
 	const subCount = agents.filter(a => a.kind === "sub").length;
 	const agentIds = useMemo(() => new Set(agents.map(a => a.id)), [agents]);
+	const bridge = electronBridge();
 	const toolHost = useMemo<ToolRenderHost>(
 		() => ({
 			hasAgent: id => agentIds.has(id),
 			openAgent: id => {
 				if (agentIds.has(id)) setSelectedId(id);
 			},
+			...(bridge?.openPath
+				? {
+						openFile: (path: string) => bridge.openPath!(path),
+						revealFile: (path: string) => {
+							const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+							return bridge.openPath!(index > 0 ? path.slice(0, index) : path);
+						},
+					}
+				: {}),
 			sendPrompt: text => {
 				void client.sendPrompt(text).catch(error => {
 					console.error("[transcript] prompt failed:", error);
@@ -1057,7 +1068,8 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 					client.rpc<AttachmentGetResult | { error: string }>("attachment.get", { hash, offset, limit }),
 			},
 		}),
-		[agentIds, client],
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- bridge is a stable window property
+		[agentIds, client, bridge],
 	);
 
 	// Wide screens can reveal the first subagent without covering the transcript.

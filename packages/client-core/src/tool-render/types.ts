@@ -83,6 +83,10 @@ export interface ToolRenderHost {
 	openSettings?(section?: string): void;
 	/** Open a session artifact in a read-only host preview. */
 	openArtifact?(id: string): void;
+	/** Open a local file with the OS default application (desktop host). */
+	openFile?(path: string): Promise<{ ok: boolean; error?: string }>;
+	/** Open the file's containing folder in the OS file manager (desktop host). */
+	revealFile?(path: string): Promise<{ ok: boolean; error?: string }>;
 	/**
 	 * Put a project plan in front of the user (the `knowledge` tool's `show`).
 	 *

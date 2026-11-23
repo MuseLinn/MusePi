@@ -32,6 +32,7 @@ import {
 } from "../../messages/display-context";
 import type { ToolRenderHost } from "../../tool-render";
 import { ResultVideo } from "../../tool-render/parts";
+import { type PresentedFile, PresentFilesCard } from "../../tool-render/presented.js";
 import { type BrowserOperationAction, browserActionLabel } from "../../tool-render/tools/browser-activity";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
@@ -1245,6 +1246,8 @@ export function AssistantBody({
 	/** Turn-wide file changes (本轮修改文件卡). When present it supersedes the
 	 *  artifact chips — one file surface per turn, not two. */
 	turnFiles,
+	/** Turn-delivered files (`present`); the delivery card renders at the tail. */
+	presented,
 	/** Turn-wide browsed pages (来源卡). Empty turns keep it undefined. */
 	sources,
 	/** Session thinking level — rendered as `model · level` beside the work
@@ -1298,6 +1301,8 @@ export function AssistantBody({
 	artifacts?: FileCardItem[];
 	/** Turn-wide file changes (see above). */
 	turnFiles?: TurnFileChange[];
+	/** Turn-delivered files (`present`), rendered as the delivery card. */
+	presented?: PresentedFile[];
 	/** Turn-wide browsed pages (see above). */
 	sources?: TurnSources;
 	/** Session thinking level — rendered as `model · level` beside the work
@@ -1434,6 +1439,9 @@ export function AssistantBody({
 				) : artifacts !== undefined ? (
 					<FileCards items={artifacts} />
 				) : null)}
+			{!pending && presented !== undefined && presented.length > 0 && (
+				<PresentFilesCard files={presented} host={host} />
+			)}
 			{!pending && sources !== undefined && <TurnSourcesCard sources={sources} />}
 			{pending ? (
 				<WorkingLine start={runStartTs ?? message.timestamp} meta={modelLevelMeta(message.model, thinkingLevel)} />

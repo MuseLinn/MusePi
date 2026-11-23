@@ -20,7 +20,7 @@
 ## Outputs
 A single text result (`Presented <absolute path>` per file) and `details.files` with the resolved absolute paths and optional descriptions. Hosts show presented files after the turn ends; the contents are not copied.
 
-The GUI transcript renders a delivery card from the same payload: a file-type badge, basename, description (or “Delivered”) and the path. One file spans the row; multiple files use a two-column grid and collapse after four, with a toggle. The card does not open files yet — the client has no file-open host capability.
+The GUI transcript renders the delivery card at the **turn tail** (after the turn's changed-files card), not inside the tool row: a file-type badge, basename, description (or “Delivered”) and the path. One file spans the row; multiple files use a two-column grid and collapse after four. The tool row itself stays one count badge. On the desktop host the card offers “Open” (OS default application) and “Open folder” (containing directory) buttons with a pending state and a visible error on failure; plain browsers and HTML exports omit the actions.
 
 ## Failure modes
 - Empty path, zero files or more than `maxFiles` — rejected before any filesystem access.
