@@ -35,10 +35,11 @@ interface PollEscalationState {
 export type AsyncJobType = "bash" | "task" | "agnes-video";
 /**
  * Refined kind of a job whose `type` cannot express it. Background questions
- * run as `task` jobs so every existing job surface keeps working, but the job
- * row still records that it is a question (with `questionCount`/`toolCallId`).
+ * and workflows run as `task` jobs so every existing job surface keeps
+ * working, but the job row still records which it is (with
+ * `questionCount`/`toolCallId`).
  */
-export type AsyncJobKind = "question";
+export type AsyncJobKind = "question" | "workflow";
 
 export interface AsyncJob {
 	id: string;
