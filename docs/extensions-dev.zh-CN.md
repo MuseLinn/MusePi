@@ -172,7 +172,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.shell` — 完整右栏壳（single）。`panel` 插件拥有标签、分栏和最大化呈现，`main.conversation` 不再打包右栏。
 - `shell.overlay` — 根级固定覆盖层（single）：拥有横向/纵向浮动滚动进度轨，并 portal 到 `document.body`。没有贡献者时宿主回退内置 `<FloatingScrollbar/>`。
 - `browser.host` — 常驻受管浏览器 guest 宿主（single），在应用根部挂载，独立于 `panel.tab.browser`。两个产物共享 `window.MusePiManagedBrowserHost`，不分别打包 store。
-- `settings.tab.<id>` — 设置页左侧导航项：扩展声明一个设置页即出现在设置导航，内容区挂载组件。
+- `settings.section` — 设置页左侧导航项（dsh 同一槽位）。每个条目自带导航身份：`id`（页 id，可为 `sessions` / `memory` 这类能力别名）、`label`、`order`、`icon` 与 `keywords`；没有 `id` 的条目不是页面。当 `id` 经 `SECTION_ALIAS` 解析后命中既有页面时**原位接管**：内置导航行保留 id、关键词与深链，注册者的 label/icon/order/keywords 覆盖该行，且不再新增 `ext:` 行。内容区挂载注册的条目，内置页分支只作为缺席或编译失败的回退。挂载的页面收到 `settingsSection: { id, close }` 与 `onApplyPrompt(text)`（把示例交给输入框并关闭设置）。设置壳本身（导航、路由、搜索、⌘K 定位）是宿主内建，不是插件。
 - `sidebar.panel.<destination id>` — 二级左栏面板（2026-11-08）：宿主按 rail 目的地 id 取唯一贡献，挂进 `.gui-side-keeper`，由 `data-panel` 决定显隐；几何读 keeper 上的 `--gui-side-w`，不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`（`task-nav`），否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板，目的地仍可用。
 - `rail.<id>` — 右缘图标轨（前缀命名空间；`rail.right` 是保留的精确槽）
 - `main.conversation`（single）/ `main.capability`（single）—— 根级 `main` 保留键：完整会话页（欢迎页 + transcript）与能力中心页。一个键只有一个占据者，无贡献时宿主渲染内建页面。
@@ -184,8 +184,7 @@ export default function (pi: ExtensionAPI): void {
 - `conversation.chat.node`（list）—— transcript 节点 seat，按节点 kind 派发（见 §10）。
 - `panel.right` / `settings.extensions` — 旧保留槽（仍可用）。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载，见下）：注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染，并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片（2026-08-17；2026-08-20 起展示于**扩展中心底部**，随插件 inventory）：按扩展 id 派发一张卡片，组件经 `settingsScope` prop 读写设置键（见下）。
-- `settings.action.<id>` — 单行偏好槽（2026-08-20）：组件挂到设置页“通用”分区末尾，功能插件贡献单行偏好（语言/外观/Enter 行为），无需整 tab 或整卡。
-- `settings.section.<page>.<seat>` — 页面自有行/分区席位（dsh `children` 粒度，2026-11-20）：声明了页面 `settings.section.<page>` 之后，`settings.section.<page>.*` 的组件由该页承载并渲染在页面内容之后；导航只把没有第二个点的槽名当页面，行座位不会被误投影成导航项。插件**自己选择座位**：只放内置页、只放扩展中心（`settings.item.<extId>`）、或两处都注册；组件收到注入的 `slot`，可为不同座位渲染不同内容。当前座位按 list 语义挂载（dsh 的 `children` 容量声明——`single`/`keyed`——尚未实现，出现第二个消费者时再补）。`ui-theme` 用 `settings.section.appearance.item` 把滚动条设置放回外观页（与 dsh 的 theme bundle 同构）。
+- `settings.item.<page>.<row>` — 页面自有行/分区席位（dsh `children` 粒度）：某个页面接管导航后，`settings.item.<page>.*` 的组件由该页承载并渲染在页面内容之后，不会变成导航项。插件**自己选择座位**：只放内置页、只放扩展中心（`settings.item.<extId>`）、或两处都注册；组件收到注入的 `slot`，可为不同座位渲染不同内容。当前座位按 list 语义挂载（dsh 的 `children` 容量声明——`single`/`keyed`——尚未实现，出现第二个消费者时再补）。`ui-theme` 用 `settings.item.appearance.rail` 把滚动条设置放回外观页（与 dsh 的 theme bundle 同构）。
 
 **设置面板宿主**（2026-10-10）：注册到 `settings.extensions` 的组件由**扩展控制中心**底部
 的「扩展设置」分区承载 —— 与 `settings.item.<extId>` 卡片同框，按 `extensionId`（扩展入口路径）
@@ -777,7 +776,7 @@ export function apply(ctx: PluginClientContext): void {   // 可选:模块级装
 |---|---|
 | `effect(dispose, label?)` | 登记一次拆卸。**逆序执行**(后装的贡献可能依赖先装的) |
 | `signal: AbortSignal` | 本模块被取代/卸载时中止;交给 `fetch`/`EventSource`,不要手工跟踪生命周期 |
-| `slot: string` | 挂载到的座位(`conversation.input.model`、`settings.tab.x` …) |
+| `slot: string` | 挂载到的座位(`conversation.input.model`、`settings.section` …) |
 | `extensionId: string` | 产出该组件的扩展入口路径 |
 
 ### 为什么必须存在这条缝

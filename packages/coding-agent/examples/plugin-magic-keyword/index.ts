@@ -39,7 +39,8 @@ export default function deepdiveKeyword(pi: ExtensionAPI): void {
 	// slots: a full page in the settings window, and the panel embedded in the
 	// plugin's detail dialog.
 	pi.registerComponent({
-		slot: "settings.section.deepdive",
+		slot: "settings.section",
+		id: "deepdive",
 		moduleUrl: "./ui/panel.tsx",
 		label: "Deepdive",
 		order: 60,

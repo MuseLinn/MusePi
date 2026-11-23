@@ -878,7 +878,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
   - 轨道用 `position: fixed` 跟随视口坐标，但面板滑动、`HeightMorph`、最大化动画的是**祖先**：容器盒尺寸不变，`ResizeObserver`/`MutationObserver` 都不会触发，轨会停在动画前的坐标。现在 `transitionrun`/`transitionend`/`transitioncancel`/`animationend` 只重测动画元素之下的轨，文档级滚动则重测所有轨。
   - `rebind` 发现槽位 DOM 被替换（皮肤基座切换）以及卸载回收前会清空拖拽快照。持有指针捕获的拇指随子树一起被移除，`pointerup` 永远不会触发；陈旧的 `drag` 会让 `retire` 与 `armIdle` 永久跳过该轨。
   - 导入皮肤的颜色值若可能发起请求或执行（`url()`、`image-set()`、`expression()`）会被拒绝；安全颜色语法（`oklch`、`color-mix`、`var()`、十六进制）照常通过。
-  - `ui-theme` Cordis bundle 现在拥有整条轨：`rail.tsx`（组件）、`rail.css`、`skins.ts`（内置目录）与 `settings.tsx`（皮肤/导入/常显分区）。它注册 `shell.overlay`（portal 到 `document.body`）与 `settings.section.appearance.item`，设置回到内置外观页（与 dsh 的 theme bundle 同构），不再只落在扩展中心；插件也可以注册 `settings.item.<id>`、或两处都注册并用注入的 `slot` 分支渲染。bundle 停用或编译失败时，宿主从同一模块渲染 `<FloatingScrollbar/>` 作为回退。
+  - `ui-theme` Cordis bundle 现在拥有整条轨：`rail.tsx`（组件）、`rail.css`、`skins.ts`（内置目录）与 `settings.tsx`（皮肤/导入/常显分区）。它注册 `shell.overlay`（portal 到 `document.body`）与 `settings.item.appearance.rail`，设置回到内置外观页（与 dsh 的 theme bundle 同构），不再只落在扩展中心；插件也可以注册 `settings.item.<extId>`、或两处都注册并用注入的 `slot` 分支渲染。bundle 停用或编译失败时，宿主从同一模块渲染 `<FloatingScrollbar/>` 作为回退。
   - 横向键盘滚动（`ArrowLeft`/`ArrowRight`）现在计为用户意图，横向轨可以像纵向一样由键盘唤醒。键盘意图只作用于最近的可溢出祖先，并在输入控件内忽略，因此在输入框里按空格不会点亮无关窗格的轨（文档级按键仍计入）。
   - RTL 容器把滚动范围加到 `scrollLeft`（`hOrigin`）上，负向 RTL 偏移因此从右缘映射拇指，拖拽也按同一原点反解（openchamber parity）。
   - 橡皮糖/贪吃蛇胶囊与横向条保持可视厚度，但增加 3px 透明边框（`background-clip: padding-box`），抓取区从约 6.6px 扩到约 12.6px，可视边缘不移动。

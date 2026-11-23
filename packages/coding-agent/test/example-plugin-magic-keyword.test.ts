@@ -121,7 +121,7 @@ describe("example plugin-magic-keyword", () => {
 
 		expect(extension.components.map(c => c.slot).sort()).toEqual([
 			"settings.extensions",
-			"settings.section.deepdive",
+			"settings.section",
 		]);
 		expect(failures).toEqual([]);
 	});

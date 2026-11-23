@@ -97,6 +97,11 @@ export const EXTENSION_SLOT_DECLARATION = {
 		"panel.right": { kind: "list" },
 		"rail.right": { kind: "list" },
 		"settings.extensions": { kind: "list" },
+		/** One settings page entry. The registrant names the nav identity:
+		 *  `id` (page id / alias), `label`, `icon`, `order`, `keywords`.
+		 *  A page whose id names a built-in section takes it over; anything
+		 *  else becomes its own nav row. */
+		"settings.section": { kind: "list" },
 		/** Row-level preference in the General settings page (dsh
 		 *  `settings.general.item`): a feature contributes one row without a page
 		 *  of its own. One spelling — no legacy alias. */
@@ -126,9 +131,6 @@ export const EXTENSION_SLOT_DECLARATION = {
 	} as const satisfies Record<string, SlotDeclaration>,
 	prefixes: [
 		"panel.tab.",
-		/** Settings page (dsh vocabulary): `settings.section.<id>`. One
-		 *  spelling — no legacy alias. */
-		"settings.section.",
 		"rail.",
 		"settings.item.",
 		"chat.session-info.",

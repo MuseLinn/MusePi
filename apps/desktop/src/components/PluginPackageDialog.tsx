@@ -8,7 +8,7 @@
  * whose extensionId lives under the package dir) mount in a 插件设置
  * section, which is where a plugin's own management UI appears.
  *
- * settings.section.* pages are deliberately excluded: a full settings nav page
+ * `settings.section` page entries are deliberately excluded: a full settings nav page
  * (its own scrollable multi-section layout) does not fit a dialog — it
  * would render a second copy of the page next to the settings nav entry it
  * already lives in. Detail surfaces get the compact settings.extensions /

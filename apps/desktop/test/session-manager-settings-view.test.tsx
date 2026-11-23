@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { SettingsView } from "../src/components/SettingsView";
 
 /**
- * The 会话 section is host-owned until a `settings.section.sessions` component is
+ * The 会话 section is host-owned until a `settings.section` entry with id `sessions` is
  * actually loadable: the built-in page (and its retention controls) must stay
  * reachable, and a broken contribution must not blank the section.
  */
@@ -103,7 +103,7 @@ const PLUGIN_PAGE_CODE = [
 ].join("\n");
 
 describe("SettingsView sessions section", () => {
-	it("keeps the built-in retention page when no settings.section.sessions exists", async () => {
+	it("keeps the built-in retention page when no sessions entry exists", async () => {
 		const container = await mountSessions([]);
 		expect(container.textContent).toContain(t("general.sessionRetention"));
 		expect(container.textContent).toContain(t("general.sessionDefaults"));
@@ -113,7 +113,8 @@ describe("SettingsView sessions section", () => {
 	it("renders the plugin page for the sessions section when the tab compiles", async () => {
 		const container = await mountSessions([
 			{
-				slot: "settings.section.sessions",
+				slot: "settings.section",
+				id: "sessions",
 				extensionId: "/plugins/session-manager/index.ts",
 				label: "会话",
 				code: PLUGIN_PAGE_CODE,
@@ -127,7 +128,8 @@ describe("SettingsView sessions section", () => {
 	it("falls back to the built-in page when the contributed tab failed to compile", async () => {
 		const container = await mountSessions([
 			{
-				slot: "settings.section.sessions",
+				slot: "settings.section",
+				id: "sessions",
 				extensionId: "/plugins/session-manager/index.ts",
 				label: "会话",
 				code: "",
@@ -142,18 +144,19 @@ describe("SettingsView sessions section", () => {
 describe("SettingsView section factory", () => {
 	it("renders a newly registered settings page without a host branch", async () => {
 		// No `activeSection === "widgets"` branch exists in the host: the section
-		// factory (dsh settings.section.view) mounts whatever the slot names.
+		// factory (dsh `settings.section`) mounts the entry the nav names.
 		const container = await mountSettings(
 			[
 				{
-					slot: "settings.section.widgets",
+					slot: "settings.section",
+					id: "widgets",
 					extensionId: "/plugins/widgets/index.ts",
 					label: "小组件",
 					code: "export default function Page() { return window.MusePiReact.createElement('div', null, 'WIDGET_PAGE'); }",
 					availability: "always",
 				},
 			],
-			"ext:settings.section.widgets",
+			"ext:widgets",
 		);
 		expect(container.textContent).toContain("WIDGET_PAGE");
 	});

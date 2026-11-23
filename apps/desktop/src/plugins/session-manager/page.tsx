@@ -40,7 +40,7 @@ import {
 import type { SessionLastPrompts, SessionListRow, SessionMessage, SessionSearchResult } from "./types";
 
 /**
- * Settings → 会话 (Cordis `settings.section.sessions`): the session-management
+ * Settings → 会话 (Cordis `settings.section` id `sessions`): the session-management
  * page, and the one place sessions are read. Data comes from the existing
  * daemon surface — `session.list` for rows, `session.lastPrompts` for one
  * page of prompt previews, `session.search` for cross-session message

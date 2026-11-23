@@ -8,13 +8,9 @@ import { SettingsView } from "../src/components/SettingsView";
 import { apply as applyUiTheme } from "../src/plugins/ui-theme";
 
 /**
- * `settings.section.<page>.<seat>` is a row the NAMED page renders after its own
+ * `settings.item.<page>.<row>` is a row the NAMED page renders after its own
  * content (SettingsView's `sectionItems`) — never a settings page of its own.
- *
- * Regression: `navGroups()` returned a null page id for a two-dot suffix and
- * fell straight through to the `ext:` push, so the ui-theme plugin's
- * `settings.section.appearance.item` (label 滚动进度轨) appeared as a SECOND
- * settings page beside 外观 while the same card already rendered inside it.
+ * Pages ride the single `settings.section` list with an owner-supplied id.
  */
 
 const roots = new Set<Root>();
@@ -107,8 +103,8 @@ function navRowLabels(container: HTMLElement): string[] {
 
 describe("page-owned settings row seats", () => {
 	it("the ui-theme row seat never becomes a nav page", () => {
-		const extTabs = uiThemeSeats().filter(seat => seat.slot.startsWith("settings.section."));
-		expect(extTabs.map(seat => seat.slot)).toEqual(["settings.section.appearance.item"]);
+		const extTabs = uiThemeSeats().filter(seat => seat.slot.startsWith("settings.item."));
+		expect(extTabs.map(seat => seat.slot)).toEqual(["settings.item.appearance.rail"]);
 
 		const items = navGroups(extTabs).flatMap(group => group.items);
 		expect(items.some(item => String(item.id).startsWith("ext:"))).toBe(false);
@@ -120,7 +116,7 @@ describe("page-owned settings row seats", () => {
 	it("renders the seat inside 外观 while the nav stays free of it", async () => {
 		const container = await mountAppearance([
 			{
-				slot: "settings.section.appearance.item",
+				slot: "settings.item.appearance.rail",
 				extensionId: "/plugins/ui-theme/settings.tsx",
 				label: "滚动进度轨",
 				code: SCROLL_TRACK_CARD,

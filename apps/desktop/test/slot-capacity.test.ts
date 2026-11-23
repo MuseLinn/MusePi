@@ -61,12 +61,14 @@ describe("composer slot capacity", () => {
 		expect(Object.keys(EXTENSION_SLOT_DECLARATION.exact).length).toBe(EXTENSION_SLOT_NAMES.length);
 	});
 
-	it("page-owned rows ride the settings.section namespace, not an exact seat", () => {
-		// dsh declares page children inside the section registration; the name
-		// shape is `settings.section.<page>.<seat>`, so the namespace accepts it
-		// while no exact declaration exists for a single page's rows.
-		expect(EXTENSION_SLOT_DECLARATION.prefixes).toContain("settings.section.");
-		expect(slotKindOf("settings.section.appearance.item")).toBeUndefined();
+	it("page-owned rows ride the settings.item namespace, not an exact seat", () => {
+		// dsh declares page children inside the section registration; the page
+		// entry itself is the one `settings.section` list slot, and its rows use
+		// `settings.item.<page>.<row>`, so the namespace accepts them while no
+		// exact declaration exists for a single page's rows.
+		expect(EXTENSION_SLOT_DECLARATION.exact["settings.section"]).toEqual({ kind: "list" });
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).toContain("settings.item.");
+		expect(slotKindOf("settings.item.appearance.rail")).toBeUndefined();
 	});
 
 	it("reports no capacity for an undeclared slot", () => {

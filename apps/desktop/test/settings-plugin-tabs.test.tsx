@@ -6,46 +6,47 @@ import { apply as applyConnectors } from "../src/plugins/connectors-settings/ind
 import { apply as applyIndexes } from "../src/plugins/index-library/index";
 
 describe("settings pages as Cordis plugins", () => {
-	test("connectors and the index library register their settings slots", () => {
-		const slots: string[] = [];
+	test("connectors and the index library register settings.section entries with their ids", () => {
+		const entries: { slot: string; id?: string }[] = [];
 		const ctx = {
 			slots: {
-				register: (component: { slot: string }) => slots.push(component.slot),
+				register: (component: { slot: string; id?: string }) => entries.push(component),
 			},
 		};
 		applyConnectors(ctx as never);
 		applyIndexes(ctx as never);
-		expect(slots).toEqual(["settings.section.connectors", "settings.section.indexes"]);
+		expect(entries.map(entry => ({ slot: entry.slot, id: entry.id }))).toEqual([
+			{ slot: "settings.section", id: "connectors" },
+			{ slot: "settings.section", id: "indexes" },
+		]);
 	});
 
-	test("a takeover slot keeps the built-in nav row instead of adding an ext row", () => {
+	test("a takeover id keeps the built-in nav row instead of adding an ext row", () => {
 		const items = navGroups([
-			{ slot: "settings.section.connectors", label: "连接器" },
-			{ slot: "settings.section.indexes", label: "索引库" },
-			// Legacy spelling stays accepted (plugins shipped before the rename).
-			{ slot: "settings.section.widgets", label: "小组件" },
-			// The retired page ids stay aliases of 会话与记忆, so a takeover slot
+			{ id: "connectors", label: "连接器" },
+			{ id: "indexes", label: "索引库" },
+			{ id: "widgets", label: "小组件" },
+			// The retired page ids stay aliases of 会话与记忆, so a takeover entry
 			// must not sprout a second nav row either.
-			{ slot: "settings.section.sessions", label: "会话" },
-			{ slot: "settings.section.memory", label: "记忆" },
+			{ id: "sessions", label: "会话" },
+			{ id: "memory", label: "记忆" },
 		]).flatMap(group => group.items);
 
 		expect(items.filter(item => item.id === "connectors")).toHaveLength(1);
 		expect(items.filter(item => item.id === "indexes")).toHaveLength(1);
 		expect(items.filter(item => item.id === "session-memory")).toHaveLength(1);
-		expect(items.some(item => item.id === "ext:settings.section.connectors")).toBe(false);
-		expect(items.some(item => item.id === "ext:settings.section.indexes")).toBe(false);
-		expect(items.some(item => item.id === "ext:settings.section.sessions")).toBe(false);
-		expect(items.some(item => item.id === "ext:settings.section.memory")).toBe(false);
-		expect(items.some(item => item.id.startsWith("ext:settings.section.memory"))).toBe(false);
-		// A genuinely new page still gets its row, through the legacy prefix too.
-		expect(items.find(item => item.id === "ext:settings.section.widgets")?.label).toBe("小组件");
+		expect(items.some(item => item.id === "ext:connectors")).toBe(false);
+		expect(items.some(item => item.id === "ext:indexes")).toBe(false);
+		expect(items.some(item => item.id === "ext:sessions")).toBe(false);
+		expect(items.some(item => item.id === "ext:memory")).toBe(false);
+		// A genuinely new page gets its own row, keyed by the entry id.
+		expect(items.find(item => item.id === "ext:widgets")?.label).toBe("小组件");
 	});
 
 	test("owner options name the built-in row's icon, label, order and keywords", () => {
 		const groups = navGroups([
 			{
-				slot: "settings.section.connectors",
+				id: "connectors",
 				label: "Remote tools",
 				icon: "star",
 				order: -1,
@@ -61,21 +62,25 @@ describe("settings pages as Cordis plugins", () => {
 		const agentGroup = groups.find(group => group.items.some(item => item.id === "connectors"))!;
 		expect(agentGroup.items[0]!.id).toBe("connectors");
 	});
+
+	test("an entry without an id is not a nav page", () => {
+		const items = navGroups([{ label: "no identity" }]).flatMap(group => group.items);
+		expect(items.some(item => item.label === "no identity")).toBe(false);
+	});
 });
 
 describe("settings slot vocabulary (dsh parity)", () => {
-	test("canonical page/row slots are declared and the legacy spellings stay accepted", () => {
-		// Canonical names from the dsh contract.
-		expect(EXTENSION_SLOT_DECLARATION.prefixes).toContain("settings.section.");
+	test("pages ride one settings.section list; page rows stay in the item namespace", () => {
+		expect(EXTENSION_SLOT_DECLARATION.exact["settings.section"]).toEqual({ kind: "list" });
+		expect(slotKindOf("settings.section")).toBe("list");
 		expect(EXTENSION_SLOT_DECLARATION.exact["settings.general.item"]).toEqual({ kind: "list" });
-		// Row seat: `settings.general.item` is an exact list seat; the page rows
-		// keep their pattern.
 		expect(slotKindOf("settings.general.item")).toBe("list");
-		// Page-owned rows live under the section namespace (dsh `children`),
-		// not in a second exact seat.
-		expect(slotKindOf("settings.section.appearance.item")).toBeUndefined();
+		// Page-owned rows ride the item namespace, never a second page seat.
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).toContain("settings.item.");
+		expect(slotKindOf("settings.item.appearance.rail")).toBeUndefined();
 		// One spelling per seat: the retired namespaces are gone, so a stale
 		// plugin fails loud at registration instead of silently mounting nowhere.
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).not.toContain("settings.section.");
 		expect(EXTENSION_SLOT_DECLARATION.prefixes).not.toContain("settings.tab.");
 		expect(EXTENSION_SLOT_DECLARATION.prefixes).not.toContain("settings.action.");
 	});

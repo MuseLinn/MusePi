@@ -24,9 +24,6 @@ import { MenuPopup } from "./MenuPopup";
  * The section id contract lives in lib/settings-nav.ts.
  */
 
-/** Settings page slots: canonical dsh vocabulary + the legacy spelling. */
-const PAGE_SLOT_PREFIXES = ["settings.section."] as const;
-
 interface SectionDef {
 	id: SectionId | string;
 	/** Must be a real sprite key — IconName is derived from the sprite, so
@@ -325,7 +322,7 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
  * module-level const would freeze the first locale's strings). */
 export function navGroups(
 	extTabs: ReadonlyArray<{
-		slot: string;
+		id?: string;
 		label?: string;
 		icon?: string;
 		order?: number;
@@ -375,22 +372,14 @@ export function navGroups(
 			],
 		},
 	];
-	// 内核级 slot(P1):`settings.section.<id>` 槽位组件挂为左侧导航项 ——
-	// 扩展声明一个设置页即出现在导航。
+	// 内核级 slot(P1):`settings.section` 的每个条目挂为左侧导航项 ——
+	// 扩展声明一个设置页即出现在导航，条目自带 id/label/icon/order/keywords。
 	// 配置项级贡献走 registerSetting 的 ui.tab(插入现有 tab)或
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
-	// A page slot whose id names an existing page TAKES IT OVER: the built-in
-	// row (and its id, keywords and deep links) stays, and the extension does
-	// not add a second row. Only genuinely new pages get an `ext:` row, and
-	// `settings.section.<page>.<seat>` — a row the named page renders itself —
-	// never gets one at all.
+	// A page whose id names an existing page TAKES IT OVER: the built-in row
+	// (and its id, keywords and deep links) stays, and the extension does not
+	// add a second row. Only genuinely new pages get an `ext:` row.
 	const builtinIds = new Set(groups.flatMap(group => group.items.map(item => item.id)));
-	/** Settings slot namespace (dsh vocabulary): `settings.section.<suffix>`.
-	 *  A slot outside the namespace is not a nav page. */
-	const sectionSuffixOf = (slot: string): string | null => {
-		const prefix = PAGE_SLOT_PREFIXES.find(candidate => slot.startsWith(candidate));
-		return prefix ? slot.slice(prefix.length) : null;
-	};
 	const iconOf = (name: string | undefined): IconName | undefined =>
 		name && name in iconSpriteData ? (name as IconName) : undefined;
 	const overrides = new Map<
@@ -398,19 +387,15 @@ export function navGroups(
 		{ label?: string; icon?: IconName; order?: number; keywords?: readonly string[] }
 	>();
 	for (const c of extTabs) {
-		const suffix = sectionSuffixOf(c.slot);
-		if (suffix === null) continue;
-		// A page-owned row seat renders inside its page (SettingsView mounts
-		// `settings.section.<active>.` after the page content); it never becomes
-		// a nav row of its own — that pushed a second 滚动进度轨 page next to 外观.
-		if (suffix.includes(".")) continue;
+		const sectionId = c.id;
+		if (!sectionId) continue;
 		// A slot may name a capability alias (sessions / memory → session-memory);
 		// resolve it before deciding whether it takes over a built-in page.
-		const pageId = (SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix;
+		const pageId = (SECTION_ALIAS as Record<string, string | undefined>)[sectionId] ?? sectionId;
 		// An alias names a sub-page of a composite page (sessions/memory inside
 		// 会话与记忆): the composite owns its label and position, so only a slot
 		// whose id IS the page id may rewrite the nav identity.
-		const direct = pageId === suffix;
+		const direct = pageId === sectionId;
 		if (builtinIds.has(pageId)) {
 			if (!direct) continue;
 			overrides.set(pageId, {
@@ -422,9 +407,9 @@ export function navGroups(
 			continue;
 		}
 		groups[1]!.items.push({
-			id: `ext:${c.slot}`,
+			id: `ext:${sectionId}`,
 			icon: iconOf(c.icon) ?? "plug",
-			label: c.label ?? c.slot,
+			label: c.label ?? sectionId,
 			enabled: true,
 			...(c.order !== undefined ? { order: c.order } : {}),
 			...(c.keywords && c.keywords.length > 0 ? { keywords: c.keywords } : {}),
@@ -466,8 +451,8 @@ function filterNavGroups(
 			...group,
 			items: group.items.filter(item => {
 				if (item.label.toLowerCase().includes(q)) return true;
-				// Extension rows carry `ext:<slot>`; search the underlying
-				// section id so a replaced page keeps the built-in keywords.
+				// Extension rows carry `ext:<id>`; search the underlying section id so
+				// a replaced page keeps the built-in keywords.
 				const termsKey = item.id.startsWith("ext:") ? (item.id.slice(4).split(".").pop() ?? item.id) : item.id;
 				const terms = [...(SECTION_SEARCH_TERMS[termsKey] ?? []), ...(item.keywords ?? [])];
 				return terms.some(k => k.includes(q) || q.includes(k));

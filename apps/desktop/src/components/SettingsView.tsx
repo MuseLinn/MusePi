@@ -10,7 +10,7 @@ import { cancelProviderLogin, logoutProvider, submitProviderLoginInput } from ".
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import { useSettingSearchRows } from "../lib/settings-search";
 import {
-	SETTINGS_SECTION_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT,
 	SlotComponentMount,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
@@ -101,24 +101,21 @@ export function SettingsView({
 	const [section, setSection] = useState<SectionRequest | string>(() => {
 		return initialSection ?? "appearance";
 	});
-	// 内核级 slot(P1):`settings.section.<id>` 槽位组件自动挂载为设置页导航项
+	// 内核级 slot(P1):`settings.section` 的每个条目挂为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
-	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_SECTION_SLOT_PREFIX);
-	// 会话管理插件页:声明 `settings.section.sessions` 的扩展接管内置「会话」分区。
+	const extSettingsTabs = useSlotComponents(rpc, SETTINGS_SECTION_SLOT);
+	// 会话管理插件页:声明 `settings.section` 且 id 为 `sessions` 的条目接管内置「会话」分区。
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
-	/** A page plugin takes over its nav id when the slot names an existing page
-	 *  (`settings.section.<id>`); the host keeps the built-in renderer as fallback. */
+	/** A page entry takes over its nav id when `id` names an existing page
+	 *  (or its alias); the host keeps the built-in renderer as fallback. */
 	const extTabFor = (id: string): (typeof extSettingsTabs)[number] | undefined => {
 		// A nav id may be a section id (`connectors`) or an ext page row
-		// (`ext:settings.section.widgets`); both resolve to the one slot.
-		const slot = id.startsWith("ext:") ? id.slice("ext:".length) : `${SETTINGS_SECTION_SLOT_PREFIX}${id}`;
-		return extSettingsTabs.find(tab => tab.slot === slot && (tab.code.length > 0 || tab.url) && !tab.error);
+		// (`ext:widgets`); both resolve to the entry's own `id`.
+		const sectionId = id.startsWith("ext:") ? id.slice("ext:".length) : id;
+		return extSettingsTabs.find(tab => tab.id === sectionId && (tab.code.length > 0 || tab.url) && !tab.error);
 	};
-	/** The section id a plugin page was registered for (dsh `settings.section.view`
-	 *  `id`): strip the nav `ext:` marker and the slot namespace. */
-	const sectionIdOf = (slot: string): string => slot.slice(SETTINGS_SECTION_SLOT_PREFIX.length);
 	const extSessionsTab = extTabFor("sessions");
-	// 记忆插件页:声明 `settings.section.memory` 的扩展接管内置「记忆」分区。
+	// 记忆插件页:声明 `settings.section` 且 id 为 `memory` 的条目接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
 	const extMemoryTab = extTabFor("memory");
 	// 行级偏好席位(dsh `settings.general.item`):挂到「常规」页末尾。
@@ -136,10 +133,9 @@ export function SettingsView({
 	const activeSection = resolveActiveSection(section, navSectionIds);
 	// 已注册页面统一走工厂:声明即渲染,内置分支只做缺席回退。
 	const activeExtTab = extTabFor(activeSection);
-	// 页面自有行席位(dsh `children` 粒度):`settings.section.<page>.*` 的组件由
-	// 该页承载,当前页只挂载自己的座位,渲染在页面内容之后。插件也可另挂
-	// `settings.item.<extId>`,同一组件用注入的 `slot` 区分座位。
-	const sectionItems = useSlotComponentsByPrefix(rpc, `settings.section.${activeSection}.`);
+	// 页面自有行席位(dsh `children` 粒度):`settings.item.<page>.<row>` 的组件由
+	// 该页承载,当前页只挂载自己的座位,渲染在页面内容之后。
+	const sectionItems = useSlotComponentsByPrefix(rpc, `settings.item.${activeSection}.`);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
 	const settingRows = useSettingSearchRows(rpc);
@@ -518,9 +514,8 @@ export function SettingsView({
 								activeSection === "model" || activeSection === "skills" ? " gui-settings-content--fill" : ""
 							}`}
 						>
-							{/* dsh `settings.section.view` factory: a registered page owns its
-							 *  content; the built-in branches below are the fallback when no
-							 *  contribution is loaded. */}
+							{/* A registered page owns its content; the built-in branches below are
+							 *  the fallback when no contribution is loaded. */}
 							{activeExtTab ? (
 								<SlotComponentMount
 									item={activeExtTab}
@@ -528,7 +523,7 @@ export function SettingsView({
 									sessionId={sessionId}
 									cwd={cwd ?? undefined}
 									onApplyPrompt={applyPrompt}
-									settingsSection={{ id: sectionIdOf(activeExtTab.slot), close: onBack }}
+									settingsSection={{ id: activeExtTab.id ?? "", close: onBack }}
 								/>
 							) : (
 								<>
@@ -623,7 +618,7 @@ export function SettingsView({
 									{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 									{activeSection.startsWith("ext:")
 										? (() => {
-												const item = extSettingsTabs.find(x => `ext:${x.slot}` === activeSection);
+												const item = extSettingsTabs.find(x => x.id === activeSection.slice("ext:".length));
 												return item ? (
 													<div className="px-3 py-2">
 														<SlotComponentMount
@@ -650,7 +645,7 @@ export function SettingsView({
 								</>
 							)}
 							{activeSection === "usage" && <UsageSection rpc={rpc} />}
-							{/* 页面自有行席位(dsh `children` 粒度):`settings.section.<page>.*`
+							{/* 页面自有行席位(dsh `children` 粒度):`settings.item.<page>.*`
 							 *  的贡献挂在本页内容之后;当前页只挂载自己的座位。 */}
 							{sectionItems.length > 0 && (
 								<div className="gui-settings-row">

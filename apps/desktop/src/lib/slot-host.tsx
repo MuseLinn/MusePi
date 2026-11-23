@@ -39,7 +39,7 @@ import {
 import {
 	SETTINGS_EXTENSION_SLOT,
 	SETTINGS_ITEM_SLOT_PREFIX,
-	SETTINGS_SECTION_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT,
 } from "@musepi/client-ui-settings/client";
 import {
 	BROWSER_HOST_SLOT,
@@ -236,7 +236,7 @@ function exposeHostReact(): void {
 export {
 	SETTINGS_EXTENSION_SLOT,
 	SETTINGS_ITEM_SLOT_PREFIX,
-	SETTINGS_SECTION_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT,
 } from "@musepi/client-ui-settings/client";
 export {
 	BROWSER_HOST_SLOT,
@@ -734,11 +734,11 @@ export interface SlotComponentProps {
 	 *  sessions). Absent when the host cannot switch sessions. */
 	onOpenSession?: (sessionId: string) => void;
 	/** Settings-page contract: hand an example sentence to the composer and
-	 *  leave settings. Present only on settings.section.* mounts whose page
+	 *  leave settings. Present only on settings.section page mounts whose page
 	 *  offers "apply to composer" (connectors, marketplace examples). */
 	onApplyPrompt?: (text: string) => void;
-	/** Settings-page view contract (dsh `settings.section.view`): the section
-	 *  id this mount renders and the surface's leave action. */
+	/** Settings-page view contract: the section id this mount renders and the
+	 *  surface's leave action. */
 	settingsSection?: { id: string; close(): void };
 	/** The slot id this component was registered into. */
 	slot?: string;
@@ -1478,7 +1478,7 @@ const slotHostBindings = {
 	RIGHT_PANEL_SLOT,
 	RIGHT_RAIL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
-	SETTINGS_SECTION_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT,
 	RAIL_SLOT_PREFIX,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	COMPOSER_BAR_SLOT,
