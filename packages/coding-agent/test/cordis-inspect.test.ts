@@ -29,6 +29,43 @@ describe("Cordis runtime API registry", () => {
 		expect((tools.data as { tools: string[] }).tools).toContain("session_only_tool");
 	});
 
+	test("serves the seat catalog: contract, register options and current occupants", async () => {
+		const all = await inspectQuery({ provider: "slots", method: "catalog" });
+		expect(all.ok).toBe(true);
+		const { exact, prefixes } = all.data as {
+			exact: Array<{
+				name: string;
+				kind: string;
+				scope: string;
+				declaredBy: string;
+				replaceRisk: string;
+				registerOptions: Array<{ name: string; requirement: string }>;
+				occupants: Array<{ slot: string; plugin: string }>;
+			}>;
+			prefixes: Array<{ prefix: string; occupants: unknown[] }>;
+		};
+		expect(exact.length).toBeGreaterThan(0);
+		expect(prefixes.length).toBeGreaterThan(0);
+
+		const page = exact.find(entry => entry.name === "settings.section")!;
+		expect(page.kind).toBe("list");
+		expect(page.registerOptions.find(option => option.name === "id")?.requirement).toBe("required");
+		expect(page.occupants.map(occupant => occupant.slot)).toContain("settings.section");
+
+		const composer = exact.find(entry => entry.name === "conversation.composer.dock")!;
+		expect(composer.occupants.length).toBeGreaterThan(0);
+	});
+
+	test("narrows the catalog to one seat and names an unknown one", async () => {
+		const one = await inspectQuery({ provider: "slots", method: "catalog", input: { slot: "settings.section" } });
+		expect(one.ok).toBe(true);
+		expect((one.data as { exact: unknown[] }).exact).toHaveLength(1);
+
+		const missing = await inspectQuery({ provider: "slots", method: "catalog", input: { slot: "nope.seat" } });
+		expect(missing.data).toMatchObject({ ok: false });
+		expect((missing.data as { seats: string[] }).seats).toContain("settings.section");
+	});
+
 	test("accepts an injected provider and restores the previous one on release", async () => {
 		const release = registerInspectProvider({
 			platform: "host",

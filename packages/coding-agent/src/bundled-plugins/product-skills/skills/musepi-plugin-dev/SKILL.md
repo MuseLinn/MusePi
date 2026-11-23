@@ -43,6 +43,7 @@ export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>)
 ```
 
 - 服务面：`ctx.tools` / `commands` / `settings` / `prompts` / `slots` / `rpc` / `subagents` / `magicKeywords` / `memory` / `hmr`。平铺的 `pi.register*` 只是 legacy 别名，新插件不要用。
+- **挂 UI 之前先查目录**：`cordis_inspect_query({ provider: "slots", method: "catalog" })` 返回每个座位的容量、作用域、注册时必须传的选项、宿主注入的 props、谁声明并挂载它、替换风险，以及当前已占着它的第一方插件。带 `{ input: { slot: "settings.section" } }` 只看一个座位。不要凭文档猜座位名或参数——目录就是契约。
 - `apply` 第二参是清单 `musepi.config` 的钳制后取值；`ctx.cwd` 是装载根。
 - 需要跨插件服务：入口 `provide: ["foo"]`，`apply` 返回 `{ foo: service }`；消费者 `inject: ["foo"]` 后用 `ctx.service("foo")`。
 - **host 作用域**：`musepi.scope: "host"` 的包由宿主进程启动时装载一次（daemon 开监听前 / 首个会话前），会话装载跳过。放进程级注册（后端 provider、全局服务），不要放会话工具。

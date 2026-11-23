@@ -8,7 +8,7 @@
 ## 工作流与工具
 
 1. `cordis_inspect_list`：先看动态插件可用的只读 API 目录（`runtime` / `package` / `slots` / `tools`）。
-2. `cordis_inspect_query`：按目录条目取精确契约——`defineTool` 的参数、声明的 slot 与 kind、内置工具名；只读，不调用业务方法。
+2. `cordis_inspect_query`：按目录条目取精确契约——`defineTool` 的参数、内置工具名；挂 UI 时用 `{ provider: "slots", method: "catalog" }`，它给出每个座位的容量、作用域、注册选项、宿主注入的 props、声明者、替换风险与当前占据者，`{ input: { slot } }` 只看一个座位。只读，不调用业务方法。
 3. `cordis_inspect_self`：看当前会话已有插件、版本、活动 run 与工具；带 `pluginId + packageId` 时返回该版本的 `hostCode` 源码。修改或修错前先读源码，不要凭记忆重写。
 4. `cordis_define`：**只定义、不运行**。新插件给 `idPrefix`（3–6 个小写英文字母，如 `clock`），宿主分配 `pluginId`；给已有插件追加版本时传 `pluginId`。每次定义产生一个**不可变** `packageId`。
 5. `cordis_run`：激活一个版本。`mode=run`（默认）用于首次激活或重启当前版本；`mode=update` 用于切换版本，要求插件已在运行。回执给出 `pluginId`、`packageId`、`runId` 与本次注册的工具名。

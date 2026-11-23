@@ -9,6 +9,7 @@
  * a static signature. Nothing here invokes business behaviour.
  */
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { SLOT_CATALOG, SLOT_PREFIX_CATALOG } from "@musepi/collab-proto/slot-catalog.generated";
 import { BUILTIN_TOOL_NAMES, PLUGIN_TOOL_NAMES } from "../tools/builtin-names";
 
 export type InspectPlatform = "host" | "client";
@@ -139,11 +140,17 @@ cordisInspectRegistry.register({
 	methods: {
 		"ctx.tools.register": { description: "Register a model tool from the plugin package." },
 		"ctx.slots.register": {
-			description: "Register a UI component into a declared slot.",
+			description:
+				"Register a UI component into a declared slot. Read `slots.catalog` first: it names the seat's capacity, required register options, the props the host passes, and who already occupies it.",
 			input: {
 				slot: "string — one of the slots provider's names",
 				moduleUrl: "string — relative module",
 				label: "string?",
+				id: "string? — list seat entry identity (required for settings.section)",
+				order: "number? — list seat position",
+				icon: "string? — settings.section nav glyph",
+				keywords: "readonly string[]? — settings.section search terms",
+				entryKinds: "readonly string[]? — conversation.chat.node dispatch keys",
 			},
 		},
 		"ctx.commands.register": { description: "Register a slash command and its handler." },
@@ -166,8 +173,31 @@ cordisInspectRegistry.register({
 cordisInspectRegistry.register({
 	platform: "host",
 	provider: "slots",
-	summary: "Declared extension slots. `list` returns every seat and its capacity.",
+	summary:
+		"Declared extension seats. `catalog` returns every seat with its contract (capacity, scope, register options, owner props, declarer, replace risk) and the first-party entries already occupying it; `list` is the bare name/kind table.",
 	methods: {
+		catalog: {
+			description:
+				"Every exact seat and prefix family with its contract and current first-party occupants. Read this before choosing a seat or writing `ctx.slots.register`.",
+			input: {
+				slot: "string? — return only the entry whose name/prefix matches",
+				kind: "single | list | hoc? — filter exact seats by capacity",
+			},
+			query: input => {
+				const slot = typeof input?.slot === "string" ? input.slot : undefined;
+				const kind = typeof input?.kind === "string" ? input.kind : undefined;
+				const exact = SLOT_CATALOG.filter(
+					entry => (slot === undefined || entry.name === slot) && (kind === undefined || entry.kind === kind),
+				);
+				const prefixes = SLOT_PREFIX_CATALOG.filter(
+					entry => slot === undefined || entry.prefix === slot || entry.prefix.startsWith(slot),
+				);
+				if (slot !== undefined && exact.length === 0 && prefixes.length === 0) {
+					return { ok: false, error: `unknown slot: ${slot}`, seats: SLOT_CATALOG.map(entry => entry.name) };
+				}
+				return { exact, prefixes };
+			},
+		},
 		list: {
 			description: "Every exact slot name with kind (single | list | hoc), plus prefix families.",
 			query: () => ({

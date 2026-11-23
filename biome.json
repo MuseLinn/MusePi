@@ -85,6 +85,7 @@
 			"tools/*/*.ts",
 			"scripts/**/*.ts",
 			"!packages/natives/native/index.d.ts",
+			"!packages/collab-proto/src/slot-catalog.generated.ts",
 			"!**/vendor/**/*",
 			"!**/node_modules/**/*",
 			"!**/test-sessions.ts",

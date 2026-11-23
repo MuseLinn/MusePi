@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
+import { SLOT_CATALOG, SLOT_PREFIX_CATALOG } from "@musepi/collab-proto/slot-catalog.generated";
 import { logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDecl, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
@@ -801,6 +802,8 @@ export class ExtensionService implements DaemonService {
 			slots: {
 				exact: [...EXTENSION_SLOT_NAMES],
 				prefixes: [...EXTENSION_SLOT_DECLARATION.prefixes],
+				catalog: SLOT_CATALOG,
+				prefixCatalog: SLOT_PREFIX_CATALOG,
 			},
 		};
 	}

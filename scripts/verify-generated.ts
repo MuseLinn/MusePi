@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildToolViews } from "../packages/client-core/scripts/build-tool-views";
+import { buildSlotCatalog } from "./gen-slot-catalog";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -32,6 +33,11 @@ const ARTIFACTS: GeneratedArtifact[] = [
 		path: "packages/coding-agent/src/export/html/tool-views.generated.js",
 		command: "bun run gen:tool-views",
 		build: buildToolViews,
+	},
+	{
+		path: "packages/collab-proto/src/slot-catalog.generated.ts",
+		command: "bun run gen:slot-catalog",
+		build: buildSlotCatalog,
 	},
 ];
 

@@ -58,6 +58,7 @@ import {
 	SIDEBAR_PANEL_SLOT_PREFIX,
 } from "@musepi/client-ui-sidebar/client";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@musepi/collab-proto/extension-slots";
+import type { SlotCatalogEntry, SlotPrefixCatalogEntry } from "@musepi/collab-proto/slot-catalog.generated";
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
@@ -557,8 +558,14 @@ export interface ExtensionRegistryData {
 	/** Scrollbar skins contributed by active extensions (registerScrollbarSkin),
 	 *  merged over the built-in catalog by id (old daemons omit the field). */
 	scrollbarSkins?: ScrollbarSkinItem[];
-	/** Slot contract from the daemon (collab-proto single authority). */
-	slots: { exact: readonly string[]; prefixes: readonly string[] };
+	/** Slot contract from the daemon (collab-proto single authority). `catalog`
+	 *  carries each seat's contract and occupants; older daemons omit it. */
+	slots: {
+		exact: readonly string[];
+		prefixes: readonly string[];
+		catalog?: readonly SlotCatalogEntry[];
+		prefixCatalog?: readonly SlotPrefixCatalogEntry[];
+	};
 	/** Identity of the compiled contribution set (daemon-side). The poll
 	 *  fetches the light form and full-fetches only when this changes. */
 	version?: string;
