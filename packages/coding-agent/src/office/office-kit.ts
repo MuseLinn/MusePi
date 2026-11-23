@@ -276,16 +276,10 @@ export class LibreOfficeKit implements OfficeKit {
 			request.extension === "pdf"
 				? new Uint8Array(await Bun.file(request.input).arrayBuffer())
 				: await this.#toPdf(request.input, signal);
-		const pageCount = pdfPageCount(pdf);
-		const pages = request.pages
-			? [...request.pages]
-			: pdfPageCount(pdf) > 0
-				? Array.from({ length: pageCount }, (_, index) => index + 1)
-				: [1];
-		if (request.maxImages !== undefined && pages.length > request.maxImages) {
+		if (request.pages !== undefined && request.maxImages !== undefined && request.pages.length > request.maxImages) {
 			throw new OfficeKitError(
 				"output-too-large",
-				`The selection has ${pages.length} pages; the limit is ${request.maxImages}.`,
+				`The selection has ${request.pages.length} pages; the limit is ${request.maxImages}.`,
 			);
 		}
 		const dir = await this.#scratch();
@@ -294,7 +288,48 @@ export class LibreOfficeKit implements OfficeKit {
 		const rasterizer = this.#pdftoppm();
 		const images: OfficeRenderedImage[] = [];
 		let totalBytes = 0;
-		for (const page of pages) {
+		const add = async (pngPath: string, page: number): Promise<void> => {
+			if (!(await Bun.file(pngPath).exists())) {
+				throw new OfficeKitError("invalid-request", `Page ${page} does not exist.`);
+			}
+			const png = new Uint8Array(await Bun.file(pngPath).arrayBuffer());
+			totalBytes += png.byteLength;
+			if (request.maxBytes !== undefined && totalBytes > request.maxBytes) {
+				throw new OfficeKitError("output-too-large", `Rendered images exceed the ${request.maxBytes}-byte limit.`);
+			}
+			const { width, height } = pngSize(png);
+			images.push({ png, width, height, page });
+		};
+
+		// No selection: one rasterizer pass writes every page, and the directory
+		// is the page count. PDF page-tree regexes miss compressed object streams,
+		// so the produced files are the authoritative count.
+		if (request.pages === undefined) {
+			const result = await run([rasterizer, "-png", "-r", String(dpi), pdfPath, path.join(dir, "page")], {
+				signal,
+			});
+			if (result.exitCode !== 0) {
+				throw new OfficeKitError("engine-failed", `The PDF rasterizer failed: ${tail(result.stderr)}`);
+			}
+			const produced = (await fsp.readdir(dir))
+				.filter(name => /^page-\d+\.png$/.test(name))
+				.sort((left, right) => Number(left.match(/(\d+)/)?.[1]) - Number(right.match(/(\d+)/)?.[1]));
+			if (produced.length === 0) {
+				throw new OfficeKitError("invalid-request", "The document has no renderable pages.");
+			}
+			if (request.maxImages !== undefined && produced.length > request.maxImages) {
+				throw new OfficeKitError(
+					"output-too-large",
+					`The document has ${produced.length} pages; the limit is ${request.maxImages}.`,
+				);
+			}
+			for (const name of produced) {
+				await add(path.join(dir, name), Number(name.match(/(\d+)/)?.[1]));
+			}
+			return { pageCount: images.length, dpi, images };
+		}
+
+		for (const page of request.pages) {
 			const prefix = path.join(dir, `page-${page}`);
 			const result = await run(
 				[
@@ -315,19 +350,9 @@ export class LibreOfficeKit implements OfficeKit {
 			if (result.exitCode !== 0) {
 				throw new OfficeKitError("engine-failed", `The PDF rasterizer failed: ${tail(result.stderr)}`);
 			}
-			const pngPath = `${prefix}.png`;
-			if (!(await Bun.file(pngPath).exists())) {
-				throw new OfficeKitError("invalid-request", `Page ${page} does not exist.`);
-			}
-			const png = new Uint8Array(await Bun.file(pngPath).arrayBuffer());
-			totalBytes += png.byteLength;
-			if (request.maxBytes !== undefined && totalBytes > request.maxBytes) {
-				throw new OfficeKitError("output-too-large", `Rendered images exceed the ${request.maxBytes}-byte limit.`);
-			}
-			const { width, height } = pngSize(png);
-			images.push({ png, width, height, page });
+			await add(`${prefix}.png`, page);
 		}
-		return { pageCount, dpi, images };
+		return { pageCount: Math.max(pdfPageCount(pdf), ...request.pages), dpi, images };
 	}
 
 	async convertTo(request: OfficeFileRequest, signal?: AbortSignal): Promise<OfficeFileResult> {
