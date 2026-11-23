@@ -62,7 +62,7 @@ function classifyRun(run: WorkflowRun, logs: ReadonlyMap<number, string>): RunCl
 	if (releaseBuildStarted(run)) return "release-attempt";
 
 	const metadata = run.jobs.find(job => job.name === METADATA_JOB);
-	if (!metadata || metadata.status !== "completed") {
+	if (metadata?.status !== "completed") {
 		return run.status === "completed" ? "not-release" : "unknown";
 	}
 	const log = logs.get(metadata.id);
@@ -114,9 +114,7 @@ export function decideTuiReleaseRecovery(
 	if (pending) {
 		return {
 			action: "wait",
-			reason:
-				`Waiting until CI run ${pending.run.id} resolves whether this commit is a release: ` +
-				pending.run.html_url,
+			reason: `Waiting until CI run ${pending.run.id} resolves whether this commit is a release: ${pending.run.html_url}`,
 		};
 	}
 	return {
@@ -223,7 +221,7 @@ export async function recoverTuiRelease({
 		const logs = new Map<number, string>();
 		for (const run of runs) {
 			const metadata = run.jobs.find(job => job.name === METADATA_JOB);
-			if (!metadata || metadata.status !== "completed") continue;
+			if (metadata?.status !== "completed") continue;
 			const publish = run.jobs.find(job => job.name === PUBLISH_JOB);
 			if (
 				publish?.conclusion === "success" ||

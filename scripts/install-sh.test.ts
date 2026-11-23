@@ -147,10 +147,7 @@ esac
 	return { binDir, home: dir };
 }
 
-function envFor(
-	bin: { binDir: string; home: string },
-	extra: Record<string, string>,
-): NodeJS.ProcessEnv {
+function envFor(bin: { binDir: string; home: string }, extra: Record<string, string>): NodeJS.ProcessEnv {
 	return {
 		...process.env,
 		PATH: `${bin.binDir}:${process.env.PATH ?? ""}`,

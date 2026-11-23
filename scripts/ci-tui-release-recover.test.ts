@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
-	RELEASE_TAG_LOG,
 	decideTuiReleaseRecovery,
 	isRecoverableReleaseTag,
+	RELEASE_TAG_LOG,
 	recoverTuiRelease,
 } from "./ci-tui-release-recover";
 
