@@ -511,13 +511,13 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 		"occupants": [
 			{
 				"slot": "conversation.composer.dock",
-				"source": "packages/coding-agent/src/bundled-plugins/stats-pills/index.ts",
+				"source": "packages/coding-agent/src/plugins/style/stats-pills/index.ts",
 				"plugin": "musepi-stats-pills",
 				"id": "activity"
 			},
 			{
 				"slot": "conversation.composer.dock",
-				"source": "packages/coding-agent/src/bundled-plugins/stats-pills/index.ts",
+				"source": "packages/coding-agent/src/plugins/style/stats-pills/index.ts",
 				"plugin": "musepi-stats-pills",
 				"id": "usage"
 			}
@@ -1125,7 +1125,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 		"occupants": [
 			{
 				"slot": "panel.tab.android-emulator",
-				"source": "packages/coding-agent/src/bundled-plugins/android-emulator/index.ts",
+				"source": "packages/coding-agent/src/plugins/capabilities/android-emulator/index.ts",
 				"plugin": "musepi-android-emulator"
 			},
 			{
@@ -1135,7 +1135,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			},
 			{
 				"slot": "panel.tab.compaction",
-				"source": "packages/coding-agent/src/bundled-plugins/compaction-summary/index.ts",
+				"source": "packages/coding-agent/src/plugins/workspace/compaction-summary/index.ts",
 				"plugin": "musepi-compaction-summary"
 			}
 		]
@@ -1247,7 +1247,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			},
 			{
 				"slot": "chat.session-info.resources",
-				"source": "packages/coding-agent/src/bundled-plugins/session-info-resources/index.ts",
+				"source": "packages/coding-agent/src/plugins/style/session-info-resources/index.ts",
 				"plugin": "musepi-session-info-resources"
 			}
 		]
