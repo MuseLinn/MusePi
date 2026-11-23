@@ -73,7 +73,7 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		const ui = this.session.uiContext as (ExtensionUIContext & AgentSecretUIContext) | undefined;
 		if (!ui?.requestSecret) {
 			throw new ToolError(
-				"This host cannot collect a secret interactively. Add it from Settings → Secrets, or expose it through secrets.yml / the environment.",
+				"This host cannot collect a secret interactively. Add it from Settings → Vault, or expose it through secrets.yml / the environment.",
 			);
 		}
 

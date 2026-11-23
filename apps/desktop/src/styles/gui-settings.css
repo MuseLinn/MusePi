@@ -8950,112 +8950,17 @@ body.gui-resizing {
 	color: var(--color-danger);
 	border-color: color-mix(in oklab, var(--color-danger) 45%, var(--border));
 }
-/* ── Settings → 智能体 → 密钥：密钥库面板 ───────────────────────────────
- * 三段式：静态加密状态卡（唯一一处声明存储事实）、`密钥 · N` 列头 + 添加
- * 动作、然后要么是一张同面式的添加/替换表单，要么是密钥行列表，要么是解释
- * request_secret 卡片的空态。
+/* ── Settings → 智能体 → 保险库：保险库面板 ─────────────────────────────
+ * 两段式：`保险库 · N` 列头（计数、搜索、添加与 .env 导入），然后要么是一张
+ * 同面式的添加/替换/导入表单，要么是密钥行列表，要么是空态。存储事实收成
+ * 页脚一句话，不再单占一张状态卡。
  *
- * 卡片面全部复用 `.gui-agent-card`（本节只改内部排布），因此状态卡、表单、
- * 列表行属于同一个视觉族，玻璃层也只认那一个 L1 面。控件尺寸走共享 token：
+ * 卡片面全部复用 `.gui-agent-card`（本节只改内部排布），因此表单与列表行
+ * 属于同一个视觉族，玻璃层也只认那一个 L1 面。控件尺寸走共享 token：
  * 字段 --control-height-field、按钮 --control-height-sm，圆角走 --radius-*
  * 阶梯，不为本页新开一套几何。 */
 
-/* 页面标题下的状态卡：头部一行（图标 + 标题 + 一句机制说明），下面三条事实
- * 各自成列（存放位置 / shell 用法 / 模型可见内容），窄屏折成单列。 */
-.gui-secret-section .gui-secret-state {
-	align-items: stretch;
-	flex-direction: column;
-	gap: var(--space-4);
-	margin-top: 18px;
-	padding: var(--space-4);
-}
-
-.gui-secret-section .gui-secret-state-head {
-	display: flex;
-	align-items: flex-start;
-	gap: var(--space-3);
-}
-
-.gui-secret-state-icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex: none;
-	width: 30px;
-	height: 30px;
-	border-radius: var(--radius-lg);
-	color: var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-}
-
-.gui-secret-state-text {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-}
-
-.gui-secret-state-title {
-	font-size: var(--ui-font-size);
-	font-weight: 600;
-	line-height: 1.3;
-	color: var(--color-text);
-}
-
-.gui-secret-state-desc {
-	font-size: 12.5px;
-	line-height: 1.45;
-	color: var(--color-text-muted);
-}
-
-/* 三条事实：等宽三列，靠列间距和一条上分隔线与头部区分，不加第二层卡片。 */
-.gui-secret-facts {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: var(--space-4);
-	padding-top: var(--space-3);
-	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
-}
-
-.gui-secret-fact {
-	display: flex;
-	align-items: flex-start;
-	gap: var(--space-2);
-	min-width: 0;
-}
-
-.gui-secret-fact-icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex: none;
-	width: 18px;
-	height: 18px;
-	margin-top: 1px;
-	color: var(--color-text-faint);
-}
-
-.gui-secret-fact-body {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-}
-
-.gui-secret-fact-title {
-	font-size: 11px;
-	line-height: 1.4;
-	color: var(--color-text-faint);
-}
-
-.gui-secret-fact-value {
-	font-size: 12px;
-	line-height: 1.45;
-	color: var(--color-text-muted);
-	overflow-wrap: anywhere;
-}
-
-/* `密钥 · N` 列头：计数在左、主操作在右，与下方列表同宽。 */
+/* `保险库 · N` 列头：计数在左、搜索与两个动作在右，与下方列表同宽。 */
 .gui-secret-listhead {
 	display: flex;
 	align-items: center;
@@ -9069,6 +8974,22 @@ body.gui-resizing {
 	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-text);
+}
+
+/* 保险库页的操作行：搜索靠右，两个动作成组；表单打开时二者都禁用。 */
+.gui-secret-listhead .gui-secret-search {
+	flex: 0 1 220px;
+	margin-left: auto;
+}
+
+.gui-secret-listhead-actions {
+	display: flex;
+	flex: none;
+	gap: var(--space-2);
+}
+
+.gui-secret-footnote {
+	margin-top: var(--space-3);
 }
 
 /* 添加 / 替换共用的表单：同一张面，字段用一条 224px 标签列排布（设置页既有

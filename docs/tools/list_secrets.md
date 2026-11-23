@@ -36,7 +36,7 @@ None.
 1. Reads the metadata sidecar and attempts to decrypt each listed entry.
 2. An entry whose envelope cannot be decrypted stays listed as
    `unavailable: value unreadable` so the user can save the value again via
-   [`request_secret`](./request_secret.md) or Settings → Secrets.
+   [`request_secret`](./request_secret.md) or Settings → Vault.
 3. An entry scoped to other workspaces is listed as stored but not usable here;
    [`request_secret`](./request_secret.md) opens the allow card for it.
 

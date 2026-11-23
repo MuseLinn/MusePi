@@ -149,7 +149,7 @@ the scope to that workspace without retyping the value. A missing or unreadable
 value opens `kind:"fill"`. A card times out as a cancel after ten minutes.
 Interactive collection requires a host that implements the `requestSecret` UI
 channel (the daemon approval bridge); a headless/TUI host returns an error
-telling the user to add the secret from Settings → Secrets.
+telling the user to add the secret from Settings → Vault.
 
 ### Storage
 
@@ -232,7 +232,7 @@ push, log or transcript contains a value.
   root gets the allow card; narrowing an entry again needs saving it with the
   "this workspace" choice, because the settings page only widens.
 - An entry whose envelope cannot be decrypted stays listed as unavailable.
-  Save the value again through `request_secret` or Settings → Secrets to repair
+  Save the value again through `request_secret` or Settings → Vault to repair
   it; do not edit the sidecar by hand.
 - Deleting a secret removes it from disk and from future bash injection, but an
   obfuscator already live in a running session keeps replacing that old value

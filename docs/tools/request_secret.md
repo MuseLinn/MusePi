@@ -38,7 +38,7 @@ The full contract — storage, scope, RPC, timeout and known limits — lives in
   `"available"`, `"saved"` or `"cancelled"` and `scope` is `"all"` or the
   workspace roots the entry covers.
 - A host with no interactive secret channel throws instead of returning a
-  placeholder result; the message suggests Settings → Secrets or `secrets.yml`.
+  placeholder result; the message suggests Settings → Vault or `secrets.yml`.
 
 ## Flow
 1. The tool validates the name and purpose.

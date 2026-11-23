@@ -36,7 +36,7 @@ scope:
 - `details`：`{ name, envName, purpose, scope, status }`，`status` 为
   `"available"`、`"saved"` 或 `"cancelled"`；`scope` 为 `"all"` 或条目覆盖的
   工作目录根列表。
-- 宿主没有交互式密钥通道时直接抛错，而不是返回占位结果；错误信息会提示使用「设置 → 密钥」或 `secrets.yml`。
+- 宿主没有交互式密钥通道时直接抛错，而不是返回占位结果；错误信息会提示使用「设置 → 智能体 → 保险库」或 `secrets.yml`。
 
 ## 流程
 1. 工具校验名字与用途。

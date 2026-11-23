@@ -7413,8 +7413,9 @@ export const settings = {
 	"settings.memory.idleEnqueueMinutes.option.24h": "24 hours",
 	"settings.memoryBackends": "Backends",
 	"settings.memoryStatusDescription": "Live backend status and maintenance actions.",
-	"settings.secrets": "Secrets",
-	"settings.secretsDescription": "Values the agent can use without ever reading them.",
+	"settings.secrets": "Vault",
+	"settings.secretsDescription":
+		"Passwords and keys your agent can use. Values reach only its bash environment, never the agent.",
 	"settings.secretsEncrypted": "Encrypted (local master key)",
 	"settings.secretsEncryptedDescription":
 		"Every value is an AES-256-GCM envelope under this machine's profile master key. There is no plaintext mode, and a value is only decrypted here.",
@@ -7427,8 +7428,21 @@ export const settings = {
 	"settings.secretsModelTitle": "What the model sees",
 	"settings.secretsModelValue":
 		"A keyed placeholder for provider requests (name plus a local hash, not reversible by the model), and name, purpose, scope and availability from list_secrets. Never the value.",
-	"settings.secretsStoredCount": "Secrets · {count}",
+	"settings.secretsStoredCount": "Vault · {count}",
 	"settings.secretsAdd": "Add secret",
+	"settings.secretsImport": "Import a .env",
+	"settings.secretsImportTitle": "Paste a .env",
+	"settings.secretsImportLabel": "Contents",
+	"settings.secretsImportHint": "One NAME=value per line; blank lines and # comments are ignored.",
+	"settings.secretsImportScope": "Imported keys are available to every session.",
+	"settings.secretsImportSubmit": "Import",
+	"settings.secretsImportEmpty": "No NAME=value lines to import.",
+	"settings.secretsImportInvalid": "Line {line} has an invalid name: {name}",
+	"settings.secretsImportDone": "Imported {count} secret(s).",
+	"settings.secretsSearch": "Search the vault",
+	"settings.secretsNoMatch": "No matching secrets.",
+	"settings.secretsFootnote":
+		"Values reach the agent only as bash environment variables. A saved value can be replaced, never viewed.",
 	"settings.secretsAddTitle": "New secret",
 	"settings.secretsReplaceTitle": "Replace value",
 	"settings.secretsName": "Name",
@@ -7447,9 +7461,9 @@ export const settings = {
 	"settings.secretsLastUsed": "Last used {when}",
 	"settings.secretsNeverUsed": "Never used",
 	"settings.secretsNoPurpose": "No purpose recorded",
-	"settings.secretsEmptyTitle": "No secrets yet",
+	"settings.secretsEmptyTitle": "Nothing saved yet.",
 	"settings.secretsEmptyBody":
-		"When a tool call needs a credential the agent does not have, it parks the call and shows a request card above the composer. It submits the name and purpose only; you type the value there, and it is stored for later calls.",
+		"Keys the agent asks for land here; you can also add one directly or paste a .env file.",
 	"settings.secretsReplace": "Replace value",
 	"settings.secretsDelete": "Delete",
 	"settings.secretsDeleteConfirm":

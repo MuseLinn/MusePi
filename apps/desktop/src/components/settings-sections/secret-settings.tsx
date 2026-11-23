@@ -1,23 +1,23 @@
 /**
- * Settings → 智能体 → 密钥: the agent secret vault.
+ * Settings → 智能体 → 保险库: the agent secret vault.
  *
  * Values are write-only over this page: the daemon returns metadata only
  * (`secret.list`), and every input that accepts a value is a masked field.
  * The page never renders a stored value, offers a reveal toggle, or keeps a
- * value after its form closes.
+ * value after its form closes. A pasted .env is parsed here and stored as one
+ * entry per `NAME=value`; its text is dropped when the form closes.
  *
  * The store is always encrypted with a local per-profile master key, so the
- * state card is static — there is no plaintext mode, no unlock step, and
- * nothing for the page to switch on. Its copy stays on what the code does:
- * `packages/coding-agent/src/secrets/agent-store.ts` writes one AES-256-GCM
- * envelope per name and a metadata sidecar at 0600; a value reaches a bash
- * child as `$MUSEPI_SECRET_<NAME>`, tool output shows `[secret:NAME]`, and the
- * provider boundary carries a keyed placeholder instead of the value.
+ * page states the fact once in its footnote — there is no plaintext mode and
+ * no unlock step. `packages/coding-agent/src/secrets/agent-store.ts` writes one
+ * AES-256-GCM envelope per name and a metadata sidecar at 0600; a value reaches
+ * a bash child as `$MUSEPI_SECRET_<NAME>`, tool output shows `[secret:NAME]`,
+ * and the provider boundary carries a keyed placeholder instead of the value.
  */
 
 import { t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
-import { Eye, FolderLock, KeyRound, Plus, RefreshCw, ShieldCheck, Terminal, Trash2 } from "lucide-react";
+import { KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
@@ -82,58 +82,6 @@ function WarningLine({ message, onRetry }: { message: string; onRetry?: () => vo
 				</button>
 			)}
 		</div>
-	);
-}
-
-/** One fact of the state card: what is protected, and by which mechanism. */
-function SecretFact({ icon, title, value }: { icon: ReactNode; title: string; value: string }): ReactNode {
-	return (
-		<div className="gui-secret-fact">
-			<span className="gui-secret-fact-icon">{icon}</span>
-			<div className="gui-secret-fact-body">
-				<div className="gui-secret-fact-title">{title}</div>
-				<div className="gui-secret-fact-value">{value}</div>
-			</div>
-		</div>
-	);
-}
-
-/**
- * The page's single claim about storage. Static on purpose: the daemon reports
- * `mode: "encrypted"` from the same store implementation, and there is no
- * second mode for a status read to discover — only whether it could be read,
- * which the warnings beside this card report.
- */
-function SecretStateCard(): ReactNode {
-	return (
-		<section className="gui-agent-card gui-secret-state" aria-label={t("settings.secretsEncrypted")}>
-			<div className="gui-secret-state-head">
-				<span className="gui-secret-state-icon">
-					<ShieldCheck size={16} aria-hidden="true" />
-				</span>
-				<div className="gui-secret-state-text">
-					<div className="gui-secret-state-title">{t("settings.secretsEncrypted")}</div>
-					<div className="gui-secret-state-desc">{t("settings.secretsEncryptedDescription")}</div>
-				</div>
-			</div>
-			<div className="gui-secret-facts">
-				<SecretFact
-					icon={<FolderLock size={13} aria-hidden="true" />}
-					title={t("settings.secretsWhereTitle")}
-					value={t("settings.secretsWhereValue")}
-				/>
-				<SecretFact
-					icon={<Terminal size={13} aria-hidden="true" />}
-					title={t("settings.secretsBashTitle")}
-					value={t("settings.secretsBashValue")}
-				/>
-				<SecretFact
-					icon={<Eye size={13} aria-hidden="true" />}
-					title={t("settings.secretsModelTitle")}
-					value={t("settings.secretsModelValue")}
-				/>
-			</div>
-		</section>
 	);
 }
 
@@ -254,6 +202,11 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const [busy, setBusy] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);
 	const [widening, setWidening] = useState<string | null>(null);
+	const [query, setQuery] = useState("");
+	const [importing, setImporting] = useState(false);
+	const [envText, setEnvText] = useState("");
+	const [envError, setEnvError] = useState<string | null>(null);
+	const [envDone, setEnvDone] = useState<number | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
 
 	const reload = useCallback((): void => {
@@ -310,6 +263,55 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		// Drop the value with the form; nothing keeps it in component state.
 		setForm(null);
 		setFormError(null);
+	};
+
+	const closeImport = (): void => {
+		setImporting(false);
+		setEnvText("");
+		setEnvError(null);
+		setEnvDone(null);
+	};
+
+	/** One `NAME=value` per line; blanks and `#` comments are ignored. */
+	const importEnv = async (): Promise<void> => {
+		if (!rpc || busy) return;
+		const lines = envText.split(/\r?\n/u);
+		const entries: Array<{ name: string; value: string }> = [];
+		for (const [index, raw] of lines.entries()) {
+			const line = raw.trim();
+			if (line === "" || line.startsWith("#")) continue;
+			const eq = line.indexOf("=");
+			const name = eq === -1 ? "" : line.slice(0, eq).trim();
+			const value = eq === -1 ? "" : line.slice(eq + 1).trim();
+			if (!SECRET_NAME_PATTERN.test(name)) {
+				setEnvError(t("settings.secretsImportInvalid", { line: index + 1, name }));
+				return;
+			}
+			if (value.length < MIN_SECRET_VALUE_LENGTH) {
+				setEnvError(t("settings.secretsSetFailed", { error: t("settings.secretsValueTooShort") }));
+				return;
+			}
+			entries.push({ name, value });
+		}
+		if (entries.length === 0) {
+			setEnvError(t("settings.secretsImportEmpty"));
+			return;
+		}
+		setBusy(true);
+		setEnvError(null);
+		setEnvDone(null);
+		try {
+			for (const entry of entries) {
+				await rpc.request("secret.set", { name: entry.name, value: entry.value });
+			}
+			setEnvDone(entries.length);
+			setEnvText("");
+			reload();
+		} catch (error) {
+			setEnvError(t("settings.secretsSetFailed", { error: errorText(error) }));
+		} finally {
+			setBusy(false);
+		}
 	};
 
 	const submitForm = async (): Promise<void> => {
@@ -407,13 +409,16 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	// daemon: without a readable list ("0 entries" included) they would
 	// contradict the offline/read-failure warning above them.
 	const listKnown = rpc !== null && !loading && !listError;
+	const normalizedQuery = query.trim().toLowerCase();
+	const visible = normalizedQuery
+		? entries.filter(entry => `${entry.name} ${entry.purpose}`.toLowerCase().includes(normalizedQuery))
+		: entries;
+	const bodyOpen = form !== null || importing;
 
 	return (
 		<div className="gui-settings-section gui-secret-section">
 			<h2 className="gui-settings-page-title">{t("settings.secrets")}</h2>
 			<p className="gui-settings-page-desc">{t("settings.secretsDescription")}</p>
-
-			<SecretStateCard />
 
 			{!rpc && <WarningLine message={t("settings.secretsOffline")} />}
 			{statusError && (
@@ -425,19 +430,39 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			{listKnown && (
 				<div className="gui-secret-listhead">
 					<span className="gui-secret-count">{t("settings.secretsStoredCount", { count: entries.length })}</span>
-					<button type="button" className="gui-btn gui-btn-primary" disabled={form !== null} onClick={openAdd}>
-						<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
-					</button>
+					<input
+						className="gui-input gui-secret-search"
+						value={query}
+						placeholder={t("settings.secretsSearch")}
+						aria-label={t("settings.secretsSearch")}
+						spellCheck={false}
+						onChange={event => setQuery(event.target.value)}
+					/>
+					<div className="gui-secret-listhead-actions">
+						<button type="button" className="gui-btn gui-btn-primary" disabled={bodyOpen} onClick={openAdd}>
+							<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
+						</button>
+						<button
+							type="button"
+							className="gui-btn"
+							disabled={bodyOpen}
+							onClick={() => {
+								setForm(null);
+								setFormError(null);
+								setImporting(true);
+								setEnvError(null);
+								setEnvDone(null);
+							}}
+						>
+							{t("settings.secretsImport")}
+						</button>
+					</div>
 				</div>
 			)}
 
-			{/* One body, never two: the open form replaces the rows/empty state
-			 * instead of stacking above them. `密钥 · N` stays visible because it
-			 * is a fact about the list, and the add action is disabled while a
-			 * form is open (a second form is not a state this page has).
-			 * Consequence: delete only exists in the rows branch, so a delete
-			 * can never need to close a form — `remove()` carries no such guard.
-			 * Restoring the stacked shape would need one again. */}
+			{/* One body, never two: an open form replaces the rows/empty state
+			 * instead of stacking above them. `保险库 · N` stays visible because
+			 * it is a fact about the list. */}
 			{loading ? (
 				<div className="gui-secret-loading">{t("settings.loading")}</div>
 			) : form ? (
@@ -449,14 +474,69 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 					onCancel={closeForm}
 					onSubmit={() => void submitForm()}
 				/>
+			) : importing ? (
+				<form
+					className="gui-agent-card gui-secret-form"
+					onSubmit={event => {
+						event.preventDefault();
+						void importEnv();
+					}}
+				>
+					<div className="gui-secret-form-head">
+						<span className="gui-secret-form-title">{t("settings.secretsImportTitle")}</span>
+					</div>
+					<label className="gui-settings-field">
+						<span className="gui-settings-field-label">{t("settings.secretsImportLabel")}</span>
+						<span className="gui-settings-field-hint">{t("settings.secretsImportHint")}</span>
+						<span className="gui-settings-field-control">
+							<textarea
+								className="gui-secret-input gui-secret-input--mono"
+								data-secret-field="env"
+								rows={5}
+								value={envText}
+								spellCheck={false}
+								autoComplete="off"
+								dir="ltr"
+								placeholder="STRIPE_SECRET_KEY=…"
+								disabled={busy}
+								onChange={event => setEnvText(event.target.value)}
+							/>
+						</span>
+					</label>
+					{envDone !== null && (
+						<p role="status" className="gui-note">
+							{t("settings.secretsImportDone", { count: envDone })}
+						</p>
+					)}
+					{envError && (
+						<div className="gui-secret-form-error" role="alert">
+							{envError}
+						</div>
+					)}
+					<div className="gui-secret-form-foot">
+						<span className="gui-settings-field-hint">{t("settings.secretsImportScope")}</span>
+						<div className="gui-secret-form-actions">
+							<button type="button" className="gui-btn" onClick={closeImport} disabled={busy}>
+								{t("settings.cancel")}
+							</button>
+							<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
+								{busy ? t("settings.secretsSaving") : t("settings.secretsImportSubmit")}
+							</button>
+						</div>
+					</div>
+				</form>
 			) : !listKnown ? null : entries.length === 0 ? (
 				<div className="gui-secret-empty">
 					<div className="gui-secret-empty-title">{t("settings.secretsEmptyTitle")}</div>
 					<p className="gui-secret-empty-body">{t("settings.secretsEmptyBody")}</p>
 				</div>
+			) : visible.length === 0 ? (
+				<div className="gui-secret-empty">
+					<p className="gui-secret-empty-body">{t("settings.secretsNoMatch")}</p>
+				</div>
 			) : (
 				<div className="gui-secret-list">
-					{entries.map(entry => (
+					{visible.map(entry => (
 						<section key={entry.name} className="gui-agent-card gui-secret-row" data-secret-name={entry.name}>
 							<span className="gui-secret-row-icon">
 								<KeyRound size={13} aria-hidden="true" />
@@ -464,11 +544,15 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 							<div className="gui-secret-row-main">
 								<div className="gui-secret-row-head">
 									<span className="gui-secret-name">{entry.name}</span>
-									<span className="gui-provider-chip">{scopeLabel(entry.scope)}</span>
 								</div>
-								<div className="gui-secret-row-purpose">{entry.purpose || t("settings.secretsNoPurpose")}</div>
+								<div className="gui-secret-row-purpose">
+									{[
+										scopeLabel(entry.scope),
+										entry.purpose || t("settings.secretsNoPurpose"),
+										lastUsedText(entry),
+									].join(" · ")}
+								</div>
 							</div>
-							<span className="gui-secret-row-meta">{lastUsedText(entry)}</span>
 							<div className="gui-secret-row-actions">
 								{entry.scope !== "all" && (
 									<button
@@ -504,6 +588,8 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 					))}
 				</div>
 			)}
+
+			<p className="gui-note gui-secret-footnote">{t("settings.secretsFootnote")}</p>
 		</div>
 	);
 }
