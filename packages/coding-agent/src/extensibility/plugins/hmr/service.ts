@@ -240,7 +240,14 @@ class WatchedHmrService implements HmrService {
 				// Editors write through rename, which shows up as add+unlink of the
 				// same path; a short settle window collapses that into one reload.
 				awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
-				ignored: [/(?:^|[/\\])(?:\.git|node_modules[/\\]\.cache)(?:[/\\]|$)/, ...this.#ignored],
+				// Dependencies are reinstalled, not edited, so nothing below them is a
+				// source change. Skipping the whole directory also keeps the watcher
+				// out of workspace symlinks: a package linked back into the repository
+				// makes `node_modules/<pkg>` an alias of the source tree, and following
+				// it would re-enter every watched root — through a different inode each
+				// time, so the walk never terminates and the host spins instead of
+				// answering. `.git` is excluded for the same "not source" reason.
+				ignored: [/(?:^|[/\\])(?:\.git|node_modules)(?:[/\\]|$)/, ...this.#ignored],
 			});
 			this.#watcher.on("all", (_event, changed) => {
 				if (changed) this.#pending.add(changed);
