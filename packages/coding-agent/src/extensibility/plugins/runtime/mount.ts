@@ -33,8 +33,8 @@ import type { EventBus } from "../../../utils/event-bus";
 import type { DynamicExtensionLoadErrorCode } from "../../extensions/dynamic-extension-error";
 import { DynamicExtensionLoadError } from "../../extensions/dynamic-extension-error";
 import { recordHostExtensionModes } from "../../extensions/host-modes";
-import { createConcreteExtensionAPI, runFactoryInFiber } from "../../extensions/loader";
 import type { Extension, ExtensionAPI, ExtensionFactory } from "../../extensions/types";
+import { createConcreteExtensionAPI, runFactoryInFiber } from "../../plugin-runtime/extension-api";
 // STATIC, not `await import()`: this module holds process-wide state (the source
 // graph snapshot the loader records, and the module cache it keys imports on). A
 // dynamic import resolved to a second instance in practice — the loader wrote
@@ -60,6 +60,7 @@ import {
 	stateKeys,
 	stateSet,
 } from "./cordis-primitives";
+import { validateDeclaredPluginConfig } from "./declared-config";
 
 /** One runtime mount request. A composition row keeps its own identity and
  * config even when another row resolves to the same entry file. Plain string
@@ -350,10 +351,19 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 	// skips the read.
 	const declaresConfig = (entry as { Config?: unknown } | null)?.Config !== undefined;
 	const acceptsConfigArgument = isCordisPluginEntry(entry) && entry.apply.length >= 2;
-	const values =
-		declaresConfig || acceptsConfigArgument
-			? (await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }))).values
-			: {};
+	let values: Record<string, unknown> = {};
+	if (declaresConfig || acceptsConfigArgument) {
+		const read = await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }));
+		try {
+			values = await validateDeclaredPluginConfig(entry, read.values);
+		} catch (error) {
+			return {
+				ok: false,
+				code: "config-invalid",
+				message: `invalid config: ${error instanceof Error ? error.message : String(error)}`,
+			};
+		}
+	}
 	const extension = createPluginExtension(ctx.entryPath, ctx.entryPath);
 
 	try {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExtensionRuntime } from "../../extensibility/extensions/loader";
+import { ExtensionRuntime } from "../../extensibility/plugin-runtime/extension-api";
 import { BlobStore } from "../../session/blob-store";
 import { ViewStore } from "../view-store";
 import { AgentsService } from "./agents-service";

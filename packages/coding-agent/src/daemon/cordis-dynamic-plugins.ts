@@ -695,7 +695,7 @@ export class CordisDynamicPluginRuntime {
 
 	async #sharedRuntime(): Promise<LoadExtensionsResult["runtime"]> {
 		if (!this.#runtime) {
-			const { ExtensionRuntime } = await import("../extensibility/extensions/loader");
+			const { ExtensionRuntime } = await import("../extensibility/plugin-runtime/extension-api");
 			this.#runtime = new ExtensionRuntime();
 		}
 		return this.#runtime;

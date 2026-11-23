@@ -23,8 +23,8 @@
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
-import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
 import type { Extension } from "../extensibility/extensions/types";
+import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/plugin-runtime/extension-api";
 import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
 import { disposePluginPrimitives } from "../extensibility/plugins/runtime/cordis-primitives";
 import { readDeclaredPluginConfig } from "../extensibility/plugins/runtime/declared-config";

@@ -5,6 +5,7 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
+	externalProductConfigFrom,
 	externalTask,
 	parseClaudeStyleEvent,
 	runExternalJsonl,
@@ -49,9 +50,9 @@ export function createClaudeCodeExecutor(
 	};
 }
 
-export function apply(ctx: PluginAPI): void {
+export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
 	registerExternalExecutableProbe(ctx, "claude");
-	const executor = ctx.config.getAll().then(config => createClaudeCodeExecutor(config));
+	const executor = Promise.resolve(createClaudeCodeExecutor(externalProductConfigFrom(config)));
 	ctx.subagents.register({
 		name: "claude-code",
 		description: "Experimental: delegate a one-shot coding task to the native Claude Code CLI.",

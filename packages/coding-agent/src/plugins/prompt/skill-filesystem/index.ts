@@ -81,11 +81,10 @@ export async function scanSkillRoot(root: string): Promise<ExtensionSkillDeclara
 	return out;
 }
 
-/** Second parameter: the preset row's config (see `mountPlugin`'s contract).
- *  `ctx.config` is the per-extension store, used only for an ambient mount. */
-export async function apply(ctx: PluginAPI, rowConfig?: { roots?: unknown }): Promise<void> {
-	const all = rowConfig ?? ((await ctx.config.getAll()) as { roots?: unknown });
-	const roots = stringArrayFromRow(all.roots, "roots");
+/** Second parameter: the plugin's effective config (manifest values plus any
+ *  preset-row overrides), handed over by `mountPlugin`. */
+export async function apply(ctx: PluginAPI, config?: { roots?: unknown }): Promise<void> {
+	const roots = stringArrayFromRow(config?.roots, "roots");
 	for (const raw of roots) {
 		const root = path.resolve(ctx.cwd, expandHome(raw));
 		for (const skill of await scanSkillRoot(root)) {

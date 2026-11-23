@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EventBus } from "../../utils/event-bus";
-import { ExtensionRuntime } from "../extensions/loader";
+import { ExtensionRuntime } from "../plugin-runtime/extension-api";
 import { CordisPresetRuntime } from "./preset-runtime";
 
 declare global {
@@ -97,7 +97,7 @@ describe("CordisPresetRuntime", () => {
 		const entry = plugin(
 			"configured.js",
 			`
-			export const Config = {};
+			export const Config = { "~standard": { version: 1, vendor: "test", validate: value => ({ value }) } };
 			export function apply(pi, config) {
 				pi.registerRpc("config", () => config);
 				pi.effect(() => { globalThis.__presetCleanup = (globalThis.__presetCleanup ?? 0) + 1; });

@@ -39,10 +39,13 @@ function frameResult(frame: { device: string; png: Uint8Array; capturedAt: numbe
 	};
 }
 
-export function apply(ctx: PluginAPI): void {
-	const ready = Promise.all([ctx.config.get<string>("adbPath"), ctx.config.get<string>("emulatorPath")]).then(
-		([adbPath, emulatorPath]) =>
-			new AndroidDeviceService({ adbPath: adbPath || undefined, emulatorPath: emulatorPath || undefined }),
+export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
+	const readString = (key: string): string | undefined => {
+		const value = config?.[key];
+		return typeof value === "string" && value !== "" ? value : undefined;
+	};
+	const ready = Promise.resolve(
+		new AndroidDeviceService({ adbPath: readString("adbPath"), emulatorPath: readString("emulatorPath") }),
 	);
 	const service = () => ready;
 	const register = (

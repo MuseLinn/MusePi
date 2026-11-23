@@ -47,8 +47,8 @@ import {
 	replaceMemoryBackendProvider,
 } from "../../../memory-backend/providers";
 import { EventBus } from "../../../utils/event-bus";
-import { ExtensionRuntime } from "../../extensions/loader";
 import { getPluginConfigPath } from "../../extensions-center/plugin-config-store";
+import { ExtensionRuntime } from "../../plugin-runtime/extension-api";
 import type { HmrRestartRequirement, HmrService } from "../hmr/service";
 import { HOST_SERVICES, providedServices, type ServiceRegistry } from "./cordis-entry";
 import { disposePluginPrimitives, registerEffect } from "./cordis-primitives";

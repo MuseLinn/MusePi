@@ -5,6 +5,7 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
+	externalProductConfigFrom,
 	externalTask,
 	parseClaudeStyleEvent,
 	runExternalJsonl,
@@ -48,9 +49,9 @@ export function createCodeBuddyExecutor(
 	};
 }
 
-export function apply(ctx: PluginAPI): void {
+export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
 	registerExternalExecutableProbe(ctx, "codebuddy");
-	const executor = ctx.config.getAll().then(config => createCodeBuddyExecutor(config));
+	const executor = Promise.resolve(createCodeBuddyExecutor(externalProductConfigFrom(config)));
 	ctx.subagents.register({
 		name: "codebuddy",
 		description: "Experimental: delegate a one-shot coding task to the native CodeBuddy CLI.",

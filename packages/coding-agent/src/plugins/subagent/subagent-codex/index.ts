@@ -5,6 +5,7 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
+	externalProductConfigFrom,
 	externalTask,
 } from "@musepi/pi-coding-agent/task/external-cli";
 import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/external-executable-probe";
@@ -36,9 +37,9 @@ export function createCodexExecutor(
 		);
 }
 
-export function apply(ctx: PluginAPI): void {
+export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
 	registerExternalExecutableProbe(ctx, "codex");
-	const executor = ctx.config.getAll().then(config => createCodexExecutor(config));
+	const executor = Promise.resolve(createCodexExecutor(externalProductConfigFrom(config)));
 	ctx.subagents.register({
 		name: "codex",
 		description: "Experimental: delegate a one-shot coding task to the native Codex app-server.",

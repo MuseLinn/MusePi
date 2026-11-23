@@ -6,6 +6,7 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
+	externalProductConfigFrom,
 	externalTask,
 	runExternalJsonl,
 } from "@musepi/pi-coding-agent/task/external-cli";
@@ -56,9 +57,9 @@ export function createOpenCodeExecutor(
 	};
 }
 
-export function apply(ctx: PluginAPI): void {
+export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
 	registerExternalExecutableProbe(ctx, "opencode");
-	const executor = ctx.config.getAll().then(config => createOpenCodeExecutor(config));
+	const executor = Promise.resolve(createOpenCodeExecutor(externalProductConfigFrom(config)));
 	ctx.subagents.register({
 		name: "opencode",
 		description: "Experimental: delegate a one-shot coding task to the native OpenCode CLI.",

@@ -15,7 +15,9 @@ export type DynamicExtensionLoadErrorCode =
 	| "incompatible-peer"
 	| "malformed-manifest"
 	/** 插件声明了本宿主不提供的服务依赖（inject 门）。 */
-	| "service-missing";
+	| "service-missing"
+	/** 配置不满足插件导出的 `Config` Standard Schema。 */
+	| "config-invalid";
 
 export class DynamicExtensionLoadError extends Error {
 	constructor(

@@ -19,6 +19,20 @@ export interface ExternalProductConfig {
 	disposeGraceMs?: number;
 }
 
+/** Read an `ExternalProductConfig` from a plugin's effective config record. */
+export function externalProductConfigFrom(values: Record<string, unknown> | undefined): ExternalProductConfig {
+	const text = (value: unknown): string | undefined =>
+		typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+	const disposeGraceMs = values?.disposeGraceMs;
+	return {
+		executable: text(values?.executable),
+		model: text(values?.model),
+		permissionMode: text(values?.permissionMode),
+		env: text(values?.env),
+		...(typeof disposeGraceMs === "number" && disposeGraceMs >= 0 ? { disposeGraceMs } : {}),
+	};
+}
+
 export type ExternalChildProcess = ChildProcess<"pipe"> | ChildProcess<"ignore">;
 
 export interface ExternalProcessOptions {

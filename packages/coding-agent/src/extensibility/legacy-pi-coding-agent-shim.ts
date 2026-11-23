@@ -62,7 +62,6 @@ import { WriteTool } from "../tools/write";
 import { EventBus } from "../utils/event-bus";
 import { convertImageToPng } from "../utils/image-loading";
 import { discoverExtensionPaths, loadExtensionFromFactory, loadExtensions } from "./extensions";
-import { ExtensionRuntime } from "./extensions/loader";
 import type {
 	BashToolResultEvent,
 	EditToolResultEvent,
@@ -74,6 +73,7 @@ import type {
 	WriteToolResultEvent,
 } from "./extensions/types";
 import { Type } from "./legacy-typebox";
+import { ExtensionRuntime } from "./plugin-runtime/extension-api";
 import { getEnabledPlugins, resolvePluginExtensionPaths, type ScopedInstalledPlugin } from "./plugins/runtime/loader";
 import type { Skill } from "./skills";
 import { loadSkillsFromDir } from "./skills";

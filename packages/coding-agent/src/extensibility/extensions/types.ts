@@ -111,6 +111,7 @@ import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../
 import type { TodoPhase } from "../../tools/todo";
 import type { EventBus } from "../../utils/event-bus";
 import type { SearchProviderDescriptor } from "../../web/search/registry";
+import type { PluginAPI } from "../plugins/api";
 import type { HmrChange, HmrRestartRequirement } from "../plugins/hmr/service";
 import type {
 	AgentEndEvent,
@@ -1522,37 +1523,7 @@ export interface ExtensionSessionScope {
 	dispose(): Promise<void>;
 }
 
-/**
- * The context a Track A (Cordis plugin) entry receives — `apply(ctx: PluginAPI)`.
- *
- * This is the plugin-facing surface: the `ctx.*` namespaces (`tools`,
- * `commands`, `settings`, `prompts`, `slots`, `rpc`, `subagents`,
- * `magicKeywords`, `memory`, `hmr`), the fiber-scoped `effect`, `on`, `state`
- * and `service`, plus the host fields a package reads (`cwd`, `logger`,
- * `config`, `sessionManager`, …).
- *
- * Track B compatibility extensions receive {@link ExtensionAPI}, which adds the
- * flat `pi.register*` aliases and the session-action methods they were written
- * against. A first-party package declares `PluginAPI`; only code that must keep
- * an old `export default (pi)` extension working names `ExtensionAPI`.
- *
- * Why not `Context`: that name already belongs to `@deepseek-ai/cordis` (the
- * real Cordis plugin context this host mounts fibers with) and to
- * `@musepi/pi-ai` (an LLM request's message list), plus a few local types. A
- * plugin-facing alias cannot take it without shadowing those.
- */
-export type PluginAPI = Omit<
-	ExtensionAPI,
-	| "sendMessage"
-	| "sendUserMessage"
-	| "appendEntry"
-	| "exec"
-	| "getActiveTools"
-	| "getAllTools"
-	| "setActiveTools"
-	| "getCommands"
-	| "setModel"
->;
+export type { PluginAPI };
 
 export interface ExtensionAPI extends PluginContextNamespaces {
 	// =========================================================================

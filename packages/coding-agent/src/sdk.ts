@@ -118,7 +118,7 @@ import { defaultExtensionHandlerTimeoutMs } from "./extensibility/extensions/han
 import { listHostExtensionModes } from "./extensibility/extensions/host-modes";
 // Class import off the barrel: the extensions index deliberately omits it, so
 // the preload path takes it from the owning module like `session-loader` does.
-import { ExtensionRuntime } from "./extensibility/extensions/loader";
+import { ExtensionRuntime } from "./extensibility/plugin-runtime/extension-api";
 import { acquirePreset, type PresetLease } from "./extensibility/plugins/preset-pool";
 import type { MountedPresetPlugin } from "./extensibility/plugins/preset-runtime";
 import { collectProfilePresetDefinitions } from "./extensibility/plugins/profile/profile-presets";

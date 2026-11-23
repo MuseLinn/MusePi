@@ -119,15 +119,9 @@ export function serverConfigFromRow(config: RowConfig): { serverName: string; co
 // module `Config`), and hands it over as this argument. `ctx.config` is the
 // per-extension settings store — the right source for an ambient plugin, not
 // for a preset row.
-export function apply(ctx: PluginAPI, rowConfig?: RowConfig): void {
-	// MCP registration is SESSION-scoped (ExtensionContext), not instance-scoped:
-	// the server belongs to the session that joined this preset, so the handler
-	// is the only correct place to connect it. The runner releases everything it
-	// owns on session shutdown. A repeated `session_start` (branch/switch)
-	// re-registers the identical config as a no-op inside the registry.
+export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
 	ctx.on("session_start", async (_event, session) => {
-		const all = rowConfig ?? ((await ctx.config.getAll()) as RowConfig);
-		const server = serverConfigFromRow(all);
+		const server = serverConfigFromRow((config ?? {}) as RowConfig);
 		if (server === null) return;
 		await session.registerMcpServer(server.serverName, server.config);
 	});

@@ -12,7 +12,7 @@ import {
 	logger,
 } from "@musepi/pi-utils";
 import { EventBus } from "../../../utils/event-bus";
-import { ExtensionRuntime } from "../../extensions/loader";
+import { ExtensionRuntime } from "../../plugin-runtime/extension-api";
 import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "../marketplace/registry";
 import { parsePluginId } from "../marketplace/types";
 import { readPluginBlock } from "../profile/manifest-block";

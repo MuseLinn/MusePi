@@ -27,6 +27,46 @@ export function pluginConfigStoreKey(entryPath: string): string {
 /** Read the declared fields with stored values coerced over their defaults. */
 export async function readDeclaredPluginConfig(entryPath: string): Promise<DeclaredPluginConfig> {
 	const [meta, store] = await Promise.all([readExtensionPluginMeta(entryPath), readPluginConfigStore()]);
-	const fields = meta?.fields ?? [];
+	const { fields } = meta ?? { fields: [] };
 	return { fields, values: coerceConfigValues(fields, store[pluginConfigStoreKey(entryPath)]) };
+}
+
+/** A Standard Schema V1 validator (`Config["~standard"].validate`). */
+interface StandardSchemaLike {
+	"~standard"?: {
+		validate?: (value: unknown) => unknown;
+	};
+}
+
+interface StandardSchemaResult {
+	value?: unknown;
+	issues?: readonly { message?: unknown }[];
+}
+
+/**
+ * Validate a plugin's effective config through its exported `Config` schema
+ * and return the schema's output (defaults and transformations applied).
+ *
+ * `Config` is the dsh contract: a Standard Schema exported by the plugin. A
+ * `Config` that is not a Standard Schema is rejected rather than ignored —
+ * silently skipping validation is how a plugin runs on values its author
+ * never agreed to.
+ */
+export async function validateDeclaredPluginConfig(
+	entry: unknown,
+	values: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+	const schema = (entry as { Config?: unknown } | null)?.Config;
+	if (schema === undefined || schema === null) return values;
+	const validate = (schema as StandardSchemaLike)["~standard"]?.validate;
+	if (typeof validate !== "function") {
+		throw new Error("Config must implement Standard Schema (`~standard.validate`)");
+	}
+	const result = (await validate(values)) as StandardSchemaResult | undefined;
+	if (result === undefined || result === null || typeof result !== "object") return values;
+	if (Array.isArray(result.issues) && result.issues.length > 0) {
+		const messages = result.issues.map(issue => (typeof issue?.message === "string" ? issue.message : String(issue)));
+		throw new Error(messages.join("; ") || "config does not satisfy the plugin's Config schema");
+	}
+	return (result.value ?? values) as Record<string, unknown>;
 }
