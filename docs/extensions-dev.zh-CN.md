@@ -306,6 +306,7 @@ const dispose = pi.registerSearchProvider({
 ```ts
 const dispose = pi.registerCompactionMethodProvider({
 	id: "acme-summarize",                  // 冲突会抛错；不得覆盖内置 id
+	kind: "summary",                       // 提交压缩条目；"prune" 原地改写、不提交
 	label: "settings.compaction.method.soft.title",   // 设置文案键，不是英文句子
 	description: "settings.compaction.method.soft.desc",
 	available: ctx => ctx.model?.input.includes("text") === true,
@@ -321,6 +322,15 @@ const dispose = pi.registerCompactionMethodProvider({
 **所有权与降级**：注册归属插件实例，卸载或热重载时释放。没有注册 provider 的 id 会从 `compaction.methodOrder` 中丢弃，因此卸载一种方法会退回内置顺序，而不是让每趟压缩都失败。注册他人已占用的 id 会抛错，而不是静默覆盖。
 
 **边界**：provider 只负责压缩这一步。提交压缩条目、记账花费（`compaction:<method>`）与重锚上下文仍归会话维护宿主——插件既不能绕过提交路径，也不需要重写它。
+
+**该用哪条缝**：两条缝回答的是不同问题，选错是常见失误。
+
+| 目标 | 缝 | 原因 |
+| --- | --- | --- |
+| 一种用户可以在 `compaction.methodOrder` 里排序的方法 | `registerCompactionMethodProvider` | 它作为一等方法进入选择器、可用性扫描与推测门禁。 |
+| 在一次压缩里替换或否决产出 | `session_before_compact` | 在压缩前运行，可返回 `{ cancel }` 或 `{ compaction }`；不需要 id，也不出现在选择器里。 |
+
+「先试我的、不行再回退内置」这种整体价值属于 provider 缝；只看一眼待压缩范围、偶尔覆盖一次的钩子属于 `session_before_compact`。插件可以同时用两者：注册方法参与排序，再用钩子否决特定的一趟。
 
 ## 9. 扩展注册魔术关键词（registerMagicKeyword，2026-10-11）
 

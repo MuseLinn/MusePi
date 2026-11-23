@@ -63,6 +63,7 @@ function handoffAvailable(ctx: CompactionMethodContext): boolean {
 const BUILTIN_PROVIDERS: readonly CompactionMethodProvider[] = [
 	{
 		id: "remote",
+		kind: "summary",
 		...COPY.remote,
 		available: remoteAvailable,
 		// Executed by the shared summarizer path in SessionMaintenance.
@@ -70,24 +71,28 @@ const BUILTIN_PROVIDERS: readonly CompactionMethodProvider[] = [
 	},
 	{
 		id: "snapcompact",
+		kind: "summary",
 		...COPY.snapcompact,
 		available: snapcompactAvailable,
 		run: async () => ({ decline: "snapcompact runs through its local engine" }),
 	},
 	{
 		id: "handoff",
+		kind: "summary",
 		...COPY.handoff,
 		available: handoffAvailable,
 		run: async () => ({ decline: "handoff runs through the session summarizer" }),
 	},
 	{
 		id: "soft",
+		kind: "summary",
 		...COPY.soft,
 		available: () => true,
 		run: async () => ({ decline: "summary compaction runs through the session summarizer" }),
 	},
 	{
 		id: "shake",
+		kind: "prune",
 		...COPY.shake,
 		available: () => true,
 		run: async () => ({ decline: "shake runs through its local pruner" }),

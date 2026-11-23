@@ -12,8 +12,8 @@
  * - 检视入口：本文件、`compaction-builtin-methods.ts`、`docs/capability-seams.md`，
  *   测试 `test/compaction-method-provider.test.ts`。
  */
+import type { CompactionPreparation, CompactionSettings } from "@musepi/pi-agent-core/compaction";
 import type { Model } from "@musepi/pi-ai";
-import type { CompactionSettings } from "../config/settings-schema";
 
 /** The five methods the host ships; every one has an entry in `methodOrder`. */
 export type BuiltinCompactionMethod = "remote" | "snapcompact" | "handoff" | "soft" | "shake";
@@ -33,6 +33,12 @@ export interface CompactionMethodContext {
 	readonly trigger: "pressure" | "overflow" | "idle" | "manual";
 	/** Manual passes carry focus text; a method that cannot use it must decline. */
 	readonly hasFocusInstructions: boolean;
+	/**
+	 * The range this pass would condense. Absent while only availability is
+	 * being decided (the picker and the pre-selection scan), so `available`
+	 * must not require it; `run` always receives it.
+	 */
+	readonly preparation?: CompactionPreparation;
 }
 
 /** Why a method declined a pass it was otherwise eligible for. */
@@ -41,11 +47,22 @@ export interface CompactionMethodDecline {
 }
 
 /**
+ * What a method does to the history. A `summary` method replaces a range with
+ * one summary node and commits a compaction entry; a `prune` method rewrites
+ * content in place and commits no entry (shake elides tool output, the tool
+ * result pruner trims oversized results). The distinction is part of the seam
+ * because a plugin author must know whether their method's result is committed.
+ */
+export type CompactionMethodKind = "summary" | "prune";
+
+/**
  * One compaction method. `run` owns only the condensation step; the host commits
  * the compaction entry, journals spend and re-anchors context afterwards.
  */
 export interface CompactionMethodProvider {
 	readonly id: CompactionMethod;
+	/** `summary` commits a compaction entry; `prune` rewrites history in place. */
+	readonly kind: CompactionMethodKind;
 	/** Settings copy keys for the ordered `compaction.methodOrder` picker. */
 	readonly label: string;
 	readonly description: string;
@@ -65,6 +82,21 @@ export interface CompactionMethodResult {
 	readonly tokensBefore: number;
 	readonly details?: unknown;
 	readonly preserveData?: Record<string, unknown>;
+}
+
+/**
+ * What a `prune` method did. It commits no compaction entry: the host only
+ * re-reads the rewritten history, so the result reports the reduction. The
+ * shape is `ShakeResult`'s contract (mode + counts + tokensFreed) without
+ * depending on that module, so a plugin pruner and the built-in shake are
+ * interchangeable.
+ */
+export interface CompactionPruneResult {
+	readonly tokensFreed: number;
+	/** Whole tool-call results replaced with placeholders. */
+	readonly toolResultsDropped: number;
+	/** Large fenced/XML blocks replaced with placeholders. */
+	readonly blocksDropped: number;
 }
 
 const providers = new Map<CompactionMethod, CompactionMethodProvider>();

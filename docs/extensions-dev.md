@@ -317,6 +317,7 @@ A plugin can contribute one compaction method to `compaction.methodOrder`. It jo
 ```ts
 const dispose = pi.registerCompactionMethodProvider({
 	id: "acme-summarize",                  // conflicts throw; must not shadow a built-in id
+	kind: "summary",                       // commits a compaction entry; "prune" rewrites in place
 	label: "settings.compaction.method.soft.title",   // settings copy keys, not sentences
 	description: "settings.compaction.method.soft.desc",
 	available: ctx => ctx.model?.input.includes("text") === true,
@@ -332,6 +333,15 @@ const dispose = pi.registerCompactionMethodProvider({
 **Ownership and degradation**: the registration belongs to the plugin instance and is released on unload or hot reload. An id with no registered provider is dropped from `compaction.methodOrder`, so uninstalling a method degrades to the built-in order instead of breaking every pass. Registering an id already owned by someone else throws instead of shadowing.
 
 **Boundary**: the provider owns only the condensation step. Committing the compaction entry, journaling spend (`compaction:<method>`) and re-anchoring context stay in the session maintenance host — a plugin cannot bypass the commit path, and it does not need to reimplement it.
+
+**Which seam to use.** Two seams answer different questions, and picking the wrong one is the usual mistake:
+
+| Goal | Seam | Why |
+| --- | --- | --- |
+| A named method the user can order in `compaction.methodOrder` | `registerCompactionMethodProvider` | It joins the picker, the availability scan and the speculation gate as a first-class method. |
+| Replace or veto what a pass produces, once | `session_before_compact` | Runs before the pass and may return `{ cancel }` or `{ compaction }`; it needs no id and never appears in the picker. |
+
+A method whose whole value is "try mine first, fall back to the built-ins" wants the provider seam. A one-off policy hook that inspects the prepared range and occasionally overrides it wants `session_before_compact`. A plugin can use both: register a method for the order and veto specific passes through the hook.
 
 ## 9. 扩展注册魔术关键词(registerMagicKeyword,2026-10-11)
 

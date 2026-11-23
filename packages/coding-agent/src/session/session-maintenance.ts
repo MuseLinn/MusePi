@@ -75,10 +75,15 @@ import type { ConfiguredThinkingLevel } from "../thinking";
 import type { AgentSessionEvent } from "./agent-session-events";
 import type { ContextUsageBreakdown, HandoffResult, SessionHandoffOptions } from "./agent-session-types";
 import { findCompactMode } from "./compact-modes";
-import { type CompactionMethodContext, getCompactionMethodProvider } from "./compaction-method-provider";
+import {
+	type CompactionMethodContext,
+	type CompactionMethodResult,
+	getCompactionMethodProvider,
+} from "./compaction-method-provider";
 import {
 	type CompactionMethod,
 	DEFAULT_COMPACTION_METHOD_ORDER,
+	isBuiltinMethod,
 	resolveCompactionMethodOrder,
 	resolveMethodSettings,
 	resolveSpeculationMethod,
@@ -1034,6 +1039,19 @@ export class SessionMaintenance {
 				}
 			}
 
+			// A plugin-contributed method owns its own condensation step. The
+			// built-ins keep their bodies in this class, so only an id whose
+			// provider declares `summary` and is not a built-in is dispatched here.
+			const pluginResult =
+				compactionPrep.kind !== "fromHook" && !isBuiltinMethod(selectedMethod)
+					? await this.#runPluginCompactionMethod(
+							selectedMethod,
+							preparation,
+							compactionSettings,
+							compactionAbortController.signal,
+						)
+					: undefined;
+
 			if (compactionPrep.kind === "fromHook") {
 				summary = compactionPrep.summary;
 				shortSummary = compactionPrep.shortSummary;
@@ -1041,6 +1059,13 @@ export class SessionMaintenance {
 				tokensBefore = compactionPrep.tokensBefore;
 				details = compactionPrep.details;
 				preserveData = compactionPrep.preserveData;
+			} else if (pluginResult) {
+				summary = pluginResult.summary;
+				shortSummary = pluginResult.shortSummary;
+				firstKeptEntryId = pluginResult.firstKeptEntryId;
+				tokensBefore = pluginResult.tokensBefore;
+				details = pluginResult.details;
+				preserveData = { ...(compactionPrep.preserveData ?? {}), ...(pluginResult.preserveData ?? {}) };
 			} else if (snapcompactResult) {
 				summary = snapcompactResult.summary;
 				shortSummary = snapcompactResult.shortSummary;
@@ -2386,6 +2411,39 @@ export class SessionMaintenance {
 
 		if (nativeCompactionFailure) throw nativeCompactionFailure.error;
 		throw this.#buildCompactionAuthError();
+	}
+
+	/**
+	 * Run one plugin-contributed compaction method. The provider owns only the
+	 * condensation step; this wrapper supplies the prepared range, the resolved
+	 * policy and the pass signal, and turns a decline into the same fall-through
+	 * the built-in order uses.
+	 */
+	async #runPluginCompactionMethod(
+		method: CompactionMethod,
+		preparation: CompactionPreparation,
+		settings: EngineCompactionSettings,
+		signal: AbortSignal,
+	): Promise<CompactionMethodResult | undefined> {
+		const provider = getCompactionMethodProvider(method);
+		if (!provider) throw new Error(`No provider is registered for compaction method "${method}".`);
+		if (provider.kind !== "summary") {
+			// A prune method rewrites history in place; it has no summary to commit.
+			throw new Error(`Compaction method "${method}" is a prune method and cannot produce a summary.`);
+		}
+		const outcome = await provider.run({
+			model: this.#model,
+			settings,
+			trigger: "manual",
+			hasFocusInstructions: false,
+			preparation,
+			signal,
+		});
+		if ("decline" in outcome) {
+			logger.debug("Compaction method declined the pass", { method, reason: outcome.decline });
+			throw new Error(`Compaction method "${method}" declined: ${outcome.decline}`);
+		}
+		return outcome;
 	}
 
 	async #prepareCompactionFromHooks(

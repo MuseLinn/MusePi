@@ -95,7 +95,7 @@ const STRATEGY_BY_COMPACTION_METHOD: Record<
 };
 
 /** Whether `method` is one the engine knows how to run with its own strategy. */
-function isBuiltinMethod(method: CompactionMethod): method is BuiltinCompactionMethod {
+export function isBuiltinMethod(method: CompactionMethod): method is BuiltinCompactionMethod {
 	return Object.hasOwn(STRATEGY_BY_COMPACTION_METHOD, method);
 }
 

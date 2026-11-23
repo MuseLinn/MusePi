@@ -64,6 +64,7 @@ describe("compaction method providers", () => {
 	test("a plugin-contributed method joins the order and the speculation scan", () => {
 		const dispose = registerCompactionMethodProvider({
 			id: "test-summarize",
+			kind: "summary",
 			label: "settings.compaction.method.soft.title",
 			description: "settings.compaction.method.soft.desc",
 			available: () => true,
@@ -86,6 +87,7 @@ describe("compaction method providers", () => {
 	test("unregistering a method drops it from configuration instead of failing", () => {
 		const dispose = registerCompactionMethodProvider({
 			id: "test-drop",
+			kind: "summary",
 			label: "settings.compaction.method.soft.title",
 			description: "settings.compaction.method.soft.desc",
 			available: () => true,
@@ -97,9 +99,22 @@ describe("compaction method providers", () => {
 		expect(resolveCompactionMethodOrder(["test-drop", "soft"])).toEqual(["soft"]);
 	});
 
+	test("each method declares whether it commits a compaction entry", () => {
+		// A `summary` method replaces a range with one summary node and the host
+		// commits an entry; a `prune` method rewrites content in place and commits
+		// nothing. A plugin author needs this stated, not inferred.
+		const kinds = new Map(listCompactionMethodProviders().map(provider => [provider.id, provider.kind]));
+		expect(kinds.get("remote")).toBe("summary");
+		expect(kinds.get("snapcompact")).toBe("summary");
+		expect(kinds.get("handoff")).toBe("summary");
+		expect(kinds.get("soft")).toBe("summary");
+		expect(kinds.get("shake")).toBe("prune");
+	});
+
 	test("a duplicate id is refused rather than silently replacing the incumbent", () => {
 		const provider = {
 			id: "soft",
+			kind: "summary" as const,
 			label: "x",
 			description: "y",
 			available: () => true,
