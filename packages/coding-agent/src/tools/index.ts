@@ -746,9 +746,9 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	const baseResults = await Promise.all(
 		baseEntries.map(async ([name, factory]) => {
 			// Layer resolution: a package-provided implementation shadows the core
-			// factory. A session-layer registration already owns the name (the tool
-			// classes skip themselves via extensionOwnsTool), so only the plugin
-			// layer can redirect construction here; otherwise the factory runs.
+			// factory. A session-layer registration (either track) already owns the
+			// name — the tool classes yield via toolIsRegistered — so only the
+			// plugin layer can redirect construction here; otherwise the factory runs.
 			const provider = resolveToolImplementation(session, name);
 			const build = provider ?? (factory as ToolFactory);
 			const tool = await logger.time(`createTools:${name}`, build, session);

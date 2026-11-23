@@ -16,9 +16,9 @@
  * only when neither a package nor the session provides the name, so a session
  * with nothing mounted behaves exactly as before.
  *
- * `pluginOwnsTool` and `extensionOwnsTool` are the two non-core layers, and
- * they are deliberately distinct: a package taking a tool over is a different
- * fact from an extension registering one for this session.
+ * `pluginOwnsTool` and `extensionOwnsTool` name the track a session
+ * registration came from (diagnostics); `toolIsRegistered` is the rule the
+ * core factory follows, because both tracks sit in the same session layer.
  */
 import type { AgentTool } from "@musepi/pi-agent-core";
 import { isCapabilityActive } from "../extensibility/capability-activation";
@@ -92,17 +92,17 @@ export function registerToolProvider(
 }
 
 /**
- * Track A owns a tool: a Cordis **plugin package** registered this name for the
- * session (via `ctx.tools.register`).
+ * Whether a Track A plugin registered this name for the session. The core tool
+ * factory yields to it, so a plugin can replace a built-in tool.
  */
 export function pluginOwnsTool(session: ToolSession, name: string): boolean {
 	return trackOfTool(session, name) === "plugin";
 }
 
 /**
- * Track B owns a tool: a legacy **extension** (`export default (pi)`) registered
- * this name. Kept separate from {@link pluginOwnsTool} so a compatibility
- * extension and a first-party plugin never share an answer.
+ * Whether a Track B compatibility extension registered this name. Reported
+ * separately so a diagnostic can name the track, never as the rule the core
+ * factory follows — a plugin and an extension are equally near.
  */
 export function extensionOwnsTool(session: ToolSession, name: string): boolean {
 	return trackOfTool(session, name) === "extension";
@@ -114,7 +114,8 @@ function trackOfTool(session: ToolSession, name: string): "plugin" | "extension"
 	return extension?.track;
 }
 
-/** Whether any track registered `name` for this session. */
+/** Whether any track registered `name` for this session — the rule the core
+ *  tool factory follows when it decides whether to construct its own copy. */
 export function toolIsRegistered(session: ToolSession, name: string): boolean {
 	return session.extensionRunner?.getAllRegisteredTools().some(tool => tool.definition.name === name) ?? false;
 }
