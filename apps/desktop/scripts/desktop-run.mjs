@@ -17,7 +17,7 @@
  * After the (skipped or real) build it runs the same relaunch + electron
  * steps as the old chain, forwarding Electron's exit code.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
@@ -36,12 +36,22 @@ function newestMtime(paths) {
 	const walk = (p) => {
 		let st;
 		try {
-			st = statSync(p);
+			// lstat, not stat: a workspace package links itself back into the
+			// repository (`node_modules/<pkg> -> ../../..`), and following that
+			// link re-enters the same tree forever. Freshness only needs the
+			// mtime of files a build actually reads, so links are leaves.
+			st = lstatSync(p);
 		} catch {
 			return; // dangling symlink / race — the build would surface it
 		}
+		if (st.isSymbolicLink()) return;
 		if (st.isDirectory()) {
-			for (const entry of readdirSync(p)) walk(join(p, entry));
+			for (const entry of readdirSync(p)) {
+				// Dependencies are installed, not edited; walking them is both
+				// pointless and the other way a link cycle can be reached.
+				if (entry === "node_modules") continue;
+				walk(join(p, entry));
+			}
 			return;
 		}
 		if (st.isFile() && st.mtimeMs > newest) newest = st.mtimeMs;
