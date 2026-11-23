@@ -143,12 +143,14 @@ describe("preset composition owns selection, packages own persona text", () => {
 			(entries ?? []).map(entry => (typeof entry === "string" ? entry : (entry as { text: string }).text));
 		expect(chatPersonaSections.map(section => section.text)).toEqual(texts(LEGACY_TEMPLATES[9]?.chat?.prompt));
 		expect(designPersonaSections.map(section => section.text)).toEqual(texts(LEGACY_TEMPLATES[9]?.design?.prompt));
-		// Creator keeps revision 9 as its base and appends the packaging and
-		// market-publishing steps, so the upgrade does not rewrite the persona.
-		const [legacyCreator] = texts(LEGACY_TEMPLATES[9]?.creator?.prompt);
+		// Creator's persona was rewritten for the Cordis plugin model rather than
+		// extended from revision 9: the current text routes creation through the
+		// `cordis_*` ring and the packaging path, so pin what it must state
+		// instead of claiming a prefix the rewrite deliberately dropped.
 		expect(creatorPersonaSections).toHaveLength(1);
-		expect(creatorPersonaSections[0]!.text.startsWith(legacyCreator!)).toBe(true);
+		expect(creatorPersonaSections[0]!.text).toContain("cordis_define");
 		expect(creatorPersonaSections[0]!.text).toContain("发布到插件市场");
+		expect(creatorPersonaSections[0]!.text).not.toContain("modes.save");
 	});
 
 	it("registers the sections from the package's Cordis entry", async () => {

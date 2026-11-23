@@ -1604,6 +1604,93 @@ export class DaemonServer {
 					};
 				}
 			},
+			// Read-only market browsing for the model. Same data the capability
+			// center renders; nothing here installs, so no approval gate applies.
+			market: (() => {
+				const service = (): MarketplaceService | null => {
+					try {
+						return this.#services.get<MarketplaceService>("marketplace");
+					} catch {
+						return null;
+					}
+				};
+				return {
+					listIndexes: async () => {
+						const found = service();
+						if (!found) return [];
+						const { entries } = await found.list();
+						const bySource = new Map<string, { url: string; title: string | null }>();
+						for (const entry of entries) {
+							if (!bySource.has(entry.marketplace)) {
+								bySource.set(entry.marketplace, { url: entry.marketplace, title: entry.marketplace });
+							}
+						}
+						return [...bySource.values()];
+					},
+					listPlugins: async input => {
+						const found = service();
+						if (!found) throw new Error("marketplace service is unavailable");
+						const { entries } = await found.list();
+						const query = (input.query ?? "").trim().toLowerCase();
+						const matched = entries
+							.filter(entry => entry.marketplace === input.target)
+							.filter(entry => {
+								if (query === "") return true;
+								const haystack = [
+									entry.name,
+									entry.description ?? "",
+									entry.author ?? "",
+									entry.category ?? "",
+									...(entry.tags ?? []),
+								]
+									.join(" ")
+									.toLowerCase();
+								return haystack.includes(query);
+							});
+						const slice = matched.slice(input.offset, input.offset + input.limit);
+						return {
+							index: input.target,
+							entries: slice.map(entry => ({
+								name: entry.name,
+								title: entry.name,
+								...(entry.description === undefined ? {} : { description: entry.description }),
+								...(entry.author === undefined ? {} : { author: entry.author }),
+								...(entry.homepage === undefined ? {} : { homepage: entry.homepage }),
+								...(entry.repository === undefined ? {} : { repository: entry.repository }),
+								...(entry.category === undefined ? {} : { category: entry.category }),
+								tags: entry.tags ?? [],
+								installed: entry.installed,
+								defaultVersion:
+									entry.version === undefined
+										? null
+										: { version: entry.version, installSpec: `${entry.name}@${entry.version}` },
+								versionCount: entry.version === undefined ? 0 : 1,
+							})),
+							total: matched.length,
+							nextOffset: input.offset + slice.length < matched.length ? input.offset + slice.length : null,
+						};
+					},
+					listVersions: async input => {
+						const found = service();
+						if (!found) throw new Error("marketplace service is unavailable");
+						const { entries } = await found.list();
+						const entry = entries.find(item => item.marketplace === input.target && item.name === input.name);
+						if (!entry) throw new Error(`${input.name} is not listed in ${input.target}`);
+						const versions =
+							entry.version === undefined
+								? []
+								: [{ version: entry.version, installSpec: `${entry.name}@${entry.version}` }];
+						const slice = versions.slice(input.offset, input.offset + input.limit);
+						return {
+							name: entry.name,
+							defaultVersion: versions[0] ?? null,
+							versions: slice,
+							total: versions.length,
+							nextOffset: input.offset + slice.length < versions.length ? input.offset + slice.length : null,
+						};
+					},
+				};
+			})(),
 		};
 	}
 

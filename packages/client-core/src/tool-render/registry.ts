@@ -18,7 +18,6 @@ import { computerRenderer } from "./tools/computer";
 import { debugRenderer } from "./tools/debug";
 import { editRenderer } from "./tools/edit";
 import { evalRenderer } from "./tools/eval";
-import { extensionsRenderer } from "./tools/extensions";
 import { fetchRenderer } from "./tools/fetch";
 import { generateImageRenderer } from "./tools/generate-image";
 import { githubRenderer } from "./tools/github";
@@ -36,6 +35,7 @@ import { reflectRenderer } from "./tools/memory-reflect";
 import { retainRenderer } from "./tools/memory-retain";
 import { notifyUserRenderer } from "./tools/notify-user";
 import { pluginManagerRenderer } from "./tools/plugin-manager";
+import { pluginsRenderer } from "./tools/plugins";
 import { readRenderer } from "./tools/read";
 import { reportToolIssueRenderer } from "./tools/report-tool-issue";
 import { resolveRenderer } from "./tools/resolve";
@@ -84,25 +84,25 @@ const BUILTIN_TOOL_VIEWS: Readonly<Record<string, ToolRenderer>> = {
 	js: evalRenderer,
 	python: evalRenderer,
 	notebook: evalRenderer,
-	cordis_define: extensionsRenderer,
-	cordis_inspect: extensionsRenderer,
-	cordis_inspect_list: extensionsRenderer,
-	cordis_inspect_query: extensionsRenderer,
-	cordis_inspect_self: extensionsRenderer,
-	cordis_run: extensionsRenderer,
-	cordis_stop: extensionsRenderer,
-	cordis_undefine: extensionsRenderer,
-	ext_define: extensionsRenderer,
-	ext_inspect: extensionsRenderer,
-	ext_run: extensionsRenderer,
-	ext_stop: extensionsRenderer,
-	ext_undefine: extensionsRenderer,
-	extension_load: extensionsRenderer,
-	extension_reload: extensionsRenderer,
-	extension_rollback: extensionsRenderer,
-	extension_status: extensionsRenderer,
-	extension_validate: extensionsRenderer,
-	extensions_list: extensionsRenderer,
+	cordis_define: pluginsRenderer,
+	cordis_inspect: pluginsRenderer,
+	cordis_inspect_list: pluginsRenderer,
+	cordis_inspect_query: pluginsRenderer,
+	cordis_inspect_self: pluginsRenderer,
+	cordis_run: pluginsRenderer,
+	cordis_stop: pluginsRenderer,
+	cordis_undefine: pluginsRenderer,
+	ext_define: pluginsRenderer,
+	ext_inspect: pluginsRenderer,
+	ext_run: pluginsRenderer,
+	ext_stop: pluginsRenderer,
+	ext_undefine: pluginsRenderer,
+	extension_load: pluginsRenderer,
+	extension_reload: pluginsRenderer,
+	extension_rollback: pluginsRenderer,
+	extension_status: pluginsRenderer,
+	extension_validate: pluginsRenderer,
+	extensions_list: pluginsRenderer,
 	fetch: fetchRenderer,
 	glob: globRenderer,
 	find: globRenderer,
@@ -133,6 +133,7 @@ const BUILTIN_TOOL_VIEWS: Readonly<Record<string, ToolRenderer>> = {
 	knowledge: knowledgeRenderer,
 	notify_user: notifyUserRenderer,
 	plugin_manager: pluginManagerRenderer,
+	plugin_market: pluginManagerRenderer,
 	todo: todoRenderer,
 	vibe_spawn: vibeRenderer,
 	vibe_send: vibeRenderer,

@@ -2105,6 +2105,7 @@ export const tools = {
 	"tools.toolCordisInspectQuery": "Query Cordis API",
 	"tools.toolCordisInspectSelf": "Inspect Cordis plugins",
 	"tools.toolPluginManager": "Plugin manager",
+	"tools.toolPluginMarket": "Plugin market",
 	"tools.extensionOk": "Success",
 	"tools.extensionFailed": "Failed",
 	"tools.extensionPassed": "Validated",

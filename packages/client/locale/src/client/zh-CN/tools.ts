@@ -2049,6 +2049,7 @@ export const tools = {
 	"tools.toolCordisInspectQuery": "查询 Cordis API",
 	"tools.toolCordisInspectSelf": "检查 Cordis 插件",
 	"tools.toolPluginManager": "插件管理",
+	"tools.toolPluginMarket": "插件市场",
 	"tools.extensionOk": "成功",
 	"tools.extensionFailed": "失败",
 	"tools.extensionPassed": "校验通过",

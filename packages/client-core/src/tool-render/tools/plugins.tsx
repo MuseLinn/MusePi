@@ -481,11 +481,11 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 	);
 }
 
-export const extensionsRenderer: ToolRenderer = { Summary, Body };
+export const pluginsRenderer: ToolRenderer = { Summary, Body };
 
 /** Extension/plugin lifecycle wire names — the run summary counts these as
  *  plugin operations instead of file edits. */
-export const EXTENSION_TOOL_NAMES: readonly string[] = [
+export const PLUGIN_TOOL_NAMES: readonly string[] = [
 	"cordis_define",
 	"cordis_inspect",
 	"cordis_inspect_list",

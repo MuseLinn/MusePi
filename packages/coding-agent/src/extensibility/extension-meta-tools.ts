@@ -35,11 +35,14 @@ export const CORDIS_TOOL_NAMES: readonly string[] = [
 ] as const;
 
 /** Creation ring: the tools the creator preset activates from session start —
- *  dynamic Cordis plugins plus the read-only inventory they are verified with. */
+ *  dynamic Cordis plugins, the inventory they are verified with, plugin
+ *  management, and read-only market browsing (the reference harness composes
+ *  `tool-plugin-manager` and `tool-plugin-market` into the same preset). */
 export const CREATION_RING_TOOL_NAMES: readonly string[] = [
 	...CORDIS_TOOL_NAMES,
 	"extensions_list",
 	"plugin_manager",
+	"plugin_market",
 ] as const;
 
 /** Track B compatibility loader — explicit extension management only, never the creator ring. */
