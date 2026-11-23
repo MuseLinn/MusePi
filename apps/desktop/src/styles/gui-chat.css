@@ -742,6 +742,14 @@
 	display: none;
 }
 
+/* A MAXIMIZED panel leaves no seam either: it floats over the card the seam
+ * belongs to, so the seam would be a line inside the panel. The band is not
+ * rendered in that state (ContextPanel), and this rule keeps a still-committed
+ * band from painting during the maximize morph. */
+.gui-pane-right--maximized .gui-pane-resize-x {
+	display: none;
+}
+
 /* No card beside the panel — a scene mid-swap, or a card parked off-screen —
  * leaves no seam either. The band measured nothing, so it must not keep
  * painting (and grabbing) at its previous coordinates. A maximized panel over

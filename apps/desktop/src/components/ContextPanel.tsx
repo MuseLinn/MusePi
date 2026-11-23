@@ -1087,6 +1087,28 @@ export function ContextPanel({
 		};
 	}, [maximized, open, snap?.sessionId]);
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
+	// The width seam only exists while the panel is DOCKED. Maximized, the
+	// panel floats over the very card the seam is shared with, so the card's
+	// right edge sits under the panel and the "seam" is a line inside it —
+	// nothing to grab and nothing to show. Not rendering the band (rather than
+	// positioning it away) also keeps it out of the keyboard tab order. A grab
+	// still leaves maximize: `.gui-pane-resize-x` stays mounted for one frame
+	// on the way out, and the pointerdown handler exits first.
+	const widthSeam = (
+		<div
+			ref={resizeHandleRef}
+			className="gui-pane-resize-x"
+			role="separator"
+			aria-orientation="vertical"
+			aria-label={t("settings.resizeRightPanel")}
+			tabIndex={0}
+			{...(resizeHandleHandlers ?? {})}
+			onKeyDown={onResizeHandleKeyDown}
+			onDoubleClick={() => commitPanelWidth(DEFAULT_PANEL_WIDTH)}
+		>
+			<SplitterGrip />
+		</div>
+	);
 	// Header chrome title (nav unification): the rail owns navigation;
 	// the strip labels the active view. `view` is derived from the active
 	// PANEL TAB (tab-primary, docs §3.3.2) — the body switch and the strip
@@ -2051,23 +2073,7 @@ export function ContextPanel({
 				document.getElementById("transcript.root") ?? document.body,
 			)}
 			<aside ref={panelRef} className={panelClass} style={maximized ? undefined : { width }}>
-				{/* Left-edge width separator: the 12px band owns the pointer drag
-				 * (capture plus the gesture shield — the page guest swallows
-				 * captured moves that leave the band), and the same band is the
-				 * keyboard handle and the anchor for the shared grip pill. */}
-				<div
-					ref={resizeHandleRef}
-					className="gui-pane-resize-x"
-					role="separator"
-					aria-orientation="vertical"
-					aria-label={t("settings.resizeRightPanel")}
-					tabIndex={0}
-					{...(resizeHandleHandlers ?? {})}
-					onKeyDown={onResizeHandleKeyDown}
-					onDoubleClick={() => commitPanelWidth(DEFAULT_PANEL_WIDTH)}
-				>
-					<SplitterGrip />
-				</div>
+				{maximized ? null : widthSeam}
 				<div className="flex h-full min-h-0 w-full flex-col">
 					{panelTabs.split ? (
 						<DndContext

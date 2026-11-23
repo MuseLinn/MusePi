@@ -393,6 +393,22 @@ describe("ContextPanel maximize/restore", () => {
 		expect(panel.getBoundingClientRect().width).toBe(dockedWidth);
 	});
 
+	it("shows the width grip only while docked", () => {
+		const { panel } = mountPanel();
+		expect(panel.querySelector(".gui-pane-resize-x")).not.toBeNull();
+
+		click("maximize");
+		finishFlip(panel);
+		// Maximized, the panel covers the card the seam is shared with, so the
+		// seam is a line inside the panel: no band, and no tab stop either.
+		expect(panel.querySelector(".gui-pane-resize-x")).toBeNull();
+		expect(panel.querySelector('[role="separator"]')).toBeNull();
+
+		click("restore");
+		finishFlip(panel);
+		expect(panel.querySelector(".gui-pane-resize-x")).not.toBeNull();
+	});
+
 	it("applies the toggle instantly under reduced motion and stays reversible", () => {
 		vi.spyOn(window, "matchMedia").mockReturnValue({
 			matches: true,
