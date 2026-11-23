@@ -251,6 +251,7 @@
       "name": "@musepi/client-ui-primitives",
       "version": "0.7.7",
       "dependencies": {
+        "lucide-react": "^1.24.0",
         "react": "19.2.7",
       },
     },

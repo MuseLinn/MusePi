@@ -11,6 +11,7 @@
 		"./src/*": "./src/*"
 	},
 	"dependencies": {
-		"react": "19.2.7"
+		"react": "19.2.7",
+		"lucide-react": "^1.24.0"
 	}
 }

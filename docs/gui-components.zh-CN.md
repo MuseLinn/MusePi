@@ -69,7 +69,7 @@ scope:
 | `@musepi/client-ui-settings` | settings extension、section 与 item 座位 | 契约已落地 |
 | `@musepi/client-ui-sidebar` | sidebar-panel 座位 | 契约已落地 |
 | `@musepi/client-locale` | 类型化词表、locale 偏好、编译期 en parity | 已落地 |
-| `@musepi/client-ui-primitives` | `FoldRegion` 与滚动边缘羽化（`useScrollShadow` / `useDeepScrollShadow`） | 已落地 |
+| `@musepi/client-ui-primitives` | `FoldRegion`、`SearchField` 与滚动边缘羽化（`useScrollShadow` / `useDeepScrollShadow`） | 已落地 |
 | `@musepi/client-ui-charts` | 零依赖响应式图表 | 已落地 |
 | `@musepi/client-ui-status` | `StatusText` 与交叉淡化样式 | 已落地 |
 | `@musepi/client-ui-chat`、`client-ui-panel`、`client-ui-marketplace`、`client-ui-agents` | 各自的组件与 CSS | 待迁 |
