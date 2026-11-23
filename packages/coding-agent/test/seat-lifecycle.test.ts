@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { CORE_SEATS } from "@musepi/collab-proto/slot-contracts";
 import {
 	declareCoreSeats,
 	declareSeats,
@@ -106,6 +107,31 @@ describe("inject: a contribution rides its seat", () => {
 		stop();
 		release();
 		declareSeats("dock", ["conversation.composer.dock"]);
+		expect(runs).toBe(1);
+	});
+});
+
+describe("core seats and the catalog", () => {
+	test("every core seat in the catalog is live once the shell declares them", () => {
+		const release = declareCoreSeats(CORE_SEATS);
+		try {
+			for (const seat of CORE_SEATS) expect(isSeatDeclared(seat), seat).toBe(true);
+		} finally {
+			release();
+		}
+	});
+
+	test("a contributor on a core seat runs immediately, not after a wait", () => {
+		const releaseCore = declareCoreSeats(CORE_SEATS);
+		let runs = 0;
+		const stop = injectSeat("settings.section", () => {
+			runs += 1;
+			return () => undefined;
+		});
+		expect(runs).toBe(1);
+		stop();
+		releaseCore();
+		// The ride does not resume for a seat the shell no longer declares.
 		expect(runs).toBe(1);
 	});
 });

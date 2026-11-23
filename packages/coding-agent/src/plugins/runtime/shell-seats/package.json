@@ -1,0 +1,40 @@
+{
+	"name": "musepi-shell-seats",
+	"version": "0.7.7",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"description": "Declares the seats the app shell renders for the whole process, so a contributor's inject runs immediately.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
+	},
+	"files": [
+		"lib",
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
+	"musepi": {
+		"label": "Shell Seats",
+		"description": "Declares the seats the app shell renders for the whole process (settings pages, the conversation page, the right panel), so a plugin's slots.inject runs immediately instead of waiting.",
+		"icon": "▣",
+		"scope": "host",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

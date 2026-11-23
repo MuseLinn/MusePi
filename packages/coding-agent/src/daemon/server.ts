@@ -6939,6 +6939,15 @@ export async function startDaemon(
 	const { ensureHostHalfPluginsLoaded } = await import("../plugins-runtime/loader");
 	await ensureHostHalfPluginsLoaded(host.cwd());
 
+	// The shell's own seats are not plugin components, so nobody declares them
+	// unless this does. Declared before any session: a plugin's `slots.inject`
+	// on a core seat must run immediately rather than queue forever.
+	const [{ declareCoreSeats }, { CORE_SEATS }] = await Promise.all([
+		import("../extensibility/extensions/seat-lifecycle"),
+		import("@musepi/collab-proto/slot-contracts"),
+	]);
+	declareCoreSeats(CORE_SEATS);
+
 	// Presets declared by extensions are host-level (dsh): warm the mode registry
 	// and the session-plugin cache before the first session. Every known
 	// workspace is preloaded, not only the daemon cwd, so a project's extension

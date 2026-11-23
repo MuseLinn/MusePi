@@ -8,6 +8,24 @@
 
 座位名与参数以目录为准。不要凭文档猜、也不要读别的插件的 DOM 或样式去推断位置——选一个已经分配了空间的座位。
 
+## 座位什么时候活着：`lifetime`
+
+目录里每个座位带 `lifetime`：
+
+- `core` —— 壳层常驻（会话页、右栏、设置页、通知等），进程内一直在。直接 `register` 即可。
+- `component` —— 由渲染它的那个组件声明（`declaredBy` 指出是哪个），父组件卸载座位就消失。
+
+挂在 `component` 座位上的贡献用 `ctx.slots.inject` 而不是直接 `register`：
+
+```ts
+ctx.slots.inject("conversation.composer.dock", () => {
+	const dispose = ctx.slots.register({ slot: "conversation.composer.dock", id: "mine", moduleUrl: "./dock.tsx" });
+	return dispose;
+});
+```
+
+座位出现时注册，座位塌缩时自动撤销，座位回来再注册一次；返回的 dispose 彻底停止。直接 `register` 到尚未声明的座位会在加载期报错，而不是静默挂不上。
+
 ## 注册
 
 ```ts

@@ -30,6 +30,8 @@ export interface SlotCatalogEntry {
 	registerOptions: readonly { name: string; requirement: string; type: string; doc: string }[];
 	ownerProps: readonly string[];
 	declaredBy: string;
+	/** "core" while the shell renders it for the process; "component" when it dies with its renderer. */
+	lifetime: string;
 	replaceRisk: string;
 	occupants: readonly SlotOccupant[];
 }
@@ -41,6 +43,7 @@ export interface SlotPrefixCatalogEntry {
 	suffix: string;
 	registerOptions: readonly { name: string; requirement: string; type: string; doc: string }[];
 	declaredBy: string;
+	lifetime: string;
 	replaceRisk: string;
 	occupants: readonly SlotOccupant[];
 }
@@ -69,6 +72,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"chatView"
 		],
 		"declaredBy": "apps/desktop/src/components/ChatView.tsx",
+		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -101,6 +105,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"page"
 		],
 		"declaredBy": "apps/desktop/src/components/CapabilityCenter.tsx",
+		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -131,6 +136,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 		],
 		"ownerProps": [],
 		"declaredBy": "apps/desktop/src/app.tsx",
+		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -163,6 +169,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"panelShell"
 		],
 		"declaredBy": "apps/desktop/src/components/ContextPanel.tsx",
+		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -195,6 +202,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"browser"
 		],
 		"declaredBy": "apps/desktop/src/components/ManagedBrowserHost.tsx",
+		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -241,6 +249,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"cwd"
 		],
 		"declaredBy": "apps/desktop/src/components/ContextPanel.tsx",
+		"lifetime": "core",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -279,6 +288,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"rpc"
 		],
 		"declaredBy": "apps/desktop/src/components/RightRail.tsx",
+		"lifetime": "core",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -313,6 +323,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"configForm"
 		],
 		"declaredBy": "apps/desktop/src/components/ExtensionsCenter.tsx",
+		"lifetime": "core",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -367,6 +378,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"onApplyPrompt"
 		],
 		"declaredBy": "apps/desktop/src/components/SettingsView.tsx",
+		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -432,6 +444,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"configForm"
 		],
 		"declaredBy": "packages/client/ui-settings/src/client/contract/slots.ts",
+		"lifetime": "core",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -461,6 +474,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"chatView"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -507,6 +521,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"formatTokens"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": [
 			{
@@ -559,6 +574,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -598,6 +614,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -638,6 +655,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"cwd"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -678,6 +696,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"cwd"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -717,6 +736,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -756,6 +776,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -783,6 +804,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -810,6 +832,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -837,6 +860,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -864,6 +888,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -891,6 +916,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "apps/desktop/src/components/Composer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -917,6 +943,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"children"
 		],
 		"declaredBy": "apps/desktop/src/components/HeroComposer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{
@@ -947,6 +974,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 		],
 		"ownerProps": [],
 		"declaredBy": "apps/desktop/src/components/HeroComposer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -973,6 +1001,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"rpc"
 		],
 		"declaredBy": "apps/desktop/src/components/HeroComposer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -999,6 +1028,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"rpc"
 		],
 		"declaredBy": "apps/desktop/src/components/HeroComposer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
@@ -1038,6 +1068,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"cwd"
 		],
 		"declaredBy": "apps/desktop/src/components/HeroComposer.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -1084,6 +1115,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			"sessionId"
 		],
 		"declaredBy": "packages/client-core/src/components/transcript/",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	}
@@ -1121,6 +1153,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			}
 		],
 		"declaredBy": "apps/desktop/src/components/ChatView.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": [
 			{
@@ -1171,6 +1204,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			}
 		],
 		"declaredBy": "apps/desktop/src/components/RightRail.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": []
 	},
@@ -1199,6 +1233,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			}
 		],
 		"declaredBy": "apps/desktop/src/components/ExtensionsCenter.tsx / SettingsView.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": [
 			{
@@ -1233,6 +1268,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			}
 		],
 		"declaredBy": "apps/desktop/src/components/session-info-card.tsx",
+		"lifetime": "component",
 		"replaceRisk": "additive",
 		"occupants": [
 			{
@@ -1271,6 +1307,7 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 			}
 		],
 		"declaredBy": "apps/desktop/src/app.tsx",
+		"lifetime": "component",
 		"replaceRisk": "shadows-shipped-ui",
 		"occupants": [
 			{

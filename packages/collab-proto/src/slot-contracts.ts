@@ -31,8 +31,18 @@ export interface SlotContract {
 	registerOptions: readonly SlotRegisterOption[];
 	/** 宿主注入给组件的 `SlotComponentProps` 字段名。 */
 	ownerProps: readonly string[];
-	/** 哪个宿主模块声明并挂载它（仓库相对路径）。 */
+	/** 哪个宿主模块渲染它（仓库相对路径）。 */
 	declaredBy: string;
+	/**
+	 * 谁声明这个座位、它什么时候消失。
+	 *
+	 * - `core`：壳层常驻，进程内一直存在；启动时声明一次（`CORE_SEATS`）。
+	 * - `component`：由渲染它的那个组件声明，父组件卸载即塌缩（`provides`）。
+	 *
+	 * 贡献者用 `ctx.slots.inject(slot, …)` 等待任何已声明座位；读到 `component`
+	 * 时，它消失与父组件同寿命，而不是随进程。
+	 */
+	lifetime: "core" | "component";
 	/**
 	 * `shadows-shipped-ui`：注册即替换宿主界面；`additive`：与内建并存。
 	 */
@@ -96,6 +106,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["chatView"],
 		declaredBy: "apps/desktop/src/components/ChatView.tsx",
+		lifetime: "core",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"main.capability": {
@@ -104,6 +115,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["page"],
 		declaredBy: "apps/desktop/src/components/CapabilityCenter.tsx",
+		lifetime: "core",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"shell.overlay": {
@@ -112,6 +124,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: [],
 		declaredBy: "apps/desktop/src/app.tsx",
+		lifetime: "core",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"panel.shell": {
@@ -120,6 +133,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["panelShell"],
 		declaredBy: "apps/desktop/src/components/ContextPanel.tsx",
+		lifetime: "core",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"browser.host": {
@@ -128,6 +142,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["browser"],
 		declaredBy: "apps/desktop/src/components/ManagedBrowserHost.tsx",
+		lifetime: "core",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"panel.right": {
@@ -136,6 +151,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId", "cwd"],
 		declaredBy: "apps/desktop/src/components/ContextPanel.tsx",
+		lifetime: "core",
 		replaceRisk: "additive",
 	},
 	"rail.right": {
@@ -144,6 +160,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc"],
 		declaredBy: "apps/desktop/src/components/RightRail.tsx",
+		lifetime: "core",
 		replaceRisk: "additive",
 	},
 	"settings.extensions": {
@@ -152,6 +169,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER],
 		ownerProps: ["rpc", "settingsScope", "configForm"],
 		declaredBy: "apps/desktop/src/components/ExtensionsCenter.tsx",
+		lifetime: "core",
 		replaceRisk: "additive",
 	},
 	"settings.section": {
@@ -160,6 +178,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [PAGE_ID, LABEL, ORDER, ICON, KEYWORDS, MODULE],
 		ownerProps: ["rpc", "sessionId", "cwd", "settingsSection", "onApplyPrompt"],
 		declaredBy: "apps/desktop/src/components/SettingsView.tsx",
+		lifetime: "core",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"settings.general.item": {
@@ -168,6 +187,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "settingsScope", "configForm"],
 		declaredBy: "packages/client/ui-settings/src/client/contract/slots.ts",
+		lifetime: "core",
 		replaceRisk: "additive",
 	},
 	"conversation.composer.bar": {
@@ -176,6 +196,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc", "sessionId", "cwd", "chatView"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.composer.dock": {
@@ -184,6 +205,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId", "formatTokens"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.dock": {
@@ -192,6 +214,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.overlay": {
@@ -200,6 +223,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.left": {
@@ -208,6 +232,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId", "cwd"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.right": {
@@ -216,6 +241,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId", "cwd"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.requestDraft": {
@@ -224,6 +250,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.for": {
@@ -232,6 +259,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.input.activity": {
@@ -240,6 +268,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.input.attachments": {
@@ -248,6 +277,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.input.plan": {
@@ -256,6 +286,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.input.permission": {
@@ -264,6 +295,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.input.model": {
@@ -272,6 +304,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc", "sessionId"],
 		declaredBy: "apps/desktop/src/components/Composer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.hero.frame": {
@@ -280,6 +313,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["children"],
 		declaredBy: "apps/desktop/src/components/HeroComposer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.hero.brand.mark": {
@@ -288,6 +322,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: [],
 		declaredBy: "apps/desktop/src/components/HeroComposer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.hero.workspace": {
@@ -296,6 +331,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc"],
 		declaredBy: "apps/desktop/src/components/HeroComposer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.hero.agentPreset": {
@@ -304,6 +340,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL],
 		ownerProps: ["rpc"],
 		declaredBy: "apps/desktop/src/components/HeroComposer.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 	"conversation.hero.options": {
@@ -312,6 +349,7 @@ export const SLOT_CONTRACTS = {
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		ownerProps: ["rpc", "cwd"],
 		declaredBy: "apps/desktop/src/components/HeroComposer.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	"conversation.chat.node": {
@@ -331,9 +369,22 @@ export const SLOT_CONTRACTS = {
 		],
 		ownerProps: ["node", "turn", "sessionId"],
 		declaredBy: "packages/client-core/src/components/transcript/",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
-} as const satisfies Record<string, SlotContract>;
+} satisfies Record<string, SlotContract>;
+
+/**
+ * Seats the app shell renders for the whole process.
+ *
+ * Declared once at startup so a contributor's `ctx.slots.inject` runs immediately
+ * instead of waiting for a declaration that never comes. Derived from the
+ * contracts: `lifetime: "core"` is exactly this set, and the test below keeps the
+ * two in step.
+ */
+export const CORE_SEATS: readonly string[] = Object.entries(SLOT_CONTRACTS)
+	.filter(([, contract]) => contract.lifetime === "core")
+	.map(([name]) => name);
 
 /** 前缀座位的契约（任意 `<prefix><id>` 均合法）。 */
 export interface SlotPrefixContract {
@@ -343,6 +394,7 @@ export interface SlotPrefixContract {
 	suffix: string;
 	registerOptions: readonly SlotRegisterOption[];
 	declaredBy: string;
+	lifetime: "component";
 	replaceRisk: "shadows-shipped-ui" | "additive";
 }
 
@@ -353,6 +405,7 @@ export const SLOT_PREFIX_CONTRACTS = [
 		suffix: "surface id (e.g. `browser`, `compaction`)",
 		registerOptions: [MODULE, LABEL, ORDER, AVAILABILITY],
 		declaredBy: "apps/desktop/src/components/ChatView.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	{
@@ -361,6 +414,7 @@ export const SLOT_PREFIX_CONTRACTS = [
 		suffix: "rail entry id",
 		registerOptions: [MODULE, LABEL, ORDER, ID],
 		declaredBy: "apps/desktop/src/components/RightRail.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	{
@@ -370,6 +424,7 @@ export const SLOT_PREFIX_CONTRACTS = [
 		suffix: "`<extId>` or `<page>.<row>`",
 		registerOptions: [MODULE, LABEL, ORDER],
 		declaredBy: "apps/desktop/src/components/ExtensionsCenter.tsx / SettingsView.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	{
@@ -378,6 +433,7 @@ export const SLOT_PREFIX_CONTRACTS = [
 		suffix: "section id (e.g. `plugins`, `agents`)",
 		registerOptions: [MODULE, LABEL, ORDER],
 		declaredBy: "apps/desktop/src/components/session-info-card.tsx",
+		lifetime: "component",
 		replaceRisk: "additive",
 	},
 	{
@@ -386,6 +442,7 @@ export const SLOT_PREFIX_CONTRACTS = [
 		suffix: "destination id (e.g. `scheduled`, `capability`)",
 		registerOptions: [MODULE, LABEL],
 		declaredBy: "apps/desktop/src/app.tsx",
+		lifetime: "component",
 		replaceRisk: "shadows-shipped-ui",
 	},
 ] as const satisfies readonly SlotPrefixContract[];

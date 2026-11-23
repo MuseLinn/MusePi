@@ -148,6 +148,8 @@ export interface SlotCatalogEntry {
 	registerOptions: readonly { name: string; requirement: string; type: string; doc: string }[];
 	ownerProps: readonly string[];
 	declaredBy: string;
+	/** "core" while the shell renders it for the process; "component" when it dies with its renderer. */
+	lifetime: string;
 	replaceRisk: string;
 	occupants: readonly SlotOccupant[];
 }
@@ -159,6 +161,7 @@ export interface SlotPrefixCatalogEntry {
 	suffix: string;
 	registerOptions: readonly { name: string; requirement: string; type: string; doc: string }[];
 	declaredBy: string;
+	lifetime: string;
 	replaceRisk: string;
 	occupants: readonly SlotOccupant[];
 }

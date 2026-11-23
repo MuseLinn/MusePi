@@ -174,11 +174,11 @@ cordisInspectRegistry.register({
 	platform: "host",
 	provider: "slots",
 	summary:
-		"Declared extension seats. `catalog` returns every seat with its contract (capacity, scope, register options, owner props, declarer, replace risk) and the first-party entries already occupying it; `list` is the bare name/kind table.",
+		"Declared extension seats. `catalog` returns every seat with its contract (capacity, scope, register options, owner props, declarer, lifetime, replace risk) and the first-party entries already occupying it; `list` is the bare name/kind table.",
 	methods: {
 		catalog: {
 			description:
-				"Every exact seat and prefix family with its contract and current first-party occupants. Read this before choosing a seat or writing `ctx.slots.register`.",
+				"Every exact seat and prefix family with its contract and current first-party occupants. `lifetime` says who declares a seat: `core` (the shell renders it for the process, `slots.inject` runs at once) or `component` (it is live only while the component named by `declaredBy` is; `slots.inject` waits and re-runs if that component returns). Read this before choosing a seat or writing `ctx.slots.register`.",
 			input: {
 				slot: "string? — return only the entry whose name/prefix matches",
 				kind: "single | list | hoc? — filter exact seats by capacity",

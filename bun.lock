@@ -652,6 +652,13 @@
         "@musepi/pi-coding-agent": "workspace:*",
       },
     },
+    "packages/coding-agent/src/plugins/runtime/shell-seats": {
+      "name": "musepi-shell-seats",
+      "version": "0.7.7",
+      "peerDependencies": {
+        "@musepi/pi-coding-agent": "workspace:*",
+      },
+    },
     "packages/coding-agent/src/plugins/session/tool-list-secrets": {
       "name": "musepi-tool-list-secrets",
       "version": "0.7.7",
@@ -775,6 +782,13 @@
     },
     "packages/coding-agent/src/plugins/workspace/compaction-summary": {
       "name": "musepi-compaction-summary",
+      "version": "0.7.7",
+      "peerDependencies": {
+        "@musepi/pi-coding-agent": "workspace:*",
+      },
+    },
+    "packages/coding-agent/src/plugins/workspace/compaction-tiers": {
+      "name": "musepi-compaction-tiers",
       "version": "0.7.7",
       "peerDependencies": {
         "@musepi/pi-coding-agent": "workspace:*",
@@ -3371,6 +3385,8 @@
 
     "musepi-compaction-summary": ["musepi-compaction-summary@workspace:packages/coding-agent/src/plugins/workspace/compaction-summary"],
 
+    "musepi-compaction-tiers": ["musepi-compaction-tiers@workspace:packages/coding-agent/src/plugins/workspace/compaction-tiers"],
+
     "musepi-computer": ["musepi-computer@workspace:packages/coding-agent/src/plugins/io/computer"],
 
     "musepi-context-notes": ["musepi-context-notes@workspace:packages/coding-agent/src/plugins/workspace/context-notes"],
@@ -3424,6 +3440,8 @@
     "musepi-prompt-suggestion": ["musepi-prompt-suggestion@workspace:packages/coding-agent/src/plugins/interaction/prompt-suggestion"],
 
     "musepi-session-info-resources": ["musepi-session-info-resources@workspace:packages/coding-agent/src/plugins/style/session-info-resources"],
+
+    "musepi-shell-seats": ["musepi-shell-seats@workspace:packages/coding-agent/src/plugins/runtime/shell-seats"],
 
     "musepi-skill-filesystem": ["musepi-skill-filesystem@workspace:packages/coding-agent/src/plugins/prompt/skill-filesystem"],
 
