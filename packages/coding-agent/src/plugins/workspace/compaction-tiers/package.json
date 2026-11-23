@@ -1,0 +1,50 @@
+{
+	"name": "musepi-compaction-tiers",
+	"version": "0.7.7",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"description": "Tighten the compaction trigger for providers that bill long context at a premium, without touching the global threshold.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
+	},
+	"files": [
+		"lib",
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json",
+		"locale"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
+	"musepi": {
+		"icon": "◪",
+		"label": "Compaction Tiers",
+		"description": "Compact earlier on models whose long context bills at a premium, leaving every other model on the global threshold.",
+		"extensions": [
+			"./index.ts"
+		],
+		"config": [
+			{
+				"key": "capPercent",
+				"type": "number",
+				"default": 70,
+				"restart": "session",
+				"label": "溢价档位触发上限",
+				"description": "长上下文按溢价计费的模型，其压缩触发点不超过该窗口占比。其他模型不受影响。"
+			}
+		]
+	}
+}
