@@ -2177,3 +2177,94 @@
 	line-height: 1.5;
 	color: var(--fg);
 }
+
+/* ---- present (delivered files) ---- */
+
+.tv-present {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.tv-present-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.tv-present-card {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	min-width: 0;
+	padding: 6px 8px;
+	border: 1px solid var(--tv-border);
+	border-radius: var(--radius-md);
+	background: var(--tv-inset);
+}
+
+.tv-present-card:only-child {
+	grid-column: 1 / -1;
+}
+
+.tv-present-icon {
+	flex: none;
+	min-width: 28px;
+	padding: 1px 4px;
+	border: 1px solid var(--tv-border);
+	border-radius: 4px;
+	color: var(--tv-muted);
+	font-size: 9px;
+	letter-spacing: 0.06em;
+	text-align: center;
+}
+
+.tv-present-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.tv-present-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--tv-fg);
+}
+
+.tv-present-desc {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--tv-muted);
+	font-size: 11px;
+}
+
+.tv-present-path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--tv-faint);
+	font-size: 10px;
+}
+
+.tv-present-toggle {
+	align-self: flex-start;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--tv-accent);
+	font: inherit;
+	cursor: pointer;
+}
+
+.tv-present-toggle:hover,
+.tv-present-toggle:focus-visible {
+	text-decoration: underline;
+}
+
+.tv-present-note {
+	color: var(--tv-faint);
+	font-size: 10px;
+}

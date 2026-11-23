@@ -36,6 +36,7 @@ import { retainRenderer } from "./tools/memory-retain";
 import { notifyUserRenderer } from "./tools/notify-user";
 import { pluginManagerRenderer } from "./tools/plugin-manager";
 import { pluginsRenderer } from "./tools/plugins";
+import { presentRenderer } from "./tools/present";
 import { readRenderer } from "./tools/read";
 import { reportToolIssueRenderer } from "./tools/report-tool-issue";
 import { resolveRenderer } from "./tools/resolve";
@@ -134,6 +135,7 @@ const BUILTIN_TOOL_VIEWS: Readonly<Record<string, ToolRenderer>> = {
 	notify_user: notifyUserRenderer,
 	plugin_manager: pluginManagerRenderer,
 	plugin_market: pluginManagerRenderer,
+	present: presentRenderer,
 	todo: todoRenderer,
 	vibe_spawn: vibeRenderer,
 	vibe_send: vibeRenderer,
