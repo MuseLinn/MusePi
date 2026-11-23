@@ -1,8 +1,8 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { FoldRegion } from "@musepi/client-ui-primitives/client";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { FoldRegion } from "../src/components/common/FoldRegion";
 
 GlobalRegistrator.register();
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;

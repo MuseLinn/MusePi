@@ -1,9 +1,9 @@
+import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
 import { ChevronDown, CircleAlert, FolderGit2, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
-import { useDeepScrollShadow } from "../../lib/scroll-shadow";
 import { FilePanel } from "./FilePanel";
 
 /**

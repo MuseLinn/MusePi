@@ -5,6 +5,8 @@
  * helper. Extracted from Transcript.tsx — the windowed list, Row chrome and
  * EntryRow dispatch stay there; they import from this module.
  */
+
+import { FoldRegion } from "@musepi/client-ui-primitives/client";
 import type {
 	AssistantMessage,
 	ImageContent,
@@ -31,7 +33,6 @@ import {
 import type { ToolRenderHost } from "../../tool-render";
 import { ResultVideo } from "../../tool-render/parts";
 import { type BrowserOperationAction, browserActionLabel } from "../../tool-render/tools/browser-activity";
-import { FoldRegion } from "../common/FoldRegion.js";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";

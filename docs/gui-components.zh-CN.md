@@ -68,9 +68,12 @@ scope:
 | `@musepi/client-ui-shell` | main、panel、rail、shell-overlay 与 browser-host 座位 | 契约已落地 |
 | `@musepi/client-ui-settings` | settings extension、section 与 item 座位 | 契约已落地 |
 | `@musepi/client-ui-sidebar` | sidebar-panel 座位 | 契约已落地 |
+| `@musepi/client-ui-primitives` | `FoldRegion` 与滚动边缘羽化（`useScrollShadow` / `useDeepScrollShadow`） | 已落地 |
 | `@musepi/client-ui-charts` | 零依赖响应式图表 | 已落地 |
 | `@musepi/client-ui-status` | `StatusText` 与交叉淡化样式 | 已落地 |
 | `@musepi/client-ui-chat`、`client-ui-panel`、`client-ui-marketplace`、`client-ui-agents` | 各自的组件与 CSS | 待迁 |
+
+**命名。** `client-ui-charts` 是软件自己的图表（设置 → 用量）。模型写的 ```ui 回答块属于独立的 `client-ui-answer-blocks` 包：块目录里的 `BarChart`/`LineChart` 是模型可见的块类型，不是这些 React 组件。若把设置里的用量页抽出来，它是 `client-ui-usage`，不是 Cordis 插件。
 
 迁移期间桌面宿主在 `slot-host.tsx` 里再导出已搬走的座位常量，现有 import 不变；新代码直接引用能力包。
 

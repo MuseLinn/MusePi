@@ -1,5 +1,5 @@
 import { type TranslationKey, t, useLocale } from "@musepi/client-core";
-import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
 import type { LocalizedPluginText } from "@musepi/pi-wire";
 import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";

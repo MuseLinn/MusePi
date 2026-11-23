@@ -27,9 +27,9 @@ const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
 	nit: "general.advisoryNit",
 };
 
+import { useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
-import { useDeepScrollShadow, useScrollShadow } from "../../lib/scroll-shadow";
 import {
 	applyAnswers,
 	autoRepairFailedBlocks,

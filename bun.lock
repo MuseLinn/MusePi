@@ -58,6 +58,7 @@
         "@milkdown/kit": "7.21.3",
         "@musepi/client-ui-charts": "workspace:*",
         "@musepi/client-ui-conversation": "workspace:*",
+        "@musepi/client-ui-primitives": "workspace:*",
         "@musepi/client-ui-settings": "workspace:*",
         "@musepi/client-ui-shell": "workspace:*",
         "@musepi/client-ui-sidebar": "workspace:*",
@@ -195,6 +196,7 @@
         "@codemirror/commands": "^6.11.0",
         "@codemirror/state": "^6.7.1",
         "@codemirror/view": "6.43.14",
+        "@musepi/client-ui-primitives": "workspace:*",
         "@musepi/collab-proto": "workspace:*",
         "@musepi/pi-utils": "catalog:",
         "@musepi/pi-wire": "workspace:*",
@@ -234,6 +236,13 @@
       "version": "0.7.7",
       "dependencies": {
         "@musepi/client-ui-slots": "workspace:*",
+      },
+    },
+    "packages/client/ui-primitives": {
+      "name": "@musepi/client-ui-primitives",
+      "version": "0.7.7",
+      "dependencies": {
+        "react": "19.2.7",
       },
     },
     "packages/client/ui-settings": {
@@ -1192,6 +1201,8 @@
     "@musepi/client-ui-charts": ["@musepi/client-ui-charts@workspace:packages/client/ui-charts"],
 
     "@musepi/client-ui-conversation": ["@musepi/client-ui-conversation@workspace:packages/client/ui-conversation"],
+
+    "@musepi/client-ui-primitives": ["@musepi/client-ui-primitives@workspace:packages/client/ui-primitives"],
 
     "@musepi/client-ui-settings": ["@musepi/client-ui-settings@workspace:packages/client/ui-settings"],
 

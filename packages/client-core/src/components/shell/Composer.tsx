@@ -1,3 +1,4 @@
+import { useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { type ImageContent, isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
 import {
 	Brain,
@@ -36,7 +37,6 @@ import {
 } from "../../lib/prompt-suggestion";
 import { useShellLayout } from "../../lib/responsive-shell";
 import { useMorphTarget } from "../../lib/scene-morph";
-import { useScrollShadow } from "../../lib/scroll-shadow";
 import { isMobileSurface } from "../../lib/surface";
 import type { TtsSnapshot } from "../../lib/tts";
 import { readSttLangPref, useTts, useTtsSnapshot } from "../../lib/tts";

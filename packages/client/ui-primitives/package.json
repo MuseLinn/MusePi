@@ -1,0 +1,16 @@
+{
+	"type": "module",
+	"name": "@musepi/client-ui-primitives",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "Shared interaction primitives: fold tracks and scroll-edge feathering.",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client/index.ts",
+		"./src/*": "./src/*"
+	},
+	"dependencies": {
+		"react": "19.2.7"
+	}
+}

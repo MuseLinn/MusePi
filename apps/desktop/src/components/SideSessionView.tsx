@@ -1,7 +1,7 @@
 import { Transcript } from "@musepi/client-core/src/components/transcript/Transcript";
 import { t } from "@musepi/client-core/src/i18n/index.js";
-import { useScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { DisplayContext, MessageDisplayContext } from "@musepi/client-core/src/messages/display-context";
+import { useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { agentSignalsFromSnapshot } from "../lib/agent-signals";
 import { thinkingOrbStateFromSession } from "../lib/companion";

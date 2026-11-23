@@ -70,9 +70,12 @@ A UI capability owns one `@musepi/ui-*` package. Its `src/contract/slots.ts` nam
 | `@musepi/client-ui-shell` | main, panel, rail, shell-overlay and browser-host seats | contract landed |
 | `@musepi/client-ui-settings` | settings extension, section and item seats | contract landed |
 | `@musepi/client-ui-sidebar` | sidebar-panel seats | contract landed |
+| `@musepi/client-ui-primitives` | `FoldRegion` and scroll-edge feathering (`useScrollShadow` / `useDeepScrollShadow`) | landed |
 | `@musepi/client-ui-charts` | zero-dependency responsive charts | landed |
 | `@musepi/client-ui-status` | `StatusText` and its cross-fade stylesheet | landed |
 | `@musepi/client-ui-chat`, `client-ui-panel`, `client-ui-marketplace`, `client-ui-agents` | their components and CSS | pending |
+
+**Naming.** `client-ui-charts` holds the app's own charts (settings → usage). Model-authored ```ui answer blocks belong to a separate `client-ui-answer-blocks` package: the block catalog's `BarChart`/`LineChart` are model-visible block types, not these React components. A settings usage page, if extracted, is `client-ui-usage`, not a Cordis plugin.
 
 The desktop host re-exports the moved seat constants from `slot-host.tsx` during migration, so existing imports keep working; new code imports the capability package directly.
 

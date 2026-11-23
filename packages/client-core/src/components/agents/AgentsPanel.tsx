@@ -1,9 +1,9 @@
+import { useScrollShadow } from "@musepi/client-ui-primitives/client";
 import type { AgentProgress, AgentSnapshot, SubagentLifecyclePayload, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens, relTime } from "../../lib/format";
-import { useScrollShadow } from "../../lib/scroll-shadow";
 import "./agents.css";
 
 /** Re-render tick so running-tool durations and relative times stay live. */

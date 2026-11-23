@@ -9,6 +9,7 @@
  * chrome.
  */
 
+export { attachScrollShadow, useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
 export { AgentsPanel } from "./components/agents/AgentsPanel";
 /** One search field for every list filter (docs/gui-design.md § capability
  *  controls; geometry from the `--control-*` tokens). */
@@ -183,7 +184,6 @@ export {
 	visiblePromptSuggestion,
 } from "./lib/prompt-suggestion";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
-export { useScrollShadow } from "./lib/scroll-shadow";
 export {
 	type ArchivedSession,
 	archivedSessionIds,

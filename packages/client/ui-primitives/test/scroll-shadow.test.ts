@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { computeScrollEdgeState, SCROLL_EDGE_THRESHOLD } from "./scroll-shadow";
+import { computeScrollEdgeState, SCROLL_EDGE_THRESHOLD } from "../src/client/scroll-shadow";
 
 /** 竖向几何:视口高 100、内容高 300。 */
 const V = { clientHeight: 100, scrollHeight: 300 };

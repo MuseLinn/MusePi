@@ -18,12 +18,12 @@ import {
 	t,
 } from "@musepi/client-core";
 import { openPlanFromChat } from "@musepi/client-core/src/components/transcript/canvas-jump";
-import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import {
 	createChatQuoteContext,
 	type DisplayContext,
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
+import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
 import type { ChatQuoteAnchor, OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
 import { Info as InfoIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";

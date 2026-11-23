@@ -5,7 +5,7 @@
  * the panel renders <GitPanel rpc cwd /> only.
  */
 import { CodeHighlightProvider, DiffBlock, type TranslationKey, t } from "@musepi/client-core";
-import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
 import {
 	ArrowDown as ArrowDownIconData,
 	ArrowUp as ArrowUpIconData,
