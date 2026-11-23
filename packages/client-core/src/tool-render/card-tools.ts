@@ -5,12 +5,8 @@ import type { ToolsKey } from "@musepi/client-locale/locale/zh-CN/tools";
  * renderer in `registry.ts` (RENDERERS). This is the single source of truth
  * for "which tools render as cards" outside the React module graph:
  *
- * - The extension center's builtin registry (coding-agent) mirrors the list
- *   into its tool-render pack entry (`raw.tools`); a coding-agent contract
- *   test intersects this export against that mirror so a renderer added
- *   here never goes unregistered in the plugin management surface.
- * - `registry.test.ts` guards the other direction: every RENDERERS key must
- *   be listed here.
+ * `registry.test.ts` is the guard: every listed name resolves to a built-in
+ * renderer, and every renderer key is listed here.
  *
  * Keep sorted; aliases (wire names mapping to a shared renderer) are real
  * renderable names and belong in the list.

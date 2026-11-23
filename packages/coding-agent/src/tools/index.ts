@@ -38,7 +38,7 @@ import { MemoryRecallTool } from "./memory-recall";
 import { MemoryReflectTool } from "./memory-reflect";
 import { MemoryRetainTool } from "./memory-retain";
 import { NotifyUserTool } from "./notify-user";
-import { OfficeReadTool } from "./office";
+import { OfficeConvertTool, OfficeRenderTool } from "./office";
 import { wrapToolWithMetaNotice } from "./output-meta";
 import { PresentTool } from "./present";
 import { ReadTool } from "./read";
@@ -129,7 +129,8 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	todo: s => new TodoTool(s),
 	knowledge: s => new KnowledgeTool(s),
 	present: s => new PresentTool(s),
-	office_read: s => new OfficeReadTool(s),
+	office_render: s => new OfficeRenderTool(s),
+	office_convert: s => new OfficeConvertTool(s),
 	workflow: s => new WorkflowTool(s),
 	request_secret: s => new RequestSecretTool(s),
 	list_secrets: s => new ListSecretsTool(s),

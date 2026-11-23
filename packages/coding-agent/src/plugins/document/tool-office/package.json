@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"license": "MIT",
-	"description": "Read text and structure from Word, Excel and PowerPoint files.",
+	"description": "Read and convert Word, Excel and PowerPoint files.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",
 	"exports": {
@@ -31,7 +31,7 @@
 	},
 	"musepi": {
 		"label": "Office",
-		"description": "Read text and structure from Word, Excel and PowerPoint files.",
+		"description": "Read and convert Word, Excel and PowerPoint files.",
 		"icon": "📄",
 		"extensions": [
 			"./index.ts"
