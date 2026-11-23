@@ -23,7 +23,10 @@ description: 为 MusePi（TUI/CLI + 桌面 GUI）创建、修改或修复插件�
 | 写一个插件入口、选服务面命名空间、决定作用域 | `references/plugin-model.md` |
 | 让插件被装载、安装、启用，或排查装载失败 | `references/loading.md` |
 | 用 `cordis_*` 在会话内做原型 | `references/dynamic-plugins.md` |
+| 往界面里加座位或组件 | `references/ui-plugin.md` |
+| 写插件页显示的标题、描述、配置表单与图标 | `references/plugin-details.md` |
 | 声明组件、处理兼容性预检与版本豁免 | `references/components-and-compatibility.md` |
+| 注册进程级服务或记忆后端 | `references/host-plugins.md` |
 | 打包、发布、进市场 | `references/packaging.md` |
 | 查文档路径与代码位置 | `references/locate-docs.md` |
 | 挑工具设计、写工具描述 | `references/tool-design.md` |
