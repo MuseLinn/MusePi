@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Context } from "@deepseek-ai/cordis";
 import { loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
-import type { ExtensionAPI, ExtensionRuntime } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { ExtensionRuntime, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { resolveProviderCandidates } from "@musepi/pi-coding-agent/web/search/provider";
 import type { SearchProvider } from "@musepi/pi-coding-agent/web/search/providers/base";
 import { getRegisteredSearchProvider, releaseSearchProviders } from "@musepi/pi-coding-agent/web/search/registry";
@@ -24,7 +24,7 @@ function stubProvider(): SearchProvider {
 	};
 }
 
-async function loadPlugin(factory: (pi: ExtensionAPI) => void, name = EXTENSION) {
+async function loadPlugin(factory: (pi: PluginAPI) => void, name = EXTENSION) {
 	const eventBus = new Context() as never;
 	const runtime = {
 		eventBus,
@@ -59,8 +59,8 @@ describe("ExtensionAPI.registerSearchProvider", () => {
 	});
 
 	it("rejects another extension's id and only removes what it owns", async () => {
-		let ownerApi: ExtensionAPI | undefined;
-		let otherApi: ExtensionAPI | undefined;
+		let ownerApi: PluginAPI | undefined;
+		let otherApi: PluginAPI | undefined;
 		await loadPlugin(pi => {
 			ownerApi = pi;
 			pi.registerSearchProvider({ id: PROVIDER_ID, label: "Plugin Search", factory: stubProvider });

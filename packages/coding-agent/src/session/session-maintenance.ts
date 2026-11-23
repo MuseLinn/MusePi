@@ -75,9 +75,9 @@ import type { ConfiguredThinkingLevel } from "../thinking";
 import type { AgentSessionEvent } from "./agent-session-events";
 import type { ContextUsageBreakdown, HandoffResult, SessionHandoffOptions } from "./agent-session-types";
 import { findCompactMode } from "./compact-modes";
+import { type CompactionMethodContext, getCompactionMethodProvider } from "./compaction-method-provider";
 import {
 	type CompactionMethod,
-	canUseRemoteCompaction,
 	DEFAULT_COMPACTION_METHOD_ORDER,
 	resolveCompactionMethodOrder,
 	resolveMethodSettings,
@@ -839,32 +839,26 @@ export class SessionMaintenance {
 			methods = resolveCompactionMethodOrder(compactMode?.overrides.methodOrder ?? compactionSettings.methodOrder);
 			const explicitSnapcompact = compactMode?.name === "snapcompact";
 			let selectedMethod: CompactionMethod | undefined;
+			const manualContext: CompactionMethodContext = {
+				model: activeModel,
+				settings: compactionSettings,
+				trigger: "manual",
+				hasFocusInstructions: Boolean(customInstructions || options?.internalGuidance),
+			};
 			for (let index = methodOffset; index < methods.length; index++) {
 				const method = methods[index];
-				if (method === "remote") {
-					if (canUseRemoteCompaction(activeModel, resolveMethodSettings(compactionSettings, method))) {
-						selectedMethod = method;
-						selectedMethodIndex = index;
-						break;
-					}
-					continue;
-				}
-				if (method === "snapcompact") {
-					if (
-						explicitSnapcompact ||
-						(!customInstructions && !options?.internalGuidance && sendsImageInputOnWire(activeModel))
-					) {
-						selectedMethod = method;
-						selectedMethodIndex = index;
-						break;
-					}
-					continue;
-				}
-				if (method === "soft") {
-					selectedMethod = method;
-					selectedMethodIndex = index;
-					break;
-				}
+				// Manual `/compact` runs only methods that produce a summary; the
+				// provider answers availability, with one manual-only exception: an
+				// explicit `snapcompact` mode asks for the local engine directly.
+				const provider = getCompactionMethodProvider(method);
+				const available =
+					provider !== undefined &&
+					(provider.available(manualContext) ||
+						(method === "snapcompact" && explicitSnapcompact && activeModel !== undefined));
+				if (!available) continue;
+				selectedMethod = method;
+				selectedMethodIndex = index;
+				break;
 			}
 			if (!selectedMethod) {
 				throw new Error("No configured compaction method can run manually.");
@@ -1329,7 +1323,7 @@ export class SessionMaintenance {
 	}
 
 	/** Install and launch one background speculation run for `method`. */
-	#startSpeculationRun(contextTokens: number, method: "remote" | "handoff" | "soft"): void {
+	#startSpeculationRun(contextTokens: number, method: CompactionMethod): void {
 		const controller = new AbortController();
 		const run: SpeculationRun = { controller, promise: Promise.resolve(), contextTokensAtStart: contextTokens };
 		const model = this.#model;
@@ -1410,11 +1404,7 @@ export class SessionMaintenance {
 	}
 
 	/** Produce and arm one speculative compaction result off a branch snapshot. */
-	async #runSpeculation(
-		run: SpeculationRun,
-		method: "remote" | "handoff" | "soft",
-		contextTokens: number,
-	): Promise<void> {
+	async #runSpeculation(run: SpeculationRun, method: CompactionMethod, contextTokens: number): Promise<void> {
 		const clear = () => {
 			if (this.#speculation === run) this.#speculation = undefined;
 		};
@@ -3203,13 +3193,17 @@ export class SessionMaintenance {
 		const startIndex = options.methodIndex ?? 0;
 		let methodIndex = -1;
 		let method: CompactionMethod | undefined;
-		const usable = (candidate: CompactionMethod): boolean => {
-			if (candidate === "remote")
-				return canUseRemoteCompaction(this.#model, resolveMethodSettings(compactionSettings, candidate));
-			if (candidate === "snapcompact") return this.#model !== undefined && sendsImageInputOnWire(this.#model);
-			if (candidate === "handoff") return reason !== "overflow";
-			return true;
+		// Availability comes from the method providers so a plugin-contributed
+		// method answers the same question the built-ins do; the maintenance loop
+		// adds only what it alone knows (a failed native speculation).
+		const methodContext: CompactionMethodContext = {
+			model: this.#model,
+			settings: compactionSettings,
+			trigger: reason === "overflow" ? "overflow" : reason === "idle" ? "idle" : "pressure",
+			hasFocusInstructions: false,
 		};
+		const usable = (candidate: CompactionMethod): boolean =>
+			getCompactionMethodProvider(candidate)?.available(methodContext) ?? false;
 		for (let index = startIndex; index < methods.length; index++) {
 			const candidate = methods[index];
 			if (!usable(candidate)) continue;

@@ -38,6 +38,8 @@ import type { StoredPluginCredential } from "../../plugin-credentials";
 import { getPluginCredentialManager } from "../../plugin-credentials";
 import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/host";
 import { scopePromptHostToOwner } from "../../prompts/host";
+import type { CompactionMethodProvider } from "../../session/compaction-method-provider";
+import { registerCompactionMethodProvider as registerCompactionMethod } from "../../session/compaction-method-provider";
 import type { CustomMessagePayload } from "../../session/messages";
 import { normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
@@ -457,6 +459,8 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly memory: ExtensionAPI["memory"];
 	readonly skins: ExtensionAPI["skins"];
 	readonly hmr: ExtensionAPI["hmr"];
+	readonly sessionActions: ExtensionAPI["sessionActions"];
+	readonly toolManagement: ExtensionAPI["toolManagement"];
 
 	constructor(
 		public readonly pi: typeof PiCodingAgent,
@@ -494,6 +498,17 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.magicKeywords = { register: this.registerMagicKeyword.bind(this) };
 		this.memory = { registerBackendProvider: this.registerMemoryBackendProvider.bind(this) };
 		this.skins = { register: this.registerScrollbarSkin.bind(this) };
+		this.sessionActions = {
+			appendEntry: this.appendEntry.bind(this),
+			sendMessage: this.sendMessage.bind(this),
+			sendUserMessage: this.sendUserMessage.bind(this),
+		};
+		this.toolManagement = {
+			getActiveTools: this.getActiveTools.bind(this),
+			setActiveTools: this.setActiveTools.bind(this),
+			getAllTools: this.getAllTools.bind(this),
+			getCommands: this.getCommands.bind(this),
+		};
 		// `ctx.hmr` is process-level, not per-extension: the host starts one
 		// watcher and every plugin subscribes to the same batches. A plugin's
 		// disposer is its own; hosts that start no watcher report enabled=false
@@ -1045,6 +1060,14 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 
 	unregisterSearchProvider(id: string): boolean {
 		return unregisterWebSearchProvider(id, { owner: this.extension.path });
+	}
+
+	registerCompactionMethodProvider(provider: CompactionMethodProvider): () => void {
+		// Ownership rides the extension's effect registry: unload, hot reload and
+		// session shutdown release the method through the same pass that releases
+		// every other registration this extension made.
+		const dispose = registerCompactionMethod(provider);
+		return registerEffect(this.extension, dispose, `compaction method ${provider.id}`);
 	}
 
 	registerMagicKeyword(keyword: ExtensionMagicKeyword): void {

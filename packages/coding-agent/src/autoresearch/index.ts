@@ -91,7 +91,7 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		runtime.runningExperiment = null;
 		dashboard.updateWidget(ctx, runtime);
 
-		const activeTools = api.getActiveTools();
+		const activeTools = api.toolManagement.getActiveTools();
 		const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
 		const nextActiveTools = runtime.autoresearchMode
 			? [...new Set([...activeTools, ...EXPERIMENT_TOOL_NAMES])]
@@ -100,7 +100,7 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 			nextActiveTools.length !== activeTools.length ||
 			nextActiveTools.some((name, index) => name !== activeTools[index]);
 		if (toolsChanged) {
-			await api.setActiveTools(nextActiveTools);
+			await api.toolManagement.setActiveTools(nextActiveTools);
 		}
 	};
 
@@ -115,7 +115,7 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		runtime.autoResumeArmed = false;
 		runtime.goal = goal;
 		runtime.lastAutoResumePendingRunNumber = null;
-		api.appendEntry("autoresearch-control", goal ? { mode, goal } : { mode });
+		api.sessionActions.appendEntry("autoresearch-control", goal ? { mode, goal } : { mode });
 	};
 
 	api.registerTool(createInitExperimentTool({ dashboard, getRuntime, pi: api }));
@@ -148,7 +148,9 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 				setMode(ctx, false, runtime.goal, "off");
 				dashboard.updateWidget(ctx, runtime);
 				const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
-				await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
+				await api.toolManagement.setActiveTools(
+					api.toolManagement.getActiveTools().filter(name => !experimentTools.has(name)),
+				);
 				ctx.ui.notify("Autoresearch mode disabled", "info");
 				return;
 			}
@@ -157,7 +159,9 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 				setMode(ctx, false, runtime.goal, "off");
 				dashboard.updateWidget(ctx, runtime);
 				const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
-				await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
+				await api.toolManagement.setActiveTools(
+					api.toolManagement.getActiveTools().filter(name => !experimentTools.has(name)),
+				);
 				ctx.ui.notify("Autoresearch mode disabled", "info");
 				return;
 			}
@@ -203,8 +207,10 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 				runtime.goal = refreshed.goal ?? goalArg;
 				setMode(ctx, true, runtime.goal, "on");
 				dashboard.updateWidget(ctx, runtime);
-				await api.setActiveTools([...new Set([...api.getActiveTools(), ...EXPERIMENT_TOOL_NAMES])]);
-				api.sendUserMessage(
+				await api.toolManagement.setActiveTools([
+					...new Set([...api.toolManagement.getActiveTools(), ...EXPERIMENT_TOOL_NAMES]),
+				]);
+				api.sessionActions.sendUserMessage(
 					prompt.render(commandResumeTemplate, {
 						branch_status_line: branchStatusLine,
 						has_resume_context: resumeContext.length > 0,
@@ -216,9 +222,11 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 
 			setMode(ctx, true, goalArg, "on");
 			dashboard.updateWidget(ctx, runtime);
-			await api.setActiveTools([...new Set([...api.getActiveTools(), ...EXPERIMENT_TOOL_NAMES])]);
+			await api.toolManagement.setActiveTools([
+				...new Set([...api.toolManagement.getActiveTools(), ...EXPERIMENT_TOOL_NAMES]),
+			]);
 			if (goalArg !== null) {
-				api.sendUserMessage(goalArg);
+				api.sessionActions.sendUserMessage(goalArg);
 			} else {
 				ctx.ui.notify("Autoresearch enabled—describe what to optimize in your next message.", "info");
 			}
@@ -278,7 +286,7 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		}
 		runtime.autoResumeArmed = false;
 		runtime.lastAutoResumePendingRunNumber = pendingRun?.runNumber ?? null;
-		api.sendMessage(
+		api.sessionActions.sendMessage(
 			{
 				customType: "autoresearch-resume",
 				content: prompt.render(resumeMessageTemplate, {
@@ -307,7 +315,9 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 			runtime.runningExperiment = null;
 			dashboard.updateWidget(ctx, runtime);
 			const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
-			await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
+			await api.toolManagement.setActiveTools(
+				api.toolManagement.getActiveTools().filter(name => !experimentTools.has(name)),
+			);
 			return;
 		}
 		const storage = await openAutoresearchStorageIfExists(ctx.cwd);
@@ -456,7 +466,9 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		setMode(ctx, false, null, "clear");
 		dashboard.updateWidget(ctx, runtime);
 		const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
-		await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
+		await api.toolManagement.setActiveTools(
+			api.toolManagement.getActiveTools().filter(name => !experimentTools.has(name)),
+		);
 		ctx.ui.notify("Autoresearch session cleared.", "info");
 	}
 };

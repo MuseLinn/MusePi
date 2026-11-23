@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { Settings } from "../../config/settings";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { installCommandHookBridge } from "../../extensibility/hooks/command/bridge";
 import { loadHookConfigFile } from "../../extensibility/hooks/command/load";
 
@@ -39,7 +39,7 @@ async function shellForHooks(): Promise<string> {
 	return process.env.SHELL || (process.platform === "win32" ? "bash" : "/bin/sh");
 }
 
-export async function apply(ctx: ExtensionAPI, rowConfig?: RowConfig): Promise<void> {
+export async function apply(ctx: PluginAPI, rowConfig?: RowConfig): Promise<void> {
 	const configPath = text(rowConfig?.configPath);
 	if (configPath === "") return;
 	const file = path.resolve(ctx.cwd, configPath);

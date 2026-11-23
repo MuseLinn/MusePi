@@ -17,7 +17,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { isCompactionMethod } from "../session/compaction-methods.ts";
+import { type CompactionMethod, isCompactionMethod } from "../session/compaction-methods.ts";
 import type {
 	AssemblyManifest,
 	AssemblyManifestValidateResult,
@@ -191,7 +191,7 @@ function normalizeManifest(raw: Record<string, unknown>): AssemblyManifestValida
 
 	// [seams.compaction]
 	const rawCompaction = (seams.compaction ?? {}) as Record<string, unknown>;
-	let compactionMethod: "handoff" | "remote" | "shake" | "snapcompact" | "soft" | undefined;
+	let compactionMethod: CompactionMethod | undefined;
 	if (rawCompaction.method !== undefined) {
 		if (isCompactionMethod(rawCompaction.method)) {
 			compactionMethod = rawCompaction.method;

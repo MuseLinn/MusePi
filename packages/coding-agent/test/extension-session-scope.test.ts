@@ -17,7 +17,7 @@ import {
 	emitSessionShutdownEvent,
 	emitSessionStartEvent,
 } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
-import type { Extension, ExtensionAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { Extension, ExtensionAPI, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { disposePluginPrimitives } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-primitives";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
@@ -34,7 +34,7 @@ describe("ctx.session", () => {
 	});
 
 	const makeRunner = async (
-		apply: (ctx: ExtensionAPI) => void,
+		apply: (ctx: PluginAPI) => void,
 	): Promise<{ runner: ExtensionRunner; extension: Extension }> => {
 		const runtime = new ExtensionRuntime();
 		const extension = await loadExtensionFromFactory(

@@ -1,5 +1,5 @@
 import type { AgentToolResult } from "@musepi/pi-agent-core";
-import type { ExtensionAPI, ExtensionContext } from "../extensibility/extensions";
+import type { ExtensionContext, PluginAPI } from "../extensibility/extensions";
 import type { SessionEntry } from "../session/session-entries";
 import type { TruncationResult } from "../session/streaming-output";
 
@@ -161,7 +161,7 @@ export interface DashboardController {
 export interface AutoresearchToolFactoryOptions {
 	dashboard: DashboardController;
 	getRuntime(ctx: ExtensionContext): AutoresearchRuntime;
-	pi: ExtensionAPI;
+	pi: PluginAPI;
 }
 
 export type AutoresearchToolResult<TDetails> = AgentToolResult<TDetails>;

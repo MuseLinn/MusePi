@@ -20,7 +20,7 @@
 
 import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { settings } from "../../config/settings";
-import type { ExtensionAPI, ExtensionFactory, ExtensionUIContext } from "../../extensibility/extensions/types";
+import type { ExtensionFactory, ExtensionUIContext, PluginAPI } from "../../extensibility/extensions/types";
 import type { Theme, ThemeColor } from "../../modes/theme/theme";
 
 // ============================================================
@@ -487,7 +487,7 @@ class TaskCardWidgetController {
 // ============================================================
 
 export function createTaskCardStyleExtension(options?: { enabled?: boolean }): ExtensionFactory {
-	return (api: ExtensionAPI): void => {
+	return (api: PluginAPI): void => {
 		if (options?.enabled === false) return;
 		api.registerSetting({
 			key: "display.taskCardStyle",

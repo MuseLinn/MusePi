@@ -244,12 +244,12 @@ export function createLogExperimentTool(
 			const segmentRunCount = currentResults(finalState.results, finalState.currentSegment).length;
 			if (finalState.maxExperiments !== null && segmentRunCount >= finalState.maxExperiments) {
 				runtime.autoresearchMode = false;
-				options.pi.appendEntry(
+				options.pi.sessionActions.appendEntry(
 					"autoresearch-control",
 					runtime.goal ? { mode: "off", goal: runtime.goal } : { mode: "off" },
 				);
-				await options.pi.setActiveTools(
-					options.pi.getActiveTools().filter(name => !EXPERIMENT_TOOL_NAMES.includes(name)),
+				await options.pi.toolManagement.setActiveTools(
+					options.pi.toolManagement.getActiveTools().filter(name => !EXPERIMENT_TOOL_NAMES.includes(name)),
 				);
 			}
 

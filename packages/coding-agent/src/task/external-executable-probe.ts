@@ -9,7 +9,7 @@
  * - 检视入口：`src/task/external-executable-probe.ts`、`docs/gui-implementation.md`。
  */
 import { $which, WhichCachePolicy } from "@musepi/pi-utils";
-import type { ExtensionAPI } from "../extensibility/extensions/types";
+import type { PluginAPI } from "../extensibility/extensions/types";
 
 const PROBE_TIMEOUT_MS = 5_000;
 const MAX_DIAGNOSTIC_CHARS = 400;
@@ -79,7 +79,7 @@ export async function probeExternalExecutable(
 	}
 }
 
-export function registerExternalExecutableProbe(pi: ExtensionAPI, fallback: string): void {
+export function registerExternalExecutableProbe(pi: PluginAPI, fallback: string): void {
 	pi.registerRpc("probeExecutable", (value, ctx) => {
 		const input = value && typeof value === "object" ? (value as { executable?: unknown }).executable : undefined;
 		return probeExternalExecutable(typeof input === "string" ? input : undefined, fallback, ctx.cwd);

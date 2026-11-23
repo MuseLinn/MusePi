@@ -7,9 +7,28 @@ import {
 import type { Model } from "@musepi/pi-ai";
 import { sendsImageInputOnWire } from "@musepi/pi-ai/providers/vision-guard";
 import type { CompactionSettings } from "../config/settings-schema";
+import { registerBuiltinCompactionMethods } from "./compaction-builtin-methods";
+import {
+	type BuiltinCompactionMethod,
+	type CompactionMethod,
+	isCompactionMethod,
+	listCompactionMethodProviders,
+} from "./compaction-method-provider";
 
-/** Choices presented by the ordered compaction-method setting. */
-export const COMPACTION_METHOD_CHOICES = [
+// The five shipped methods are registered on first import, so every consumer of
+// this module (settings schema, maintenance, status line, SDK) sees them without
+// a separate bootstrap step. A plugin registering an extra method runs after.
+registerBuiltinCompactionMethods();
+
+export type { BuiltinCompactionMethod, CompactionMethod };
+
+/**
+ * Choices presented by the ordered compaction-method setting: the built-in five.
+ * A plugin-contributed method is merged in by the daemon's `settings.schema`
+ * response (same rule as `memory.backend`), so a late registration still shows
+ * up without this module depending on load order.
+ */
+export const COMPACTION_METHOD_CHOICES: ReadonlyArray<{ value: string; label: string; description: string }> = [
 	{
 		value: "remote",
 		label: "settings.compaction.method.remote.title",
@@ -35,10 +54,7 @@ export const COMPACTION_METHOD_CHOICES = [
 		label: "settings.compaction.method.shake.title",
 		description: "settings.compaction.method.shake.desc",
 	},
-] as const;
-
-/** One selectable automatic context-maintenance method. */
-export type CompactionMethod = (typeof COMPACTION_METHOD_CHOICES)[number]["value"];
+];
 
 /** Default fallback order: server-native first, portable summary last. */
 export const DEFAULT_COMPACTION_METHOD_ORDER: CompactionMethod[] = [
@@ -49,22 +65,13 @@ export const DEFAULT_COMPACTION_METHOD_ORDER: CompactionMethod[] = [
 	"soft",
 ];
 
-const COMPACTION_METHODS: Record<CompactionMethod, true> = {
-	remote: true,
-	snapcompact: true,
-	handoff: true,
-	soft: true,
-	shake: true,
-};
-
-/** Whether an unknown configuration value names a supported compaction method. */
-export function isCompactionMethod(value: unknown): value is CompactionMethod {
-	return typeof value === "string" && Object.hasOwn(COMPACTION_METHODS, value);
-}
+export { isCompactionMethod };
 
 /**
  * Filter malformed entries and preserve first occurrence order from a configured
- * compaction-method preference list.
+ * compaction-method preference list. An id with no registered provider is
+ * dropped, so uninstalling a method degrades to the built-in order instead of
+ * failing every pass.
  */
 export function resolveCompactionMethodOrder(value: unknown): CompactionMethod[] {
 	if (!Array.isArray(value)) return [];
@@ -76,7 +83,10 @@ export function resolveCompactionMethodOrder(value: unknown): CompactionMethod[]
 	return methods;
 }
 
-const STRATEGY_BY_COMPACTION_METHOD: Record<CompactionMethod, "context-full" | "handoff" | "shake" | "snapcompact"> = {
+const STRATEGY_BY_COMPACTION_METHOD: Record<
+	BuiltinCompactionMethod,
+	"context-full" | "handoff" | "shake" | "snapcompact"
+> = {
 	remote: "context-full",
 	snapcompact: "snapcompact",
 	handoff: "handoff",
@@ -84,10 +94,19 @@ const STRATEGY_BY_COMPACTION_METHOD: Record<CompactionMethod, "context-full" | "
 	shake: "shake",
 };
 
+/** Whether `method` is one the engine knows how to run with its own strategy. */
+function isBuiltinMethod(method: CompactionMethod): method is BuiltinCompactionMethod {
+	return Object.hasOwn(STRATEGY_BY_COMPACTION_METHOD, method);
+}
+
 /**
  * Convert the selected preference into the engine's compact operation flags.
  * The engine intentionally remains usable by SDK consumers that do not expose
  * the coding agent's preference list.
+ *
+ * A plugin-contributed method has no engine strategy of its own: it runs through
+ * the portable summary strategy, with remote compaction off unless it is the
+ * remote method itself.
  */
 export function resolveMethodSettings(
 	settings: CompactionSettings,
@@ -95,7 +114,7 @@ export function resolveMethodSettings(
 ): EngineCompactionSettings {
 	return {
 		...settings,
-		strategy: STRATEGY_BY_COMPACTION_METHOD[method],
+		strategy: isBuiltinMethod(method) ? STRATEGY_BY_COMPACTION_METHOD[method] : "context-full",
 		remoteEnabled: method === "remote",
 	};
 }
@@ -118,7 +137,7 @@ export function resolveSpeculationMethod(
 	model: Model | null | undefined,
 	settings: CompactionSettings,
 	options: { skipRemote?: boolean } = {},
-): "remote" | "handoff" | "soft" | undefined {
+): CompactionMethod | undefined {
 	for (const candidate of resolveCompactionMethodOrder(settings.methodOrder)) {
 		const available =
 			candidate === "remote"
@@ -127,7 +146,15 @@ export function resolveSpeculationMethod(
 					? !!model && sendsImageInputOnWire(model)
 					: true;
 		if (!available) continue;
-		return candidate === "remote" || candidate === "handoff" || candidate === "soft" ? candidate : undefined;
+		// Only methods that need a remote LLM call can be speculated on.
+		const speculatable =
+			candidate === "remote" || candidate === "handoff" || candidate === "soft" || !isBuiltinMethod(candidate);
+		return speculatable ? candidate : undefined;
 	}
 	return undefined;
+}
+
+/** Every method id the host currently accepts, in registration order. */
+export function listCompactionMethods(): CompactionMethod[] {
+	return listCompactionMethodProviders().map(provider => provider.id);
 }

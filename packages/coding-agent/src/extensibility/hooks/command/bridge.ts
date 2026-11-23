@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "../../extensions/types";
+import type { ExtensionContext, PluginAPI } from "../../extensions/types";
 import type { HookPointResult } from "./engine";
 import { runHookPoint } from "./engine";
 import type { CommandHookConfig, CommandHookEvent, HookDialect, HookRunRecord } from "./types";
@@ -89,13 +89,13 @@ function contextsOf(point: CommandHookEvent, result: HookPointResult): string[] 
 }
 
 /** Keep a compact, hidden audit trail for outcomes that mattered (block/failure). */
-function audit(pi: ExtensionAPI, point: CommandHookEvent, dialect: HookDialect, result: HookPointResult): void {
+function audit(pi: PluginAPI, point: CommandHookEvent, dialect: HookDialect, result: HookPointResult): void {
 	for (const record of result.records) {
 		const blocking = record.output.decision === "deny" || record.output.decision === "block";
 		const failed = record.output.exitCode !== undefined && record.output.exitCode !== 0;
 		if (!blocking && !failed) continue;
 		try {
-			pi.appendEntry?.("hook-result", {
+			pi.sessionActions.appendEntry("hook-result", {
 				point,
 				dialect,
 				decision: blocking ? "block" : "allow",
@@ -120,7 +120,7 @@ function warningsOf(result: HookPointResult, records: readonly HookRunRecord[]):
 	return out;
 }
 
-export function installCommandHookBridge(pi: ExtensionAPI, options: CommandHookBridgeOptions): void {
+export function installCommandHookBridge(pi: PluginAPI, options: CommandHookBridgeOptions): void {
 	pi.on("session_start", async (_event, session) => {
 		const cwd = session.cwd;
 		const result = await run(
@@ -136,7 +136,7 @@ export function installCommandHookBridge(pi: ExtensionAPI, options: CommandHookB
 		const contexts = contextsOf("SessionStart", result);
 		if (contexts.length > 0) {
 			try {
-				pi.sendMessage(
+				pi.sessionActions.sendMessage(
 					{ customType: CONTEXT_CUSTOM_TYPE, content: contexts.join("\n\n"), display: false, attribution: "user" },
 					{ deliverAs: "nextTurn" },
 				);

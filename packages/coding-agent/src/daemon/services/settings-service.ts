@@ -398,6 +398,23 @@ export class SettingsService implements DaemonService {
 						item.ui = { ...ui, options: [...declared, ...contributed] };
 					}
 				}
+				// A plugin-contributed compaction method joins the ordered picker the
+				// same way a contributed memory backend joins its enum.
+				if (key === "compaction.methodOrder") {
+					const { listCompactionMethodProviders } = await import("../../session/compaction-method-provider");
+					const declared = (ui.options as Array<{ value: string }> | undefined) ?? [];
+					const known = new Set(declared.map(option => option.value));
+					const contributed = listCompactionMethodProviders()
+						.filter(provider => !known.has(provider.id))
+						.map(provider => ({
+							value: provider.id,
+							label: provider.label,
+							description: provider.description,
+						}));
+					if (contributed.length > 0) {
+						item.ui = { ...ui, options: [...declared, ...contributed] };
+					}
+				}
 				// `options: "runtime"` (theme.dark/theme.light) — resolve the
 				// runtime list daemon-side so the GUI renders a real select
 				// instead of the TUI's runtime-populated submenu. The TUI

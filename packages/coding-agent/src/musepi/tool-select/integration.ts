@@ -19,9 +19,9 @@ import {
 import type {
 	AgentToolUpdateCallback,
 	ContextEvent,
-	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
+	PluginAPI,
 	ToolCallEvent,
 	ToolCallEventResult,
 } from "../../extensibility/extensions/types";
@@ -59,7 +59,7 @@ export function createToolSelectExtension(options?: {
 	/** Tools to never defer even if auto-detected. */
 	never?: string[];
 }): ExtensionFactory {
-	return (api: ExtensionAPI) => {
+	return (api: PluginAPI) => {
 		if (!options?.enabled) {
 			api.logger.debug("tool-select disabled by config");
 			return;

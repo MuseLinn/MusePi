@@ -119,10 +119,7 @@ describe("example plugin-magic-keyword", () => {
 			components: extension.components,
 		});
 
-		expect(extension.components.map(c => c.slot).sort()).toEqual([
-			"settings.extensions",
-			"settings.section",
-		]);
+		expect(extension.components.map(c => c.slot).sort()).toEqual(["settings.extensions", "settings.section"]);
 		expect(failures).toEqual([]);
 	});
 

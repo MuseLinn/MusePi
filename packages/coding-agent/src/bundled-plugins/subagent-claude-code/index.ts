@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import {
 	type ExternalProcessFactory,
 	type ExternalProductConfig,
@@ -49,7 +49,7 @@ export function createClaudeCodeExecutor(
 	};
 }
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	registerExternalExecutableProbe(ctx, "claude");
 	const executor = ctx.config.getAll().then(config => createClaudeCodeExecutor(config));
 	ctx.subagents.register({

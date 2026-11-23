@@ -90,6 +90,7 @@ import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/ho
 import type { PromptText } from "../../prompts/registry";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
+import type { CompactionMethodProvider } from "../../session/compaction-method-provider";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
 import type { ReadonlySessionManager, SessionManager } from "../../session/session-manager";
 import type { AgentDefinition, SubagentDefinition } from "../../task/types";
@@ -1429,6 +1430,34 @@ export interface PluginContextNamespaces {
 	 * plugin does not branch at registration time.
 	 */
 	readonly hmr: HmrSurface;
+	/**
+	 * Session actions — the namespaced home for what Track B exposes as flat
+	 * methods (`appendEntry`, `sendMessage`, `sendUserMessage`). A plugin writes
+	 * `ctx.sessionActions.appendEntry(...)`; the flat names stay on
+	 * `ExtensionAPI` for old extensions. Named `sessionActions` because
+	 * `ctx.session` already carries the session event subscriptions.
+	 */
+	readonly sessionActions: {
+		appendEntry<T = unknown>(customType: string, data?: T): void;
+		sendMessage<T = unknown>(
+			message: CustomMessagePayload<T>,
+			options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
+		): void;
+		sendUserMessage(
+			content: string | (TextContent | ImageContent)[],
+			options?: { deliverAs?: "steer" | "followUp" },
+		): void;
+	};
+	/**
+	 * Tool-slate actions — the namespaced home for Track B's flat
+	 * `getActiveTools` / `setActiveTools` / `getAllTools` / `getCommands`.
+	 */
+	readonly toolManagement: {
+		getActiveTools(): string[];
+		setActiveTools(toolNames: string[]): Promise<void>;
+		getAllTools(): ToolInfo[];
+		getCommands(): SlashCommandInfo[];
+	};
 }
 
 /** The `ctx.hmr` service surface a plugin sees. */
@@ -1769,6 +1798,21 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	/** Remove a provider registered through {@link registerSearchProvider}.
 	 * Resolves false for built-ins and for ids another party owns. */
 	unregisterSearchProvider(id: string): boolean;
+	/**
+	 * Register a compaction method for `compaction.methodOrder`.
+	 *
+	 * The method joins the same registry the five built-ins use, so it appears in
+	 * the ordered picker and in every availability scan without a second
+	 * selection path. Its `id` must not collide with a built-in or another
+	 * party's registration; a collision throws instead of overwriting, and
+	 * re-registering this extension's own id replaces it so hot reload is safe.
+	 * An id with no registered provider is dropped from the configured order, so
+	 * unloading degrades to the built-in order rather than breaking every pass.
+	 *
+	 * The provider owns only the condensation step: committing the compaction
+	 * entry, journaling spend and re-anchoring context stay in the host.
+	 */
+	registerCompactionMethodProvider(provider: CompactionMethodProvider): () => void;
 	/**
 	 * Register a fallback writer consulted when a native `write`/`edit` byte-write is
 	 * denied with a permission error (`EPERM`/`EACCES`/`EROFS`). Every other write
@@ -2519,7 +2563,7 @@ export interface ProviderModelConfig {
 
 /** Extension factory function type. Supports both sync and async initialization. */
 export type ExtensionFactory = (
-	pi: ExtensionAPI,
+	pi: PluginAPI,
 	/** Coerced values of the plugin's declared `musepi.config` fields (dsh's
 	 *  `apply(ctx, config)`). Empty for a plugin that declares none. */
 	config?: Record<string, unknown>,
@@ -3050,7 +3094,7 @@ export interface ExtensionComponent {
 	 *  DSH `conversation.chat.node` entryKey analog. */
 	entryKinds?: string[];
 	/** Nav glyph for settings pages (IconName or short label). DSH
-	 *  `settings.section.icon` parity: the registrant, not the shell, names the
+	 *  `settings.section` owner option: the registrant, not the shell, names the
 	 *  icon its section renders with. */
 	icon?: string;
 	/** Extra search terms for the settings search (owner-provided, like the

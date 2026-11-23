@@ -375,7 +375,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			});
 			pi.on("input", async () => {
 				await startupPromise;
-				await pi.setActiveTools([...pi.getActiveTools(), "late_active_tool"]);
+				await pi.toolManagement.setActiveTools([...pi.toolManagement.getActiveTools(), "late_active_tool"]);
 			});
 		};
 
@@ -971,7 +971,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 				},
 			});
 			pi.on("session_start", async () => {
-				await pi.setActiveTools(["read"]);
+				await pi.toolManagement.setActiveTools(["read"]);
 				pi.registerTool({
 					name: "disabled_replacement_tool",
 					label: "Disabled Replacement Tool",
@@ -1321,7 +1321,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 						return { content: [{ type: "text", text: "registered" }] };
 					},
 				});
-				await pi.setActiveTools(["read"]);
+				await pi.toolManagement.setActiveTools(["read"]);
 			});
 		};
 

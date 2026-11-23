@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import {
 	type ExternalJsonlEvent,
 	type ExternalProcessFactory,
@@ -58,7 +58,7 @@ export function createKimiCodeExecutor(
 	};
 }
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	registerExternalExecutableProbe(ctx, "kimi");
 	const executor = ctx.config.getAll().then(config => createKimiCodeExecutor(config));
 	ctx.subagents.register({
