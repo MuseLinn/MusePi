@@ -65,6 +65,10 @@ export const settingsCompaction = {
 	"settings.compaction.backgroundPre.desc":
 		"Summarize in the background as the threshold approaches, then splice the ready result in, so compaction adds no wait.",
 
+	"settings.compaction.speculationCacheGuard.title": "Skip Pre-Compaction on a Cold Cache",
+	"settings.compaction.speculationCacheGuard.desc":
+		"Write the background summary only while the last response's prompt cache is still alive; after a long pause it would pay for the whole prefix again beside your next request. Off always pre-compacts.",
+
 	"settings.compaction.remoteV2.title": "Remote Compaction V2",
 	"settings.compaction.remoteV2.desc": "Stream compaction responses on models that support server-side compaction.",
 

@@ -1771,6 +1771,7 @@ export class AgentSession {
 			scheduleCompactionContinuation: options => this.#scheduleCompactionContinuation(options),
 			persistTurnMessagesForMidRunCompaction: context => this.#persistTurnMessagesForMidRunCompaction(context),
 			findLastAssistantMessage: () => this.#findLastAssistantMessage(),
+			lastMeasuredResponseAgeMs: () => this.#lastMeasuredResponseAgeMs(),
 			disconnectFromAgent: () => this.#disconnectFromAgent(),
 			reconnectToAgent: () => this.#reconnectToAgent(),
 			drainStrandedQueuedMessages: () => this.#drainStrandedQueuedMessages(),
@@ -3719,6 +3720,25 @@ export class AgentSession {
 			const msg = messages[i];
 			if (msg.role === "assistant") {
 				return msg as AssistantMessage;
+			}
+		}
+		return undefined;
+	}
+
+	/**
+	 * Milliseconds since the newest assistant response that carried real usage,
+	 * i.e. the response whose request wrote the prompt-cache entry the next
+	 * speculative summary would read. Undefined when the session has none yet.
+	 */
+	#lastMeasuredResponseAgeMs(): number | undefined {
+		const messages = this.agent.state.messages;
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i];
+			if (msg.role === "assistant") {
+				const usage = (msg as AssistantMessage).usage;
+				if (usage && (usage.input > 0 || usage.cacheRead > 0 || usage.cacheWrite > 0)) {
+					return Math.max(0, Date.now() - msg.timestamp);
+				}
 			}
 		}
 		return undefined;

@@ -63,6 +63,10 @@ export const settingsCompaction = {
 	"settings.compaction.backgroundPre.title": "后台预压缩",
 	"settings.compaction.backgroundPre.desc": "接近阈值时先在后台生成摘要，越过阈值后直接拼接，压缩不再让你等待。",
 
+	"settings.compaction.speculationCacheGuard.title": "缓存冷时跳过预压缩",
+	"settings.compaction.speculationCacheGuard.desc":
+		"只在最近一次响应的提示缓存仍有效时在后台生成摘要；长时间离开后它会让整个前缀重新计费，并和你的下一条请求抢缓存。关闭后始终预压缩。",
+
 	"settings.compaction.remoteV2.title": "远程压缩 V2",
 	"settings.compaction.remoteV2.desc": "对支持服务端压缩的模型使用流式压缩响应。",
 

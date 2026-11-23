@@ -3029,6 +3029,17 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"compaction.speculationCacheGuard": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "settings.compaction.group.behavior",
+			label: "settings.compaction.speculationCacheGuard.title",
+			description: "settings.compaction.speculationCacheGuard.desc",
+		},
+	},
+
 	"compaction.remoteStreamingV2Enabled": {
 		type: "boolean",
 		default: true,
@@ -7110,6 +7121,8 @@ export interface CompactionSettings {
 	keepRecentTokens: number;
 	midTurnEnabled: boolean;
 	asyncEnabled: boolean;
+	/** Skip background pre-compaction once the last response's prompt cache has gone cold. */
+	speculationCacheGuard: boolean;
 	modelThresholdsEnabled: boolean;
 	modelThresholds: Record<string, number | string | null>;
 	experimentalContextManagement: boolean;

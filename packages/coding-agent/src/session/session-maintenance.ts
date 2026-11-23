@@ -98,6 +98,7 @@ import {
 } from "./messages";
 import { resolveModelCompactionSettings } from "./model-compaction-threshold";
 import { journalCompaction } from "./model-usage-journal";
+import { isPromptCacheWarm, resolvePromptCacheLifetimeMs } from "./prompt-cache-guard";
 import { isTerminalTextAssistantAnswer } from "./queued-messages";
 import {
 	resolveCompactionConfiguredTarget,
@@ -291,6 +292,8 @@ export interface SessionMaintenanceHost {
 	}): boolean;
 	persistTurnMessagesForMidRunCompaction(context: AgentTurnEndContext | undefined): Promise<boolean>;
 	findLastAssistantMessage(): AssistantMessage | undefined;
+	/** Milliseconds since the newest response the provider measured; undefined when none was. */
+	lastMeasuredResponseAgeMs(): number | undefined;
 	disconnectFromAgent(): void;
 	reconnectToAgent(): void;
 	drainStrandedQueuedMessages(): void;
@@ -1319,6 +1322,9 @@ export class SessionMaintenance {
 		const thresholdTokens = resolveThresholdTokens(contextWindow, settings);
 		if (contextTokens >= thresholdTokens) return; // real maintenance owns it now
 		if (thresholdTokens - contextTokens > resolveSpeculationLeadTokens(thresholdTokens)) return;
+		// A summary off a cold cache prefix is wasted work and a second full
+		// prefill beside the user's next request; wait for the real pass instead.
+		if (!this.#promptCacheWarmForSpeculation()) return;
 		const current = this.#speculation;
 		if (current) {
 			if (!current.armed) return; // one run at a time
@@ -1424,8 +1430,28 @@ export class SessionMaintenance {
 			}
 			return true; // still summarizing in the background
 		}
+		// Nothing armed yet: starting a run here would only pay for a cold prefix.
+		if (!this.#promptCacheWarmForSpeculation()) return false;
 		this.#startSpeculationRun(contextTokens, method);
 		return true;
+	}
+
+	/**
+	 * Whether the prompt-cache entry a speculative summary would read is still
+	 * warm. Disabled by `compaction.speculationCacheGuard === false`; a session
+	 * with no measured response yet is warm by default, since its first request
+	 * wrote the cache moments ago.
+	 */
+	#promptCacheWarmForSpeculation(): boolean {
+		const settings = this.#compactionSettings;
+		if (settings.speculationCacheGuard === false) return true;
+		const model = this.#model;
+		if (!model) return false;
+		const lifetimeMs = resolvePromptCacheLifetimeMs(model, undefined);
+		if (lifetimeMs === undefined) return false;
+		const ageMs = this.#host.lastMeasuredResponseAgeMs();
+		if (ageMs === undefined) return true;
+		return isPromptCacheWarm(lifetimeMs, ageMs);
 	}
 
 	/** Produce and arm one speculative compaction result off a branch snapshot. */

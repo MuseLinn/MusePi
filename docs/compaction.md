@@ -144,6 +144,12 @@ The automatic paths are intentionally different:
   - Trigger: `runIdleCompaction()` when not streaming or already compacting.
   - Uses `reason: "idle"` and does not auto-continue afterward.
 
+### Background pre-compaction and the prompt-cache guard
+
+`compaction.asyncEnabled` (on by default) starts a speculative summary once context enters the pre-threshold band `[threshold − lead, threshold)`, where the lead is `threshold × 12.5%` clamped to 8,192–32,000 tokens. The result is held ("armed") and spliced in by the next real maintenance pass, so a turn that crosses the threshold does not wait for a summary. A turn that jumps past the threshold while a run is still live is deferred instead of blocked, until the grace cap at `threshold + lead`.
+
+A speculative summary reads the prefix the provider last processed, so it stays cheap only while that prefix's prompt-cache entry is alive. `compaction.speculationCacheGuard` (on by default) skips a new speculation run once the newest response carrying real usage is older than the model's prompt-cache lifetime minus a margin of 30 s (a quarter of the lifetime on short caches). After a long pause the entry is cold, and writing the summary then pays a full cache write for the whole prefix beside the user's next request. An armed summary is never discarded by the guard: it is spliced in whenever the real pass runs. Models that declare no cache lifetime take a 5-minute default; a model whose retention is `none` never speculates.
+
 ### Snapcompact strategy
 
 `compaction.strategy: "snapcompact"` replaces the LLM summarization call with a local, deterministic archival pass (`compact` from `@musepi/snapcompact`):

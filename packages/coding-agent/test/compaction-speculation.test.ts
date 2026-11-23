@@ -71,6 +71,9 @@ describe("async speculative compaction", () => {
 			queueNotesReminder?: (prompt: string) => void;
 			extensionRunner?: SessionMaintenanceHost["extensionRunner"];
 			generateHandoffDocument?: SessionMaintenanceHost["generateHandoffDocument"];
+			/** Age of the newest measured response; drives the prompt-cache guard. */
+			lastMeasuredResponseAgeMs?: number;
+			cacheGuard?: boolean;
 		} = {},
 	): SessionMaintenance {
 		const agent = new Agent({
@@ -83,6 +86,7 @@ describe("async speculative compaction", () => {
 			"compaction.thresholdPercent": options.thresholdPercent ?? 50,
 			"compaction.keepRecentTokens": 1,
 			"compaction.autoContinue": false,
+			...(options.cacheGuard === undefined ? {} : { "compaction.speculationCacheGuard": options.cacheGuard }),
 			...(options.remoteEndpoint === undefined ? {} : { "compaction.remoteEndpoint": options.remoteEndpoint }),
 			...(options.modelThresholds === undefined ? {} : { "compaction.modelThresholds": options.modelThresholds }),
 			...(options.modelThresholdsEnabled === undefined
@@ -126,6 +130,7 @@ describe("async speculative compaction", () => {
 			scheduleCompactionContinuation: () => false,
 			persistTurnMessagesForMidRunCompaction: async () => false,
 			findLastAssistantMessage: () => undefined,
+			lastMeasuredResponseAgeMs: () => options.lastMeasuredResponseAgeMs,
 			disconnectFromAgent: () => {},
 			reconnectToAgent: () => {},
 			drainStrandedQueuedMessages: () => {},
@@ -191,6 +196,44 @@ describe("async speculative compaction", () => {
 
 	afterAll(() => {
 		authStorage.close();
+	});
+
+	it("skips speculation once the prompt cache has gone cold", () => {
+		// Default 5-minute lifetime, 30s margin: ten minutes is far past it.
+		maintenance = createMaintenance({ lastMeasuredResponseAgeMs: 10 * 60_000 });
+		appendSummarizableConversation();
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("idle");
+	});
+
+	it("still speculates while the prompt cache is warm", async () => {
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: "speculative summary",
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		maintenance = createMaintenance({ lastMeasuredResponseAgeMs: 60_000 });
+		appendSummarizableConversation();
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		await waitForState("armed");
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores a cold cache when the guard is switched off", async () => {
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: "speculative summary",
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		maintenance = createMaintenance({ lastMeasuredResponseAgeMs: 10 * 60_000, cacheGuard: false });
+		appendSummarizableConversation();
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		await waitForState("armed");
+		expect(compactSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not call the summarizer below the speculative band, then arms inside it", async () => {
