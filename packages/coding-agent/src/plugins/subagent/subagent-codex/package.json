@@ -21,7 +21,7 @@
 	],
 	"peerDependencies": {
 		"@musepi/pi-coding-agent": "workspace:*",
-		"@musepi/pi-utils/ptree": "workspace:*"
+		"@musepi/pi-utils": "workspace:*"
 	},
 	"scripts": {
 		"check": "tsgo -p tsconfig.json --noEmit"
