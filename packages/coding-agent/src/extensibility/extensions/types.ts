@@ -2047,6 +2047,17 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 		get<T = unknown>(key: string): Promise<T | undefined>;
 		/** The full coerced value table for this extension's declared fields. */
 		getAll(): Promise<Record<string, unknown>>;
+		/**
+		 * Persist one declared field, through the same coercion the form and the
+		 * reader use. Returns the coerced value that was stored.
+		 *
+		 * Rejects instead of writing something unreadable: an undeclared key has
+		 * no field to coerce against, and a value that does not fit its declared
+		 * type would silently fall back to the default on the next read — a write
+		 * that appears to succeed and changes nothing. The plugin never edits the
+		 * host's own configuration file; this store is the one it owns.
+		 */
+		set(key: string, value: unknown): Promise<unknown>;
 	};
 
 	// =========================================================================

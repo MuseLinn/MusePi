@@ -1915,6 +1915,12 @@ export const settings = {
 	"settings.onboardingBranchImport": "导入会话",
 	"settings.onboardingBranchPersonalize": "个性化",
 	"settings.onboardingBranchFeatures": "功能速览",
+	"settings.onboardingBranchMemory": "记忆",
+	"settings.onboardingMemoryBackend": "让 MusePi 跨会话记住内容",
+	"settings.onboardingMemoryBackendDescription":
+		"在本机保存过去工作的笔记，需要时带回来。除非你之后选远端后端，否则内容不会离开这台电脑。",
+	"settings.onboardingMemoryIdle": "我不在时整理记忆",
+	"settings.onboardingMemoryIdleDescription": "安静一小时后，在后台把较旧的笔记折叠成摘要。",
 	"settings.onboardingBranchDesign": "设计模式（新）",
 	"settings.onboardingBranchDesignBody":
 		"设计模式让 agent 变成 UI 设计师：先对齐简报（目标、平台、风格基准、参考、交付物），先判断结构再谈配色，产出的是带 manifest 的可预览设计稿，而不是实现代码。要落地实现时切回 Work 模式。",
@@ -7102,7 +7108,6 @@ export const settings = {
 	"settings.memory.idleEnqueueMinutes.option.12h": "12 小时",
 	"settings.memory.idleEnqueueMinutes.option.24h": "24 小时",
 	"settings.memoryBackends": "后端",
-	"settings.memoryBackendsDescription": "记忆存在哪里：本机管线、本地 SQLite 引擎，或远端服务。",
 	"settings.memoryStatusDescription": "实时后端状态与维护操作。",
 	"settings.secrets": "密钥",
 	"settings.secretsDescription": "Agent 可以使用、但始终读不到真实值的密钥。",

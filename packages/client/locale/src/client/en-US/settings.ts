@@ -2003,6 +2003,13 @@ export const settings = {
 	"settings.onboardingBranchImport": "Import sessions",
 	"settings.onboardingBranchPersonalize": "Personalize",
 	"settings.onboardingBranchFeatures": "Feature tour",
+	"settings.onboardingBranchMemory": "Memory",
+	"settings.onboardingMemoryBackend": "Let MusePi remember across sessions",
+	"settings.onboardingMemoryBackendDescription":
+		"Keeps notes from past work on this machine and brings back what is relevant. Nothing leaves your computer unless you pick a remote backend later.",
+	"settings.onboardingMemoryIdle": "Tidy memory when I'm away",
+	"settings.onboardingMemoryIdleDescription":
+		"After an hour of quiet, fold older notes into summaries in the background.",
 	"settings.onboardingBranchDesign": "Design mode (new)",
 	"settings.onboardingBranchDesignBody":
 		"Design mode turns the agent into a UI designer: it aligns on a brief first (goal, platform, style baseline, references, deliverable), judges structure before colours, and produces a previewable design artifact with a manifest instead of writing implementation code. Switch back to Work mode when you want it built.",
@@ -7404,8 +7411,6 @@ export const settings = {
 	"settings.memory.idleEnqueueMinutes.option.12h": "12 hours",
 	"settings.memory.idleEnqueueMinutes.option.24h": "24 hours",
 	"settings.memoryBackends": "Backends",
-	"settings.memoryBackendsDescription":
-		"Where memory is stored: an on-device pipeline, the local SQLite engine, or a remote service.",
 	"settings.memoryStatusDescription": "Live backend status and maintenance actions.",
 	"settings.secrets": "Secrets",
 	"settings.secretsDescription": "Values the agent can use without ever reading them.",

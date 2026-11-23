@@ -104,13 +104,13 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const backend = status?.status?.backend;
 	return (
 		<>
+			{/* One section, three group headings: the backend choice, then that
+			 *  backend's own settings under the schema's groups (Mnemopi,
+			 *  Hindsight, Memory Maintenance), then auto-learn. A 15px section
+			 *  heading over a single dropdown read as more structure than the
+			 *  page holds. */}
 			<div className="gui-settings-section">
-				<div className="gui-memory-workspace-head">
-					<div className="min-w-0">
-						<div className="gui-settings-section-title">{t("settings.memoryBackends")}</div>
-						<div className="gui-settings-row-desc">{t("settings.memoryBackendsDescription")}</div>
-					</div>
-				</div>
+				<div className="gui-settings-group-h">{t("settings.memoryBackends")}</div>
 				<SchemaTabSection
 					rpc={rpc}
 					tabs={["memory"]}
