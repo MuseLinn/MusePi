@@ -20,6 +20,7 @@
  * registration came from (diagnostics); `toolIsRegistered` is the rule the
  * core factory follows, because both tracks sit in the same session layer.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import type { ToolSession } from ".";
@@ -42,6 +43,20 @@ interface PluginRegistration {
 	owner?: ToolOwner;
 	/** Package that registered it, for diagnostics. */
 	packageName?: string;
+	/** Mounts holding this registration, keyed by the mounting entry. */
+	mounts: Map<string, number>;
+}
+
+/**
+ * The owning mount of a registration made inside `runWithToolProviderOwner`.
+ * Mounts are async, so a plain module variable could attribute one plugin's
+ * registration to another; AsyncLocalStorage carries the owner across awaits.
+ */
+const mountOwner = new AsyncLocalStorage<string>();
+
+/** Attribute tool-provider registrations made by `run` to one mounting entry. */
+export function runWithToolProviderOwner<T>(owner: string, run: () => T): T {
+	return mountOwner.run(owner, run);
 }
 
 /**
@@ -69,26 +84,45 @@ export function providedToolNames(): string[] {
 /**
  * Register a package-provided implementation.
  *
- * A duplicate inside the plugin layer throws: two packages claiming one tool is
- * a composition error, not something to resolve by load order. The returned
- * disposer removes exactly this registration.
+ * A package may be mounted more than once (host preload, then a session): a
+ * second mount by the same entry joins the registration, and the name leaves
+ * the layer only when its last mount releases. A *different* mount claiming the
+ * same name still fails — dsh's rule that a duplicate inside one layer is a
+ * composition error, with a per-agent variant belonging in that agent's scope.
+ * The returned disposer removes exactly this mount's hold.
  */
 export function registerToolProvider(
 	name: string,
 	implementation: ToolImplementation,
 	options: { owner?: ToolOwner; packageName?: string } = {},
 ): () => void {
-	if (pluginLayer.has(name)) {
-		throw new Error(
-			`tool "${name}" is already provided by the plugin layer${
-				pluginLayer.get(name)?.packageName === undefined ? "" : ` (${pluginLayer.get(name)!.packageName!})`
-			}`,
-		);
+	const owner = mountOwner.getStore() ?? `direct:${nextDirectOwner++}`;
+	const existing = pluginLayer.get(name);
+	if (existing !== undefined) {
+		const held = existing.mounts.get(owner) ?? 0;
+		if (held === 0) {
+			throw new Error(
+				`tool "${name}" is already provided by the plugin layer${
+					existing.packageName === undefined ? "" : ` (${existing.packageName})`
+				}`,
+			);
+		}
+		existing.mounts.set(owner, held + 1);
+		return () => releaseToolProvider(name, owner);
 	}
-	pluginLayer.set(name, { implementation, ...options });
-	return () => {
-		pluginLayer.delete(name);
-	};
+	pluginLayer.set(name, { implementation, ...options, mounts: new Map([[owner, 1]]) });
+	return () => releaseToolProvider(name, owner);
+}
+
+let nextDirectOwner = 0;
+
+function releaseToolProvider(name: string, owner: string): void {
+	const entry = pluginLayer.get(name);
+	if (entry === undefined) return;
+	const held = entry.mounts.get(owner) ?? 0;
+	if (held <= 1) entry.mounts.delete(owner);
+	else entry.mounts.set(owner, held - 1);
+	if (entry.mounts.size === 0) pluginLayer.delete(name);
 }
 
 /**
@@ -219,10 +253,10 @@ export function isToolOwnerActive(name: string): boolean {
 	const owner = toolOwnerOf(name);
 	if (owner === undefined || isCapabilityActive(owner.domain, owner.id)) return true;
 	// A preload or re-mount can dispose the activation while the package still
-	// provides the implementation process-wide. Treating that transient as an
-	// unloaded component would hide the whole owned family (bash, ask,
-	// request_secret) from every session. Component disablement stays
-	// authoritative through `tools.disabled`.
+	// provides the implementation process-wide. Availability follows the
+	// registered implementation (dsh: a scope's view of registered tools); the
+	// explicit denylists (`tools.disabled`, `disabledExtensionComponents`) stay
+	// authoritative.
 	return pluginProvidesTool(name);
 }
 

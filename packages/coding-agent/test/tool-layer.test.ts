@@ -14,6 +14,7 @@ import {
 	providedToolNames,
 	registerToolProvider,
 	resolveToolImplementation,
+	runWithToolProviderOwner,
 	toolLayerOf,
 	toolProviderFor,
 } from "@musepi/pi-coding-agent/tools/tool-ownership";
@@ -111,6 +112,32 @@ describe("layered tool resolution", () => {
 		expect(isToolOwnerActive("bash")).toBe(true);
 		for (const release of releases.splice(0)) release();
 		expect(isToolOwnerActive("bash")).toBe(false);
+	});
+
+	test("a re-mount by the same entry joins the existing registration", () => {
+		const releaseFirst = runWithToolProviderOwner("/pkg/tool-bash", () => registerToolProvider("bash", () => null));
+		const releaseSecond = runWithToolProviderOwner("/pkg/tool-bash", () => registerToolProvider("bash", () => null));
+		expect(toolProviderFor("bash")).toBeDefined();
+		releaseSecond();
+		expect(toolProviderFor("bash")).toBeDefined();
+		releaseFirst();
+		expect(toolProviderFor("bash")).toBeUndefined();
+	});
+
+	test("a different mount claiming the same name still fails", () => {
+		const release = runWithToolProviderOwner("/pkg/first", () => registerToolProvider("grep", () => null));
+		expect(() => runWithToolProviderOwner("/pkg/second", () => registerToolProvider("grep", () => null))).toThrow(
+			/already provided by the plugin layer/,
+		);
+		release();
+	});
+
+	test("the mount owner survives awaits inside apply", async () => {
+		await runWithToolProviderOwner("/pkg/async", async () => {
+			await Promise.resolve();
+			releases.push(registerToolProvider("web_search", () => null));
+		});
+		expect(toolProviderFor("web_search")).toBeDefined();
 	});
 
 	test("createTools keeps the owned tool after a released activation", async () => {

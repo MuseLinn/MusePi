@@ -46,7 +46,7 @@ import { RequestSecretTool } from "./request-secret";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
 import { TodoTool } from "./todo";
-import { isToolOwnerActive, resolveToolImplementation } from "./tool-ownership";
+import { isToolOwnerActive, pluginProvidesTool, resolveToolImplementation } from "./tool-ownership";
 import { WorkflowTool } from "./workflow";
 import { WriteTool } from "./write";
 import { isMountableUnderXdev } from "./xdev";
@@ -311,7 +311,12 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			const goalState = session.getGoalModeState?.();
 			return goalState === undefined || goalState.enabled === true || goalState.goal.status === "dropped";
 		}
-		if (name === "lsp") return isCapabilityActive("tool", "lsp") && enableLsp && session.settings.get("lsp.enabled");
+		if (name === "lsp")
+			return (
+				(isCapabilityActive("tool", "lsp") || pluginProvidesTool("lsp")) &&
+				enableLsp &&
+				session.settings.get("lsp.enabled")
+			);
 		if (name === "bash") return session.settings.get("bash.enabled");
 		if (name === "eval") return allowEval;
 		if (name === "debug") return session.settings.get("debug.enabled");
@@ -334,7 +339,10 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "ask") return session.settings.get("ask.enabled");
 		if (name === "browser") return session.settings.get("browser.enabled");
 		if (name === "computer")
-			return isCapabilityActive("tool", "computer") && session.settings.get("computer.enabled");
+			return (
+				(isCapabilityActive("tool", "computer") || pluginProvidesTool("computer")) &&
+				session.settings.get("computer.enabled")
+			);
 		if (name === "checkpoint" || name === "rewind")
 			return (
 				session.settings.get("checkpoint.enabled") &&

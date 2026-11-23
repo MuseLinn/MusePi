@@ -41,7 +41,7 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **注册即所有权**：两条轨道各有一个判定，不共用答案——`pluginOwnsTool(session, name)` 只在 **Track A 插件**（`ctx.tools.register`）注册该名时为真，`extensionOwnsTool(session, name)` 只在 **Track B 旧扩展**注册时为真。`Extension.track` 是这条区分的依据（两条轨道各自的构造器打标），runner 用 `getExtensionForTool(name)` 反查。工具类的 `createIf` 仍用 `extensionOwnsTool` 判定「已被注册，核心工厂不再造第二份」。
 
-**分层注册表**：解析顺序是 session 层（两条轨道的注册）→ plugin 层（`registerToolProvider`，进程级包提供实现）→ core（`BUILTIN_TOOLS` 工厂表）。近层遮蔽远层，同一层内重复注册报错（`pluginProvidesTool` 用于判断 plugin 层是否已提供），disposer 移除的是自己那一条。`toolLayerOf` 报告某个名字由哪一层回答。
+**分层注册表**：解析顺序是 session 层（两条轨道的注册）→ plugin 层（`registerToolProvider`，进程级包提供实现）→ core（`BUILTIN_TOOLS` 工厂表）。近层遮蔽远层；同一个挂载入口再次挂载会加入现有注册（按挂载计数，最后一个挂载释放时名字才离开），不同入口声称同一个名字仍然报错——这与 dsh「同层重复是组合错误，per-agent 变体走该 agent 的 scope」一致（`pluginProvidesTool` 用于判断 plugin 层是否已提供），disposer 只释放自己那一份挂载。`toolLayerOf` 报告某个名字由哪一层回答。
 
 Track A 入口必须使用**具名导出**：`export const name`、`export const inject`、可选的 `export const provide` / `export const Config`、`export function apply(ctx, config)`。不要写 `export default apply` 或 `export default { ... }`：前者会被宿主解析成 legacy bare factory，`name` / `inject` / `provide` 全部失效；后者不是 dsh 的入口约定。MusePi 的 loader 仍兼容旧写法，但新插件一律用具名导出。
 Track A 的 `apply` 收到同一个对象，既是 `pi`（平铺兼容面），也是 `ctx`（dsh 风格服务面）。新插件应使用 `ctx.tools.register`、`ctx.commands.register`、`ctx.settings.register`、`ctx.prompts.register`、`ctx.slots.register`、`ctx.rpc.register`、`ctx.memory.registerBackendProvider`、`ctx.hmr.onChange`；`pi.registerTool` 等平铺方法只作为既有插件的兼容别名保留。

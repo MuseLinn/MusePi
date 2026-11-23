@@ -29,6 +29,7 @@
  * validation) living on the track that owns it, not about forking mechanisms.
  */
 
+import { runWithToolProviderOwner } from "../../../tools/tool-ownership";
 import type { EventBus } from "../../../utils/event-bus";
 import type { DynamicExtensionLoadErrorCode } from "../../extensions/dynamic-extension-error";
 import { DynamicExtensionLoadError } from "../../extensions/dynamic-extension-error";
@@ -377,28 +378,30 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		// the names in its `provide`, handed to consumers through
 		// `pi.service(name)`. A legacy factory's return is ignored — it predates
 		// the contract and returning something there is not a publish.
-		const returned = await runPluginInFiber(
-			extension,
-			ctx.runtime,
-			ctx.cwd,
-			ctx.eventBus,
-			factory as unknown as ExtensionFactory,
-			ownContext => {
-				const base = createPluginAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus, ownContext);
-				// Primitives first, then the ledger: the ledger wraps registrations
-				// into effects, and it must see the primitives too so a `register*`
-				// call made through the wrapped API is still recorded.
-				const primitives = withCordisPrimitives(base, extension);
-				// The service handle comes last so a plugin holds ONE api object:
-				// asking `pi.service("name")` in `apply` must resolve through the
-				// same registry the gate consulted, or a dependency could pass the
-				// check and still be unreachable at use time.
-				const withServices =
-					ctx.serviceRegistry === undefined ? primitives : withServiceAccess(primitives, ctx.serviceRegistry);
-				return ctx.wrapApi === undefined ? withServices : ctx.wrapApi(withServices, extension);
-			},
-			values,
-			ctx.scopeTag,
+		const returned = await runWithToolProviderOwner(extension.resolvedPath, () =>
+			runPluginInFiber(
+				extension,
+				ctx.runtime,
+				ctx.cwd,
+				ctx.eventBus,
+				factory as unknown as ExtensionFactory,
+				ownContext => {
+					const base = createPluginAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus, ownContext);
+					// Primitives first, then the ledger: the ledger wraps registrations
+					// into effects, and it must see the primitives too so a `register*`
+					// call made through the wrapped API is still recorded.
+					const primitives = withCordisPrimitives(base, extension);
+					// The service handle comes last so a plugin holds ONE api object:
+					// asking `pi.service("name")` in `apply` must resolve through the
+					// same registry the gate consulted, or a dependency could pass the
+					// check and still be unreachable at use time.
+					const withServices =
+						ctx.serviceRegistry === undefined ? primitives : withServiceAccess(primitives, ctx.serviceRegistry);
+					return ctx.wrapApi === undefined ? withServices : ctx.wrapApi(withServices, extension);
+				},
+				values,
+				ctx.scopeTag,
+			),
 		);
 		// Only a plain object is a publish. A string/number/array returned by a
 		// cordis entry is not one, and treating it as such would hand a consumer
