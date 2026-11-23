@@ -1,7 +1,7 @@
 import { type Volatile, volatile, z } from "@musepi/pi-coding-agent/plugin-config";
 
 /**
- * The plugin's declared config (dsh's `Config`): the host validates the
+ * The plugin's declared config (the declared config): the host validates the
  * effective values through this schema, fills defaults, and derives the
  * management form from `toJsonSchema()`. The manifest no longer carries a
  * parallel field table.

@@ -404,7 +404,7 @@ type RunnerEmitResult<TEvent extends RunnerEmitEvent> = TEvent extends { type: "
  * the agent does); `remember` runs serially, stops on a truthy result (cancel,
  * continued) and otherwise takes the last remembered result.
  *
- * dsh picks the mode at each emit site (`ctx.serial` / `ctx.parallel` /
+ * The emit site picks the mode (`ctx.serial` (`ctx.serial` / `ctx.parallel` /
  * `ctx.bail`). MusePi declares it once here because the runner exposes a single
  * `emit(event)` entry: one declaration cannot drift between call sites, and the
  * record below makes the choice exhaustive at compile time.
@@ -600,7 +600,7 @@ export class ExtensionRunner {
 	#claimedReservedCommands: Set<string> = new Set();
 	#toolRegistrationScope = new AsyncLocalStorage<ToolRegistrationScope>();
 	#toolRegistrationBarrier: Promise<void> | undefined;
-	/** The live session's Cordis fiber (dsh's agent scope). Owned by the runner,
+	/** The live session's Cordis fiber (the agent scope). Owned by the runner,
 	 *  not the runtime: one runtime may serve several sessions once instances
 	 *  are shared, and each keeps its own scope. */
 	#sessionScope: ExtensionSessionScope | undefined;
@@ -1294,7 +1294,7 @@ export class ExtensionRunner {
 	}
 
 	/**
-	 * Update one volatile config field in place (dsh `.volatile()`): returns
+	 * Update one volatile config field in place: returns
 	 * false when the field is not volatile, so the caller remounts instead.
 	 */
 	updateConfig(entryPath: string, key: string, value: unknown): boolean {
@@ -1968,7 +1968,7 @@ export class ExtensionRunner {
 	 *  `start` is isolated: a throw/rejection is routed to onError and the
 	 *  remaining services still start.
 	 *
-	 *  Services belong to the instance, not the session (dsh: the plugin fiber
+	 *  Services belong to the instance, not the session (the plugin fiber
 	 *  owns them), so a shared instance starts them once even when several
 	 *  sessions use it. */
 	startServices(): void {
@@ -2009,7 +2009,7 @@ export class ExtensionRunner {
 	}
 
 	/**
-	 * Open the live session's Cordis fiber (dsh: the agent-scoped context).
+	 * Open the live session's Cordis fiber (the agent-scoped context).
 	 *
 	 * The fiber's own disposal reclaims every listener registered through
 	 * `ctx.session`, so session cleanup needs no parallel ledger. A new session
@@ -2055,7 +2055,7 @@ export class ExtensionRunner {
 
 	async stopServices(): Promise<void> {
 		// Session boundary only. Services, memory-backend providers, apply-time
-		// effects, and instance listeners belong to the extension (dsh's plugin
+		// effects, and instance listeners belong to the extension (the plugin
 		// fiber) and stay alive for a shared instance; a plugin that needs
 		// session cleanup registers it in `session_start` with `ctx.effect`.
 		await this.closeSessionScope();
@@ -2267,7 +2267,7 @@ export class ExtensionRunner {
 	}
 
 	/**
-	 * Dispatch a host-level event on this session's Cordis bus (dsh names such
+	 * Dispatch a host-level event on this session's Cordis bus (the host names such
 	 * events `domain/name`, e.g. `agent-preset/selected`). Delivery follows the
 	 * session carrier, so preset-scoped listeners see it and unrelated sessions
 	 * on a shared bus do not.

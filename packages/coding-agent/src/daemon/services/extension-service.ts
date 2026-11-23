@@ -162,7 +162,7 @@ export interface ExtensionServiceDeps {
 	 * Apply an entry-level plugin change to sessions that are already open
 	 * (package enable/disable). Absent → the change lands with the next session.
 	 */
-	/** Replace the running instance after a config write (dsh: config edit reloads). */
+	/** Replace the running instance after a config write (a config edit reloads). */
 	applyLive?(target: LiveApplyTarget): Promise<{ errors: string[] }>;
 	/** Update a volatile field in place across live sessions; true = no remount needed. */
 	applyVolatileConfig?(entryPath: string, key: string, value: unknown): Promise<boolean>;
@@ -671,7 +671,7 @@ export class ExtensionService implements DaemonService {
 				if (!resolved.extensionsExplicit && resolved.plugins.length === 0) continue;
 				const builtinName = t(`preset ${id} name` as never);
 				const label = !builtinName.startsWith("preset ") ? builtinName : (resolved.label ?? id);
-				// dsh's inventory plane: every row the preset composes, including a
+				// The inventory plane: every row the preset composes, including a
 				// disabled row a child uses to switch a parent's plugin off.
 				const rows: PresetCompositionRowView[] = [];
 				const seen = new Set<string>();
@@ -1405,7 +1405,7 @@ export class ExtensionService implements DaemonService {
 	}
 
 	/**
-	 * Replace running instances after a config write (dsh: a config edit reloads
+	 * Replace running instances after a config write (a config edit reloads
 	 * the plugin). Host-scope records reload through their own runtime; live
 	 * sessions remount the entry through the Track A mount pipeline, which
 	 * revalidates `Config` and keeps the old instance on failure.

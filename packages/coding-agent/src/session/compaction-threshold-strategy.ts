@@ -10,7 +10,7 @@
  * - 检视入口：本文件、`model-compaction-threshold.ts`、`docs/capability-seams.md`，
  *   测试 `test/compaction-threshold-strategy.test.ts`。
  *
- * 为什么需要这条缝：阈值是「什么时候压」的核心策略，而 dsh 把同类策略全部做成可替换的
+ * 为什么需要这条缝：阈值是「什么时候压」的核心策略，而这类策略需要全部做成可替换的
  * 可选能力。按模型覆盖、按目录覆盖、按订阅档位覆盖，都是同一个问题的不同答案；插件
  * 应该能新增一种，而不是等内核为它加字段。
  */

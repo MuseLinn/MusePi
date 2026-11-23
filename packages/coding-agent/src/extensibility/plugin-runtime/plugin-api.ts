@@ -316,7 +316,7 @@ export function createPluginAPI(
 	cwd: string,
 	eventBus: EventBus,
 	/** The extension's fiber context; listeners registered through it are owned
-	 *  by the fiber (dsh: a plugin is a fiber). Absent for loaders that run the
+	 *  by the fiber (a plugin is a fiber). Absent for loaders that run the
 	 *  factory outside one — the listener ledger still covers those. */
 	ownContext?: Context,
 ): ExtensionAPI {
@@ -521,7 +521,7 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 	}
 
 	/**
-	 * The live session's registration scope (dsh's agent-scoped context).
+	 * The live session's registration scope (the agent-scoped context).
 	 * Undefined outside a session, so a listener wired in `session_start` cannot
 	 * silently outlive it. Registration goes through the session fiber's
 	 * `effect`, so Cordis — not a hand-kept ledger — owns disposal.
@@ -548,7 +548,7 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 	 * re-running the factory. Undefined when no session wired a host.
 	 */
 	get promptHost(): PromptHostSurface | undefined {
-		// Session-scoped by design (dsh: prompt contributions register when the
+		// Session-scoped by design (prompt contributions register when the
 		// agent exists). Reading it in `apply` returns undefined; register in
 		// `session_start` instead. This is what lets instances be shared.
 		const scope = currentSessionScope();
@@ -604,10 +604,10 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 		return coerceConfigValues(fields, store[pluginConfigStoreKey(this.extension.path)]);
 	}
 
-	/** Register a cleanup owned by this extension (dsh `ctx.effect`); the
+	/** Register a cleanup owned by this extension (the effect ledger); the
 	 *  disposer removes just this record. Unloading the plugin runs them all. */
 	effect(cleanup: () => void | Promise<void>, label?: string): () => void {
-		// Ownership follows the call site, like dsh: an effect registered in
+		// Ownership follows the call site: an effect registered in
 		// `apply` belongs to the extension's fiber, one registered inside a
 		// session handler belongs to the session's fiber. No third ledger.
 		const scope = currentSessionScope();

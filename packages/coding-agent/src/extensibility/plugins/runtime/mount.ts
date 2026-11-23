@@ -144,7 +144,7 @@ export interface MountContext {
 	 *  listeners are filtered to sessions that joined that preset. */
 	scopeTag?: object;
 	/** The plugin generation receiving this mount's tool-provider registrations
-	 *  (dsh's agent scope). Omitted mounts register into the global layer. */
+	 *  (the agent scope). Omitted mounts register into the global layer. */
 	scope?: string;
 }
 
@@ -372,7 +372,7 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 
 	try {
 		// The factory runs inside the extension's own Cordis fiber, so listeners
-		// and apply-time effects are owned by the instance (dsh: a plugin is a
+		// and apply-time effects are owned by the instance (a plugin is a
 		// fiber). A cordis entry receives its declared config; the legacy factory
 		// keeps the single-argument call (passing a second arg is indistinguishable
 		// from not passing it, but the types are clearer this way).
@@ -419,7 +419,7 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 				? (returned as Record<string, unknown>)
 				: undefined;
 		// Host-level preset registry: a mode is listable without a live session
-		// once any mount has declared it (dsh registers presets at host level).
+		// once any mount has declared it (presets register at host level).
 		recordHostExtensionModes([extension]);
 		return { ok: true, extension, module, entry, config: values, published };
 	} catch (err) {

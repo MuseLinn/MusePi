@@ -1385,7 +1385,7 @@ export type ExtensionServiceTier<Family extends ServiceTierFamily> = Family exte
  * ExtensionAPI passed to extension factory functions.
  */
 /**
- * dsh-aligned Track A context namespaces. New plugins receive the same object
+ * Track A context namespaces. New plugins receive the same object
  * as `pi` and should program against these services; the flat `pi.*` methods
  * remain as legacy aliases.
  */
@@ -1428,7 +1428,7 @@ export interface PluginContextNamespaces {
 	 *  catalog without shipping renderer code. */
 	readonly skins: { register: ExtensionAPI["registerScrollbarSkin"] };
 	/**
-	 * The live session's registration scope (dsh's agent-scoped context).
+	 * The live session's registration scope (the agent-scoped context).
 	 *
 	 * Undefined outside a session: a plugin wires per-session listeners in
 	 * `session_start`, and they are disposed when the session ends, so they
@@ -1439,7 +1439,7 @@ export interface PluginContextNamespaces {
 		on: ExtensionAPI["on"];
 	};
 	/**
-	 * Host-level hot reload (dsh's `ctx.hmr`). False when the host started no
+	 * Host-level hot reload (`ctx.hmr`). False when the host started no
 	 * watcher (print mode, tests): subscriptions still return a disposer so a
 	 * plugin does not branch at registration time.
 	 */
@@ -1494,7 +1494,7 @@ export interface HmrSurface {
 	onRestartRequired(listener: (requirement: HmrRestartRequirement) => void): () => void;
 	/** Run the current listeners as if the watched files had just changed. */
 	reload(): Promise<void>;
-	/** Serialize work against reload batches (dsh `runExclusive`). */
+	/** Serialize work against reload batches (`runExclusive`). */
 	runExclusive<T>(transaction: () => Promise<T> | T): Promise<T>;
 	/** Entries that own `file`; empty when no graph is attached. */
 	getLinked(file: string): readonly string[];
@@ -1504,7 +1504,7 @@ export interface HmrSurface {
 
 /** A live session's Cordis fiber. `ctx.session` registers through its context,
  *  so disposing the fiber reclaims every listener the session owns — the same
- *  ownership dsh gets from `agent.ctx`. */
+ *  ownership the agent context gives. */
 export interface ExtensionSessionScope {
 	/** Identity the dispatch carrier filters on. */
 	readonly key: object;
@@ -1533,7 +1533,7 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	/** File logger for error/warning/debug messages */
 	logger: typeof PiLogger;
 
-	/** Mounting root this plugin was loaded for (dsh exposes the same as part of
+	/** Mounting root this plugin was loaded for (exposed as part of
 	 *  the plugin context). */
 	readonly cwd: string;
 
@@ -2079,7 +2079,7 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	/** Declare a long-lived background service. `start` runs once when the
 	 *  extension instance loads; `stop` runs when that instance unloads or
 	 *  reloads — not at session end, because a shared instance may still serve
-	 *  other sessions (dsh: the plugin fiber owns its services). The runner
+	 *  other sessions (the plugin fiber owns its services). The runner
 	 *  isolates a throw, and the service must not leave residual processes. */
 	registerService(
 		name: string,
@@ -2111,7 +2111,7 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 *  re-registers it. */
 	registerScrollbarSkin(skin: ExtensionScrollbarSkin): void;
 
-	// Effect ledger (every tracked plugin; dsh's `ctx.effect`)
+	// Effect ledger (every tracked plugin)
 	// =========================================================================
 
 	/**
@@ -2123,7 +2123,7 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 * reload and accumulated: a plugin reloaded five times left four orphaned
 	 * timers.
 	 *
-	 * The cleanup belongs to the scope the call was made in (dsh semantics):
+	 * The cleanup belongs to the scope the call was made in:
 	 * called from `apply`, it lives with the extension's fiber and runs on
 	 * unload or reload; called inside a session handler (`session_start`), it
 	 * lives with the session fiber and runs when the session ends. A throw
@@ -2564,7 +2564,7 @@ export interface ProviderModelConfig {
 /** Extension factory function type. Supports both sync and async initialization. */
 export type ExtensionFactory = (
 	pi: PluginAPI,
-	/** Coerced values of the plugin's declared `musepi.config` fields (dsh's
+	/** Coerced values of the plugin's declared config fields
 	 *  `apply(ctx, config)`). Empty for a plugin that declares none. */
 	config?: Record<string, unknown>,
 ) => void | Promise<void>;
@@ -2858,7 +2858,7 @@ export interface ExtensionRuntime
 		ExtensionDesignRegistryState,
 		ExtensionMagicKeywordRegistryState,
 		ExtensionActions {
-	/** The plugin generation these registrations belong to (dsh's agent scope).
+	/** The plugin generation these registrations belong to (the agent scope).
 	 *  A session copies it onto its ToolSession so scoped tool providers shadow
 	 *  the process-global default. */
 	pluginScope?: string;
@@ -3023,7 +3023,7 @@ export interface Extension {
 	 *  With a fiber they are also fiber-owned; this list keeps the count exact
 	 *  for diagnostics and covers loaders that run without one. */
 	eventListenerDisposers?: Array<() => void>;
-	/** The extension's own Cordis fiber (dsh: a plugin is a fiber). `pi.on`
+	/** The extension's own Cordis fiber (a plugin is a fiber). `pi.on`
 	 *  registers inside it, so disposal — reload, unload, rollback — is one
 	 *  `fiber.dispose()` instead of a second ownership mechanism. `state` and
 	 *  `getEffects` are live reads for diagnostics (extension center, host

@@ -61,7 +61,7 @@ interface StandardSchemaResult {
  * Validate a plugin's effective config through its exported `Config` schema
  * and return the schema's output (defaults and transformations applied).
  *
- * `Config` is the dsh contract: a Standard Schema exported by the plugin. A
+ * `Config` is the plugin contract: a Standard Schema exported by the plugin. A
  * `Config` that is not a Standard Schema is rejected rather than ignored —
  * silently skipping validation is how a plugin runs on values its author
  * never agreed to.

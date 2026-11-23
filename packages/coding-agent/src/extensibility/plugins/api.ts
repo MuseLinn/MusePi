@@ -8,7 +8,7 @@
  * `sessionManager`, …).
  *
  * Config is NOT a runtime read here. A Track A entry receives its declared
- * config as the second `apply` argument, exactly as dsh hands a plugin its
+ * config as the second `apply` argument, so a plugin receives its
  * `Config`: `apply(ctx: PluginAPI, config?: Record<string, unknown>)`. The
  * legacy `pi.config` reader stays on `ExtensionAPI` (Track B), which has no
  * second argument to receive it.

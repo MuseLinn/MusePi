@@ -70,7 +70,7 @@ export interface SessionPluginLoadOptions {
 /**
  * Process-wide cache of session plugin loads, keyed by cwd + entry list.
  *
- * dsh mounts a preset once and lets every session of that preset join its
+ * A preset mounts once and every session of that preset joins its
  * scope. The equivalent here is the `(cwd, entry set)` pair, because a plugin
  * instance captures `cwd` at apply time; session-bound work (listeners, prompt
  * contributions, effects) is owned by the session scope, so one instance set
@@ -82,7 +82,7 @@ export interface SessionPluginLoadOptions {
 interface CachedSessionLoad {
 	readonly result: LoadExtensionsResult;
 	/** Live sessions joined to this generation. A retired generation is kept
-	 *  alive for them and disposed when the last one releases (dsh preset GC). */
+	 *  alive for them and disposed when the last one releases (preset GC). */
 	users: number;
 	retired: boolean;
 	/** Registrations queued during the first load, replayed to every session
@@ -99,7 +99,7 @@ const sessionLoadCache = new Map<string, Promise<CachedSessionLoad>>();
 
 let nextPluginScope = 0;
 
-/** One identity per mounted plugin generation (dsh: the agent scope). */
+/** One identity per mounted plugin generation (the agent scope). */
 function mintPluginScope(): string {
 	return `plugin-scope-${++nextPluginScope}`;
 }
