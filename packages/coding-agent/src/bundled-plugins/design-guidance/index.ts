@@ -16,7 +16,7 @@
  * `ctx.registerDesignSystem`; this plugin reads that registry only for ids it
  * does not own.
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { getDesignSystem } from "../../presets/design-systems";
 import {
 	ASSET_POLICY_BRIEFS,
@@ -64,7 +64,7 @@ export function renderAssetPolicyBrief(selection: unknown): string | undefined {
  * section is registered, so a selection change replaces the rendered brief
  * instead of adding a second one.
  */
-export function registerDesignGuidance(ctx: ExtensionAPI): void {
+export function registerDesignGuidance(ctx: PluginAPI): void {
 	ctx.prompts.register({
 		...DESIGN_SYSTEM_SECTION,
 		text: context => renderDesignSystemBrief(context.designSystemId),
@@ -75,7 +75,7 @@ export function registerDesignGuidance(ctx: ExtensionAPI): void {
 	});
 }
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	registerDesignGuidance(ctx);
 }
 

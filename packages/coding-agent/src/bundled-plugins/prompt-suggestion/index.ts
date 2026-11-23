@@ -1,5 +1,5 @@
 import { logger, prompt } from "@musepi/pi-utils";
-import type { ExtensionAPI, ExtensionContext } from "../../extensibility/extensions/types";
+import type { ExtensionContext, PluginAPI } from "../../extensibility/extensions/types";
 import type { AgentEndEvent } from "../../extensibility/shared-events";
 import suggestionInstruction from "../../prompts/system/suggestion-instruction.md" with { type: "text" };
 import { promptSuggestionText, turnAllowsPromptSuggestion } from "../../session/prompt-suggestion";
@@ -35,7 +35,7 @@ interface SuggestionState {
  * without a composer (print, RPC, TUI) call nothing at all, because they never
  * receive `ctx.showSuggestion`.
  */
-export function apply(pi: ExtensionAPI): void {
+export function apply(pi: PluginAPI): void {
 	const states = new WeakMap<object, SuggestionState>();
 	const stateFor = (ctx: ExtensionContext): SuggestionState => {
 		const key = ctx.sessionManager;

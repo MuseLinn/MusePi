@@ -7,7 +7,7 @@
 import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { getPluginsDir } from "@musepi/pi-utils";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { resolveExtensionWatchRoots } from "../../extensibility/plugins/hmr/roots";
 import { createHmrService, type HmrService } from "../../extensibility/plugins/hmr/service";
 
@@ -41,7 +41,7 @@ function list(value: unknown): string[] {
 	return [];
 }
 
-export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>): Promise<{ hmr: HmrService }> {
+export async function apply(ctx: PluginAPI, config?: Record<string, unknown>): Promise<{ hmr: HmrService }> {
 	// `base` anchors relative `root` entries; without a configured root the
 	// native roots stand, because a hand-written list had drifted from what
 	// discovery actually loads before.

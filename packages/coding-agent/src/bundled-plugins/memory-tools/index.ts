@@ -7,13 +7,13 @@
  * `src/tools/memory-*.ts` — the package owns *whether* they mount, and the
  * provider seam makes a package the thing that supplies the implementation.
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
 export const name = "musepi-memory-tools";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(_ctx: ExtensionAPI): void {
+export function apply(_ctx: PluginAPI): void {
 	// Components carry the per-tool registration; the package entry itself only
 	// exists so discovery finds the directory and `musepi.components` mounts.
 }

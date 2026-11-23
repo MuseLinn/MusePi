@@ -1,10 +1,10 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
 export const name = "musepi-compaction-summary";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	ctx.slots.register({
 		slot: "panel.tab.compaction",
 		moduleUrl: "./ui/summary-panel.tsx",

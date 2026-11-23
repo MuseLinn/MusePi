@@ -6,7 +6,7 @@
  * mode switch that disposes the fiber therefore removes the persona, rather
  * than falling back to an inline copy in the preset definition.
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import persona from "./persona.md" with { type: "text" };
 
 /** Plugin identity in the Cordis runtime. */
@@ -20,6 +20,6 @@ export const provide = [] as const;
 export const creatorPersonaSections = [{ name: "mode:creator:role", order: 25, text: persona }] as const;
 
 /** Cordis entry: register the persona section on the fiber that owns it. */
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	for (const section of creatorPersonaSections) ctx.prompts.register(section);
 }

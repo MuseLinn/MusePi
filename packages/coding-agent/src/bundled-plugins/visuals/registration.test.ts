@@ -7,10 +7,10 @@
  * (otherwise a presentation surface becomes impossible to turn off).
  */
 import { describe, expect, test } from "bun:test";
-import type { ExtensionAPI, ExtensionWidget, ToolDefinition } from "../../extensibility/extensions/types";
+import type { ExtensionWidget, PluginAPI, ToolDefinition } from "../../extensibility/extensions/types";
 import { apply } from "./index";
 
-function fakeCtx(): { ctx: ExtensionAPI; tools: ToolDefinition[]; widgets: ExtensionWidget[] } {
+function fakeCtx(): { ctx: PluginAPI; tools: ToolDefinition[]; widgets: ExtensionWidget[] } {
 	const tools: ToolDefinition[] = [];
 	const widgets: ExtensionWidget[] = [];
 	const ctx = {
@@ -26,7 +26,7 @@ function fakeCtx(): { ctx: ExtensionAPI; tools: ToolDefinition[]; widgets: Exten
 			},
 		},
 		logger: { info() {}, warn() {}, error() {} },
-	} as unknown as ExtensionAPI;
+	} as unknown as PluginAPI;
 	return { ctx, tools, widgets };
 }
 

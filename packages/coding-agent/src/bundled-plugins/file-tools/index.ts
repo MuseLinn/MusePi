@@ -1,11 +1,11 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { registerFileToolPrompts } from "./prompts";
 
 export const name = "musepi-file-tools";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	fileTools(ctx);
 	// The session prompt host is optional in the extension API type (external
 	// callers may omit it), so guard before registering the tool sections.
@@ -16,4 +16,4 @@ export function apply(ctx: ExtensionAPI): void {
 	});
 }
 
-function fileTools(ctx: ExtensionAPI): void {}
+function fileTools(ctx: PluginAPI): void {}

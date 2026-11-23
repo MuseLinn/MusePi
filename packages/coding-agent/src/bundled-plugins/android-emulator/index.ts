@@ -13,7 +13,7 @@
  *   各自命令执行，截图采集串行且仅缓存最新帧。
  * - 检视入口：`src/bundled-plugins/android-emulator/`、`docs/extensions-dev.md`。
  */
-import type { ExtensionAPI, ExtensionRpcHandler } from "../../extensibility/extensions/types";
+import type { ExtensionRpcHandler, PluginAPI } from "../../extensibility/extensions/types";
 import { AndroidDeviceService } from "./android-service";
 import { createAndroidEmulatorTool } from "./tools";
 
@@ -39,7 +39,7 @@ function frameResult(frame: { device: string; png: Uint8Array; capturedAt: numbe
 	};
 }
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	const ready = Promise.all([ctx.config.get<string>("adbPath"), ctx.config.get<string>("emulatorPath")]).then(
 		([adbPath, emulatorPath]) =>
 			new AndroidDeviceService({ adbPath: adbPath || undefined, emulatorPath: emulatorPath || undefined }),

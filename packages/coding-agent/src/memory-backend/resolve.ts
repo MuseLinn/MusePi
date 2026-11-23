@@ -10,10 +10,14 @@ import type { MemoryBackend } from "./types";
  *
  * Selection rules (single source of truth — every memory consumer routes
  * through this):
- *   - `memory.backend === "hindsight"`  → Hindsight remote memory
- *   - `memory.backend === "mnemopi"`  → local Mnemopi SQLite memory
- *   - `memory.backend === "local"`      → local rollout summary pipeline
- *   - everything else                   → no-op
+ *   - a registered provider for the id wins (`registerMemoryBackendProvider`);
+ *   - otherwise the built-in implementation for that id;
+ *   - anything unknown is the no-op backend.
+ *
+ * Every built-in backend also ships as a host-scope package
+ * (`memory-off` / `memory-local` / `memory-hindsight` / `memory-mnemopi` /
+ * `memory-sharpshooter`), so a mounted host resolves through the provider seam
+ * and the branches below are the fallback for hosts that mount nothing.
  *
  * `memories.enabled` remains accepted only as a legacy migration input. Once
  * a config is loaded, `memory.backend` is the sole runtime selector.

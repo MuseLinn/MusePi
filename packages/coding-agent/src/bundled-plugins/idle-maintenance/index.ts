@@ -1,5 +1,5 @@
 import { logger, prompt } from "@musepi/pi-utils";
-import type { ExtensionAPI, ExtensionContext } from "../../extensibility/extensions/types";
+import type { ExtensionContext, PluginAPI } from "../../extensibility/extensions/types";
 import idleRecapPrompt from "../../prompts/system/recap-user.md" with { type: "text" };
 import { nextActionableTask } from "../../tools/todo";
 
@@ -30,7 +30,7 @@ const RECAP_MAX_SECONDS = 3600;
  * A plugin instance can serve several sessions, so state is bucketed by the
  * session's manager; one session's activity never cancels another's timer.
  */
-export function apply(pi: ExtensionAPI): void {
+export function apply(pi: PluginAPI): void {
 	const states = new WeakMap<object, IdleState>();
 
 	const stateFor = (ctx: ExtensionContext): IdleState => {

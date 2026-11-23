@@ -20,7 +20,7 @@
  * registry, and the editor paints only registered highlighters. Disabling or
  * unloading the package removes both effects; there is no static fallback.
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { renderOrchestrateNotice } from "../../modes/orchestrate";
 import { ULTRATHINK_NOTICE } from "../../modes/ultrathink";
 import { renderWorkflowNotice } from "../../modes/workflow";
@@ -48,11 +48,11 @@ export const provide = [] as const;
  * registration list is exactly the two-implementations drift this codebase
  * treats as a bug.
  */
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	magicKeywords(ctx);
 }
 
-function magicKeywords(ctx: ExtensionAPI): void {
+function magicKeywords(ctx: PluginAPI): void {
 	// ultrathink: full-spectrum rainbow (hue 0..330), matches the compiled-in
 	// highlighter's sweep exactly.
 	ctx.magicKeywords.register({

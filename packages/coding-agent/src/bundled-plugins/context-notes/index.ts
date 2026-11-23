@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import contextNotesDescription from "../../prompts/tools/context-notes.md" with { type: "text" };
 import contextNotesTextDescription from "../../prompts/tools/context-notes-text.md" with { type: "text" };
 import newContextDescription from "../../prompts/tools/new-context.md" with { type: "text" };
@@ -20,7 +20,7 @@ export const provide = [] as const;
  * profile can drop the component without touching the built-in tool slate; the
  * maintenance loop only needs the active tool names to detect `new_context`.
  */
-export function apply(pi: ExtensionAPI): void {
+export function apply(pi: PluginAPI): void {
 	const enabled = ({ settings }: { settings: { get(key: string): unknown } }) =>
 		settings.get("compaction.experimentalContextManagement") === true;
 

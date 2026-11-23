@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test, vi } from "bun:test";
 import { type } from "@musepi/musepi-type";
 import { parseConfigFields } from "@musepi/pi-wire";
 import type {
-	ExtensionAPI,
 	ExtensionComponent,
 	ExtensionContext,
 	ExtensionRpcHandler,
+	PluginAPI,
 	ToolDefinition,
 } from "../../extensibility/extensions/types";
 import { AndroidDeviceService, type AndroidProcessRunner, type AndroidRunResult } from "./android-service";
@@ -110,7 +110,7 @@ describe("Cordis plugin registration", () => {
 				},
 			},
 			logger: { info() {} },
-		} as unknown as ExtensionAPI;
+		} as unknown as PluginAPI;
 		vi.spyOn(AndroidDeviceService.prototype, "frame").mockImplementation(async function (
 			this: AndroidDeviceService,
 			device: string,

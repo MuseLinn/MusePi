@@ -158,6 +158,11 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	ast_grep: { domain: "file", id: "search" },
 	computer: { domain: "tool", id: "computer" },
 	lsp: { domain: "tool", id: "lsp" },
+	bash: { domain: "tool", id: "bash" },
+	eval: { domain: "tool", id: "eval" },
+	task: { domain: "tool", id: "task" },
+	hub: { domain: "tool", id: "hub" },
+	web_search: { domain: "tool", id: "web_search" },
 	// Memory tools: each is its own component in the memory-tools package, so a
 	// deployment can ship the read side without the write side.
 	retain: { domain: "memory", id: "retain" },

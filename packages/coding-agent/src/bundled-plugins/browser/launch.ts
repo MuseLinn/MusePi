@@ -1,6 +1,6 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
-export default function launch(ctx: ExtensionAPI): void {
+export default function launch(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("browser", "launch"), "browser-backend:launch");
 }

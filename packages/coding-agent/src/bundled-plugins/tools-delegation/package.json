@@ -1,0 +1,20 @@
+{
+	"name": "musepi-tools-delegation",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Delegation Tools",
+		"description": "Subagent delegation and the agent-coordination hub.",
+		"icon": "🧭",
+		"extensions": ["./index.ts"],
+		"components": [
+			{ "id": "task", "entry": "./task.ts", "description": "子代理委派工具。" },
+			{ "id": "hub", "entry": "./hub.ts", "description": "代理协作中枢工具。" }
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}

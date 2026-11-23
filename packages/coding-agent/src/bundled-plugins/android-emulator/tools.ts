@@ -1,5 +1,5 @@
 import type { AgentToolResult } from "@musepi/pi-agent-core";
-import type { ExtensionAPI, ToolDefinition } from "../../extensibility/extensions/types";
+import type { PluginAPI, ToolDefinition } from "../../extensibility/extensions/types";
 import type { AndroidDeviceService } from "./android-service";
 
 interface AndroidToolParams {
@@ -41,7 +41,7 @@ function number(value: number | undefined, name: string): number {
 }
 
 export function createAndroidEmulatorTool(
-	schema: ExtensionAPI["arktype"],
+	schema: PluginAPI["arktype"],
 	service: AndroidDeviceService | Promise<AndroidDeviceService>,
 ): ToolDefinition {
 	return {

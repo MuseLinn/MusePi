@@ -1,10 +1,10 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { MemoryRecallTool } from "../../tools/memory-recall";
 import { registerToolProvider } from "../../tools/tool-ownership";
 
 /** The memory-tools package provides `recall` (read side). */
-export default function recall(ctx: ExtensionAPI): void {
+export default function recall(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("memory", "recall"), "memory-tools:recall");
 	ctx.effect!(
 		registerToolProvider("recall", session => MemoryRecallTool.createIf(session)),

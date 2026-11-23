@@ -10,7 +10,7 @@
  * discovery: it is a preset contribution, not something every session should
  * load and then ignore.
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import persona from "./persona.md" with { type: "text" };
 
 /** Plugin identity in the Cordis runtime. */
@@ -30,6 +30,6 @@ export const chatPersonaSections = [
 ] as const;
 
 /** Cordis entry: register the persona section on the fiber that owns it. */
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	for (const section of chatPersonaSections) ctx.prompts.register(section);
 }

@@ -15,8 +15,8 @@ afterEach(() => resetCapabilityActivations());
 
 describe("tool ownership", () => {
 	test("an unowned tool stays implicitly available", () => {
-		expect(toolOwnerOf("bash")).toBeUndefined();
-		expect(isToolOwnerActive("bash")).toBe(true);
+		expect(toolOwnerOf("ask")).toBeUndefined();
+		expect(isToolOwnerActive("ask")).toBe(true);
 	});
 
 	test("a packaged tool follows its component", () => {
@@ -52,13 +52,13 @@ describe("tool ownership", () => {
 	});
 
 	test("a runtime claim wins over the declared table and restores on release", () => {
-		expect(toolOwnerOf("bash")).toBeUndefined();
-		const release = registerToolOwner("bash", { domain: "tool", id: "bash" });
-		expect(toolOwnerOf("bash")).toEqual({ domain: "tool", id: "bash" });
-		expect(ownedToolNames()).toContain("bash");
+		expect(toolOwnerOf("ask")).toBeUndefined();
+		const release = registerToolOwner("ask", { domain: "tool", id: "ask" });
+		expect(toolOwnerOf("ask")).toEqual({ domain: "tool", id: "ask" });
+		expect(ownedToolNames()).toContain("ask");
 		release();
-		expect(toolOwnerOf("bash")).toBeUndefined();
-		expect(ownedToolNames()).not.toContain("bash");
+		expect(toolOwnerOf("ask")).toBeUndefined();
+		expect(ownedToolNames()).not.toContain("ask");
 	});
 
 	test("the declared table covers every file family and the packaged single tools", () => {

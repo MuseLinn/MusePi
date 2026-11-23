@@ -1,6 +1,6 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
-export default function indexBackend(ctx: ExtensionAPI): void {
+export default function indexBackend(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("file", "index"), "file-backend:index");
 }

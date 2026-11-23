@@ -14,7 +14,7 @@
  *   暴露，读的就是本插件的类型表。
  * - 检视入口：`src/bundled-plugins/board/`、`docs/gui-widget-spec.md`。
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { BoardTool } from "./tool";
 
 export const name = "musepi-board";
@@ -22,7 +22,7 @@ export const name = "musepi-board";
 export const inject = ["genui"] as const;
 export const provide = [] as const;
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	ctx.tools.register(new BoardTool());
 	// No seed faces: a board card is generated content now (block or page).
 }

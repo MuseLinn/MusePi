@@ -1,0 +1,17 @@
+{
+	"name": "musepi-tools-web",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Web Tools",
+		"description": "Web search over the configured providers.",
+		"icon": "🌐",
+		"extensions": ["./index.ts"],
+		"components": [{ "id": "search", "entry": "./search.ts", "description": "网页搜索工具。" }],
+		"host": {
+			"readonly": true
+		}
+	}
+}

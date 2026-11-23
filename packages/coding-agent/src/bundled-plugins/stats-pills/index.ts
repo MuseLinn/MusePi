@@ -31,7 +31,7 @@
  * 这正是「插件只组合宿主已有能力」的形态：它不复制统计逻辑，只把读数画出来。
  */
 
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
 /** 插件在 cordis 运行时与扩展中心的身份。 */
 export const name = "musepi-stats-pills";
@@ -41,11 +41,11 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 /** Cordis 入口。 */
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	statsPills(ctx);
 }
 
-function statsPills(ctx: ExtensionAPI): void {
+function statsPills(ctx: PluginAPI): void {
 	// `conversation.composer.dock` 是输入卡下方的整行座位。两枚读数各占一条
 	// 条目（参考实现同样是「一个胶囊一条条目」）：`id` 让另一份插件可以按 id
 	// 只替换其中一枚，而不是拿走整行读数。

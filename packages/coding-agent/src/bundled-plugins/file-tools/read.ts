@@ -1,5 +1,5 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { ReadTool } from "../../tools/read";
 import { registerToolOwner, registerToolProvider } from "../../tools/tool-ownership";
 
@@ -8,7 +8,7 @@ import { registerToolOwner, registerToolProvider } from "../../tools/tool-owners
  * its implementation. Sessions without this package mounted keep the core
  * factory, so the CLI and isolated workers are unaffected.
  */
-export default function read(ctx: ExtensionAPI): void {
+export default function read(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("file", "read"), "file-backend:read");
 	ctx.effect!(
 		registerToolProvider("read", session => new ReadTool(session)),

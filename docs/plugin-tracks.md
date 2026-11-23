@@ -29,11 +29,15 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **工具所有权**：每个内建工具在 `tools/tool-ownership.ts` 里可以有一个拥有者组件（`TOOL_OWNERS`），工具可用性跟随该组件的 fiber——卸载或 deny 那个组件，工具就离开工具表；没有拥有者的工具保持隐式可用，从未装载过的域也不会让工具消失。`registerToolOwner(name, owner)` 是运行时声明缝（返回 disposer 恢复上一个拥有者），包可以在 `apply` 里认领自己贡献的工具。
 
-**工具实现提供**：`registerToolProvider(name, factory)` 让能力包提供内建工具的**实现**，核心工厂表退为默认与兜底——没装载任何包的会话（CLI、隔离 worker）行为不变。`file-tools` 的 read / write / search 组件已经这样接管 `read`、`write`、`edit`、`glob`、`grep`；`memory-tools` 的 retain / recall / reflect / edit / learn 组件接管同名记忆工具。这就是 dsh「每个工具一个 plugin 行」在 MusePi 的落地形态：拥有者决定工具**能不能存在**，提供者决定**跑什么**。
+**工具实现提供**：`registerToolProvider(name, factory)` 让能力包提供内建工具的**实现**，核心工厂表退为默认与兜底——没装载任何包的会话（CLI、隔离 worker）行为不变。`file-tools` 的 read / write / search 组件已经这样接管 `read`、`write`、`edit`、`glob`、`grep`；`memory-tools` 的 retain / recall / reflect / edit / learn 组件接管同名记忆工具；`tools-exec`（`bash` / `eval`）、`tools-delegation`（`task` / `hub`）、`tools-web`（`web_search`）同形。这就是 dsh「每个工具一个 plugin 行」在 MusePi 的落地形态：拥有者决定工具**能不能存在**，提供者决定**跑什么**。
+
+**Track A 类型名是 `PluginAPI`**：第一方插件声明 `apply(ctx: PluginAPI)`，拿到的是插件面（`ctx.*` 命名空间、`effect`、`on`、`state`、`service`、`cwd`、`logger`、`config` 等）。`ExtensionAPI` 是 Track B 兼容面，在其上多出平铺 `pi.register*` 别名与 `sendMessage`/`exec`/`getActiveTools` 这类会话动作方法——只有确实要维持旧 `export default (pi)` 扩展工作的包才用它。当前 154 处第一方引用用 `PluginAPI`，10 处因调用这些方法保留 `ExtensionAPI`。
+
+不叫 `Context` 的原因：该名字已被 `@deepseek-ai/cordis` 的 `Context`（本宿主挂载 fiber 用的真实 Cordis 上下文）与 `@musepi/pi-ai` 的 `Context`（LLM 请求的消息列表）占用，另有多处本地类型同名，插件别名无法在不遮蔽它们的前提下使用。
 
 **拥有者必须声明式**：`TOOL_OWNERS` 是唯一事实源，不能靠运行时 `registerToolOwner` 认领——组件禁用时 disposer 会撤掉运行时注册，工具就退回「无拥有者即允许」而仍然出现。`registerToolOwner` 只用于运行时**改写**已声明的拥有者（如把某个工具临时归到另一个组件），不作为首次声明手段。
 
-**注册即所有权**：两条轨道各有一个判定，不共用答案——`pluginOwnsTool(session, name)` 只在 **Track A 插件**（`ctx.tools.register`）注册该名时为真，`extensionOwnsTool(session, name)` 只在 **Track B 旧扩展**注册时为真。`Extension.track` 是这条区分的依据（两条轨道各自的构造器打标），runner 用 `getExtensionForTool(name)` 反查。工具类的 `createIf` 仍用 `extensionOwnsTool` 判定「已被注册，核心工厂不再造第二份」。
+**注册即所有权**：两条轨道各有一个判定，不共用答案——`pluginOwnsTool(session, name)` 只在 **Track A 插件**（`ctx.tools.register`）注册该名时为真，`extensionOwnsTool(session, name)` 只在 **Track B 旧扩展**注册时为真。`Extension.track` 是这条区分的依据（两条轨道各自的构造器打标），runner 用 `getExtensionForTool(name)` 反查。工具类让位用 `toolIsRegistered`（任一轨道注册即让位），因为两条轨道同在 session 层，谁近谁远不成立。
 
 **分层注册表**：解析顺序是 session 层（两条轨道的注册）→ plugin 层（`registerToolProvider`，进程级包提供实现）→ core（`BUILTIN_TOOLS` 工厂表）。近层遮蔽远层，同一层内重复注册报错（`pluginProvidesTool` 用于判断 plugin 层是否已提供），disposer 移除的是自己那一条。`toolLayerOf` 报告某个名字由哪一层回答。
 

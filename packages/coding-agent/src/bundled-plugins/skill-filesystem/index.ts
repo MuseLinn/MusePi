@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@musepi/pi-utils";
-import type { ExtensionAPI, ExtensionSkillDeclaration } from "../../extensibility/extensions/types";
+import type { ExtensionSkillDeclaration, PluginAPI } from "../../extensibility/extensions/types";
 import { stringArrayFromRow } from "../../extensibility/plugins/row-config";
 
 /**
@@ -83,7 +83,7 @@ export async function scanSkillRoot(root: string): Promise<ExtensionSkillDeclara
 
 /** Second parameter: the preset row's config (see `mountPlugin`'s contract).
  *  `ctx.config` is the per-extension store, used only for an ambient mount. */
-export async function apply(ctx: ExtensionAPI, rowConfig?: { roots?: unknown }): Promise<void> {
+export async function apply(ctx: PluginAPI, rowConfig?: { roots?: unknown }): Promise<void> {
 	const all = rowConfig ?? ((await ctx.config.getAll()) as { roots?: unknown });
 	const roots = stringArrayFromRow(all.roots, "roots");
 	for (const raw of roots) {

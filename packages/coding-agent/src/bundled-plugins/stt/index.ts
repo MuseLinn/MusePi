@@ -1,11 +1,11 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
 export const name = "musepi-stt";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	stt(ctx);
 }
 
-function stt(ctx: ExtensionAPI): void {}
+function stt(ctx: PluginAPI): void {}

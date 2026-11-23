@@ -1,11 +1,11 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { GlobTool } from "../../tools/glob";
 import { GrepTool } from "../../tools/grep";
 import { registerToolOwner, registerToolProvider } from "../../tools/tool-ownership";
 
 /** The file-tools package provides the search family: `glob` and `grep`. */
-export default function search(ctx: ExtensionAPI): void {
+export default function search(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("file", "search"), "file-backend:search");
 	ctx.effect!(
 		registerToolProvider("glob", session => new GlobTool(session, { rootPathAlias: true })),

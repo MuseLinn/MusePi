@@ -1,11 +1,11 @@
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { registerLspPrompts } from "./prompts";
 
 export const name = "musepi-lsp";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	lsp(ctx);
 	// Prompt contributions are session-scoped (dsh: register when the agent
 	// exists), so a shared instance can serve several sessions.
@@ -14,4 +14,4 @@ export function apply(ctx: ExtensionAPI): void {
 	});
 }
 
-function lsp(ctx: ExtensionAPI): void {}
+function lsp(ctx: PluginAPI): void {}

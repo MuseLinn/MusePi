@@ -1,6 +1,6 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
-export default function lspTool(ctx: ExtensionAPI): void {
+export default function lspTool(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("tool", "lsp"), "tool:lsp");
 }

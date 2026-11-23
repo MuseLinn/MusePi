@@ -1,0 +1,14 @@
+{
+	"name": "musepi-memory-local",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Local Summary Memory Backend",
+		"description": "Host-half adapter that registers the local rollout-summary backend as a provider.",
+		"icon": "▤",
+		"scope": "host",
+		"extensions": ["./index.ts"]
+	}
+}

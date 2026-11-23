@@ -6,10 +6,10 @@
  * from the card with no host-side change to notice it.
  */
 import { describe, expect, test } from "bun:test";
-import type { ExtensionAPI, ExtensionComponent } from "../../extensibility/extensions/types";
+import type { ExtensionComponent, PluginAPI } from "../../extensibility/extensions/types";
 import { apply } from "./index";
 
-function fakeCtx(): { ctx: ExtensionAPI; components: ExtensionComponent[] } {
+function fakeCtx(): { ctx: PluginAPI; components: ExtensionComponent[] } {
 	const components: ExtensionComponent[] = [];
 	const ctx = {
 		setLabel() {},
@@ -19,7 +19,7 @@ function fakeCtx(): { ctx: ExtensionAPI; components: ExtensionComponent[] } {
 			},
 		},
 		logger: { info() {}, warn() {}, error() {} },
-	} as unknown as ExtensionAPI;
+	} as unknown as PluginAPI;
 	return { ctx, components };
 }
 

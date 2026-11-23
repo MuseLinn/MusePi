@@ -1,6 +1,6 @@
 import { activateCapability } from "../../extensibility/capability-activation";
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 
-export default function computerTool(ctx: ExtensionAPI): void {
+export default function computerTool(ctx: PluginAPI): void {
 	ctx.effect!(activateCapability("tool", "computer"), "tool:computer");
 }

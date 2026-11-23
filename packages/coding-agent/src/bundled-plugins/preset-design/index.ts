@@ -7,7 +7,7 @@
  * the rest of the preset. Nothing in `presets/resolve.ts` restates this text,
  * so an edited or disabled row cannot leave a stale design brief behind.
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import artifact from "./artifact.md" with { type: "text" };
 import boundary from "./boundary.md" with { type: "text" };
 import brief from "./brief.md" with { type: "text" };
@@ -33,6 +33,6 @@ export const designPersonaSections = [
 ] as const;
 
 /** Cordis entry: register the design sections on the fiber that owns them. */
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	for (const section of designPersonaSections) ctx.prompts.register(section);
 }

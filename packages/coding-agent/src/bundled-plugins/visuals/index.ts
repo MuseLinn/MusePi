@@ -15,7 +15,7 @@
  * - 冲突：独占 `widget` 工具名。
  * - 检视入口：`src/bundled-plugins/visuals/`、`docs/gui-widget-spec.md`。
  */
-import type { ExtensionAPI } from "../../extensibility/extensions/types";
+import type { PluginAPI } from "../../extensibility/extensions/types";
 import { registerVisualPrompts } from "./prompts";
 import { WidgetTool } from "./tool";
 
@@ -24,7 +24,7 @@ export const inject = [] as const;
 /** The service the board plugin depends on: blocks + pages for a session. */
 export const provide = ["genui"] as const;
 
-export function apply(ctx: ExtensionAPI): void {
+export function apply(ctx: PluginAPI): void {
 	ctx.tools.register(new WidgetTool());
 	// The visual contract travels with the plugin that owns it, exactly like the
 	// browser plugin's verification section.
