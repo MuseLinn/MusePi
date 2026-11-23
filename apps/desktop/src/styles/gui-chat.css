@@ -742,6 +742,14 @@
 	display: none;
 }
 
+/* No card beside the panel — a scene mid-swap, or a card parked off-screen —
+ * leaves no seam either. The band measured nothing, so it must not keep
+ * painting (and grabbing) at its previous coordinates. A maximized panel over
+ * its card keeps its seam: the card is still there to grab the width against. */
+.gui-pane-resize-x[data-seam="hidden"] {
+	visibility: hidden;
+}
+
 /* The pill uses the shared primitive's own centring (`.gui-split-grip` in
  * gui-settings.css): the band already sits on the seam, so no offset here. */
 

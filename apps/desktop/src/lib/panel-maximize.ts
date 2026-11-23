@@ -42,25 +42,60 @@ export function setPanelMaximized(next: boolean): void {
 	for (const listener of listeners) listener();
 }
 
+/** Every card that carries the conversation next to the right panel: the
+ *  session column with a session open, the welcome card on the welcome scene,
+ *  and the float-card wrapper around either. */
+export const SCENE_CARD_SELECTOR = ".gui-chat-column, .gui-welcome-card, .gui-float-card";
+
+/** Cards inside `scenes`, most specific first — the column holding the
+ *  transcript, then any column, then the welcome card, then an outer wrapper.
+ *  A generic `.gui-float-card` query is what once let a leaving scene's wrapper
+ *  win over the incoming column. */
+function sceneCards(panel: HTMLElement | null): HTMLElement[] {
+	// The panel is a flex sibling of the scene stack, so the stack is not an
+	// ancestor of it; the shared surface owns both. The panel's own subtrees are
+	// excluded because its dock and panes reuse the float-card class.
+	const surface = panel?.closest<HTMLElement>(".gui-chat-surface") ?? null;
+	if (!surface) return [];
+	const cards = [...surface.querySelectorAll<HTMLElement>(SCENE_CARD_SELECTOR)].filter(card => !panel?.contains(card));
+	const kind = (card: HTMLElement): number => {
+		if (card.classList.contains("gui-chat-column")) {
+			return card.querySelector(".gui-transcript-wrap") ? 0 : 1;
+		}
+		return card.classList.contains("gui-welcome-card") ? 2 : 3;
+	};
+	return cards.sort((a, b) => kind(a) - kind(b));
+}
+
 /** The scene card a panel maximizes over: the session column with a session
  *  open, the welcome card on the welcome scene (that scene has no
  *  `.gui-chat-column`, and returning null there left the panel painted with
  *  the previous session's measured box). */
 export function panelMaximizeColumn(panel: HTMLElement | null): HTMLElement | null {
 	if (!panel) return null;
-	const surface = panel.closest<HTMLElement>(".gui-chat-surface");
-	if (!surface) return null;
-	// The outgoing scene stays mounted through the crossfade; its card still
-	// has a box, so it must not win over the incoming one.
-	const usable = (element: HTMLElement): boolean => {
-		if (panel.contains(element) || element.closest(".gui-scene--leaving") !== null) return false;
-		const rect = element.getBoundingClientRect();
-		return rect.width > 0 && rect.height > 0;
-	};
-	const columns = [...surface.querySelectorAll<HTMLElement>(".gui-chat-column")].filter(usable);
-	const chatColumn = columns.find(column => column.querySelector(".gui-transcript-wrap")) ?? columns[0];
-	if (chatColumn) return chatColumn;
-	return [...surface.querySelectorAll<HTMLElement>(".gui-welcome-card")].find(usable) ?? null;
+	// A leaving card has no box of its own (the scene fades, it stays laid out),
+	// so the scene class — not the rect — decides that it lost.
+	return (
+		sceneCards(panel).find(card => {
+			if (panel.contains(card) || card.closest(".gui-scene--leaving") !== null) return false;
+			const rect = card.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0;
+		}) ?? null
+	);
+}
+
+/** Where the right panel's left-edge grip sits on the viewport x-axis: the
+ *  middle of the gap between the scene card and the panel. `null` means there
+ *  is no seam — a card parked off-screen has no edge to grab, so the band must
+ *  hide rather than stay at its previous position. The panel overlaying the
+ *  card (maximized) is NOT an absent seam. */
+export function panelSeamX(
+	cardRect: Pick<DOMRect, "right"> | null,
+	panelRect: Pick<DOMRect, "left">,
+	viewportWidth: number,
+): number | null {
+	if (!cardRect || cardRect.right <= 0 || cardRect.right >= viewportWidth) return null;
+	return (cardRect.right + panelRect.left) / 2;
 }
 
 /** Write the scene card's box onto --pane-max-*; the panel's CSS paints it. */

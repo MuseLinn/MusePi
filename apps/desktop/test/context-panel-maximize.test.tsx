@@ -177,6 +177,9 @@ function mountPanel(options: MountOptions = {}): {
 		setProperty(property: string, value: string): void {
 			values.set(property, value);
 		},
+		getPropertyValue(property: string): string {
+			return values.get(property) ?? "";
+		},
 		removeProperty(property: string): string {
 			const previous = values.get(property) ?? "";
 			values.delete(property);

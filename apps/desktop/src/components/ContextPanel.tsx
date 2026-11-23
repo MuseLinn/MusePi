@@ -78,6 +78,8 @@ import {
 	getPanelMaximized,
 	measurePanelMaximizedGeometry,
 	panelMaximizeColumn,
+	panelSeamX,
+	SCENE_CARD_SELECTOR,
 	subscribePanelMaximize,
 } from "../lib/panel-maximize";
 import { type PanelDropZone, panelDropPointer, resolvePanelDrop } from "../lib/panel-tab-dnd";
@@ -880,44 +882,79 @@ export function ContextPanel({
 	// (the panel's right edge and the chat column's left edge), so the cap is
 	// stable — and a fixed 1200 let the panel squeeze the chat out entirely.
 	const panelRef = useRef<HTMLElement | null>(null);
+	const resizeHandleRef = useRef<HTMLDivElement | null>(null);
 	// The grip pill escapes the panel's `overflow: clip` with `position: fixed`,
-	// which means it cannot read its own seam from layout — nothing may place a
-	// fixed child at the midpoint of a gap the clip box hides. The panel
-	// measures that midpoint once it can: the gap runs from this panel's left
-	// edge to the chat card's right edge, so the seam is their mean. Published
-	// as `--gui-pane-resize-seam` for the pill and refreshed on resize, on a
-	// fold, and when the chat column changes width (sidebar drag).
+	// so it cannot read its own seam from layout — nothing may place a fixed
+	// child at the midpoint of a gap the clip box hides. This effect measures
+	// that midpoint and publishes it as `--gui-pane-resize-seam` for the band.
+	//
+	// Layout alone is not a trigger: a scene swap (session ↔ welcome) replaces
+	// the card WITHOUT resizing the panel, and a maximized panel floats over the
+	// card without either box changing. So every box the seam depends on is
+	// observed — the panel, the card, the card's ancestors up to the scene stack
+	// (the card's own box does not change when the stack, not the card, moves),
+	// and the window — and a card that goes away hands the seam to the next one.
+	// Mutations are batched to the next frame, a write compares before it sets,
+	// and a seam that cannot be placed hides the band instead of leaving the
+	// last value on screen.
 	useLayoutEffect(() => {
 		const panel = panelRef.current;
 		if (!panel) return;
+		const set = (name: string, value: string): void => {
+			if (panel.style.getPropertyValue(name) === value) return;
+			panel.style.setProperty(name, value);
+		};
 		const write = (): void => {
-			const card = document.querySelector(".gui-chat-column, .gui-welcome-card, .gui-float-card");
+			const card = panelMaximizeColumn(panel);
+			const cardRect = card?.getBoundingClientRect() ?? null;
 			const panelRect = panel.getBoundingClientRect();
-			const cardRect = card?.getBoundingClientRect();
-			// Subtract the pill's containing block origin: an ancestor with a
-			// transform/filter/backdrop-filter becomes the containing block for
-			// `position: fixed`, so viewport coordinates written raw would be
-			// offset by that ancestor's own origin (measured: the pill landed
-			// 299.6px right — exactly .gui-chat-keeper's left).
+			// A fixed box declares its own height: the band spans the panel, not
+			// the viewport. Only the y coordinate needs the containing-block
+			// correction — x is taken from the raw viewport seam because a
+			// maximized panel can be the band's own containing block.
 			const origin = containingBlockOrigin(panel);
-			panel.style.setProperty("--gui-pane-resize-seam-y", `${(panelRect.top + panelRect.bottom) / 2 - origin.y}px`);
-			// The band is `fixed` too, so it needs its own height: it spans the
-			// panel's vertical extent, not the viewport.
-			panel.style.setProperty("--gui-pane-resize-h", `${panelRect.height}px`);
-			if (!cardRect || cardRect.right >= panelRect.left) return;
-			panel.style.setProperty("--gui-pane-resize-seam", `${(cardRect.right + panelRect.left) / 2 - origin.x}px`);
+			set("--gui-pane-resize-seam-y", `${(panelRect.top + panelRect.bottom) / 2 - origin.y}px`);
+			set("--gui-pane-resize-h", `${panelRect.height}px`);
+			const seam = panelSeamX(cardRect, panelRect, window.innerWidth);
+			const handle = resizeHandleRef.current;
+			if (seam === null) {
+				handle?.setAttribute("data-seam", "hidden");
+				return;
+			}
+			set("--gui-pane-resize-seam", `${seam}px`);
+			handle?.removeAttribute("data-seam");
+		};
+		let frame = 0;
+		const schedule = (): void => {
+			if (frame) return;
+			frame = requestAnimationFrame(() => {
+				frame = 0;
+				write();
+			});
 		};
 		write();
-		const observer = new ResizeObserver(write);
+		const observer = new ResizeObserver(schedule);
+		// Every card and the surface they share: a card's own box does not
+		// change when only its ancestors move, and an entering card replaces the
+		// observed one.
+		const surface = panel.closest<HTMLElement>(".gui-chat-surface");
 		observer.observe(panel);
-		const card = document.querySelector(".gui-chat-column, .gui-welcome-card, .gui-float-card");
-		if (card) observer.observe(card);
-		window.addEventListener("resize", write);
+		if (surface) {
+			observer.observe(surface);
+			surface.querySelectorAll<HTMLElement>(SCENE_CARD_SELECTOR).forEach(card => observer.observe(card));
+		}
+		// A scene swap keeps the surface and replaces the card, which changes
+		// which boxes matter without changing any of them.
+		const mutations = new MutationObserver(schedule);
+		if (surface) mutations.observe(surface, { childList: true, subtree: true, attributeFilter: ["class"] });
+		window.addEventListener("resize", schedule);
 		return () => {
+			if (frame) cancelAnimationFrame(frame);
 			observer.disconnect();
-			window.removeEventListener("resize", write);
+			mutations.disconnect();
+			window.removeEventListener("resize", schedule);
 		};
-	}, [width]);
+	}, [width, open]);
 	const maxWidthRef = useRef(MAX_PANEL_WIDTH);
 	const measureCap = useCallback((): number => {
 		const panel = panelRef.current?.getBoundingClientRect();
@@ -2019,6 +2056,7 @@ export function ContextPanel({
 				 * captured moves that leave the band), and the same band is the
 				 * keyboard handle and the anchor for the shared grip pill. */}
 				<div
+					ref={resizeHandleRef}
 					className="gui-pane-resize-x"
 					role="separator"
 					aria-orientation="vertical"
