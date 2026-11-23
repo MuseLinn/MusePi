@@ -1,0 +1,37 @@
+name: TUI release recover
+
+# Tagging a commit that is already on main does not push main, so ci.yml
+# does not start and its release jobs never upload standalone TUI binaries.
+# scripts/release.ts avoids that by pushing the version-bump commit and the
+# tag together; that main push is the publisher. This workflow handles the
+# other case: dispatch CI on the tag, which release_metadata already treats
+# as a release, and only when no CI run for the commit is already that
+# publisher. The dispatched run still has to pass release_gate. This
+# workflow does not upload assets itself.
+on:
+   push:
+      tags:
+         - "v*"
+
+concurrency:
+   group: tui-release-recover-${{ github.sha }}
+   cancel-in-progress: false
+
+permissions:
+   contents: read
+   actions: write
+
+jobs:
+   recover:
+      name: Publish TUI assets when the main push did not
+      runs-on: ubuntu-22.04
+      steps:
+         - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+         - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+           with:
+              bun-version-file: package.json
+         - name: Dispatch CI on this tag when TUI assets were not published
+           env:
+              GH_TOKEN: ${{ github.token }}
+              GITHUB_REPOSITORY: ${{ github.repository }}
+           run: bun scripts/ci-tui-release-recover.ts "${{ github.sha }}" "${{ github.ref_name }}"
