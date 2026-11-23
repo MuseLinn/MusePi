@@ -12,7 +12,6 @@
 	"workspaces": {
 		"packages": [
 			"packages/*",
-			"packages/coding-agent/src/plugins/*/*",
 			"apps/*",
 			"tools/*",
 			"packages/client/*"
