@@ -343,6 +343,28 @@ const dispose = pi.registerCompactionMethodProvider({
 
 A method whose whole value is "try mine first, fall back to the built-ins" wants the provider seam. A one-off policy hook that inspects the prepared range and occasionally overrides it wants `session_before_compact`. A plugin can use both: register a method for the order and veto specific passes through the hook.
 
+## 8.3 Extension-contributed compaction thresholds (registerCompactionThresholdStrategy, 2026-11-23)
+
+Deciding *when* to compact is a strategy, and a plugin can add one without asking the host for a new setting. Every strategy sees the configured policy plus the model, and the first one to return a policy wins.
+
+```ts
+const dispose = pi.registerCompactionThresholdStrategy({
+	id: "acme-tier-cap",
+	priority: 10,                       // after the built-in per-model rule (0)
+	resolve({ settings, model }) {
+		// Tighten the trigger for one subscription tier, leave everything else alone.
+		if (model?.provider !== "acme") return undefined;
+		return { ...settings, thresholdPercent: Math.min(settings.thresholdPercent, 70) };
+	},
+});
+```
+
+**Order**: strategies run by `priority` (lowest first). The built-in `compaction.modelThresholds` rule runs at `0`, so a plugin strategy only sees models that rule did not cover — an explicit per-model entry always wins over a blanket plugin rule, which is what a user who typed a per-model number expects.
+
+**Limit**: a strategy may rewrite threshold fields only. Compaction on/off (`compaction.enabled`), the method order and `keepRecentTokens` stay the user's configuration; a strategy that silently changed them would make the settings page describe a policy that is not in force. A strategy also never commits a compaction or picks a method — those are the method seam's job.
+
+**Ownership**: the registration belongs to the plugin instance and is released on unload or hot reload; a duplicate id throws instead of shadowing.
+
 ## 9. 扩展注册魔术关键词(registerMagicKeyword,2026-10-11)
 
 扩展贡献一个**魔术关键词**:输入框里单独出现的词,提交时向模型追加一条隐藏提示。

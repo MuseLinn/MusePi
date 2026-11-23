@@ -91,6 +91,7 @@ import type { Theme } from "../../render/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
 import type { CompactionMethodProvider } from "../../session/compaction-method-provider";
+import type { CompactionThresholdStrategy } from "../../session/compaction-threshold-strategy";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
 import type { ReadonlySessionManager, SessionManager } from "../../session/session-manager";
 import type { AgentDefinition, SubagentDefinition } from "../../task/types";
@@ -1815,6 +1816,22 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 * entry, journaling spend and re-anchoring context stay in the host.
 	 */
 	registerCompactionMethodProvider(provider: CompactionMethodProvider): () => void;
+	/**
+	 * Register a compaction threshold strategy: one rule that rewrites the
+	 * trigger for the models it applies to.
+	 *
+	 * Strategies are consulted in `priority` order (lowest first) and the first
+	 * one to return a policy wins. The built-in per-model rule
+	 * (`compaction.modelThresholds`) runs at priority `0`, so a plugin strategy
+	 * sees only models that rule left alone — add a per-directory or
+	 * per-subscription-tier rule there instead of asking the host for a field.
+	 *
+	 * A strategy may only rewrite threshold fields. Compaction on/off, the
+	 * method order and the keep-recent budget stay the user's configuration,
+	 * or the settings page would describe a policy that is not in force. The
+	 * `id` must not collide with another strategy; a collision throws.
+	 */
+	registerCompactionThresholdStrategy(strategy: CompactionThresholdStrategy): () => void;
 	/**
 	 * Register a fallback writer consulted when a native `write`/`edit` byte-write is
 	 * denied with a permission error (`EPERM`/`EACCES`/`EROFS`). Every other write

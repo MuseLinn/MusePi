@@ -332,6 +332,28 @@ const dispose = pi.registerCompactionMethodProvider({
 
 「先试我的、不行再回退内置」这种整体价值属于 provider 缝；只看一眼待压缩范围、偶尔覆盖一次的钩子属于 `session_before_compact`。插件可以同时用两者：注册方法参与排序，再用钩子否决特定的一趟。
 
+## 8.3 扩展贡献压缩阈值策略（registerCompactionThresholdStrategy，2026-11-23）
+
+「什么时候压」本身是一种策略，插件可以新增一种，而不必等宿主为它加设置项。每个策略都能看到当前配置与模型，第一个返回结果的生效。
+
+```ts
+const dispose = pi.registerCompactionThresholdStrategy({
+	id: "acme-tier-cap",
+	priority: 10,                       // 排在内置按模型规则（0）之后
+	resolve({ settings, model }) {
+		// 只收紧某个订阅档位的触发点，其余原样让给后续策略。
+		if (model?.provider !== "acme") return undefined;
+		return { ...settings, thresholdPercent: Math.min(settings.thresholdPercent, 70) };
+	},
+});
+```
+
+**顺序**：策略按 `priority` 从低到高询问。内置的 `compaction.modelThresholds` 规则在 `0`，所以插件策略只看到它没有覆盖的模型——用户显式写下的按模型条目永远压过一条笼统的插件规则，这符合写下那个数字的人的预期。
+
+**边界**：策略只能改写阈值字段。压缩开关（`compaction.enabled`）、方法顺序与 `keepRecentTokens` 仍属用户配置；策略若悄悄改了它们，设置页描述的就不再是实际生效的策略。策略也不提交压缩条目、不选择方法——那是方法缝的职责。
+
+**所有权**：注册归属插件实例，卸载或热重载时释放；重复 id 会抛错，而不是静默覆盖。
+
 ## 9. 扩展注册魔术关键词（registerMagicKeyword，2026-10-11）
 
 扩展贡献一个**魔术关键词**：输入框里单独出现的词，提交时向模型追加一条隐藏提示。

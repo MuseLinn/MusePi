@@ -25,6 +25,7 @@ function settings(overrides: Partial<CompactionSettings> = {}): CompactionSettin
 		keepRecentTokens: 20_000,
 		midTurnEnabled: true,
 		asyncEnabled: true,
+		speculationCacheGuard: false,
 		modelThresholdsEnabled: true,
 		modelThresholds: {},
 		experimentalContextManagement: false,

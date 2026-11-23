@@ -159,7 +159,8 @@ export function applyCompactionThresholdPair<T extends CompactionThresholdPair &
 /**
  * `settings` with the `compaction.modelThresholds` entry governing `model`
  * applied; the same object when no entry applies. Results are cached per
- * settings snapshot so hot paths allocate once per entry.
+ * settings snapshot so hot paths allocate once per entry. The key includes the
+ * model: two models on one snapshot must not share an entry.
  */
 export function applyModelCompactionThreshold<T extends CompactionThresholdPair & { baseWindowTokens?: number }>(
 	settings: T,
@@ -169,15 +170,16 @@ export function applyModelCompactionThreshold<T extends CompactionThresholdPair 
 	if (!model) return settings;
 	const match = matchModelCompactionThreshold(raw, model);
 	if (!match) return settings;
+	const cacheKey = `${model.provider}/${model.id}\u0000${match.key}`;
 	let byKey = appliedThresholds.get(settings);
 	if (!byKey) {
 		byKey = new Map();
 		appliedThresholds.set(settings, byKey);
 	}
-	const cached = byKey.get(match.key);
+	const cached = byKey.get(cacheKey);
 	if (cached?.threshold === match.threshold) return cached.applied as T;
 	const applied = applyCompactionThresholdPair(settings, match.threshold);
-	byKey.set(match.key, { threshold: match.threshold, applied });
+	byKey.set(cacheKey, { threshold: match.threshold, applied });
 	return applied;
 }
 
