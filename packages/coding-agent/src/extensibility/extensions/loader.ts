@@ -40,6 +40,10 @@ import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/ho
 import { scopePromptHostToOwner } from "../../prompts/host";
 import type { CompactionMethodProvider } from "../../session/compaction-method-provider";
 import { registerCompactionMethodProvider as registerCompactionMethod } from "../../session/compaction-method-provider";
+import {
+	type CompactionThresholdStrategy,
+	registerCompactionThresholdStrategy as registerThresholdStrategy,
+} from "../../session/compaction-threshold-strategy";
 import type { CustomMessagePayload } from "../../session/messages";
 import { normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
@@ -64,6 +68,7 @@ import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { handlerTimeoutForEvent } from "./handler-timeout";
 import { readExtensionPluginLabel, readExtensionPluginMeta } from "./plugin-manifest";
+import { declareSeats, injectSeat } from "./seat-lifecycle";
 import { currentSessionScope, PRESET_SCOPE_TAG } from "./session-dispatch";
 import { sessionStopContinues } from "./session-stop-result";
 import { applyToolResultPatch } from "./tool-result-patch";
@@ -489,6 +494,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.slots = {
 			register: this.registerComponent.bind(this),
 			registerWidget: this.registerWidget.bind(this),
+			inject: (slot: string, register: () => () => void) => injectSeat(slot, register),
 		};
 		this.rpc = {
 			register: this.registerRpc.bind(this),
@@ -1009,6 +1015,8 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 * Read once and cached: it is on the credential path, which a login flow
 	 * calls several times.
 	 */
+	/** Declarations of the seats this extension's components render. */
+	readonly #seatDeclarations: Array<() => void> = [];
 	#credentialNamespacePromise: Promise<string> | null = null;
 	#credentialNamespace(): Promise<string> {
 		this.#credentialNamespacePromise ??= readPackageNameNear(this.extension.path).then(
@@ -1025,6 +1033,16 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		// 而不是静默注册、GUI 永不挂载。前缀命名空间保持开放
 		// (panel.tab.<任意 id> 等永远合法),仅兜住拼写错误/未支持槽位。
 		assertKnownComponentSlot(component.slot);
+		// `provides` declares the seats this component renders, so they are live
+		// exactly while it is. Declared before the push: a conflict throws here and
+		// the component never enters the list, which keeps a failed registration
+		// from leaving seats alive for a component the host will not mount.
+		if (component.provides !== undefined && component.provides.length > 0) {
+			for (const seat of component.provides) assertKnownComponentSlot(seat);
+			const release = declareSeats(`${this.extension.path}#${component.slot}`, component.provides);
+			this.#seatDeclarations.push(release);
+			this.extension.seatDeclarations = [...(this.extension.seatDeclarations ?? []), release];
+		}
 		this.extension.components.push(component);
 	}
 
@@ -1092,6 +1110,11 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		// every other registration this extension made.
 		const dispose = registerCompactionMethod(provider);
 		return registerEffect(this.extension, dispose, `compaction method ${provider.id}`);
+	}
+
+	registerCompactionThresholdStrategy(strategy: CompactionThresholdStrategy): () => void {
+		const dispose = registerThresholdStrategy(strategy);
+		return registerEffect(this.extension, dispose, `compaction threshold strategy ${strategy.id}`);
 	}
 
 	registerMagicKeyword(keyword: ExtensionMagicKeyword): void {
@@ -1578,7 +1601,14 @@ export async function runFactoryInFiber(
 			return fiber.state;
 		},
 		getEffects: () => fiber.getEffects().map(effect => ({ label: effect.label })),
-		dispose: () => fiber.dispose(),
+		dispose: async () => {
+			// Seats collapse before the fiber does: a contribution riding one of
+			// this component's seats must stop while its plugin code is still loaded
+			// (its disposer may touch module state), not after the fiber tore down.
+			for (const release of extension.seatDeclarations ?? []) release();
+			extension.seatDeclarations = [];
+			await fiber.dispose();
+		},
 	};
 	return published;
 }

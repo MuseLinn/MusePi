@@ -1405,6 +1405,16 @@ export interface PluginContextNamespaces {
 	readonly slots: {
 		register: ExtensionAPI["registerComponent"];
 		registerWidget: ExtensionAPI["registerWidget"];
+		/**
+		 * Ride a seat for its whole declaration lifetime.
+		 *
+		 * `register` runs when the seat is declared (immediately if it already
+		 * is), is undone when the seat collapses, and runs again if it returns.
+		 * A seat is declared by the component that renders it (`provides`) or by
+		 * the app shell for root seats; `cordis_inspect { provider: "slots",
+		 * method: "catalog" }` names both. The returned disposer stops the ride.
+		 */
+		inject(slot: string, register: () => () => void): () => void;
 	};
 	readonly rpc: {
 		register: ExtensionAPI["registerRpc"];
@@ -3053,6 +3063,10 @@ export interface Extension {
 		readonly state?: number;
 		getEffects?(): ReadonlyArray<{ label: string }>;
 	};
+	/** Releases the seat declarations this instance made (`provides`), so a
+	 *  contribution riding one of its seats stops while the plugin code is still
+	 *  loaded. Run before the fiber disposes. */
+	seatDeclarations?: Array<() => void>;
 	/** Services were started for this instance. They belong to the instance
 	 *  (not the session), so a shared instance starts them once. */
 	servicesStarted?: boolean;
@@ -3131,6 +3145,17 @@ export interface ExtensionComponent {
 	/** Extra search terms for the settings search (owner-provided, like the
 	 *  shell's built-in section keywords). */
 	keywords?: readonly string[];
+	/**
+	 * Seats this component renders, so they are live exactly while it is.
+	 *
+	 * `cordis_inspect { provider: "slots", method: "catalog" }` lists every seat;
+	 * a hub component (the composer, the settings shell) names the children it
+	 * renders here. A contributor targeting a seat that no component declares
+	 * waits instead of rendering into nothing; `ctx.slots.inject` is that wait.
+	 * Root seats the app shell always renders are declared at startup and need
+	 * no entry here.
+	 */
+	provides?: readonly string[];
 }
 
 /**
