@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { zhCN } from "@musepi/client-locale/locale/zh-CN";
 import { getLocaleSnapshot, setLocale, t } from "../src/i18n/index.js";
-import { zhCN } from "../src/i18n/zh-CN/index.js";
 
 const INITIAL_LOCALE = getLocaleSnapshot();
 afterAll(() => setLocale(INITIAL_LOCALE));

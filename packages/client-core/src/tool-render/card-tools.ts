@@ -1,4 +1,4 @@
-import type { ToolsKey } from "../i18n/zh-CN/tools.js";
+import type { ToolsKey } from "@musepi/client-locale/locale/zh-CN/tools";
 
 /**
  * Canonical inventory of wire tool names that have a first-party card

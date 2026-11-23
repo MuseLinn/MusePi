@@ -1,0 +1,22 @@
+{
+	"type": "module",
+	"name": "@musepi/client-locale",
+	"version": "0.7.7",
+	"private": true,
+	"license": "MIT",
+	"description": "Locale plugin: typed dictionaries, locale preference and compile-time en parity.",
+	"exports": {
+		".": "./src/index.ts",
+		"./client": "./src/client/index.ts",
+		"./src/*": "./src/*",
+		"./use-locale": "./src/client/use-locale.ts",
+		"./release-notes": "./src/client/release-notes.ts",
+		"./locale/zh-CN": "./src/client/zh-CN/index.ts",
+		"./locale/zh-CN/tools": "./src/client/zh-CN/tools.ts",
+		"./locale/zh-CN/creation": "./src/client/zh-CN/creation.ts",
+		"./locale/en-US": "./src/client/en-US/index.ts"
+	},
+	"dependencies": {
+		"react": "19.2.7"
+	}
+}

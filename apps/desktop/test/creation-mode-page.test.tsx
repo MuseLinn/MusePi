@@ -5,7 +5,7 @@ import "./happy-dom-shim"; // MUST be first: component module graphs define HTML
 import "@lobehub/icons";
 import { afterAll, describe, expect, test } from "bun:test";
 import { setLocale, type TranslationKey, t } from "@musepi/client-core";
-import { creation as creationZh } from "@musepi/client-core/src/i18n/zh-CN/creation.js";
+import { creation as creationZh } from "@musepi/client-locale/locale/zh-CN/creation";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { CreationMessage } from "../src/components/CreationModeRow";

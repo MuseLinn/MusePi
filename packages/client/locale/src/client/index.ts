@@ -1,0 +1,300 @@
+/**
+ * Lightweight i18n for client-core.
+ *
+ * Keys are namespaced ("<domain>.<name>"); en-US/zh-CN domain dictionaries
+ * live under ./en-US and ./zh-CN. `t()` must only be called at render
+ * time, never at module load time.
+ */
+
+import { enUS } from "./en-US/index.js";
+import { zhCN } from "./zh-CN/index.js";
+
+/** Translation map: English source string → localized string. */
+export type TranslationMap = Record<string, string>;
+
+/**
+ * Typed translation keys: every `t()` key must exist in zh-CN.ts
+ * (English pass-through = key itself). Typos are compile errors.
+ */
+export type TranslationKey = keyof typeof zhCN;
+
+/**
+ * Translation keys for a session's recorded outcome.
+ *
+ * Kept beside the dictionary rather than in the settings plugin that renders
+ * them: the plugin is a compiled extension module, and a literal that happens
+ * to equal the English copy there reads as hardcoded UI text to the copy gate.
+ */
+export const SESSION_OUTCOME_LABEL_KEYS = {
+	complete: "session status complete",
+	interrupted: "session status interrupted",
+	aborted: "session status aborted",
+	error: "session status error",
+	pending: "session status pending",
+	unknown: "session status unknown",
+} as const satisfies Record<string, TranslationKey>;
+
+/**
+ * Extract `{name}` placeholders from a translated template into a params
+ * contract, so `t("… {count} …", { count })` is checked at compile time.
+ */
+type PlaceholderOf<S extends string> = S extends `${string}{${infer N}}${infer R}`
+	? N extends string
+		? N | PlaceholderOf<R>
+		: never
+	: never;
+
+/** Params type for a key: `{ count: string | number }` when the template has placeholders, else `{}`. */
+export type ParamsOf<K extends TranslationKey> = [PlaceholderOf<(typeof zhCN)[K]>] extends [never]
+	? Record<string, never>
+	: { [P in PlaceholderOf<(typeof zhCN)[K]>]: string | number };
+
+// ── Locale registry ──────────────────────────────────────────────────────────
+
+const locales: Record<string, TranslationMap> = {
+	"zh-CN": zhCN,
+	"en-US": enUS,
+};
+
+let currentLocale = detectLocale();
+
+function detectLocale(): string {
+	if (typeof navigator !== "undefined") {
+		const nav = navigator as Navigator;
+		const lang = typeof nav.language === "string" ? nav.language.toLowerCase() : "";
+		if (lang.startsWith("zh")) return "zh-CN";
+	}
+	return "en-US";
+}
+
+const listeners = new Set<() => void>();
+
+function emit(): void {
+	for (const listener of listeners) {
+		listener();
+	}
+}
+
+/** Set locale at runtime (e.g., from settings change). */
+export function setLocale(locale: string): void {
+	if (currentLocale === locale) return;
+	const doc = globalThis.document as (Document & { startViewTransition?: (cb: () => void) => void }) | undefined;
+	const swap = (): void => {
+		currentLocale = locale;
+		try {
+			globalThis.localStorage.setItem("omp.collab.locale", locale);
+		} catch {
+			// storage unavailable — non-fatal
+		}
+		emit();
+	};
+	if (doc?.startViewTransition) {
+		// Whole-UI cross-fade on language switch — text would snap without
+		// it (View Transitions API, Chromium 111+; safe no-op elsewhere).
+		doc.startViewTransition(swap);
+	} else {
+		swap();
+	}
+}
+
+/** Subscribe to locale changes. Returns an unsubscribe function. */
+export function subscribeLocale(callback: () => void): () => void {
+	listeners.add(callback);
+	return () => listeners.delete(callback);
+}
+
+/** Snapshot of the current locale for useSyncExternalStore. */
+export function getLocaleSnapshot(): string {
+	return currentLocale;
+}
+
+// ── Core API ─────────────────────────────────────────────────────────────────
+
+/**
+ * Runtime overlays from {@link registerTranslations}, kept as a separate
+ * tier so an un-namespaced plugin key ("usage") can shadow a base entry's
+ * namespaced lookup ("tools.usage") without rewriting the base map.
+ */
+const overlays: Record<string, TranslationMap> = {};
+
+/**
+ * Core translation lookup for `key`:
+ *   1. overlay[current locale][key]
+ *   2. overlay[current locale][key minus its namespace] — plugin keys
+ *      registered bare shadow the namespaced base entry
+ *   3. base map[current locale][key]
+ *   4. the namespace-stripped key (e.g. "tools.usage" → "usage") — so a
+ *      locale that never registered the key still shows readable text
+ * Named `{name}` replacements applied when params are given.
+ */
+function translate(key: string, params?: Record<string, string | number>): string {
+	const strip = key.includes(".") ? key.slice(key.indexOf(".") + 1) : key;
+	const overlay = overlays[currentLocale];
+	const locale = locales[currentLocale];
+	let translated = overlay?.[key] ?? overlay?.[strip] ?? locale?.[key] ?? strip;
+	if (params) {
+		for (const [name, value] of Object.entries(params)) {
+			translated = translated.split(`{${name}}`).join(String(value));
+		}
+	}
+	return translated;
+}
+
+/**
+ * Translate `key` for the current locale.
+ * Falls back to the key itself if no translation is found.
+ *
+ * @param key - English source string (also the translation key)
+ * @param params - optional named replacements ({count}, {name}, …)
+ */
+export function t<K extends TranslationKey>(key: K, params?: ParamsOf<K>): string {
+	return translate(key, params);
+}
+
+/**
+ * Loose `t` for plugin-originated keys that are not (yet) in the core
+ * zh-CN map — e.g. strings contributed via {@link registerTranslations}.
+ * Plugin components calling `t()` with their own keys need this (or an
+ * explicit `as TranslationKey` cast) since `t` only accepts core keys.
+ */
+export function tLoose(key: string, params?: Record<string, string | number>): string {
+	return translate(key, params);
+}
+
+/**
+ * Translate `key` for an explicitly requested locale instead of the current
+ * UI locale. Release notes and changelogs project the document's own language
+ * while the app chrome may be in another; `zh*` resolves to zh-CN and every
+ * other tag to en-US. Runtime overlays apply, and a missing key falls back to
+ * its en-US value.
+ */
+export function tFor<K extends TranslationKey>(locale: string, key: K, params?: ParamsOf<K>): string {
+	const tag = locale.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+	const base = locales[tag] ?? enUS;
+	let translated = overlays[tag]?.[key] ?? base[key] ?? enUS[key] ?? key;
+	if (params) {
+		for (const [name, value] of Object.entries(params)) {
+			translated = translated.split(`{${name}}`).join(String(value));
+		}
+	}
+	return translated;
+}
+
+/**
+ * Register (or override) translations for a locale at runtime — the seam
+ * for plugins / host apps contributing UI strings. Overlays the base map:
+ * existing keys are replaced, new keys are added. Emits so live UI
+ * re-renders when the current locale is affected. Not persisted — a reload
+ * restores the core maps.
+ */
+export function registerTranslations(locale: string, map: Record<string, string>): void {
+	const base = overlays[locale] ?? {};
+	overlays[locale] = { ...base, ...map };
+	if (locale === currentLocale) emit();
+}
+
+// ── Namespaced contributions (plugins) ───────────────────────────────────────
+
+/**
+ * Register a plugin's dictionaries under its own namespace.
+ *
+ * The flat seam above shares one key space with the core map, so two plugins
+ * using `title` or `close` would silently overwrite each other and the winner
+ * would depend on load order. A namespace makes each plugin's keys its own:
+ * `registerTranslationNamespace("auth-hub", { "zh-CN": { title: "账号" } })`
+ * stores `auth-hub:title`, which nothing else can claim.
+ *
+ * Shapes taken from the reference host's locale service (`ctx.locale.register(
+ * NS, { zh, en })`): a namespace plus a dictionary per locale tag.
+ */
+export function registerTranslationNamespace(
+	namespace: string,
+	dictionaries: Record<string, Record<string, string>>,
+): void {
+	if (namespace.trim() === "") {
+		throw new Error("translation namespace must not be empty");
+	}
+	const prefix = `${namespace}:`;
+	for (const [locale, map] of Object.entries(dictionaries)) {
+		const scoped: Record<string, string> = {};
+		for (const [key, value] of Object.entries(map)) {
+			// A key that already carries this namespace is kept as-is, so a plugin
+			// cannot accidentally double-prefix on a reload.
+			scoped[key.startsWith(prefix) ? key : `${prefix}${key}`] = value;
+		}
+		const base = overlays[locale] ?? {};
+		overlays[locale] = { ...base, ...scoped };
+		if (locale === currentLocale) emit();
+	}
+}
+
+/** Drop a namespace's keys (plugin unload). */
+export function unregisterTranslationNamespace(namespace: string): void {
+	const prefix = `${namespace}:`;
+	let changed = false;
+	for (const [locale, map] of Object.entries(overlays)) {
+		const kept: Record<string, string> = {};
+		for (const [key, value] of Object.entries(map)) {
+			if (key.startsWith(prefix)) {
+				changed = true;
+				continue;
+			}
+			kept[key] = value;
+		}
+		overlays[locale] = kept;
+	}
+	if (changed) emit();
+}
+
+/**
+ * A translator bound to one namespace — the reference's `ctx.locale.bind(NS)`.
+ *
+ * The returned function takes BARE keys (`t("title")`), prefixes them, and
+ * carries `locale` so callers doing their own date/number formatting do not have
+ * to reach for the global state.
+ */
+export interface NamespacedTranslator {
+	(key: string, params?: Record<string, string | number>): string;
+	/** The locale tag in effect right now (re-read on every access). */
+	readonly locale: string;
+	/** The namespace this translator is bound to. */
+	readonly namespace: string;
+}
+
+export function bindTranslationNamespace(namespace: string): NamespacedTranslator {
+	const translateBound = ((key: string, params?: Record<string, string | number>): string =>
+		translate(`${namespace}:${key}`, params)) as {
+		(key: string, params?: Record<string, string | number>): string;
+		locale: string;
+		namespace: string;
+	};
+	translateBound.namespace = namespace;
+	// A getter so `t.locale` follows a live locale switch without the caller
+	// re-binding (the reference reads it the same way, for date formatting).
+	Object.defineProperty(translateBound, "locale", {
+		get: () => currentLocale,
+		enumerable: true,
+	});
+	return translateBound;
+}
+
+// ── Initialization ───────────────────────────────────────────────────────────
+
+try {
+	const stored = globalThis.localStorage.getItem("omp.collab.locale");
+	if (stored === "zh-CN" || stored === "en-US") {
+		setLocale(stored);
+	}
+} catch {
+	// storage unavailable — use detected locale
+}
+
+// Re-detect when the OS/browser language changes while the page is open, so
+// locale switches take effect without a reload (detectLocale ran at module
+// load and would otherwise stay stale).
+if (typeof window !== "undefined") {
+	window.addEventListener("languagechange", () => {
+		const next = detectLocale();
+		if (next !== currentLocale) setLocale(next);
+	});
+}

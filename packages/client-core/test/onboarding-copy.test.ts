@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { enUS } from "../src/i18n/en-US/index.js";
+import { enUS } from "@musepi/client-locale/locale/en-US";
+import { zhCN } from "@musepi/client-locale/locale/zh-CN";
 import { t } from "../src/i18n/index.js";
-import { zhCN } from "../src/i18n/zh-CN/index.js";
 
 /**
  * Onboarding copy contract (P1 restructure — 8 steps → 3 main + 3 branches).

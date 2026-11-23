@@ -70,6 +70,7 @@ A UI capability owns one `@musepi/ui-*` package. Its `src/contract/slots.ts` nam
 | `@musepi/client-ui-shell` | main, panel, rail, shell-overlay and browser-host seats | contract landed |
 | `@musepi/client-ui-settings` | settings extension, section and item seats | contract landed |
 | `@musepi/client-ui-sidebar` | sidebar-panel seats | contract landed |
+| `@musepi/client-locale` | typed dictionaries, locale preference, compile-time en parity | landed |
 | `@musepi/client-ui-primitives` | `FoldRegion` and scroll-edge feathering (`useScrollShadow` / `useDeepScrollShadow`) | landed |
 | `@musepi/client-ui-charts` | zero-dependency responsive charts | landed |
 | `@musepi/client-ui-status` | `StatusText` and its cross-fade stylesheet | landed |
