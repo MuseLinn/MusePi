@@ -29,7 +29,9 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **工具所有权**：每个内建工具在 `tools/tool-ownership.ts` 里可以有一个拥有者组件（`TOOL_OWNERS`），工具可用性跟随该组件的 fiber——卸载或 deny 那个组件，工具就离开工具表；没有拥有者的工具保持隐式可用，从未装载过的域也不会让工具消失。`registerToolOwner(name, owner)` 是运行时声明缝（返回 disposer 恢复上一个拥有者），包可以在 `apply` 里认领自己贡献的工具。
 
-**工具实现提供**：`registerToolProvider(name, factory)` 让能力包提供内建工具的**实现**，核心工厂表退为默认与兜底——没装载任何包的会话（CLI、隔离 worker）行为不变。`file-tools` 的 read / write / search 组件已经这样接管 `read`、`write`、`edit`、`glob`、`grep`，这就是 dsh「每个工具一个 plugin 行」在 MusePi 的落地形态：拥有者决定工具**能不能存在**，提供者决定**跑什么**。
+**工具实现提供**：`registerToolProvider(name, factory)` 让能力包提供内建工具的**实现**，核心工厂表退为默认与兜底——没装载任何包的会话（CLI、隔离 worker）行为不变。`file-tools` 的 read / write / search 组件已经这样接管 `read`、`write`、`edit`、`glob`、`grep`；`memory-tools` 的 retain / recall / reflect / edit / learn 组件接管同名记忆工具。这就是 dsh「每个工具一个 plugin 行」在 MusePi 的落地形态：拥有者决定工具**能不能存在**，提供者决定**跑什么**。
+
+**拥有者必须声明式**：`TOOL_OWNERS` 是唯一事实源，不能靠运行时 `registerToolOwner` 认领——组件禁用时 disposer 会撤掉运行时注册，工具就退回「无拥有者即允许」而仍然出现。`registerToolOwner` 只用于运行时**改写**已声明的拥有者（如把某个工具临时归到另一个组件），不作为首次声明手段。
 
 **注册即所有权**：两条轨道各有一个判定，不共用答案——`pluginOwnsTool(session, name)` 只在 **Track A 插件**（`ctx.tools.register`）注册该名时为真，`extensionOwnsTool(session, name)` 只在 **Track B 旧扩展**注册时为真。`Extension.track` 是这条区分的依据（两条轨道各自的构造器打标），runner 用 `getExtensionForTool(name)` 反查。工具类的 `createIf` 仍用 `extensionOwnsTool` 判定「已被注册，核心工厂不再造第二份」。
 

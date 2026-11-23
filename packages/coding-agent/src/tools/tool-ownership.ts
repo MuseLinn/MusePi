@@ -158,6 +158,13 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	ast_grep: { domain: "file", id: "search" },
 	computer: { domain: "tool", id: "computer" },
 	lsp: { domain: "tool", id: "lsp" },
+	// Memory tools: each is its own component in the memory-tools package, so a
+	// deployment can ship the read side without the write side.
+	retain: { domain: "memory", id: "retain" },
+	recall: { domain: "memory", id: "recall" },
+	reflect: { domain: "memory", id: "reflect" },
+	memory_edit: { domain: "memory", id: "edit" },
+	learn: { domain: "memory", id: "learn" },
 };
 
 const ownerOverrides = new Map<string, ToolOwner>();

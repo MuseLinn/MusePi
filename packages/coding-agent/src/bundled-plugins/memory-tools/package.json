@@ -1,0 +1,23 @@
+{
+	"name": "musepi-memory-tools",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Memory Tools",
+		"description": "Long-term memory tools (retain, recall, reflect, edit) and the auto-learn capture tool.",
+		"icon": "🧠",
+		"extensions": ["./index.ts"],
+		"components": [
+			{ "id": "retain", "entry": "./retain.ts", "description": "写入长期记忆。" },
+			{ "id": "recall", "entry": "./recall.ts", "description": "从长期记忆检索。" },
+			{ "id": "reflect", "entry": "./reflect.ts", "description": "基于长期记忆作答。" },
+			{ "id": "edit", "entry": "./edit.ts", "description": "编辑 Mnemopi 记忆库。" },
+			{ "id": "learn", "entry": "./learn.ts", "description": "把可复用的经验写入记忆。" }
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}
