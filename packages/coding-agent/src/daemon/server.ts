@@ -782,12 +782,26 @@ export class DaemonServer {
 				runtimeTargets: () => this.#services.get<BundleService>("bundles").runtimeTargets(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				applyLive: target => this.applyPluginEntriesLive(target),
+				applyVolatileConfig: async (entryPath, key, value) => {
+					const resolved = path.resolve(entryPath);
+					let seen = false;
+					let all = true;
+					for (const live of this.#host.allSessions()) {
+						const loaded = live.agentSession
+							.listLoadedExtensions()
+							.some(extension => path.resolve(extension.path) === resolved);
+						if (!loaded) continue;
+						seen = true;
+						all = all && (await live.agentSession.updatePluginConfig(entryPath, key, value));
+					}
+					return seen && all;
+				},
 				reloadHostPluginConfigs: async () => {
 					const [{ reloadHostPlugins }, { getPluginConfigPath }] = await Promise.all([
 						import("../extensibility/plugins/runtime/host-runtime"),
 						import("../extensibility/extensions-center/plugin-config-store"),
 					]);
-					await reloadHostPlugins([getPluginConfigPath()]);
+					await reloadHostPlugins([getPluginConfigPath()], this.#host.settings() ?? undefined);
 				},
 			}),
 		);
@@ -914,6 +928,7 @@ export class DaemonServer {
 				},
 				resolveLive: sessionId => this.#host.get(sessionId),
 				activateLive: sessionId => this.#host.activate(sessionId),
+				projectionsSnapshot: sessionId => this.#host.projectionsSnapshot(sessionId),
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
 				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
 				deletedWorkspaces: () => this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces(),
@@ -1415,7 +1430,7 @@ export class DaemonServer {
 		// than racing the constructor.
 		void (async () => {
 			const { ensureHostHalfPluginsLoaded } = await import("../plugins-runtime/loader");
-			await ensureHostHalfPluginsLoaded(this.#host.cwd());
+			await ensureHostHalfPluginsLoaded(this.#host.cwd(), this.#host.settings() ?? undefined);
 			const service = getHostService<HmrService>("hmr");
 			if (!service) {
 				// No HMR plugin (disabled or failed): discovery TTL still applies.
@@ -6944,7 +6959,7 @@ export async function startDaemon(
 	// connection: what they register (memory backend providers, services) must
 	// exist for session-less RPC such as `memory.status`, not only for sessions.
 	const { ensureHostHalfPluginsLoaded } = await import("../plugins-runtime/loader");
-	await ensureHostHalfPluginsLoaded(host.cwd());
+	await ensureHostHalfPluginsLoaded(host.cwd(), host.settings() ?? undefined);
 
 	// The shell's own seats are not plugin components, so nobody declares them
 	// unless this does. Declared before any session: a plugin's `slots.inject`

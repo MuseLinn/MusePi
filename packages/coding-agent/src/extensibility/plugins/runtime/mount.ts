@@ -19,7 +19,7 @@
  * shared code that only one of them owns. So Track A mounts here.
  *
  * What it deliberately still shares: the module loader
- * (`loadLegacyPiModule`) and the API factory (`createConcreteExtensionAPI`).
+ * (`loadLegacyPiModule`) and the API factory (`createPluginAPI`).
  * Those are *mechanisms*, not track policy — there is one way to import a
  * user-supplied TS entry in this host, and one façade the whole extension
  * surface speaks. Duplicating them would create two behaviours of the same
@@ -34,7 +34,7 @@ import type { DynamicExtensionLoadErrorCode } from "../../extensions/dynamic-ext
 import { DynamicExtensionLoadError } from "../../extensions/dynamic-extension-error";
 import { recordHostExtensionModes } from "../../extensions/host-modes";
 import type { Extension, ExtensionAPI, ExtensionFactory } from "../../extensions/types";
-import { createConcreteExtensionAPI, runFactoryInFiber } from "../../plugin-runtime/extension-api";
+import { createPluginAPI, runPluginInFiber } from "../../plugin-runtime/plugin-api";
 // STATIC, not `await import()`: this module holds process-wide state (the source
 // graph snapshot the loader records, and the module cache it keys imports on). A
 // dynamic import resolved to a second instance in practice — the loader wrote
@@ -60,7 +60,7 @@ import {
 	stateKeys,
 	stateSet,
 } from "./cordis-primitives";
-import { validateDeclaredPluginConfig } from "./declared-config";
+import { validateDeclaredPluginConfig, wrapVolatileConfig } from "./declared-config";
 
 /** One runtime mount request. A composition row keeps its own identity and
  * config even when another row resolves to the same entry file. Plain string
@@ -113,7 +113,7 @@ export interface MountContext {
 	entryPath: string;
 	cwd: string;
 	eventBus: EventBus;
-	runtime: Parameters<typeof createConcreteExtensionAPI>[1];
+	runtime: Parameters<typeof createPluginAPI>[1];
 	/**
 	 * Reads this plugin's config values out of the store, coerced to its fields.
 	 *
@@ -148,7 +148,7 @@ export interface MountContext {
  * Add the cordis primitives (`effect` / `state`) to an API instance.
  *
  * The base API is shared with Track B and must stay that way, so the primitives
- * are attached here rather than in `createConcreteExtensionAPI`. Track B does
+ * are attached here rather than in `createPluginAPI`. Track B does
  * not get them: it has no fiber to scope state to and no ledger to attach
  * cleanups to, so exposing them there would be a lie.
  *
@@ -216,7 +216,7 @@ function withServiceAccess(api: ExtensionAPI, registry: ServiceRegistry): Extens
 /**
  * Create an empty `Extension` for a plugin entry.
  *
- * Track B's `createExtension` is module-private, and reaching into it would
+ * Track B's `createPluginRecord` is module-private, and reaching into it would
  * couple the two tracks again — exactly what this split removes. The shape is
  * declared in `extensions/types.ts` (shared vocabulary, not Track B policy), so
  * Track A builds its own and both tracks agree on the object the rest of the
@@ -355,7 +355,7 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 	if (declaresConfig || acceptsConfigArgument) {
 		const read = await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }));
 		try {
-			values = await validateDeclaredPluginConfig(entry, read.values);
+			values = wrapVolatileConfig(entry, await validateDeclaredPluginConfig(entry, read.values));
 		} catch (error) {
 			return {
 				ok: false,
@@ -377,14 +377,14 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		// the names in its `provide`, handed to consumers through
 		// `pi.service(name)`. A legacy factory's return is ignored — it predates
 		// the contract and returning something there is not a publish.
-		const returned = await runFactoryInFiber(
+		const returned = await runPluginInFiber(
 			extension,
 			ctx.runtime,
 			ctx.cwd,
 			ctx.eventBus,
 			factory as unknown as ExtensionFactory,
 			ownContext => {
-				const base = createConcreteExtensionAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus, ownContext);
+				const base = createPluginAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus, ownContext);
 				// Primitives first, then the ledger: the ledger wraps registrations
 				// into effects, and it must see the primitives too so a `register*`
 				// call made through the wrapped API is still recorded.

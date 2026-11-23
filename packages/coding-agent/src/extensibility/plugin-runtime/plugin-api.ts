@@ -104,7 +104,7 @@ const CANCELABLE_PRE_EVENTS: ReadonlySet<string> = new Set([
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
-export class ExtensionRuntimeNotInitializedError extends Error {
+export class PluginRuntimeNotInitializedError extends Error {
 	constructor() {
 		super("Extension runtime not initialized. Action methods cannot be called during extension loading.");
 	}
@@ -114,7 +114,7 @@ export class ExtensionRuntimeNotInitializedError extends Error {
  * Extension runtime with throwing stubs for action methods.
  * These are replaced with real implementations during initialization.
  */
-export class ExtensionRuntime implements IExtensionRuntime {
+export class PluginRuntime implements IExtensionRuntime {
 	flagValues = new Map<string, boolean | string>();
 	/** Cordis event context for lifecycle events already migrated off the
 	 *  hand-written loops (`session_start`, `session_shutdown`). */
@@ -224,72 +224,72 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	}
 
 	sendMessage(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	sendUserMessage(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	appendEntry(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	setLabel(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	getActiveTools(): string[] {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	getAllTools(): ToolInfo[] {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	setActiveTools(): Promise<void> {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	getCommands(): never {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	setModel(): Promise<boolean> {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	getThinkingLevel(): ThinkingLevel {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	setThinkingLevel(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	getServiceTiers(): ServiceTierByFamily {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	setServiceTier(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	getSessionName(): string | undefined {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	setSessionName(): Promise<void> {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 
 	emitNotification(): void {
-		throw new ExtensionRuntimeNotInitializedError();
+		throw new PluginRuntimeNotInitializedError();
 	}
 }
 
 /**
- * 同源工厂：ConcreteExtensionAPI 的唯一构造入口（收编第二刀）——会话装载
+ * 同源工厂：ConcretePluginAPI 的唯一构造入口（收编第二刀）——会话装载
  * （bindExtension）与 cordis 宿主级动态装载（cordis-dynamic-plugins）
  * 共用同一 API 实例来源，换实现处只此一点，两条加载路径不会漂移。
  */
@@ -299,7 +299,7 @@ export class ExtensionRuntime implements IExtensionRuntime {
  * Shared by the lazy `on` path and the factory loader that starts the
  * extension's own fiber on the same context.
  */
-function ensureExtensionEventBus(runtime: IExtensionRuntime): NonNullable<IExtensionRuntime["eventBus"]> {
+function ensurePluginEventBus(runtime: IExtensionRuntime): NonNullable<IExtensionRuntime["eventBus"]> {
 	let bus = runtime.eventBus;
 	if (!bus) {
 		bus = new Context() as unknown as NonNullable<IExtensionRuntime["eventBus"]>;
@@ -308,7 +308,7 @@ function ensureExtensionEventBus(runtime: IExtensionRuntime): NonNullable<IExten
 	return bus;
 }
 
-export function createConcreteExtensionAPI(
+export function createPluginAPI(
 	extension: Extension,
 	runtime: IExtensionRuntime,
 	cwd: string,
@@ -318,7 +318,7 @@ export function createConcreteExtensionAPI(
 	 *  factory outside one — the listener ledger still covers those. */
 	ownContext?: Context,
 ): ExtensionAPI {
-	return new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus, ownContext);
+	return new ConcretePluginAPI(PiCodingAgent, extension, runtime, cwd, eventBus, ownContext);
 }
 
 /**
@@ -377,7 +377,7 @@ function toExtensionCredential(stored: StoredPluginCredential): ExtensionCredent
  * contributions (`ext:<id>`), matching the composer source convention and
  * `extensionIdOf` in sdk.ts.
  */
-export function extensionHostOwner(extensionPath: string): string {
+export function pluginHostOwner(extensionPath: string): string {
 	return `ext:${getExtensionNameFromPath(extensionPath)}`;
 }
 
@@ -408,7 +408,7 @@ function bindFiberEffect(context: Context, cleanup: () => void | Promise<void>, 
 	};
 }
 
-class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
+class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
 	readonly arktype = type;
@@ -563,7 +563,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		}
 		const host = scope.promptHost;
 		if (!host) return undefined;
-		const owner = extensionHostOwner(this.extension.path);
+		const owner = pluginHostOwner(this.extension.path);
 		const ledgers = currentSessionScope()?.promptHostLedgers;
 		if (!ledgers) return undefined;
 		let ledger = ledgers.get(owner);
@@ -627,7 +627,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		// dispatcher only cares about the name at emit time.
 		const bus = this.ownContext
 			? (this.ownContext as unknown as NonNullable<IExtensionRuntime["eventBus"]>)
-			: ensureExtensionEventBus(this.runtime);
+			: ensurePluginEventBus(this.runtime);
 		const dispose = this.#registerListener(bus, event, handler, options);
 		// Fiber ownership: the disposer becomes an effect of this extension's
 		// fiber, so a reload/unload/rollback reclaims it with the instance.
@@ -1373,7 +1373,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 /**
  * Create an Extension object with empty collections.
  */
-export function createExtension(extensionPath: string, resolvedPath: string): Extension {
+export function createPluginRecord(extensionPath: string, resolvedPath: string): Extension {
 	return {
 		path: extensionPath,
 		resolvedPath,
@@ -1449,7 +1449,7 @@ async function runExtensionFactory(
 	}
 }
 
-export async function runFactoryInFiber(
+export async function runPluginInFiber(
 	extension: Extension,
 	runtime: IExtensionRuntime,
 	cwd: string,
@@ -1460,7 +1460,8 @@ export async function runFactoryInFiber(
 	/** Tag the instance's context as part of one preset generation. */
 	scopeTag?: object,
 ): Promise<unknown> {
-	const bus = ensureExtensionEventBus(runtime) as unknown as Context;
+	const bus = ensurePluginEventBus(runtime) as unknown as Context;
+	extension.config = config;
 	let published: unknown;
 	const fiber = bus.inject({}, async scope => {
 		const ownContext = scopeTag ? (scope as Context).extend({ [PRESET_SCOPE_TAG]: scopeTag }) : (scope as Context);
@@ -1493,7 +1494,7 @@ export async function runFactoryInFiber(
 	return published;
 }
 
-export async function loadExtensionFromFactory(
+export async function loadPluginFromFactory(
 	factory: ExtensionFactory,
 	cwd: string,
 	eventBus: EventBus,
@@ -1504,14 +1505,14 @@ export async function loadExtensionFromFactory(
 	/** Coerced `musepi.config` values, handed to `apply(ctx, config)`. */
 	config?: Record<string, unknown>,
 ): Promise<Extension> {
-	const extension = createExtension(name, name);
-	const published = await runFactoryInFiber(
+	const extension = createPluginRecord(name, name);
+	const published = await runPluginInFiber(
 		extension,
 		runtime,
 		cwd,
 		eventBus,
 		factory,
-		ownContext => createConcreteExtensionAPI(extension, runtime, cwd, eventBus, ownContext),
+		ownContext => createPluginAPI(extension, runtime, cwd, eventBus, ownContext),
 		config,
 	);
 	if (capture) capture.published = published;

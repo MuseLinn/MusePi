@@ -10,6 +10,7 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ConfigFieldDesc } from "@musepi/pi-wire";
+import { isVolatileSchema } from "../src/plugin-config";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 
@@ -24,7 +25,7 @@ interface JsonSchemaNode {
 }
 
 /** One JSON Schema node as the management page's field descriptor. */
-export function projectConfigFields(schema: JsonSchemaNode): ConfigFieldDesc[] {
+export function projectConfigFields(schema: JsonSchemaNode, shape?: Record<string, unknown>): ConfigFieldDesc[] {
 	const fields: ConfigFieldDesc[] = [];
 	for (const [key, property] of Object.entries(schema.properties ?? {})) {
 		const options = Array.isArray(property.enum)
@@ -44,9 +45,8 @@ export function projectConfigFields(schema: JsonSchemaNode): ConfigFieldDesc[] {
 			key,
 			type,
 			label: key,
-			// Ordinary config is read when the plugin mounts; a new session is the
-			// boundary at which a changed value takes effect.
-			restart: "session",
+			// A volatile field is live; ordinary config is read when the plugin mounts.
+			restart: isVolatileSchema(shape?.[key]) ? "none" : "session",
 			...(property.default !== undefined ? { default: property.default } : {}),
 			...(typeof property.minimum === "number" ? { min: property.minimum } : {}),
 			...(typeof property.maximum === "number" ? { max: property.maximum } : {}),
@@ -77,7 +77,7 @@ export async function buildPluginConfigArtifacts(): Promise<PluginConfigArtifact
 		if (!schema || typeof schema.toJsonSchema !== "function") {
 			throw new Error(`${relative}: Config must expose toJsonSchema()`);
 		}
-		const fields = projectConfigFields(schema.toJsonSchema());
+		const fields = projectConfigFields(schema.toJsonSchema(), (schema as { shape?: Record<string, unknown> }).shape);
 		artifacts.push({
 			path: path.join(dir, "config.json"),
 			content: `${JSON.stringify({ fields }, null, "\t")}\n`,

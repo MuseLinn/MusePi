@@ -1,4 +1,4 @@
-import { z } from "@musepi/pi-coding-agent/plugin-config";
+import { type Volatile, volatile, z } from "@musepi/pi-coding-agent/plugin-config";
 
 /**
  * The plugin's declared config (dsh's `Config`): the host validates the
@@ -7,12 +7,11 @@ import { z } from "@musepi/pi-coding-agent/plugin-config";
  * parallel field table.
  */
 export interface Config {
-	capPercent: number;
+	capPercent: Volatile<number>;
 }
 
 export const Config = z.object({
-	capPercent: z
-		.number()
-		.default(70)
-		.describe("长上下文按溢价计费的模型，其压缩触发点不超过该窗口占比。其他模型不受影响。"),
+	capPercent: volatile(
+		z.number().default(70).describe("长上下文按溢价计费的模型，其压缩触发点不超过该窗口占比。其他模型不受影响。"),
+	),
 });

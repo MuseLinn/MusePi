@@ -12,7 +12,7 @@ import {
 	logger,
 } from "@musepi/pi-utils";
 import { EventBus } from "../../../utils/event-bus";
-import { ExtensionRuntime } from "../../plugin-runtime/extension-api";
+import { PluginRuntime } from "../../plugin-runtime/plugin-api";
 import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "../marketplace/registry";
 import { parsePluginId } from "../marketplace/types";
 import { readPluginBlock } from "../profile/manifest-block";
@@ -597,7 +597,7 @@ export class PluginManager {
 		}
 
 		if (loadable.length > 0) {
-			const runtime = new ExtensionRuntime();
+			const runtime = new PluginRuntime();
 			const eventBus = new EventBus();
 			const readConfig = await defaultSessionConfigReader();
 			for (const entryPath of loadable) {

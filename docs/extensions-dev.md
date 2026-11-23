@@ -548,12 +548,13 @@ export function apply(ctx: PluginAPI, config: Config): void {
 }
 ```
 
-- `mountPlugin` 用 `Config["~standard"].validate` 校验有效值(存储值 + 组合行覆盖),返回 schema 输出；校验失败以 `config-invalid` 拒绝挂载，旧实例保留。导出一个不是 Standard Schema 的 `Config` 也会被拒绝，不会静默跳过。
+- 字段可用 `volatile(z.string())` 标记为活引用(dsh `.volatile()`):挂载时包成 ref,配置写入原地更新且管理页标为 `restart: none`;`compaction-tiers` 的 `capPercent` 已消费。普通字段在挂载时读取,写入触发重挂载。
+- `mountPlugin` 用 `Config["~standard"].validate` 校验有效值(存储值 + 组合行覆盖),返回 schema 输出；校验失败以 `config-invalid` 拒绝挂载，旧实例保留。导出一个不是 Standard Schema 的 `Config` 也会被拒绝，不会静默跳过。settings-backed 包的读取链路收到会话 Settings 时用其值,否则用声明默认。
 - 管理页表单由 `Config.toJsonSchema()` 生成到包内的 `config.json`(字段、默认值、边界、枚举、描述)；不要手改该文件。生成命令 `bun --cwd=packages/coding-agent run gen:plugin-config`，`verify-generated` 会拦截过期产物。
 - `musepi.config` 不再是 Track A 的配置声明；遗留清单字段仍可读，供 Track B / 未迁移包回退。`pi.config.get/getAll` 只保留在 `ExtensionAPI`(Track B)，Track A 通过 `apply(ctx, config)` 拿到配置。
 - 配置写出后宿主重载运行实例：进程级宿主插件按有效配置批次重载；活动会话通过 Track A 挂载管线重挂载并重放 `session_start`；失败保留旧实例并返回错误。管理页把字段标为 `session`，因为值在挂载时读取。
 - 取值仍与 `extensions.setConfig` 写入共用 `@musepi/pi-wire` 的钳制链路(坏存储值回退 schema 默认)。
-- 存储落点:`<agentDir>/extensions/plugin-config.json`,键空间与 `disabledExtensions` 一致(包名,`pluginEntryId`;Track A 运行时读取与表单写入共用这一身份)。
+- 存储落点:`<agentDir>/extensions/plugin-config.json` —— 这是 MusePi 的 **profile patch**:按 profile(`agentDir`)持久化,键是包名(`pluginEntryId`,与启停同一身份),预设行的 `config` 在其上覆盖。dsh 的 `cordis.yml` 是 Cordis 组合格式,MusePi 的组合单位是 mode 文件与 lockfile,因此不引入第二套 YAML 组合器;「配置写进 profile、挂载时应用」的语义与 dsh 一致。
 - `musepi` 块继续承载 `extensions` / `resources` / `components` / `label` / `description` / `icon` / `experimental` / `presetOnly` 等非配置清单字段。
 
 ### 13.1 插件名字的本地化(`locale/<tag>.json`,dsh parity,2026-11-15)

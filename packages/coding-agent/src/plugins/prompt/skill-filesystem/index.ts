@@ -6,6 +6,8 @@ import type { ExtensionSkillDeclaration, PluginAPI } from "@musepi/pi-coding-age
 import { stringArrayFromRow } from "@musepi/pi-coding-agent/extensibility/plugins/row-config";
 import { parseFrontmatter } from "@musepi/pi-utils";
 
+import type { Config } from "./config";
+
 export { Config } from "./config";
 
 /**
@@ -85,7 +87,7 @@ export async function scanSkillRoot(root: string): Promise<ExtensionSkillDeclara
 
 /** Second parameter: the plugin's effective config (manifest values plus any
  *  preset-row overrides), handed over by `mountPlugin`. */
-export async function apply(ctx: PluginAPI, config?: { roots?: unknown }): Promise<void> {
+export async function apply(ctx: PluginAPI, config?: Config): Promise<void> {
 	const roots = stringArrayFromRow(config?.roots, "roots");
 	for (const raw of roots) {
 		const root = path.resolve(ctx.cwd, expandHome(raw));

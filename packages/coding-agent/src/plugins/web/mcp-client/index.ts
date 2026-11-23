@@ -1,6 +1,8 @@
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 
+import type { Config } from "./config";
+
 export { Config } from "./config";
 
 /**
@@ -119,7 +121,7 @@ export function serverConfigFromRow(config: RowConfig): { serverName: string; co
 // The second parameter is the plugin's effective config: manifest/schema
 // defaults plus this row's overrides, validated through the module's `Config`
 // and handed over by `mountPlugin`.
-export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
+export function apply(ctx: PluginAPI, config?: Config): void {
 	ctx.on("session_start", async (_event, session) => {
 		const server = serverConfigFromRow((config ?? {}) as RowConfig);
 		if (server === null) return;

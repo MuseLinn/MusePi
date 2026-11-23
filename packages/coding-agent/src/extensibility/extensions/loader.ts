@@ -31,23 +31,25 @@ import type {
 
 installLegacyPiSpecifierShim();
 
-import {
-	createConcreteExtensionAPI,
-	createExtension,
-	ExtensionRuntime,
-	runFactoryInFiber,
-} from "../plugin-runtime/extension-api";
+import { createPluginAPI, createPluginRecord, PluginRuntime, runPluginInFiber } from "../plugin-runtime/plugin-api";
 
 export {
 	assertKnownComponentSlot,
-	createConcreteExtensionAPI,
-	createExtension,
-	ExtensionRuntime,
-	ExtensionRuntimeNotInitializedError,
-	extensionHostOwner,
-	loadExtensionFromFactory,
-	runFactoryInFiber,
-} from "../plugin-runtime/extension-api";
+	createPluginAPI,
+	createPluginAPI as createConcreteExtensionAPI,
+	createPluginRecord,
+	createPluginRecord as createExtension,
+	loadPluginFromFactory,
+	loadPluginFromFactory as loadExtensionFromFactory,
+	PluginRuntime,
+	PluginRuntime as ExtensionRuntime,
+	PluginRuntimeNotInitializedError,
+	PluginRuntimeNotInitializedError as ExtensionRuntimeNotInitializedError,
+	pluginHostOwner,
+	pluginHostOwner as extensionHostOwner,
+	runPluginInFiber,
+	runPluginInFiber as runFactoryInFiber,
+} from "../plugin-runtime/plugin-api";
 
 type LoadedExtensionModule = PluginEntryModule;
 
@@ -150,15 +152,15 @@ async function bindExtension(
 		return { extension: null, error: imported.error };
 	}
 	try {
-		const extension = createExtension(extensionPath, imported.resolvedPath);
+		const extension = createPluginRecord(extensionPath, imported.resolvedPath);
 		// The name the agent-facing `extensions-inventory` prompt section and the
 		// `plugins.list` readout show. The manifest owns it, so a package cannot
 		// name itself twice and drift; `ctx.setLabel` remains the runtime override
 		// for a plugin that decides its name while loading.
 		extension.label = await readExtensionPluginLabel(imported.resolvedPath);
 		await withHostGuard(() =>
-			runFactoryInFiber(extension, runtime, cwd, eventBus, factory, ownContext =>
-				wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus, ownContext), extension),
+			runPluginInFiber(extension, runtime, cwd, eventBus, factory, ownContext =>
+				wrapApi(createPluginAPI(extension, runtime, cwd, eventBus, ownContext), extension),
 			),
 		);
 
@@ -211,7 +213,8 @@ export async function loadExtensions(
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 	const resolvedEventBus = eventBus ?? new EventBus();
-	const runtime = options?.runtime ?? new ExtensionRuntime();
+	const runtime = options?.runtime ?? new PluginRuntime();
+	runtime.sessionEventBus ??= resolvedEventBus;
 	// The session prompt host travels on the runtime so every factory binding
 	// (including cordis mounts reusing this runtime) sees the same host.
 	runtime.promptHost = options?.promptHost;

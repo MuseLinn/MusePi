@@ -15,6 +15,7 @@
  */
 import type { ExtensionRpcHandler, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { AndroidDeviceService } from "./android-service";
+import type { Config } from "./config";
 import { createAndroidEmulatorTool } from "./tools";
 
 export { Config } from "./config";
@@ -41,13 +42,12 @@ function frameResult(frame: { device: string; png: Uint8Array; capturedAt: numbe
 	};
 }
 
-export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
-	const readString = (key: string): string | undefined => {
-		const value = config?.[key];
-		return typeof value === "string" && value !== "" ? value : undefined;
-	};
+export function apply(ctx: PluginAPI, config?: Config): void {
 	const ready = Promise.resolve(
-		new AndroidDeviceService({ adbPath: readString("adbPath"), emulatorPath: readString("emulatorPath") }),
+		new AndroidDeviceService({
+			adbPath: config?.adbPath || undefined,
+			emulatorPath: config?.emulatorPath || undefined,
+		}),
 	);
 	const service = () => ready;
 	const register = (

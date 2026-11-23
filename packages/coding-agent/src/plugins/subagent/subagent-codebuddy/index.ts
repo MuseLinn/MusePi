@@ -5,13 +5,14 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
-	externalProductConfigFrom,
 	externalTask,
 	parseClaudeStyleEvent,
 	runExternalJsonl,
 } from "@musepi/pi-coding-agent/task/external-cli";
 import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/external-executable-probe";
 import type { ExternalSubagentExecutor } from "@musepi/pi-coding-agent/task/types";
+
+import type { Config } from "./config";
 
 export { Config } from "./config";
 
@@ -51,9 +52,9 @@ export function createCodeBuddyExecutor(
 	};
 }
 
-export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
+export function apply(ctx: PluginAPI, config?: Config): void {
 	registerExternalExecutableProbe(ctx, "codebuddy");
-	const executor = Promise.resolve(createCodeBuddyExecutor(externalProductConfigFrom(config)));
+	const executor = Promise.resolve(createCodeBuddyExecutor(config));
 	ctx.subagents.register({
 		name: "codebuddy",
 		description: "Experimental: delegate a one-shot coding task to the native CodeBuddy CLI.",

@@ -73,7 +73,7 @@ src/extensibility/
 │   ├── marketplace/           插件市场
 │   └── legacy-pi-compat.ts    模块装载机制（两条轨道共用）
 ├── plugin-runtime/   ← 两条轨道共用的机制
-│   └── extension-api.ts       Extension 账本 + ConcreteExtensionAPI + fiber 工厂
+│   └── plugin-api.ts          PluginRuntime + createPluginAPI + fiber 工厂
 └── extensions/       ← Track B。与 omp 同源，勿改语义
     ├── loader.ts              import + bind（Track B 自己的）
     ├── runner.ts              ExtensionRunner（会话编排；Track A 重载走自己的 mount）

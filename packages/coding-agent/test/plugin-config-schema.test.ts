@@ -5,7 +5,12 @@
 import { describe, expect, test } from "bun:test";
 import * as path from "node:path";
 import { readExtensionPluginMeta } from "../src/extensibility/extensions/plugin-manifest";
-import { validateDeclaredPluginConfig } from "../src/extensibility/plugins/runtime/declared-config";
+import {
+	updateVolatileValue,
+	validateDeclaredPluginConfig,
+	wrapVolatileConfig,
+} from "../src/extensibility/plugins/runtime/declared-config";
+import { isVolatileRef, volatile, z } from "../src/plugin-config";
 
 const ENTRY = path.resolve(import.meta.dir, "../src/plugins/workspace/compaction-tiers/index.ts");
 
@@ -36,6 +41,16 @@ describe("plugin Config validation", () => {
 	test("an entry without Config passes its values through", async () => {
 		expect(await validateDeclaredPluginConfig({}, { answer: 42 })).toEqual({ answer: 42 });
 	});
+
+	test("volatile fields become refs and update in place", () => {
+		const Config = { shape: { mode: volatile(z.string().default("a")), other: z.string().default("b") } };
+		const wrapped = wrapVolatileConfig({ Config }, { mode: "x", other: "y" });
+		expect(isVolatileRef(wrapped.mode)).toBe(true);
+		expect(wrapped.other).toBe("y");
+		expect(updateVolatileValue({ config: wrapped }, "mode", "z")).toBe(true);
+		expect((wrapped.mode as { get(): string }).get()).toBe("z");
+		expect(updateVolatileValue({ config: wrapped }, "other", "q")).toBe(false);
+	});
 });
 
 describe("generated config sidecar", () => {
@@ -46,7 +61,7 @@ describe("generated config sidecar", () => {
 			key: "capPercent",
 			type: "number",
 			default: 70,
-			restart: "session",
+			restart: "none",
 		});
 	});
 });

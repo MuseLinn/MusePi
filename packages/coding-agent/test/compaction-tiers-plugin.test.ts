@@ -6,6 +6,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { CompactionSettings } from "../src/config/settings";
+import { updateVolatileValue } from "../src/extensibility/plugins/runtime/declared-config";
+import { makeVolatileRef } from "../src/plugin-config";
 import { apply } from "../src/plugins/workspace/compaction-tiers/index";
 import {
 	listCompactionThresholdStrategies,
@@ -94,6 +96,29 @@ describe("compaction-tiers plugin", () => {
 		}
 	});
 
+	test("reads a volatile cap on every resolve", () => {
+		const config = { capPercent: makeVolatileRef(60) };
+		let dispose: (() => void) | undefined;
+		apply(
+			{
+				registerCompactionThresholdStrategy: (
+					strategy: Parameters<typeof registerCompactionThresholdStrategy>[0],
+				) => {
+					dispose = registerCompactionThresholdStrategy(strategy);
+					return dispose;
+				},
+			} as never,
+			config,
+		);
+		try {
+			expect(resolveModelCompactionSettings(settings({ thresholdPercent: 85 }), premium).thresholdPercent).toBe(60);
+			expect(updateVolatileValue({ config }, "capPercent", 40)).toBe(true);
+			expect(resolveModelCompactionSettings(settings({ thresholdPercent: 85 }), premium).thresholdPercent).toBe(40);
+		} finally {
+			dispose?.();
+		}
+	});
+
 	test("the strategy disappears when the plugin is unloaded", () => {
 		const dispose = applyPlugin();
 		dispose();
@@ -112,7 +137,7 @@ function applyPlugin(config?: { capPercent: number }): () => void {
 				return dispose;
 			},
 		} as never,
-		config,
+		config ? { capPercent: makeVolatileRef(config.capPercent) } : undefined,
 	);
 	if (!dispose) throw new Error("plugin did not register a strategy");
 	return dispose;

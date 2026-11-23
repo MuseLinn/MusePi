@@ -11,7 +11,7 @@ import {
 	resetPluginConfigStoreCache,
 	writePluginConfigValue,
 } from "../src/extensibility/extensions-center/plugin-config-store";
-import { ExtensionRuntime } from "../src/extensibility/plugin-runtime/extension-api";
+import { PluginRuntime } from "../src/extensibility/plugin-runtime/plugin-api";
 import { disposePluginPrimitives } from "../src/extensibility/plugins/runtime/cordis-primitives";
 import { pluginConfigStoreKey } from "../src/extensibility/plugins/runtime/declared-config";
 import { reloadSessionPlugin } from "../src/extensibility/plugins/runtime/session-loader";
@@ -59,7 +59,7 @@ afterAll(async () => {
 describe("Track A config reload", () => {
 	test("a second mount receives the value written after the first", async () => {
 		const key = pluginConfigStoreKey(entryPath);
-		const runtime = new ExtensionRuntime();
+		const runtime = new PluginRuntime();
 		const eventBus = new EventBus();
 
 		await writePluginConfigValue(key, "answer", 1);

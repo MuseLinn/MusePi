@@ -107,9 +107,9 @@ import {
 	ExtensionToolWrapper,
 	type ExtensionUIContext,
 	emitSessionStartEvent,
-	extensionHostOwner,
 	type LoadExtensionsResult,
-	loadExtensionFromFactory,
+	loadPluginFromFactory,
+	pluginHostOwner,
 	type RegisteredTool,
 	type ToolDefinition,
 	wrapRegisteredTools,
@@ -118,7 +118,7 @@ import { defaultExtensionHandlerTimeoutMs } from "./extensibility/extensions/han
 import { listHostExtensionModes } from "./extensibility/extensions/host-modes";
 // Class import off the barrel: the extensions index deliberately omits it, so
 // the preload path takes it from the owning module like `session-loader` does.
-import { ExtensionRuntime } from "./extensibility/plugin-runtime/extension-api";
+import { PluginRuntime } from "./extensibility/plugin-runtime/plugin-api";
 import { acquirePreset, type PresetLease } from "./extensibility/plugins/preset-pool";
 import type { MountedPresetPlugin } from "./extensibility/plugins/preset-runtime";
 import { collectProfilePresetDefinitions } from "./extensibility/plugins/profile/profile-presets";
@@ -1644,19 +1644,19 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		extensionRunnerRef?.getSessionPromptHostLedgers();
 	/** Release one extension owner's prompt-host contributions (disable/teardown direction). */
 	const removeExtensionHostSections = (extensionPath: string): void => {
-		const owner = extensionHostOwner(extensionPath);
+		const owner = pluginHostOwner(extensionPath);
 		const ledger = sessionPromptLedgers()?.get(owner);
 		if (ledger) removeScopedPromptHostLedger(promptHost, owner, ledger);
 		else promptHost.removeByOwner(owner);
 	};
 	/** Forget one extension owner's recorded registrations (records are going away). */
 	const clearExtensionHostLedger = (extensionPath: string): void => {
-		const ledger = sessionPromptLedgers()?.get(extensionHostOwner(extensionPath));
+		const ledger = sessionPromptLedgers()?.get(pluginHostOwner(extensionPath));
 		if (ledger) ledger.entries.length = 0;
 	};
 	/** Replay one extension owner's recorded registrations (re-enable direction). */
 	const replayExtensionHostSections = (extensionPath: string): void => {
-		const owner = extensionHostOwner(extensionPath);
+		const owner = pluginHostOwner(extensionPath);
 		const ledger = sessionPromptLedgers()?.get(owner);
 		if (ledger) replayPromptHostLedger(promptHost, owner, ledger);
 	};
@@ -2520,12 +2520,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			// instances, paths, or factories. The core prompt packages still mount:
 			// their prompt-host sections are part of a restricted session's contract.
 			extensionPaths = await discoverBundledSessionPromptPluginPaths();
-			extensionsResult = await loadSessionPlugins(extensionPaths, cwd, eventBus, { promptHost });
+			extensionsResult = await loadSessionPlugins(extensionPaths, cwd, eventBus, { promptHost, settings });
 		} else if (options.preloadedExtensions) {
 			const preloaded = options.preloadedExtensions;
 			// A stub result (tests) may carry a minimal runtime; a real one is
 			// reused so the remount lands in the session's single runtime.
-			const runtime = preloaded.runtime ?? new ExtensionRuntime();
+			const runtime = preloaded.runtime ?? new PluginRuntime();
 			// Remount the core prompt packages through the SHARED runtime: the
 			// preload pass ran without this session's prompt host, so its core
 			// records hold no live promptHost contributions. Same-path preload
@@ -2534,6 +2534,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			const coreResult = await loadSessionPlugins(await discoverBundledSessionPromptPluginPaths(), cwd, eventBus, {
 				promptHost,
 				runtime,
+				settings,
 			});
 			for (const { path, error } of coreResult.errors) {
 				logger.error("Failed to load core prompt package", { path, error });
@@ -2643,7 +2644,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 
 		// Modes v1(§4.3/决策 #10):预设扩展白名单过滤 —— 三态:
 		// extensions undefined = 全部启用;[] = 仅内置核心;数组 = 白名单。
-		// 扩展 id = 发现路径 basename(loader.createExtension 无独立 id 字段)。
+		// 扩展 id = 发现路径 basename(loader.createPluginRecord 无独立 id 字段)。
 		// 用户全局 disabledExtensions 在 discoverSessionExtensionPaths/settings 层最后生效。
 		if (modeRuntime.resolved) {
 			const whitelist = modeRuntime.resolved.extensions;
@@ -2714,7 +2715,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		if (inlineExtensions.length > 0) {
 			for (let i = 0; i < inlineExtensions.length; i++) {
 				const factory = inlineExtensions[i];
-				const loaded = await loadExtensionFromFactory(
+				const loaded = await loadPluginFromFactory(
 					factory,
 					cwd,
 					eventBus,
@@ -2762,12 +2763,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// (which clears this queue) is what removes it again. The first-party trio
 		// loads here too: they ship as a bundled plugin package, and this is the
 		// one site that must guarantee them regardless of discovery options.
-		await ensureBundledPluginsLoaded(cwd);
+		await ensureBundledPluginsLoaded(cwd, settings);
 		// Host-scope packages (`musepi.scope: "host"`) register process-wide
 		// facts such as memory backend providers. The daemon mounts them before
 		// it listens; every other host — TUI, ACP, SDK, print — mounts them here,
 		// before the first session resolves a backend, so both paths agree.
-		await ensureHostHalfPluginsLoaded(cwd);
+		await ensureHostHalfPluginsLoaded(cwd, settings);
 		// A caller-supplied `preloadedExtensions` runtime may be a minimal stub
 		// (tests do exactly that, and the SDK documents accepting one when no
 		// extension hooks fire), so this queue is optional rather than assumed.

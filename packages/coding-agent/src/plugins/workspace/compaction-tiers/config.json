@@ -4,7 +4,7 @@
 			"key": "capPercent",
 			"type": "number",
 			"label": "capPercent",
-			"restart": "session",
+			"restart": "none",
 			"default": 70,
 			"description": "长上下文按溢价计费的模型，其压缩触发点不超过该窗口占比。其他模型不受影响。"
 		}

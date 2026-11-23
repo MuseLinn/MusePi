@@ -2949,6 +2949,8 @@ export interface Extension {
 	label?: string;
 	/** Host EventBus this instance was created with; a reload remounts on it. */
 	eventBus?: EventBus;
+	/** The validated config object `apply` received (volatile fields are refs). */
+	config?: Record<string, unknown>;
 	tools: Map<string, RegisteredTool<any, any>>;
 	toolRegistrationListeners?: Set<ToolRegistrationListener>;
 	assistantThinkingRenderers: AssistantThinkingRenderer[];

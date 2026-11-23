@@ -11,7 +11,15 @@ import { resolveExtensionWatchRoots } from "@musepi/pi-coding-agent/extensibilit
 import { createHmrService, type HmrService } from "@musepi/pi-coding-agent/extensibility/plugins/hmr/service";
 import { getPluginsDir } from "@musepi/pi-utils";
 
+import type { Config } from "./config";
+
 export { Config } from "./config";
+
+/** Accept the schema's arrays and the legacy comma-separated form for direct calls. */
+type ConfigInput = Omit<Config, "root" | "ignored"> & {
+	root?: string | string[];
+	ignored?: string | string[];
+};
 
 export const name = "musepi-hmr";
 export const inject = [] as const;
@@ -43,7 +51,7 @@ function list(value: unknown): string[] {
 	return [];
 }
 
-export async function apply(ctx: PluginAPI, config?: Record<string, unknown>): Promise<{ hmr: HmrService }> {
+export async function apply(ctx: PluginAPI, config?: ConfigInput): Promise<{ hmr: HmrService }> {
 	// `base` anchors relative `root` entries; without a configured root the
 	// native roots stand, because a hand-written list had drifted from what
 	// discovery actually loads before.

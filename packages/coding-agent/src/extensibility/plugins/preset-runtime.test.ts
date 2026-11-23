@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EventBus } from "../../utils/event-bus";
-import { ExtensionRuntime } from "../plugin-runtime/extension-api";
+import { PluginRuntime } from "../plugin-runtime/plugin-api";
 import { CordisPresetRuntime } from "./preset-runtime";
 
 declare global {
@@ -32,7 +32,7 @@ function runtime(entries: Record<string, string>): CordisPresetRuntime {
 	return new CordisPresetRuntime({
 		cwd,
 		eventBus: new EventBus(),
-		runtime: new ExtensionRuntime(),
+		runtime: new PluginRuntime(),
 		entryResolver: {
 			resolveEntries: async () => new Map(Object.entries(entries).map(([name, entry]) => [name, [entry]])),
 		},

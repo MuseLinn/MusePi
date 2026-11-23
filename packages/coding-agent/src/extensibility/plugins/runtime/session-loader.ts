@@ -26,11 +26,12 @@
 
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import type { Settings } from "../../../config/settings";
 import type { PromptHostSurface } from "../../../prompts/host";
 import type { EventBus } from "../../../utils/event-bus";
 import { enablementAllowsPath } from "../../enablement-manifest";
 import type { Extension, LoadExtensionsResult } from "../../extensions/types";
-import { ExtensionRuntime } from "../../plugin-runtime/extension-api";
+import { PluginRuntime } from "../../plugin-runtime/plugin-api";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
 import { disposePluginPrimitives } from "./cordis-primitives";
@@ -54,6 +55,8 @@ export interface SessionPluginLoadOptions {
 	 * reach it through `pi.promptHost`. Absent when no session is wiring one.
 	 */
 	promptHost?: PromptHostSurface;
+	/** The session's Settings instance, so settings-backed config reaches `apply`. */
+	settings?: Settings;
 	/**
 	 * Mount into an existing runtime instead of a fresh one. The preload path
 	 * (CLI `preloadedExtensions`) reuses the caller's runtime so the core
@@ -214,7 +217,7 @@ export async function loadSessionPlugins(
 	// The runtime is constructed up front because every mount registers into
 	// it; a caller-injected runtime (preload path) replaces the fresh one so
 	// its pending queues and ledgers stay the session's single source.
-	const runtime = options.runtime ?? new ExtensionRuntime();
+	const runtime = options.runtime ?? new PluginRuntime();
 	runtime.promptHost = options.promptHost;
 	runtime.sessionEventBus = eventBus;
 	const extensions: Extension[] = [];
@@ -223,7 +226,7 @@ export async function loadSessionPlugins(
 	const admissible = await sessionAdmissiblePaths(paths, errors);
 	if (admissible.length === 0) return { extensions, errors, runtime };
 
-	const readConfig = options.readConfig ?? (await defaultSessionConfigReader());
+	const readConfig = options.readConfig ?? (await defaultSessionConfigReader(options.settings));
 	for (const entryPath of admissible) {
 		// No `wrapApi`: `mountPlugin` builds the API itself from `ctx.runtime`,
 		// `cwd` and `eventBus` — the three things that make this the SESSION's
@@ -271,8 +274,8 @@ async function sessionAdmissiblePaths(
 }
 
 /** The default config reader: the shared Track A reader (one store, one id). */
-export async function defaultSessionConfigReader(): Promise<MountContext["readConfig"]> {
-	return readDeclaredPluginConfig;
+export async function defaultSessionConfigReader(settings?: Settings): Promise<MountContext["readConfig"]> {
+	return entryPath => readDeclaredPluginConfig(entryPath, settings);
 }
 
 /**
@@ -286,8 +289,9 @@ export async function reloadSessionPlugin(options: {
 	cwd: string;
 	runtime: LoadExtensionsResult["runtime"];
 	eventBus: EventBus;
+	settings?: Settings;
 }): Promise<{ extension: Extension | null; errors: string[] }> {
-	const readConfig = await defaultSessionConfigReader();
+	const readConfig = await defaultSessionConfigReader(options.settings);
 	const mounted = await mountPlugin({
 		entryPath: options.entryPath,
 		cwd: options.cwd,

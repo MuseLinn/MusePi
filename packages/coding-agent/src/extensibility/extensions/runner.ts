@@ -28,8 +28,9 @@ import type { SessionManager } from "../../session/session-manager";
 import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import { releaseSearchProviders as releaseSearchProvidersForOwner } from "../../web/search/registry";
-import { extensionHostOwner } from "../plugin-runtime/extension-api";
+import { pluginHostOwner } from "../plugin-runtime/plugin-api";
 import { disposePluginPrimitives } from "../plugins/runtime/cordis-primitives";
+import { updateVolatileValue } from "../plugins/runtime/declared-config";
 import { isSharedSessionExtension, retireSessionPluginGeneration } from "../plugins/runtime/session-loader";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { loadExtensions } from "./loader";
@@ -1293,6 +1294,16 @@ export class ExtensionRunner {
 	}
 
 	/**
+	 * Update one volatile config field in place (dsh `.volatile()`): returns
+	 * false when the field is not volatile, so the caller remounts instead.
+	 */
+	updateConfig(entryPath: string, key: string, value: unknown): boolean {
+		const resolvedTarget = path.resolve(entryPath);
+		const extension = this.extensions.find(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+		return extension ? updateVolatileValue(extension, key, value) : false;
+	}
+
+	/**
 	 * Hot-reload one extension entry (P5 session-level HMR v2).
 	 *
 	 * Locates the loaded {@link Extension} whose `resolvedPath` matches
@@ -1327,7 +1338,7 @@ export class ExtensionRunner {
 		// Release the old instance's prompt-host contributions before the
 		// replacement factory runs — same-name re-registrations would only
 		// shadow, and sections the new module drops must not linger.
-		const hostOwner = extensionHostOwner(oldExt.path);
+		const hostOwner = pluginHostOwner(oldExt.path);
 		const sessionHost = this.#sessionScope?.promptHost;
 		const oldLedger = sessionHost ? this.#sessionScope?.promptHostLedgers.get(hostOwner) : undefined;
 		if (sessionHost && oldLedger) removeScopedPromptHostLedger(sessionHost, hostOwner, oldLedger);
@@ -1352,6 +1363,7 @@ export class ExtensionRunner {
 				cwd: cwd ?? this.cwd,
 				runtime: this.runtime,
 				eventBus,
+				settings: this.settings,
 			});
 			replacement = reloaded.extension ?? undefined;
 			reloadErrors = reloaded.errors;
@@ -1537,7 +1549,7 @@ export class ExtensionRunner {
 		// reload cannot restore the old contributions.
 		const sessionHost = this.#sessionScope?.promptHost;
 		if (sessionHost) {
-			const owner = extensionHostOwner(resolvedTarget);
+			const owner = pluginHostOwner(resolvedTarget);
 			let sessionLedger = this.#sessionScope?.promptHostLedgers.get(owner);
 			if (!sessionLedger) {
 				sessionLedger = { entries: [] };

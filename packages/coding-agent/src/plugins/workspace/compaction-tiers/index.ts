@@ -1,5 +1,8 @@
 import type { Model } from "@musepi/pi-ai";
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { isVolatileRef } from "@musepi/pi-coding-agent/plugin-config";
+
+import type { Config } from "./config";
 
 export { Config } from "./config";
 
@@ -35,14 +38,20 @@ function hasPremiumLongContext(model: Pick<Model, "provider" | "id">): boolean {
  *   or below the cap, is left untouched, so the configured policy still
  *   decides.
  */
-export function apply(pi: PluginAPI, config?: Record<string, unknown>): void {
-	const configured = Number(config?.capPercent ?? DEFAULT_CAP_PERCENT);
-	const cap = Number.isFinite(configured) && configured > 0 && configured < 100 ? configured : DEFAULT_CAP_PERCENT;
+/** The effective cap: a volatile ref is read per resolve, so an edit is live. */
+function capOf(value: unknown): number {
+	const raw = isVolatileRef(value) ? value.get() : value;
+	const configured = Number(raw ?? DEFAULT_CAP_PERCENT);
+	return Number.isFinite(configured) && configured > 0 && configured < 100 ? configured : DEFAULT_CAP_PERCENT;
+}
 
+export function apply(pi: PluginAPI, config?: Config): void {
+	const capRef = config?.capPercent;
 	pi.registerCompactionThresholdStrategy({
 		id: "compactionTiers.premiumCap",
 		priority: 10,
 		resolve: ({ settings, model }) => {
+			const cap = capOf(capRef);
 			if (!model || !hasPremiumLongContext(model)) return undefined;
 			const effective = settings.thresholdPercent;
 			// A fixed token trigger or the legacy reserve policy is not a share of

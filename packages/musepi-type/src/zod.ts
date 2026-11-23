@@ -345,9 +345,13 @@ function objectSchema<const S extends Shape>(shape: S): ZodLikeSchema<ObjectOutp
 		}
 		props.push(prop);
 	}
-	return decorateUnknown(schemaFromIR<unknown>({ k: "object", props, extras: "delete" })) as unknown as ZodLikeSchema<
-		ObjectOutput<S>
-	>;
+	const composed = decorateUnknown(
+		schemaFromIR<unknown>({ k: "object", props, extras: "delete" }),
+	) as unknown as ZodLikeSchema<ObjectOutput<S>>;
+	// The declared field schemas, so a host can project per-field metadata
+	// (volatile fields, form descriptors) without re-parsing the IR.
+	Object.defineProperty(composed, "shape", { value: shape, enumerable: false });
+	return composed;
 }
 
 export const string = (): ZodLikeSchema<string> => decorate(schemaFromIR(type.string.ir));

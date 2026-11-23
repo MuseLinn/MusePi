@@ -5075,6 +5075,10 @@ export class AgentSession {
 		return this.#performExtensionReload(entryPath);
 	}
 
+	async updatePluginConfig(entryPath: string, key: string, value: unknown): Promise<boolean> {
+		return this.#extensionRunner?.updateConfig(entryPath, key, value) ?? false;
+	}
+
 	/** Runs a session-level extension reload and its registry cleanup. */
 	async #performExtensionReload(
 		entryPath: string,

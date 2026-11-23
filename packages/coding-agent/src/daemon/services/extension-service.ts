@@ -162,7 +162,10 @@ export interface ExtensionServiceDeps {
 	 * Apply an entry-level plugin change to sessions that are already open
 	 * (package enable/disable). Absent → the change lands with the next session.
 	 */
+	/** Replace the running instance after a config write (dsh: config edit reloads). */
 	applyLive?(target: LiveApplyTarget): Promise<{ errors: string[] }>;
+	/** Update a volatile field in place across live sessions; true = no remount needed. */
+	applyVolatileConfig?(entryPath: string, key: string, value: unknown): Promise<boolean>;
 	/** Reload process-level host plugins whose effective config changed. */
 	reloadHostPluginConfigs?(): Promise<unknown>;
 	/**
@@ -1357,6 +1360,11 @@ export class ExtensionService implements DaemonService {
 			throw new Error(`extensions.setConfig: "${p.key}" is not a declared config field of ${p.id}`);
 		}
 		const coerced = coerceConfigFieldValue(desc, p.value);
+		const volatile =
+			(await this.#deps.applyVolatileConfig?.(ext.path, p.key, coerced).catch(error => {
+				logger.warn("volatile plugin config update failed", { path: ext.path, error: String(error) });
+				return false;
+			})) ?? false;
 		if (ext.host?.configStorage === "settings") {
 			let settings = this.#deps.settings();
 			if (!settings) {
@@ -1374,11 +1382,11 @@ export class ExtensionService implements DaemonService {
 				for (const field of cached.config) stored[field.key] = settings.getRaw(field.key);
 				cached.configValues = coerceConfigValues([...cached.config], stored);
 			}
-			const apply = await this.#applyConfigChange(ext);
+			const apply = volatile ? undefined : await this.#applyConfigChange(ext);
 			this.#deps.onChanged();
 			return {
 				ok: true as const,
-				restart: desc.restart ?? ("none" as const),
+				restart: volatile ? ("none" as const) : (desc.restart ?? ("none" as const)),
 				values: undefined,
 				...(apply?.errors.length ? { apply } : {}),
 			};
@@ -1386,11 +1394,11 @@ export class ExtensionService implements DaemonService {
 		const { writePluginConfigValue } = await import("../../extensibility/extensions-center/plugin-config-store");
 		const values = await writePluginConfigValue(ext.name, p.key, coerced);
 		this.invalidateExtensionsCache();
-		const apply = await this.#applyConfigChange(ext);
+		const apply = volatile ? undefined : await this.#applyConfigChange(ext);
 		this.#deps.onChanged();
 		return {
 			ok: true as const,
-			restart: desc.restart ?? ("none" as const),
+			restart: volatile ? ("none" as const) : (desc.restart ?? ("none" as const)),
 			values,
 			...(apply?.errors.length ? { apply } : {}),
 		};

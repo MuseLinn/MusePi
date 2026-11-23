@@ -5,12 +5,13 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
-	externalProductConfigFrom,
 	externalTask,
 } from "@musepi/pi-coding-agent/task/external-cli";
 import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/external-executable-probe";
 import type { ExternalSubagentExecutor } from "@musepi/pi-coding-agent/task/types";
 import { runCodexAppServer } from "./app-server";
+
+import type { Config } from "./config";
 
 export { Config } from "./config";
 
@@ -39,9 +40,9 @@ export function createCodexExecutor(
 		);
 }
 
-export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
+export function apply(ctx: PluginAPI, config?: Config): void {
 	registerExternalExecutableProbe(ctx, "codex");
-	const executor = Promise.resolve(createCodexExecutor(externalProductConfigFrom(config)));
+	const executor = Promise.resolve(createCodexExecutor(config));
 	ctx.subagents.register({
 		name: "codex",
 		description: "Experimental: delegate a one-shot coding task to the native Codex app-server.",

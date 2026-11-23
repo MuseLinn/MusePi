@@ -3,10 +3,13 @@
  */
 
 export {
-	ExtensionRuntimeNotInitializedError,
-	extensionHostOwner,
-	loadExtensionFromFactory,
-} from "../plugin-runtime/extension-api";
+	loadPluginFromFactory,
+	loadPluginFromFactory as loadExtensionFromFactory,
+	PluginRuntimeNotInitializedError,
+	PluginRuntimeNotInitializedError as ExtensionRuntimeNotInitializedError,
+	pluginHostOwner,
+	pluginHostOwner as extensionHostOwner,
+} from "../plugin-runtime/plugin-api";
 export type { SlashCommandInfo, SlashCommandLocation, SlashCommandSource } from "../slash-commands";
 export { discoverAndLoadExtensions, discoverExtensionPaths, loadExtensions } from "./loader";
 export * from "./runner";

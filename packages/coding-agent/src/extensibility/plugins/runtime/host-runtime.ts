@@ -39,6 +39,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import type { Settings } from "../../../config/settings";
 import { discoverBundledPluginPaths } from "../../../discovery/builtin";
 import { getExtensionNameFromPath } from "../../../discovery/helpers";
 import {
@@ -48,7 +49,7 @@ import {
 } from "../../../memory-backend/providers";
 import { EventBus } from "../../../utils/event-bus";
 import { getPluginConfigPath } from "../../extensions-center/plugin-config-store";
-import { ExtensionRuntime } from "../../plugin-runtime/extension-api";
+import { PluginRuntime } from "../../plugin-runtime/plugin-api";
 import type { HmrRestartRequirement, HmrService } from "../hmr/service";
 import { HOST_SERVICES, providedServices, type ServiceRegistry } from "./cordis-entry";
 import { disposePluginPrimitives, registerEffect } from "./cordis-primitives";
@@ -77,8 +78,10 @@ interface HostPluginRecord {
 interface HostPluginRuntime {
 	loaded: boolean;
 	readonly records: Map<string, HostPluginRecord>;
-	readonly runtime: ExtensionRuntime;
+	readonly runtime: PluginRuntime;
 	readonly eventBus: EventBus;
+	/** The host's Settings instance, used by settings-backed plugin config. */
+	settings?: Settings;
 }
 
 /** Diagnostics for one host package, keyed the way the extension center lists it. */
@@ -111,7 +114,7 @@ function runtimeState(): HostPluginRuntime {
 	state ??= {
 		loaded: false,
 		records: new Map(),
-		runtime: new ExtensionRuntime(),
+		runtime: new PluginRuntime(),
 		eventBus: new EventBus(),
 	};
 	return state;
@@ -277,13 +280,14 @@ async function mountHostEntry(
  * itself rejects the attempt and is retried by the next caller rather than
  * cached forever.
  */
-export function ensureHostPlugins(cwd: string): Promise<boolean> {
+export function ensureHostPlugins(cwd: string, settings?: Settings): Promise<boolean> {
 	return withLifecycle(async () => {
 		const current = runtimeState();
+		current.settings = settings;
 		if (current.loaded) return false;
 		const [paths, readConfig] = await Promise.all([
 			discoverBundledPluginPaths({ scope: "host" }),
-			defaultSessionConfigReader(),
+			defaultSessionConfigReader(settings),
 		]);
 		for (const entryPath of paths) {
 			try {
@@ -310,20 +314,20 @@ export function ensureHostPlugins(cwd: string): Promise<boolean> {
  * previous module and re-applies it, so a syntax error never leaves the host
  * without its process-wide registrations.
  */
-export function reloadHostPlugins(changedFiles?: readonly string[]): Promise<readonly string[]> {
+export function reloadHostPlugins(changedFiles?: readonly string[], settings?: Settings): Promise<readonly string[]> {
 	// Mount, replacement, and reset share one queue so old and new effects
 	// cannot overlap even when a reset races an ensure or another reload.
-	return withLifecycle(() => reloadHostPluginsNow(changedFiles));
+	return withLifecycle(() => reloadHostPluginsNow(changedFiles, settings));
 }
 
-async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<readonly string[]> {
+async function reloadHostPluginsNow(changedFiles?: readonly string[], settings?: Settings): Promise<readonly string[]> {
 	const current = state;
 	if (!current?.loaded) return [];
 	const records = [...current.records.values()];
 	if (changedFiles !== undefined && changedFiles.length > 0) {
 		requestRestartForHostFiles(records, changedFiles);
 	}
-	const readConfig = await defaultSessionConfigReader();
+	const readConfig = await defaultSessionConfigReader(settings ?? current.settings);
 	const affected = new Map(selectAffected(records, changedFiles).map(record => [record.entryPath, record]));
 	if (changedFiles?.some(file => path.resolve(file) === path.resolve(getPluginConfigPath()))) {
 		for (const record of await selectConfigAffected(records, readConfig)) affected.set(record.entryPath, record);

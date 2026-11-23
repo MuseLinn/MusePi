@@ -201,7 +201,7 @@
 |---|---|
 | `setLabel` | `types.ts:1463` |
 | `getFlag` | `types.ts:1466` |
-| `pi.config.get` / `pi.config.getAll`（仅 Track B） | `types.ts` `ExtensionAPI.config`，实现 `plugin-runtime/extension-api.ts`；Track A 用 `apply(ctx, config)` |
+| `pi.config.get` / `pi.config.getAll`（仅 Track B） | `types.ts` `ExtensionAPI.config`，实现 `plugin-runtime/plugin-api.ts`；Track A 用 `apply(ctx, config)` |
 | `sendMessage` | `types.ts:1548` |
 | `sendUserMessage` | `types.ts:1554` |
 | `appendEntry` | `types.ts:1560` |
@@ -574,7 +574,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 - 钳制 `coerceConfigValues`：`packages/wire/src/plugin-config.ts:275`（daemon 与 GUI 单一权威）
 - 运行时校验：`plugins/runtime/mount.ts` 调 `validateDeclaredPluginConfig`，走 `Config["~standard"].validate`，失败为 `config-invalid`
 - 表单 sidecar：`plugins/runtime/declared-config.ts` 读包内 `config.json`（`scripts/gen-plugin-config.ts` 从 `toJsonSchema()` 生成，`verify-generated` 门禁）；旧 `musepi.config` 仅作回退
-- 运行时读取：Track A 由 `apply(ctx, config)` 收到有效值；`pi.config` 仅 Track B（`plugin-runtime/extension-api.ts`）
+- 运行时读取：Track A 由 `apply(ctx, config)` 收到有效值；`pi.config` 仅 Track B（`plugin-runtime/plugin-api.ts`）
 
 ### 8.2 `ConfigFormRenderer`
 

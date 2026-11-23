@@ -61,7 +61,7 @@ import { ReadTool } from "../tools/read";
 import { WriteTool } from "../tools/write";
 import { EventBus } from "../utils/event-bus";
 import { convertImageToPng } from "../utils/image-loading";
-import { discoverExtensionPaths, loadExtensionFromFactory, loadExtensions } from "./extensions";
+import { discoverExtensionPaths, loadExtensions, loadPluginFromFactory } from "./extensions";
 import type {
 	BashToolResultEvent,
 	EditToolResultEvent,
@@ -73,7 +73,7 @@ import type {
 	WriteToolResultEvent,
 } from "./extensions/types";
 import { Type } from "./legacy-typebox";
-import { ExtensionRuntime } from "./plugin-runtime/extension-api";
+import { PluginRuntime } from "./plugin-runtime/plugin-api";
 import { getEnabledPlugins, resolvePluginExtensionPaths, type ScopedInstalledPlugin } from "./plugins/runtime/loader";
 import type { Skill } from "./skills";
 import { loadSkillsFromDir } from "./skills";
@@ -944,8 +944,8 @@ export interface ResourceLoader {
 }
 
 /** Create a pre-initialization runtime for legacy extension resource loaders. */
-export function createExtensionRuntime(): ExtensionRuntime {
-	return new ExtensionRuntime();
+export function createExtensionRuntime(): PluginRuntime {
+	return new PluginRuntime();
 }
 
 /**
@@ -1144,7 +1144,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 
 		const result = await loadExtensions(paths, cwd, eventBus);
 		for (let i = 0; i < extensionFactories.length; i++) {
-			const loaded = await loadExtensionFromFactory(
+			const loaded = await loadPluginFromFactory(
 				extensionFactories[i],
 				cwd,
 				eventBus,

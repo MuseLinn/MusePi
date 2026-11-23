@@ -6,12 +6,13 @@ import {
 	externalEnvironment,
 	externalExecutable,
 	externalModel,
-	externalProductConfigFrom,
 	externalTask,
 	runExternalJsonl,
 } from "@musepi/pi-coding-agent/task/external-cli";
 import { registerExternalExecutableProbe } from "@musepi/pi-coding-agent/task/external-executable-probe";
 import type { ExternalSubagentExecutor } from "@musepi/pi-coding-agent/task/types";
+
+import type { Config } from "./config";
 
 export { Config } from "./config";
 
@@ -61,9 +62,9 @@ export function createKimiCodeExecutor(
 	};
 }
 
-export function apply(ctx: PluginAPI, config?: Record<string, unknown>): void {
+export function apply(ctx: PluginAPI, config?: Config): void {
 	registerExternalExecutableProbe(ctx, "kimi");
-	const executor = Promise.resolve(createKimiCodeExecutor(externalProductConfigFrom(config)));
+	const executor = Promise.resolve(createKimiCodeExecutor(config));
 	ctx.subagents.register({
 		name: "kimi-code",
 		description: "Experimental: delegate a one-shot coding task to the native Kimi Code CLI.",

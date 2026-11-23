@@ -22,9 +22,10 @@
 
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import type { Settings } from "../config/settings";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
 import type { Extension } from "../extensibility/extensions/types";
-import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/plugin-runtime/extension-api";
+import { loadPluginFromFactory, PluginRuntime } from "../extensibility/plugin-runtime/plugin-api";
 import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
 import { disposePluginPrimitives } from "../extensibility/plugins/runtime/cordis-primitives";
 import { readDeclaredPluginConfig } from "../extensibility/plugins/runtime/declared-config";
@@ -70,12 +71,12 @@ export async function discoverBundledSessionPromptPluginPaths(): Promise<string[
  * through the shared Track A reader (`ctx.config` reads the same values from
  * the same store and key).
  */
-async function readDeclaredConfig(entry: string): Promise<Record<string, unknown>> {
-	return (await readDeclaredPluginConfig(entry)).values;
+async function readDeclaredConfig(entry: string, settings?: Settings): Promise<Record<string, unknown>> {
+	return (await readDeclaredPluginConfig(entry, settings)).values;
 }
 
 export interface BundledPluginLoader {
-	ensure(cwd: string): Promise<boolean>;
+	ensure(cwd: string, settings?: Settings): Promise<boolean>;
 	/** Forget the attempt and dispose what it mounted (`memoryBackendProviders`
 	 *  and other registration disposers). */
 	reset(): void;
@@ -89,7 +90,7 @@ export function createBundledPluginLoader(
 	let inFlight: Promise<void> | undefined;
 	const mounted: Extension[] = [];
 	return {
-		ensure: async cwd => {
+		ensure: async (cwd, settings) => {
 			if (loaded) return false;
 			if (inFlight) {
 				await inFlight;
@@ -106,15 +107,15 @@ export function createBundledPluginLoader(
 						if (resolved === null) {
 							throw new Error(`bundled plugin exports nothing loadable: ${entry}`);
 						}
-						const runtime = new ExtensionRuntime();
-						const extension = await loadExtensionFromFactory(
+						const runtime = new PluginRuntime();
+						const extension = await loadPluginFromFactory(
 							toFactory(resolved) as never,
 							cwd,
 							eventBus,
 							runtime,
 							entry,
 							undefined,
-							await readDeclaredConfig(entry),
+							await readDeclaredConfig(entry, settings),
 						);
 						mounted.push(extension);
 						for (const keyword of runtime.pendingMagicKeywordRegistrations) {
@@ -151,8 +152,8 @@ export function createBundledPluginLoader(
 const bundledPluginLoader = createBundledPluginLoader();
 
 /** Load bundled packages once. Returns false after the shared attempt has already completed. */
-export function ensureBundledPluginsLoaded(cwd: string): Promise<boolean> {
-	return bundledPluginLoader.ensure(cwd);
+export function ensureBundledPluginsLoaded(cwd: string, settings?: Settings): Promise<boolean> {
+	return bundledPluginLoader.ensure(cwd, settings);
 }
 
 /** Test helper: forget the process-wide loader state so a test can load again. */
@@ -168,8 +169,8 @@ export function resetBundledPluginsLoaded(): void {
  * `apply` per process is the registry's requirement, and a fiber per package
  * is what reclaims those registrations when the host tears them down.
  */
-export function ensureHostHalfPluginsLoaded(cwd: string): Promise<boolean> {
-	return ensureHostPlugins(cwd);
+export function ensureHostHalfPluginsLoaded(cwd: string, settings?: Settings): Promise<boolean> {
+	return ensureHostPlugins(cwd, settings);
 }
 
 /** Test helper: tear down the process-wide host runtime so a test can mount again. */
