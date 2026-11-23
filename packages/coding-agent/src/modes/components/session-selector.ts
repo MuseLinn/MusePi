@@ -15,10 +15,10 @@ import {
 } from "@musepi/pi-tui";
 import { formatBytes } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
+import { shortenPath } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import type { SessionInfo, SessionStatus } from "../../session/session-listing";
-import { shortenPath } from "../../tools/render-utils";
 import { DynamicBorder } from "./dynamic-border";
 import { HookSelectorComponent } from "./hook-selector";
 

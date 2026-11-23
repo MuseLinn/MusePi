@@ -9,18 +9,8 @@ import { Text } from "@musepi/pi-tui";
 import { prompt, untilAborted } from "@musepi/pi-utils";
 import { recordFileSnapshot, recordSeenLinesFromBody } from "../edit/file-snapshot-store";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
 import astGrepDescription from "../prompts/tools/ast-grep.md" with { type: "text" };
-import { isScoutSpawnable } from "../task/spawn-policy";
-import { Ellipsis, fileHyperlink, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
-import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import type { ToolSession } from ".";
-import { materializeReadUrlToFile, parseReadUrlTarget } from "./fetch";
-import { createFileRecorder, formatResultPath } from "./file-recorder";
-import { classifyGroupedLines, formatGroupedFiles, groupLineIndicesByBlank } from "./grouped-file-output";
-import { formatMatchLine } from "./match-line-format";
-import type { OutputMeta } from "./output-meta";
-import { resolveToolSearchScope, toPathList } from "./path-utils";
+import { resolveToolSearchScope, toPathList } from "../render/path-utils";
 import {
 	appendParseErrorsBulletList,
 	capParseErrors,
@@ -32,7 +22,17 @@ import {
 	formatParseErrors,
 	formatParseErrorsCountLabel,
 	PREVIEW_LIMITS,
-} from "./render-utils";
+} from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
+import { isScoutSpawnable } from "../task/spawn-policy";
+import { Ellipsis, fileHyperlink, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
+import { resolveFileDisplayMode } from "../utils/file-display-mode";
+import type { ToolSession } from ".";
+import { materializeReadUrlToFile, parseReadUrlTarget } from "./fetch";
+import { createFileRecorder, formatResultPath } from "./file-recorder";
+import { classifyGroupedLines, formatGroupedFiles, groupLineIndicesByBlank } from "./grouped-file-output";
+import { formatMatchLine } from "./match-line-format";
+import type { OutputMeta } from "./output-meta";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

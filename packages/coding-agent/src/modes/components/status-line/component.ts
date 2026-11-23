@@ -11,6 +11,7 @@ import {
 } from "@musepi/pi-tui";
 import { adjustHsv, formatNumber, getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../../config/settings";
+import { theme } from "../../../render/theme/theme";
 import type { AgentSession } from "../../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";
 import { limitMatchesActiveAccount } from "../../../slash-commands/helpers/active-oauth-account";
@@ -20,7 +21,6 @@ import * as jj from "../../../utils/jj";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/session-color";
 import { calculateTokensPerSecond } from "../../../utils/token-rate";
 import { sanitizeStatusText } from "../../shared";
-import { theme } from "../../theme/theme";
 import { type CompactionBoundaries, computeCompactionBoundaries } from "../../utils/context-usage";
 import {
 	type CodexResetFireworksEvent,

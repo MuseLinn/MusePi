@@ -7,7 +7,7 @@
  * render wiring is needed beyond `addChild`/`setFocus`/`start`.
  */
 import { ProcessTerminal, type SelectItem, SelectList, TUI } from "@musepi/pi-tui";
-import { getSelectListTheme } from "../modes/theme/theme";
+import { getSelectListTheme } from "../render/theme/theme";
 
 /**
  * Show a single-column model picker and resolve with the chosen item's value,

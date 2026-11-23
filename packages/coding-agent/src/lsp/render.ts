@@ -9,7 +9,6 @@
  */
 import type { RenderResultOptions } from "@musepi/pi-agent-core";
 import { type Component, Text } from "@musepi/pi-tui";
-import { getLanguageFromPath, highlightCode as highlightThemeCode, type Theme } from "../modes/theme/theme";
 import {
 	formatExpandHint,
 	formatMoreItems,
@@ -18,7 +17,8 @@ import {
 	shortenPath,
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
-} from "../tools/render-utils";
+} from "../render/render-utils";
+import { getLanguageFromPath, highlightCode as highlightThemeCode, type Theme } from "../render/theme/theme";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock, markFramedBlockComponent } from "../tui/output-block";
 import type { LspParams, LspToolDetails } from "./types";

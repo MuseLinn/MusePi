@@ -15,8 +15,8 @@ import {
 	LocalShareManager,
 } from "@musepi/pi-coding-agent/collab/local-share";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import {
 	type BuiltinSlashCommandRuntime,
 	executeBuiltinSlashCommand,

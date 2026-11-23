@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { BashExecutionComponent } from "@musepi/pi-coding-agent/modes/components/bash-execution";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { sanitizeWithOptionalSixelPassthrough } from "@musepi/pi-coding-agent/utils/sixel";
 import type { TUI } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";

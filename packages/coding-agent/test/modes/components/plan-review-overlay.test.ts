@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
 import type { HookSelectorSlider } from "@musepi/pi-coding-agent/modes/components/hook-selector";
 import { PlanReviewOverlay } from "@musepi/pi-coding-agent/modes/components/plan-review-overlay";
-import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { setKeybindings } from "@musepi/pi-tui";
 
 const UP = "\x1b[A";

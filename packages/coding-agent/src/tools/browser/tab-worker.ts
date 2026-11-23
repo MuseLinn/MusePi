@@ -17,9 +17,9 @@ import type {
 	Target,
 } from "puppeteer-core";
 import { JsRuntime, type RuntimeHooks } from "../../eval/js/shared/runtime";
+import { resolveToCwd } from "../../render/path-utils";
+import { formatScreenshot } from "../../render/render-utils";
 import { resizeImage } from "../../utils/image-resize";
-import { resolveToCwd } from "../path-utils";
-import { formatScreenshot } from "../render-utils";
 import {
 	bindRunFacade,
 	CELL_BUDGET_SLACK_MS,

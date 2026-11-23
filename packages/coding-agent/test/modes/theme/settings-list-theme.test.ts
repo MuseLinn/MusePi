@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { getSettingsListTheme, initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getSettingsListTheme, initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();

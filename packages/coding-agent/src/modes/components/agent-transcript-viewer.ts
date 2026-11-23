@@ -22,17 +22,17 @@ import type { MessageRenderer } from "../../extensibility/extensions/types";
 import { t } from "../../i18n/index.js";
 import type { AgentLifecycleManager } from "../../registry/agent-lifecycle";
 import type { AgentRegistry, AgentStatus } from "../../registry/agent-registry";
+import { formatContextUsage } from "../../render/context-thresholds";
+import { replaceTabs, shortenPath, truncateToWidth } from "../../render/render-utils";
+import { getEditorTheme, theme } from "../../render/theme/theme";
 import type { FileEntry, SessionMessageEntry } from "../../session/session-entries";
 import { parseSessionEntries } from "../../session/session-loader";
 import { extractRenderableEntries } from "../../session/transcript-records";
-import { replaceTabs, shortenPath, truncateToWidth } from "../../tools/render-utils";
 import type { ObservableSession, SessionObserverRegistry } from "../session-observer-registry";
-import { getEditorTheme, theme } from "../theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import type { AgentHubRemote } from "./agent-hub";
 import { ChatTranscriptBuilder } from "./chat-transcript-builder";
 import { DynamicBorder } from "./dynamic-border";
-import { formatContextUsage } from "./status-line/context-thresholds";
 
 export interface AgentTranscriptViewerDeps {
 	agentId: string;

@@ -20,13 +20,12 @@ import { TodoReminderComponent } from "../../modes/components/todo-reminder";
 import { ToolExecutionComponent, type ToolExecutionHandle } from "../../modes/components/tool-execution";
 import { TtsrNotificationComponent } from "../../modes/components/ttsr-notification";
 import { createUsageRowBlock } from "../../modes/components/usage-row";
-import { getSymbolTheme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext, TodoPhase } from "../../modes/types";
-
+import { previewLine, TRUNCATE_LENGTHS } from "../../render/render-utils";
+import { getSymbolTheme, theme } from "../../render/theme/theme";
 import type { AgentSessionEvent } from "../../session/agent-session";
 import { isSilentAbort, readQueueChipText, resolveAbortLabel } from "../../session/messages";
 import { type ApprovalMode, resolveApproval } from "../../tools/approval";
-import { previewLine, TRUNCATE_LENGTHS } from "../../tools/render-utils";
 import { PROPOSE_DEVICE_NAME, writeDeviceDispatch } from "../../tools/resolve";
 import { SpeechEnhancer } from "../../tts/speech-enhancer";
 import { vocalizer } from "../../tts/vocalizer";

@@ -6,9 +6,9 @@ import {
 	replaceTabs,
 	type ToolUIColor,
 	wrapTextWithAnsi,
-} from "../../tools/render-utils";
+} from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
 import { Ellipsis, truncateToWidth } from "../../tui";
-import type { Theme } from "../theme/theme";
 
 const COLLAPSED_NOTES = 3;
 const NOTE_LINE_WIDTH = 110;

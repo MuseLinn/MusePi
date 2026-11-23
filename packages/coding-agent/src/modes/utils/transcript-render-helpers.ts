@@ -9,13 +9,6 @@ import { type Component, Text } from "@musepi/pi-tui";
 import { formatBytes, formatDuration } from "@musepi/pi-utils";
 import { asyncJobResultView } from "@musepi/pi-wire";
 import {
-	type CustomMessage,
-	type FileMentionMessage,
-	resolveAbortLabel,
-	shouldRenderAbortReason,
-} from "../../session/messages";
-import { createIrcMessageCard } from "../../tools/hub";
-import {
 	createCachedComponent,
 	Ellipsis,
 	getPreviewLines,
@@ -24,12 +17,19 @@ import {
 	type ToolUIStatus,
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
-} from "../../tools/render-utils";
+} from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
+import {
+	type CustomMessage,
+	type FileMentionMessage,
+	resolveAbortLabel,
+	shouldRenderAbortReason,
+} from "../../session/messages";
+import { createIrcMessageCard } from "../../tools/hub";
 import { renderStatusLine } from "../../tui";
 import { canonicalizeMessage } from "../../utils/thinking-display";
 import { ToolActivityContainer } from "../components/tool-activity";
 import { TranscriptBlock } from "../components/transcript-container";
-import { theme } from "../theme/theme";
 
 type CustomOrHookMessage = Extract<AgentMessage, { role: "custom" | "hookMessage" }>;
 type AssistantAgentMessage = Extract<AgentMessage, { role: "assistant" }>;

@@ -15,9 +15,9 @@ import { pluralize } from "@musepi/pi-utils";
 import { formatKeyHints, type KeyId } from "../config/keybindings";
 import { isSettingsInitialized, settings } from "../config/settings";
 import { getDefault } from "../config/settings-schema";
-import type { Theme } from "../modes/theme/theme";
 import { Hasher } from "../tui/utils";
 import { formatDimensionNote, type ResizedImage } from "../utils/image-resize";
+import type { Theme } from "./theme/theme";
 
 export { Ellipsis } from "@musepi/pi-natives";
 export { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
@@ -799,7 +799,8 @@ export function createCachedComponent(
 		render(width: number): readonly string[] {
 			const expanded = getExpanded();
 			const key = new Hasher().bool(expanded).u32(width).digest();
-			if (cached?.key === key) return cached.lines;
+			const hit = cached;
+			if (hit?.key === key) return hit.lines;
 			const paddingX = Math.max(0, options.paddingX ?? 0);
 			const innerWidth = Math.max(1, width - paddingX * 2);
 			const lines = compute(innerWidth, expanded);

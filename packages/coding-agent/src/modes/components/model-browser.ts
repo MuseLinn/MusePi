@@ -25,9 +25,9 @@ import { formatNumber } from "@musepi/pi-utils";
 import { getModelMatchPreferences, resolveModelRoleValue } from "../../config/model-resolver";
 import { getKnownRoleIds, getRoleInfo, MODEL_ROLE_IDS } from "../../config/model-roles";
 import type { Settings } from "../../config/settings";
+import { type ThemeColor, theme } from "../../render/theme/theme";
 import type { ModelPerfStats } from "../../session/agent-storage";
 import { AUTO_THINKING, type ConfiguredThinkingLevel, parseConfiguredThinkingLevel } from "../../thinking";
-import { type ThemeColor, theme } from "../theme/theme";
 import {
 	matchesSelectCancel,
 	matchesSelectDown,

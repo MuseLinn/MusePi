@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { AttachmentChipsBand } from "@musepi/pi-coding-agent/modes/components/attachment-chips";
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
 import { chipLabel } from "@musepi/pi-coding-agent/modes/composer-attachments";
-import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { ImageBudget } from "@musepi/pi-tui";
 import { setKittyGraphics } from "@musepi/pi-tui/kitty-graphics";
 import { getCellDimensions, ImageProtocol, setCellDimensions, TERMINAL } from "@musepi/pi-tui/terminal-capabilities";

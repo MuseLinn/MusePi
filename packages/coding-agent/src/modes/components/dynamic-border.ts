@@ -1,5 +1,5 @@
 import type { Component } from "@musepi/pi-tui";
-import { fgOrPlain, theme } from "../../modes/theme/theme";
+import { fgOrPlain, theme } from "../../render/theme/theme";
 
 /**
  * Dynamic border component that adjusts to viewport width.

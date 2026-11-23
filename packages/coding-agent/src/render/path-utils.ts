@@ -6,7 +6,7 @@ import { glob } from "@musepi/pi-natives";
 import { hasFsCode, isEnoent, isEnotdir, stripWindowsExtendedLengthPathPrefix } from "@musepi/pi-utils";
 import type { Skill } from "../extensibility/skills";
 import { InternalUrlRouter, type LocalProtocolOptions } from "../internal-urls";
-import { ToolAbortError, ToolError } from "./tool-errors";
+import { ToolAbortError, ToolError } from "../tools/tool-errors";
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 // A single line-range chunk: `N`, `N-M`, `N+K`, or open-ended `N-`. `..` is

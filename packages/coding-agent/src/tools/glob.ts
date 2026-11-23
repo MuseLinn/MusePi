@@ -10,14 +10,7 @@ import { formatGroupedPaths, hasFsCode, isEnoent, prompt, untilAborted } from "@
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { InternalUrlRouter } from "../internal-urls";
 import { splitMemoryGlobPattern } from "../internal-urls/memory-protocol";
-import type { Theme } from "../modes/theme/theme";
 import globDescription from "../prompts/tools/glob.md" with { type: "text" };
-import { type TruncationResult, truncateHead } from "../session/streaming-output";
-import { isScoutSpawnable } from "../task/spawn-policy";
-import { Ellipsis, fileHyperlink, renderFileList, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
-import type { ToolSession } from ".";
-import { applyListLimit } from "./list-limit";
-import { formatFullOutputReference, type OutputMeta } from "./output-meta";
 import {
 	expandDelimitedPathEntries,
 	formatPathRelativeToCwd,
@@ -29,14 +22,21 @@ import {
 	resolveExplicitFindPatterns,
 	resolveToCwd,
 	toPathList,
-} from "./path-utils";
+} from "../render/path-utils";
 import {
 	createCachedComponent,
 	formatCount,
 	formatEmptyMessage,
 	formatErrorMessage,
 	PREVIEW_LIMITS,
-} from "./render-utils";
+} from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
+import { type TruncationResult, truncateHead } from "../session/streaming-output";
+import { isScoutSpawnable } from "../task/spawn-policy";
+import { Ellipsis, fileHyperlink, renderFileList, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
+import type { ToolSession } from ".";
+import { applyListLimit } from "./list-limit";
+import { formatFullOutputReference, type OutputMeta } from "./output-meta";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

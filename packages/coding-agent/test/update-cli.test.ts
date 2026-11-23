@@ -36,7 +36,7 @@ import {
 import Update from "@musepi/pi-coding-agent/commands/update";
 import { removeWithRetries } from "@musepi/pi-utils";
 import type { CliConfig } from "@musepi/pi-utils/cli";
-import { getThemeByName, setThemeInstance } from "../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "../src/render/theme/theme";
 
 const tempDirs: string[] = [];
 

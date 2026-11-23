@@ -9,7 +9,7 @@ import {
 } from "@musepi/pi-coding-agent/internal-urls/registry-helpers";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
-import { shortenPath } from "@musepi/pi-coding-agent/tools/render-utils";
+import { shortenPath } from "../../src/render/render-utils";
 
 function getTextOutput(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content

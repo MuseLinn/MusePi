@@ -18,6 +18,7 @@ import type { ImageContent } from "@musepi/pi-ai";
 import { formatAge, formatBytes, isProbablyBinary, readImageMetadata } from "@musepi/pi-utils";
 import { canonicalSnapshotKey } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
+import { resolveReadPath } from "../render/path-utils";
 import type { FileMentionMessage } from "../session/messages";
 import {
 	DEFAULT_MAX_BYTES,
@@ -25,7 +26,6 @@ import {
 	truncateHead,
 	truncateHeadBytes,
 } from "../session/streaming-output";
-import { resolveReadPath } from "../tools/path-utils";
 import { formatDimensionNote, resizeImage } from "./image-resize";
 
 /** Regex to match @filepath patterns in text */

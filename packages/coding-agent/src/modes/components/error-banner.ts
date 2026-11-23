@@ -1,7 +1,7 @@
 import { Container, Text } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import { WidthAwareText } from "../../tui/width-aware-text.js";
-import { theme } from "../theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 import { formatErrorBlock } from "./error-block";
 

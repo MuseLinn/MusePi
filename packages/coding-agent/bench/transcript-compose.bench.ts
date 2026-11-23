@@ -21,7 +21,7 @@ import type { AssistantMessage } from "@musepi/pi-ai";
 import { Settings } from "../src/config/settings";
 import { AssistantMessageComponent } from "../src/modes/components/assistant-message";
 import { TranscriptContainer } from "../src/modes/components/transcript-container";
-import { initTheme } from "../src/modes/theme/theme";
+import { initTheme } from "../src/render/theme/theme";
 
 const WIDTH = 100;
 const SIZES = [500, 5000];

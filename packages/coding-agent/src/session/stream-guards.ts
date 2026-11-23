@@ -10,9 +10,9 @@ import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import geminiToolReminderTemplate from "../prompts/system/gemini-tool-call-reminder.md" with { type: "text" };
 import toolCallLoopRedirectTemplate from "../prompts/system/tool-call-loop-redirect.md" with { type: "text" };
+import { isInternalUrlPath, normalizeLocalScheme, resolveToCwd } from "../render/path-utils";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import { assertEditableFile } from "../tools/auto-generated-guard";
-import { isInternalUrlPath, normalizeLocalScheme, resolveToCwd } from "../tools/path-utils";
 import { ToolError } from "../tools/tool-errors";
 import type { CustomMessage } from "./messages";
 import type { SessionManager } from "./session-manager";

@@ -6,7 +6,7 @@ import { stripVTControlCharacters } from "node:util";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { StatusLineComponent, type StatusLineSettings } from "@musepi/pi-coding-agent/modes/components/status-line";
 import { STATUS_LINE_PRESETS } from "@musepi/pi-coding-agent/modes/components/status-line/presets";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import * as git from "@musepi/pi-coding-agent/utils/git";
 import { removeSyncWithRetries, setProjectDir } from "@musepi/pi-utils";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";

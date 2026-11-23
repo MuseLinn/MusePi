@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "bun:test";
 import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 
 beforeAll(async () => {

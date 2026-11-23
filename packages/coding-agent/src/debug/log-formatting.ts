@@ -1,5 +1,5 @@
 import { sanitizeText } from "@musepi/pi-utils";
-import { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "../tools/render-utils";
+import { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "../render/render-utils";
 
 export function formatDebugLogLine(line: string, maxWidth: number): string {
 	const sanitized = sanitizeText(line);

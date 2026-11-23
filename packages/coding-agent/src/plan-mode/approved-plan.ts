@@ -1,4 +1,4 @@
-import { normalizeLocalScheme } from "../tools/path-utils";
+import { normalizeLocalScheme } from "../render/path-utils";
 import { ToolError } from "../tools/tool-errors";
 
 /** Shape forwarded from the plan-proposal handler to InteractiveMode's

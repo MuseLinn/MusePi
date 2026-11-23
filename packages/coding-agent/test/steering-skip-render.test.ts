@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
-import { formatStatusIcon } from "@musepi/pi-coding-agent/tools/render-utils";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal";
+import { formatStatusIcon } from "../src/render/render-utils";
 
 beforeAll(async () => {
 	resetSettingsForTest();

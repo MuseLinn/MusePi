@@ -9,7 +9,6 @@
 
 import { Container, matchesKey, Spacer, Text } from "@musepi/pi-tui";
 import { getAgentDir, getProjectDir } from "@musepi/pi-utils";
-import { theme } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
 	matchesSelectDown,
@@ -17,6 +16,7 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
+import { theme } from "../../render/theme/theme";
 import {
 	createForeignSessionStore,
 	foreignSessionSourceName,

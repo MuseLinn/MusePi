@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { editToolRenderer } from "@musepi/pi-coding-agent/edit/renderer";
-import { getThemeByName, initTheme, type Theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme, type Theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { readToolRenderer } from "@musepi/pi-coding-agent/tools/read";
 import { writeToolRenderer } from "@musepi/pi-coding-agent/tools/write";
 import type { Component } from "@musepi/pi-tui";

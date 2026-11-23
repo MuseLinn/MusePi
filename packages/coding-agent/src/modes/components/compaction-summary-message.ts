@@ -1,6 +1,6 @@
 import { Box, type Component, Markdown } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getMarkdownTheme, theme } from "../../modes/theme/theme";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import type { BranchSummaryMessage, CompactionSummaryMessage, CustomMessage } from "../../session/messages";
 
 interface SummaryDividerOptions {

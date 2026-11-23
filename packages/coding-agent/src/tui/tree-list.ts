@@ -3,8 +3,8 @@
  */
 
 import { replaceTabs } from "@musepi/pi-tui";
-import type { Theme } from "../modes/theme/theme";
-import { formatMoreItems } from "../tools/render-utils";
+import { formatMoreItems } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import type { TreeContext } from "./types";
 import { getTreeBranch, getTreeContinuePrefix } from "./utils";
 

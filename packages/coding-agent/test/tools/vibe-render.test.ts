@@ -14,7 +14,7 @@
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { Settings } from "../../src/config/settings";
-import { getThemeByName, setThemeInstance, type Theme } from "../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "../../src/render/theme/theme";
 import { createVibeToolRenderer, type VibeToolDetails } from "../../src/tools/vibe";
 import type { VibeScreenSnapshot } from "../../src/vibe/runtime";
 

@@ -7,7 +7,7 @@ import { Command, Flags } from "@musepi/pi-utils/cli";
 import { commitHelp as commandHelp } from "../cli/command-help";
 import { CommitAbortedError, runCommitCommand } from "../commit";
 import type { CommitCommandArgs } from "../commit/types";
-import { initTheme } from "../modes/theme/theme";
+import { initTheme } from "../render/theme/theme";
 
 export default class Commit extends Command {
 	static description = commandHelp.description;

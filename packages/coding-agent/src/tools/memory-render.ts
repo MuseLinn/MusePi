@@ -12,8 +12,6 @@
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
-import { Ellipsis, renderStatusLine, truncateToWidth } from "../tui";
 import {
 	createCachedComponent,
 	formatErrorMessage,
@@ -21,7 +19,9 @@ import {
 	PREVIEW_LIMITS,
 	replaceTabs,
 	type ToolUIStatus,
-} from "./render-utils";
+} from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
+import { Ellipsis, renderStatusLine, truncateToWidth } from "../tui";
 
 // Each stored memory renders as `<bullet> <content>`; the bullet glyph comes
 // from the active theme (`•` by default, a nerd-font dot under nerd themes).

@@ -1,9 +1,9 @@
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
+import { formatErrorDetail, formatExpandHint, replaceTabs, shortenPath, truncateToWidth } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { framedBlock, renderStatusLine } from "../tui";
-import { formatErrorDetail, formatExpandHint, replaceTabs, shortenPath, truncateToWidth } from "./render-utils";
 
 interface InspectImageRenderArgs {
 	path?: string;

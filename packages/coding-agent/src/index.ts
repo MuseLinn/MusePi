@@ -35,7 +35,7 @@ export * from "./main";
 export * from "./modes";
 export * from "./modes/components";
 // Theme utilities for custom tools
-export * from "./modes/theme/theme";
+export * from "./render/theme/theme";
 // SDK for programmatic usage
 export * from "./sdk";
 export * from "./session/agent-session";

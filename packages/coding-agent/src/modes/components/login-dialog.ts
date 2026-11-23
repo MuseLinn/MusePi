@@ -1,7 +1,7 @@
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { Container, getKeybindings, Input, Spacer, Text, type TUI, wrapTextWithAnsi } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 import { urlHyperlinkAlways, WidthAwareText } from "../../tui";
 import { openPath } from "../../utils/open";
 import { DynamicBorder } from "./dynamic-border";

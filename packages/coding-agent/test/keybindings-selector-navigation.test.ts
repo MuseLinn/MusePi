@@ -7,7 +7,7 @@ import { HistorySearchComponent } from "@musepi/pi-coding-agent/modes/components
 import { SessionSelectorComponent } from "@musepi/pi-coding-agent/modes/components/session-selector";
 import { TreeSelectorComponent } from "@musepi/pi-coding-agent/modes/components/tree-selector";
 import { UserMessageSelectorComponent } from "@musepi/pi-coding-agent/modes/components/user-message-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { HistoryStorage } from "@musepi/pi-coding-agent/session/history-storage";
 import type { SessionTreeNode } from "@musepi/pi-coding-agent/session/session-entries";
 import type { SessionInfo } from "@musepi/pi-coding-agent/session/session-listing";

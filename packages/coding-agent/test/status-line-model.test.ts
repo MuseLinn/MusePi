@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { ThinkingLevel } from "@musepi/pi-agent-core";
 import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
 import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();

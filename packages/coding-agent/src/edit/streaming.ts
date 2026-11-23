@@ -24,7 +24,7 @@ import {
 	Patch as HashlinePatch,
 	type SnapshotStore,
 } from "@musepi/hashline";
-import type { Theme } from "../modes/theme/theme";
+import type { Theme } from "../render/theme/theme";
 import { type EditMode, resolveEditMode } from "../utils/edit-mode";
 import { computeEditDiff, type DiffError, type DiffResult } from "./diff";
 import { computeHashlineDiff, computeHashlineSectionDiff } from "./hashline/diff";

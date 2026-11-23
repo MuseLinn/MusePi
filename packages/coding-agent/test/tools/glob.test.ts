@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import * as path from "node:path";
 import { FileType } from "@musepi/pi-natives";
 import { Settings } from "../../src/config/settings";
+import { findUniqueWorkspaceSuffixWithGlobForTest } from "../../src/render/path-utils";
 import type { ToolSession } from "../../src/tools";
 import { GlobTool } from "../../src/tools/glob";
-import { findUniqueWorkspaceSuffixWithGlobForTest } from "../../src/tools/path-utils";
 import { ToolAbortError, ToolError } from "../../src/tools/tool-errors";
 
 function createSession(cwd = process.cwd()): ToolSession {

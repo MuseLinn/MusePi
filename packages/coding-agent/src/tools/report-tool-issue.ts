@@ -37,10 +37,10 @@ import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import { $env, $flag, getAutoQaDbPath, getInstallId, logger, VERSION } from "@musepi/pi-utils";
 import type { Settings } from "..";
-import type { Theme } from "../modes/theme/theme";
+import { replaceTabs } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { renderStatusLine, truncateToWidth } from "../tui";
 import type { ToolSession } from "./index";
-import { replaceTabs } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import type { XdevDispatch } from "./xdev";
 

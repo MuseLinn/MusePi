@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { HookSelectorComponent, type HookSelectorSlider } from "@musepi/pi-coding-agent/modes/components/hook-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 const LEFT = "\x1b[D";
 const RIGHT = "\x1b[C";

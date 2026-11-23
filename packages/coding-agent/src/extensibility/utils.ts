@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { postmortem } from "@musepi/pi-utils";
-import { theme } from "../modes/theme/theme";
-import { expandPath, normalizeLocalScheme } from "../tools/path-utils";
+import { expandPath, normalizeLocalScheme } from "../render/path-utils";
+import { theme } from "../render/theme/theme";
 import type { HookUIContext } from "./hooks/types";
 
 /**

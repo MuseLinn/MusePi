@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { AssistantMessage } from "@musepi/pi-ai";
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme(false);

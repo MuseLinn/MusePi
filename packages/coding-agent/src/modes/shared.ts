@@ -1,6 +1,6 @@
 import type { TabBarTheme } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
-import { theme } from "./theme/theme";
+import { theme } from "../render/theme/theme";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Text Sanitization

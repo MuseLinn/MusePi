@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { renderMarkdownCell } from "@musepi/pi-coding-agent/tui/code-cell";
 import { renderOutputBlock } from "@musepi/pi-coding-agent/tui/output-block";
 

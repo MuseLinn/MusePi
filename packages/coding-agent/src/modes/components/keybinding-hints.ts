@@ -3,7 +3,7 @@
  */
 import { getKeybindings, type Keybinding } from "@musepi/pi-tui";
 import { type AppKeybinding, formatKeyHints, type KeybindingsManager } from "../../config/keybindings";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /**
  * Get display string for an editor action.

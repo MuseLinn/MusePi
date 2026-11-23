@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import type { ImageContent } from "@musepi/pi-ai";
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
 import { chipLabel } from "@musepi/pi-coding-agent/modes/composer-attachments";
-import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 const image: ImageContent = { type: "image", data: "aGVsbG8=", mimeType: "image/png" };
 

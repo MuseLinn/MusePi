@@ -55,7 +55,8 @@ import type {
 	MCPServerConfig,
 	MCPServerConnection,
 } from "../../mcp/types";
-import { shortenPath } from "../../tools/render-utils";
+import { shortenPath } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import { urlHyperlinkAlways } from "../../tui";
 import { copyToClipboard } from "../../utils/clipboard";
 import { isTimeoutError } from "../../utils/fetch-timeout";
@@ -64,7 +65,6 @@ import { ChatBlock } from "../components/chat-block";
 import { MCPAddWizard } from "../components/mcp-add-wizard";
 import { TranscriptBlock } from "../components/transcript-container";
 import { parseCommandArgs } from "../shared";
-import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
 import { groupBySource, parseRemoveArgs, readScopeFlag, showCommandMessage } from "./command-controller-shared";
 

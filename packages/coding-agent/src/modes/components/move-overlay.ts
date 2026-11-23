@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { type Component, CURSOR_MARKER, type Focusable, Key, matchesKey } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { theme } from "../theme/theme";
+import { theme } from "../../render/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import { bottomBorder, row, topBorder } from "./overlay-box";
 

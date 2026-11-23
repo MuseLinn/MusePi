@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { getProjectDir, removeSyncWithRetries, setProjectDir } from "@musepi/pi-utils";
 import { Settings, settings } from "../../../../src/config/settings";
 import { StatusLineComponent } from "../../../../src/modes/components/status-line/component";
-import { getThemeByName, setThemeInstance } from "../../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "../../../../src/render/theme/theme";
 import type { AgentSession } from "../../../../src/session/agent-session";
 import * as git from "../../../../src/utils/git";
 import * as jj from "../../../../src/utils/jj";

@@ -28,9 +28,9 @@ import type { Component } from "@musepi/pi-tui";
 import { prompt } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import { IrcBus } from "../../irc/bus";
-import type { Theme } from "../../modes/theme/theme";
 import hubDescription from "../../prompts/tools/hub.md" with { type: "text" };
 import type { AgentRegistry } from "../../registry/agent-registry";
+import type { Theme } from "../../render/theme/theme";
 import type { ToolSession } from "..";
 import {
 	buildJobResult,

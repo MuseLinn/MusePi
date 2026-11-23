@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test
 import type { AssistantMessage } from "@musepi/pi-ai";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { type Component, Container, Markdown } from "@musepi/pi-tui";
 
 const W = 100;

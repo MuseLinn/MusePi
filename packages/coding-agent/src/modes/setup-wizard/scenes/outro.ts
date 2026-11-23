@@ -1,7 +1,7 @@
 import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { t } from "../../../i18n/index.js";
+import { theme } from "../../../render/theme/theme";
 import { gradientLogo, PI_LOGO } from "../../components/welcome";
-import { theme } from "../../theme/theme";
 import { renderStarfield, SETUP_TICK_MS } from "./splash";
 
 export const SETUP_OUTRO_MS = 1200;

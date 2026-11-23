@@ -17,7 +17,7 @@ import {
 	type SessionCompactEvent,
 	type SessionEvent,
 } from "@musepi/pi-coding-agent/extensibility/hooks";
-import { theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName } from "@musepi/pi-coding-agent/render/theme/theme";
 import { sanitizeText } from "@musepi/pi-utils";
 import { globToolRenderer } from "../../src/tools/glob";
 

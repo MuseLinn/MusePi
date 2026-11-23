@@ -32,8 +32,8 @@ import {
 } from "../../extensibility/plugins/marketplace";
 import type { InstalledPlugin, PluginSettingSchema } from "../../extensibility/plugins/runtime/types";
 import { t } from "../../i18n/index.js";
-import { getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
-import { shortenPath } from "../../tools/render-utils";
+import { shortenPath } from "../../render/render-utils";
+import { getSelectListTheme, getSettingsListTheme, theme } from "../../render/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
 /**

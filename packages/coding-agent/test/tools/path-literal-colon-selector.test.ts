@@ -5,18 +5,18 @@ import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { EditTool } from "@musepi/pi-coding-agent/edit";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
+import { GrepOutputMode } from "@musepi/pi-natives";
+import { removeWithRetries } from "@musepi/pi-utils";
+import { runGrepCommand } from "../../src/cli/grep-cli";
 import {
 	expandPath,
 	probeLiteralPathExists,
 	resolveToCwd,
 	splitPathAndSel,
 	splitPathAndSelPreferringLiteral,
-} from "@musepi/pi-coding-agent/tools/path-utils";
-import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
-import { GrepOutputMode } from "@musepi/pi-natives";
-import { removeWithRetries } from "@musepi/pi-utils";
-import { runGrepCommand } from "../../src/cli/grep-cli";
-import { initTheme } from "../../src/modes/theme/theme";
+} from "../../src/render/path-utils";
+import { initTheme } from "../../src/render/theme/theme";
 import { GrepTool } from "../../src/tools/grep";
 
 function getText(result: { content: Array<{ type: string; text?: string }> }): string {

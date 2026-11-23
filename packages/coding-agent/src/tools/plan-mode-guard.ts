@@ -7,8 +7,8 @@ import {
 	resolveLocalUrlToPath,
 	resolveVaultUrlToPath,
 } from "../internal-urls";
+import { normalizeLocalScheme, resolveToCwd } from "../render/path-utils";
 import type { ToolSession } from ".";
-import { normalizeLocalScheme, resolveToCwd } from "./path-utils";
 import { ToolError } from "./tool-errors";
 
 const VAULT_SCHEME_PREFIX = "vault:";

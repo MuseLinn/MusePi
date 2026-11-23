@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import * as nativesModule from "@musepi/pi-natives";
 import { type MacAppearanceObserver, MacOSAppearance } from "@musepi/pi-natives";
 import type { Terminal, TerminalAppearance } from "@musepi/pi-tui";

@@ -9,9 +9,9 @@ import type {
 	ExtensionUIContext,
 } from "@musepi/pi-coding-agent/extensibility/extensions";
 import { ExtensionUiController } from "@musepi/pi-coding-agent/modes/controllers/extension-ui-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext, RenderSessionContextOptions } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { buildSessionContext, type SessionContext } from "@musepi/pi-coding-agent/session/session-context";
 import type { CustomMessageEntry, SessionEntry } from "@musepi/pi-coding-agent/session/session-entries";
 import { Container } from "@musepi/pi-tui";

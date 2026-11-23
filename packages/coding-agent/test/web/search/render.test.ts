@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { renderSearchResult, type SearchRenderDetails } from "@musepi/pi-coding-agent/web/search/render";
 import type { SearchResponse } from "@musepi/pi-coding-agent/web/search/types";
 import { sanitizeText } from "@musepi/pi-utils";

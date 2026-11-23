@@ -10,8 +10,20 @@ import { $envpos, prompt, untilAborted } from "@musepi/pi-utils";
 import { canonicalSnapshotKey, getFileSnapshotStore } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
 import astEditDescription from "../prompts/tools/ast-edit.md" with { type: "text" };
+import { isInternalUrlPath, resolveToolSearchScope } from "../render/path-utils";
+import {
+	appendParseErrorsBulletList,
+	capParseErrors,
+	formatCodeFrameLine,
+	formatCount,
+	formatErrorDetail,
+	formatMoreItems,
+	formatParseErrors,
+	formatParseErrorsCountLabel,
+	PREVIEW_LIMITS,
+} from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import {
 	Ellipsis,
 	fileHyperlink,
@@ -27,18 +39,6 @@ import { parseReadUrlTarget } from "./fetch";
 import { createFileRecorder, formatResultPath } from "./file-recorder";
 import { classifyGroupedLines, formatGroupedFiles, groupLineIndicesByBlank } from "./grouped-file-output";
 import type { OutputMeta } from "./output-meta";
-import { isInternalUrlPath, resolveToolSearchScope } from "./path-utils";
-import {
-	appendParseErrorsBulletList,
-	capParseErrors,
-	formatCodeFrameLine,
-	formatCount,
-	formatErrorDetail,
-	formatMoreItems,
-	formatParseErrors,
-	formatParseErrorsCountLabel,
-	PREVIEW_LIMITS,
-} from "./render-utils";
 import { PREVIEW_PENDING_NOTICE, queueResolveHandler } from "./resolve";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";

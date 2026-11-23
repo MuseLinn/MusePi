@@ -10,8 +10,8 @@ import {
 } from "@musepi/pi-tui";
 import { APP_NAME } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import { gradientLogo, PI_LOGO } from "../components/welcome";
-import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
 import { renderSetupOutro, SETUP_OUTRO_MS } from "./scenes/outro";
 import { renderSetupSplash, SETUP_SPLASH_MS, SETUP_TICK_MS } from "./scenes/splash";

@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import type { AssistantMessage } from "@musepi/pi-ai";
 import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
 import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/types";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { calculateTokensPerSecond } from "@musepi/pi-coding-agent/utils/token-rate";
 
 beforeAll(async () => {

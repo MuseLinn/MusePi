@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 
 import { HookInputComponent } from "@musepi/pi-coding-agent/modes/components/hook-input";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { TUI } from "@musepi/pi-tui";
 
 beforeAll(async () => {

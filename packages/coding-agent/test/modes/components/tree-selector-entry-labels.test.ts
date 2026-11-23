@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { TreeSelectorComponent } from "@musepi/pi-coding-agent/modes/components/tree-selector";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionEntry, SessionTreeNode } from "@musepi/pi-coding-agent/session/session-entries";
 
 const ALT_A = "\x1ba";

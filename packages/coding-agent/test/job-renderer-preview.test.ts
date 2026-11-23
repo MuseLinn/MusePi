@@ -6,7 +6,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { prompt } from "@musepi/pi-utils";
 import taskSummaryTemplate from "../src/prompts/tools/task-summary.md" with { type: "text" };
 import { hubToolRenderer } from "../src/tools/hub";

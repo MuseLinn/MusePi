@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { renderStatusLine } from "@musepi/pi-coding-agent/tui";
 import { sanitizeText } from "@musepi/pi-utils";
 

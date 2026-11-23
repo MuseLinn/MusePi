@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 

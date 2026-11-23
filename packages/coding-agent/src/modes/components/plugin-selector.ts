@@ -6,7 +6,7 @@
  */
 import { Container, type SelectItem, SelectList, type SgrMouseEvent } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getSelectListTheme } from "../theme/theme";
+import { getSelectListTheme } from "../../render/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 import { routeSelectListMouseWithTopBorder } from "./select-list-mouse-routing";
 

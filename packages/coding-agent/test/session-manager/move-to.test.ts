@@ -8,8 +8,8 @@ import type { SessionHeader } from "@musepi/pi-coding-agent/session/session-entr
 import { loadEntriesFromFile } from "@musepi/pi-coding-agent/session/session-loader";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { resetSessionTitleIndexForTests } from "@musepi/pi-coding-agent/session/title-index";
-import { stripOuterDoubleQuotes } from "@musepi/pi-coding-agent/tools/path-utils";
 import { getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
+import { stripOuterDoubleQuotes } from "../../src/render/path-utils";
 
 // -- helpers ----------------------------------------------------------------
 

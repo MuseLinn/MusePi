@@ -22,12 +22,12 @@ import { Filesystem, NotFoundError, type PreflightWriteOptions, type WriteResult
 import { isEnoent } from "@musepi/pi-utils";
 import type { FileDiagnosticsResult, WritethroughCallback, WritethroughDeferredHandle } from "../../lsp";
 import { FileChangeType, notifyWorkspaceWatchedFiles } from "../../lsp/client";
+import { isInternalUrlPath } from "../../render/path-utils";
 import type { ToolSession } from "../../tools";
 import { routeWriteThroughBridge } from "../../tools/acp-bridge";
 import { assertEditableFileContent } from "../../tools/auto-generated-guard";
 import { deleteFileWithFallback, writeFileWithFallback } from "../../tools/file-write-fallback";
 import { invalidateFsScanAfterWrite } from "../../tools/fs-cache-invalidation";
-import { isInternalUrlPath } from "../../tools/path-utils";
 import { enforcePlanModeWrite, resolvePlanPath, targetsLocalSandbox } from "../../tools/plan-mode-guard";
 import { canonicalSnapshotKey } from "../file-snapshot-store";
 import { isNotebookPath } from "../notebook";

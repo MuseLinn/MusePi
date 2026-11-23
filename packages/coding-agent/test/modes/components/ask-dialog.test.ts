@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
 import type { ExtensionAskDialogQuestion } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { AskDialogComponent } from "@musepi/pi-coding-agent/modes/components/ask-dialog";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { setKeybindings } from "@musepi/pi-tui";
 
 const DOWN = "\x1b[B";

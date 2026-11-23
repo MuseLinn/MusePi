@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import { ToolChoiceQueue } from "@musepi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type Tool, type ToolSession } from "@musepi/pi-coding-agent/tools";
 import { requiresApproval, resolveApproval } from "@musepi/pi-coding-agent/tools/approval";

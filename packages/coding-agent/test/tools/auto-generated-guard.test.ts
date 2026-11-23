@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { assertEditableFile, assertEditableFileContent } from "@musepi/pi-coding-agent/tools/auto-generated-guard";
-import { resolveImageOptions } from "@musepi/pi-coding-agent/tools/render-utils";
 import { ToolError } from "@musepi/pi-coding-agent/tools/tool-errors";
+import { resolveImageOptions } from "../../src/render/render-utils";
 
 let tempDir: string;
 let testSettings: Settings;

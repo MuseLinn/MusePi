@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { buildAsyncJobResultBlock } from "@musepi/pi-coding-agent/modes/utils/transcript-render-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { CustomMessage } from "@musepi/pi-coding-agent/session/messages";
 
 beforeAll(async () => {

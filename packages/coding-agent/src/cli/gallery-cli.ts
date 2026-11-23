@@ -12,7 +12,7 @@ import type { TUI } from "@musepi/pi-tui";
 import { getProjectDir } from "@musepi/pi-utils";
 import { Settings } from "../config/settings";
 import { ToolExecutionComponent } from "../modes/components/tool-execution";
-import { initTheme, theme } from "../modes/theme/theme";
+import { initTheme, theme } from "../render/theme/theme";
 import { toolRenderers } from "../tools/renderers";
 import { type GalleryFixture, type GalleryResult, galleryFixtures } from "./gallery-fixtures";
 import { captureGalleryScreenshots } from "./gallery-screenshot";

@@ -30,8 +30,32 @@ import { couldBecomeXdUrl, parseXdUrl } from "../internal-urls/xd-protocol";
 import { createLspWritethrough, type FileDiagnosticsResult, type WritethroughCallback, writethroughNoop } from "../lsp";
 import { DeferredDiagnostics } from "../lsp/deferred-diagnostics";
 import { getDiagnosticsLedger } from "../lsp/diagnostics-ledger";
-import { getLanguageFromPath, highlightCode, type Theme } from "../modes/theme/theme";
 import writeDescription from "../prompts/tools/write.md" with { type: "text" };
+import {
+	formatPathRelativeToCwd,
+	pathTargetsSsh,
+	peelWriteUrlSelector,
+	probeLiteralPathExists,
+	resolveFileWriteApprovalTier,
+	splitPathAndSel,
+} from "../render/path-utils";
+import {
+	cachedRenderedString,
+	createRenderedStringCache,
+	Ellipsis,
+	formatDiagnostics,
+	formatErrorDetail,
+	formatExpandHint,
+	formatMoreItems,
+	formatStatusIcon,
+	getLspBatchRequest,
+	type RenderedStringCache,
+	replaceTabs,
+	shortenPath,
+	TRUNCATE_LENGTHS,
+	truncateToWidth,
+} from "../render/render-utils";
+import { getLanguageFromPath, highlightCode, type Theme } from "../render/theme/theme";
 import type { ToolSession } from "../sdk";
 import { fileHyperlink, framedBlock, renderStatusLine } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
@@ -49,31 +73,7 @@ import {
 } from "./conflict-detect";
 import { invalidateFsScanAfterWrite } from "./fs-cache-invalidation";
 import { type OutputMeta, outputMeta } from "./output-meta";
-import {
-	formatPathRelativeToCwd,
-	pathTargetsSsh,
-	peelWriteUrlSelector,
-	probeLiteralPathExists,
-	resolveFileWriteApprovalTier,
-	splitPathAndSel,
-} from "./path-utils";
 import { enforcePlanModeWrite, resolvePlanPath, unwrapHashlineHeaderPath } from "./plan-mode-guard";
-import {
-	cachedRenderedString,
-	createRenderedStringCache,
-	Ellipsis,
-	formatDiagnostics,
-	formatErrorDetail,
-	formatExpandHint,
-	formatMoreItems,
-	formatStatusIcon,
-	getLspBatchRequest,
-	type RenderedStringCache,
-	replaceTabs,
-	shortenPath,
-	TRUNCATE_LENGTHS,
-	truncateToWidth,
-} from "./render-utils";
 import type { ToolActivityContext, ToolActivitySummary } from "./renderers";
 import { dispatchReportIssueDevice, REPORT_ISSUE_DEVICE_NAME, renderReportIssueDeviceCall } from "./report-tool-issue";
 import { dispatchResolutionDevice, isResolutionDeviceName, renderResolutionDeviceCall } from "./resolve";

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { Settings } from "../../src/config/settings";
-import { getThemeByName, setThemeInstance, type Theme } from "../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "../../src/render/theme/theme";
 import { renderResult } from "../../src/task/render";
 import { taskToolRenderer } from "../../src/task/renderer";
 import type { AgentProgress, SingleResult, TaskToolDetails } from "../../src/task/types";

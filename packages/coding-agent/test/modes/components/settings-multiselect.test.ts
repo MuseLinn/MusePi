@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
 import { SettingsSelectorComponent } from "@musepi/pi-coding-agent/modes/components/settings-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { SEARCH_PROVIDER_CHOICES } from "@musepi/pi-coding-agent/web/search/types";
 
 beforeAll(async () => {

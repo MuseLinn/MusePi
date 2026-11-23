@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { CONFIG_DIR_NAME, prompt } from "@musepi/pi-utils";
 import type { Rule } from "../../capability/rule";
 import omfgUserPrompt from "../../prompts/system/omfg-user.md" with { type: "text" };
-import { shortenPath } from "../../tools/render-utils";
+import { shortenPath } from "../../render/render-utils";
 import { OmfgPanelComponent } from "../components/omfg-panel";
 import type { InteractiveModeContext } from "../types";
 import {

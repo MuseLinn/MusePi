@@ -68,11 +68,11 @@ import { InteractiveMode } from "./modes/interactive-mode";
 import type { PrintModeOptions } from "./modes/print-mode";
 import { claimRpcInput } from "./modes/rpc/rpc-input";
 import { CURRENT_SETUP_VERSION } from "./modes/setup-version";
-import { initTheme, stopThemeWatcher } from "./modes/theme/theme";
 import type { SubmittedUserInput } from "./modes/types";
 import { createWarpEventBridgeExtension } from "./modes/warp-events";
 import { ensureHostHalfPluginsLoaded } from "./plugins-runtime/loader";
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
+import { initTheme, stopThemeWatcher } from "./render/theme/theme";
 import {
 	type CreateAgentSessionOptions,
 	type CreateAgentSessionResult,

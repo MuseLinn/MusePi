@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { HookSelectorComponent } from "@musepi/pi-coding-agent/modes/components/hook-selector";
-import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { visibleWidth } from "@musepi/pi-tui";
 
 beforeAll(async () => {

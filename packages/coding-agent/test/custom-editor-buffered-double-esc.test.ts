@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
-import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { StdinBuffer } from "@musepi/pi-tui/stdin-buffer";
 
 /**

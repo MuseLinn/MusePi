@@ -2,8 +2,8 @@ import { afterEach, beforeAll, describe, expect, it, type Mock, vi } from "bun:t
 import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
 import { HookEditorComponent } from "@musepi/pi-coding-agent/modes/components/hook-editor";
 import { ExtensionUiController } from "@musepi/pi-coding-agent/modes/controllers/extension-ui-controller";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { CURSOR_MARKER, isFocusable, setKeybindings, type TUI } from "@musepi/pi-tui";
 
 beforeAll(async () => {

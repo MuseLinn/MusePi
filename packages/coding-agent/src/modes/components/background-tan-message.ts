@@ -1,7 +1,7 @@
 import { Text } from "@musepi/pi-tui";
+import { replaceTabs } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import type { BackgroundTanDispatchDetails, CustomMessage } from "../../session/messages";
-import { replaceTabs } from "../../tools/render-utils";
-import { theme } from "../theme/theme";
 import { TranscriptBlock } from "./transcript-container";
 
 const TAN_WORK_PREVIEW_LENGTH = 56;

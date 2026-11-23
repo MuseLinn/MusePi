@@ -1,5 +1,5 @@
 import { tryParseJson } from "@musepi/pi-utils";
-import { formatBytes } from "../../tools/render-utils";
+import { formatBytes } from "../../render/render-utils";
 import type { RenderResult, SpecialHandler } from "./types";
 import { buildResult, formatIsoDate, formatNumber, loadPage } from "./types";
 

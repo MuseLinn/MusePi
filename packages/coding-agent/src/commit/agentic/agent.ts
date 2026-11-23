@@ -7,7 +7,7 @@ import { INTENT_FIELD } from "@musepi/pi-wire";
 import typesDescriptionPrompt from "../../commit/prompts/types-description.md" with { type: "text" };
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
-import { getMarkdownTheme } from "../../modes/theme/theme";
+import { getMarkdownTheme } from "../../render/theme/theme";
 import { createAgentSession } from "../../sdk";
 import type { AgentSessionEvent } from "../../session/agent-session";
 import type { AuthStorage } from "../../session/auth-storage";

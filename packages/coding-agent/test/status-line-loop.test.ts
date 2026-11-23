@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
 import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();

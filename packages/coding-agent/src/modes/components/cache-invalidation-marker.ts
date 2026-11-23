@@ -1,7 +1,7 @@
 import type { Usage } from "@musepi/pi-ai";
 import type { Component } from "@musepi/pi-tui";
 import { formatNumber } from "@musepi/pi-utils";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /**
  * Minimum prefix the previous turn must have READ back from cache before a

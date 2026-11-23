@@ -2,9 +2,9 @@ import type { TextContent } from "@musepi/pi-ai";
 import type { Component } from "@musepi/pi-tui";
 import { Box, Container, Markdown, Spacer, Text } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getMarkdownTheme, theme } from "../../modes/theme/theme";
+import { shortenPath } from "../../render/render-utils";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import type { CustomMessage, SkillPromptDetails } from "../../session/messages";
-import { shortenPath } from "../../tools/render-utils";
 import { fileHyperlink } from "../../tui";
 
 export class SkillMessageComponent extends Container {

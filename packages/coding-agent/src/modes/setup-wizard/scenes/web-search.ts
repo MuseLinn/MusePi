@@ -1,5 +1,6 @@
 import { routeSelectListMouse, type SelectItem, SelectList, type SgrMouseEvent, truncateToWidth } from "@musepi/pi-tui";
 import { t } from "../../../i18n/index.js";
+import { getSelectListTheme, theme } from "../../../render/theme/theme";
 import { getSearchProvider, setSearchProviderOrder } from "../../../web/search/provider";
 import {
 	isSearchProviderId,
@@ -7,7 +8,6 @@ import {
 	SEARCH_PROVIDER_ORDER,
 	type SearchProviderId,
 } from "../../../web/search/types";
-import { getSelectListTheme, theme } from "../../theme/theme";
 import type { SetupSceneHost, SetupTab } from "./types";
 
 const MAX_VISIBLE = 8;

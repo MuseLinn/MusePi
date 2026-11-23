@@ -9,12 +9,12 @@
  */
 import { Container, Editor, type Focusable, matchesKey, Spacer, Text, type TUI } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getEditorTheme, theme } from "../../modes/theme/theme";
 import {
 	matchesAppExternalEditor,
 	matchesAppFollowUp,
 	matchesAppInterrupt,
 } from "../../modes/utils/keybinding-matchers";
+import { getEditorTheme, theme } from "../../render/theme/theme";
 import { getEditorCommand, openInEditor } from "../../utils/external-editor";
 import { DynamicBorder } from "./dynamic-border";
 

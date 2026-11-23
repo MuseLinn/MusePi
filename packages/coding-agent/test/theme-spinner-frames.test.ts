@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { SPINNER_GLYPH_ADVANCE_MS, sharedSpinnerFrame } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getConfigRootDir, getCustomThemesDir, removeWithRetries, setAgentDir } from "@musepi/pi-utils";
 
 // Path of the built-in dark theme JSON, used as a known-valid base we can

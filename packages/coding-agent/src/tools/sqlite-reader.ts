@@ -1,5 +1,5 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite";
-import { formatBytes, replaceTabs, truncateToWidth } from "./render-utils";
+import { formatBytes, replaceTabs, truncateToWidth } from "../render/render-utils";
 import { ToolError } from "./tool-errors";
 
 const SQLITE_MAGIC = new Uint8Array([

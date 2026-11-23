@@ -20,6 +20,7 @@ import type { CompactOptions } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import type { MCPManager } from "../mcp";
 import type { PlanApprovalDetails } from "../plan-mode/approved-plan";
+import type { Theme } from "../render/theme/theme";
 import type { AgentSession } from "../session/agent-session";
 import type { CompactMode } from "../session/compact-modes";
 import type { ForeignSessionSource } from "../session/foreign-session-store";
@@ -42,7 +43,6 @@ import type { TranscriptContainer } from "./components/transcript-container";
 import type { EventController } from "./controllers/event-controller";
 import type { LoopLimitRuntime } from "./loop-limit";
 import type { OAuthManualInputManager } from "./oauth-manual-input";
-import type { Theme } from "./theme/theme";
 
 export type CompactionQueuedMessage = {
 	text: string;

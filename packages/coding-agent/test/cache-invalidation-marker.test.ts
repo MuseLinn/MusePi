@@ -4,7 +4,7 @@ import {
 	CacheInvalidationMarkerComponent,
 	detectCacheInvalidation,
 } from "@musepi/pi-coding-agent/modes/components/cache-invalidation-marker";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 function usage(parts: { input?: number; cacheRead?: number; cacheWrite?: number; output?: number }): Usage {
 	const input = parts.input ?? 0;

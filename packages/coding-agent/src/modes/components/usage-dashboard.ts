@@ -25,13 +25,13 @@ import {
 } from "@musepi/pi-tui";
 import { formatDuration, formatNumber } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import {
 	formatAbsoluteOnlyAmount,
 	formatRemainingOnlyTotal,
 	isRemainingOnlyAbsoluteAmount,
 } from "../../utils/usage-amounts";
 import { formatLimitTitle, usageAccountLabel } from "../../utils/usage-display";
-import { theme } from "../theme/theme";
 import { matchesAppInterrupt } from "../utils/keybinding-matchers";
 import { bottomBorder, row, topBorder } from "./overlay-box";
 

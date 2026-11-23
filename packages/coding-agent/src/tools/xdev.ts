@@ -36,15 +36,15 @@ import { parseStreamingJson } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { XD_URL_PREFIX } from "../internal-urls/xd-protocol";
 import { parseMCPToolName } from "../mcp/tool-bridge";
-import type { Theme } from "../modes/theme/theme";
+import type { Theme } from "../render/theme/theme";
 import { truncateHeadBytes } from "../session/streaming-output";
 import { resolveToolTier, type ToolTier } from "./approval";
 import type { Tool, XdevState } from "./contract";
 
 export type { XdevState } from "./contract";
 
+import { replaceTabs } from "../render/render-utils";
 import { renderDefaultToolExecution } from "./default-renderer";
-import { replaceTabs } from "./render-utils";
 import type { ToolActivitySummary, ToolRenderer } from "./renderers";
 import { renderError, ToolAbortError, ToolError } from "./tool-errors";
 

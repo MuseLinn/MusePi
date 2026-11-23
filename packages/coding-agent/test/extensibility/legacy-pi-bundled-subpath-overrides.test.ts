@@ -232,6 +232,6 @@ process.stdout.write(JSON.stringify([
 		expect(keys.has("@musepi/pi-coding-agent/slash-commands/helpers/active-oauth-account")).toBe(true);
 		// Directory index modules stay excluded: `./x/*` must not serve `x/y`
 		// from `y/index.ts`, which Node would not resolve either.
-		expect(keys.has("@musepi/pi-coding-agent/modes/theme/defaults/index")).toBe(false);
+		expect(keys.has("@musepi/pi-coding-agent/render/theme/defaults/index")).toBe(false);
 	});
 });

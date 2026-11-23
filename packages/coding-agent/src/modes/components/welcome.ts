@@ -9,7 +9,7 @@ import {
 } from "@musepi/pi-tui";
 import { APP_NAME } from "@musepi/pi-utils";
 import { getLocale, t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 import tipsText from "./tips.txt" with { type: "text" };
 import tipsZhText from "./tips-zh.txt" with { type: "text" };
 

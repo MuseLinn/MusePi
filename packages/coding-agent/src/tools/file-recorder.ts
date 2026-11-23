@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { formatPathRelativeToCwd } from "./path-utils";
+import { formatPathRelativeToCwd } from "../render/path-utils";
 
 /**
  * Creates a deduplicating recorder for relative file paths.

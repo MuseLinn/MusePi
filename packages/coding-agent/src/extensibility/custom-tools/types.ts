@@ -28,7 +28,7 @@ import type { ExecOptions, ExecResult } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
 import type * as PiCodingAgent from "../../index";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
-import type { Theme } from "../../modes/theme/theme";
+import type { Theme } from "../../render/theme/theme";
 import type { ReadonlySessionManager } from "../../session/session-manager";
 import type { CollabToolHandle } from "../../tools/collab";
 import type { PluginManagementHandle } from "../../tools/plugin-manager";

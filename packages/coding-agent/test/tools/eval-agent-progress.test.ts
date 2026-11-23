@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { EvalStatusEvent, EvalToolDetails } from "@musepi/pi-coding-agent/eval/types";
-import { getThemeByName, setThemeInstance, type Theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { evalToolRenderer } from "@musepi/pi-coding-agent/tools/eval";
 
 /**

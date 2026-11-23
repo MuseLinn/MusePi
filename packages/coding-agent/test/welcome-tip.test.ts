@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { renderWelcomeTip } from "@musepi/pi-coding-agent/modes/components/welcome";
-import { initTheme, setTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, setTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { visibleWidth } from "@musepi/pi-tui";
 
 describe("renderWelcomeTip", () => {

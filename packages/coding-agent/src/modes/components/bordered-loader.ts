@@ -1,6 +1,6 @@
 import { CancellableLoader, Container, Spacer, Text, type TUI } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import type { Theme } from "../../modes/theme/theme";
+import type { Theme } from "../../render/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
 /** Loader wrapped with borders for hook UI */

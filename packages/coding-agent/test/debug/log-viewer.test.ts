@@ -6,7 +6,7 @@ import {
 	LOAD_OLDER_LABEL,
 	SESSION_BOUNDARY_WARNING,
 } from "@musepi/pi-coding-agent/debug/log-viewer";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	const theme = await getThemeByName("dark");

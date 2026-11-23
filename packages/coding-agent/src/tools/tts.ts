@@ -11,10 +11,10 @@ import { USER_AGENT } from "@musepi/pi-utils";
 import { settings } from "../config/settings";
 import type { CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 import { resolveXAIHttpCredentials } from "../lib/xai-http";
+import { formatPathRelativeToCwd, resolveToCwd } from "../render/path-utils";
 import { DEFAULT_TTS_LOCAL_MODEL_KEY, DEFAULT_TTS_VOICE, isTtsLocalModelKey, KOKORO_VOICES } from "../tts/models";
 import { ttsClient } from "../tts/tts-client";
 import { encodeWav } from "../tts/wav";
-import { formatPathRelativeToCwd, resolveToCwd } from "./path-utils";
 
 // Hermes tts_tool.py L167-171
 const DEFAULT_XAI_VOICE_ID = "eve" as const;

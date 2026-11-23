@@ -37,6 +37,7 @@ import { formatKeyHints } from "../config/keybindings";
 import type { PromptTemplate } from "../config/prompt-templates";
 import { type SettingPath, Settings } from "../config/settings";
 import { EditTool } from "../edit";
+import { formatBytes } from "../render/render-utils";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult, LoadExtensionsResult } from "../sdk";
 import {
 	discoverContextFiles,
@@ -57,7 +58,6 @@ import { BashTool } from "../tools/bash";
 import { GlobTool } from "../tools/glob";
 import { GrepTool } from "../tools/grep";
 import { ReadTool } from "../tools/read";
-import { formatBytes } from "../tools/render-utils";
 import { WriteTool } from "../tools/write";
 import { EventBus } from "../utils/event-bus";
 import { convertImageToPng } from "../utils/image-loading";
@@ -1483,7 +1483,7 @@ export { CONFIG_DIR_NAME } from "@musepi/pi-utils";
 export { parseArgs } from "../cli/args";
 
 export * from "../index";
-export { formatBytes as formatSize } from "../tools/render-utils";
+export { formatBytes as formatSize } from "../render/render-utils";
 export { copyToClipboard } from "../utils/clipboard";
 export { Type } from "./legacy-typebox";
 

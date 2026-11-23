@@ -8,7 +8,7 @@ import {
 	renderPauseScreen,
 	runPauseScreen,
 } from "../../../src/modes/components/pause-screen";
-import { getThemeByName, setThemeInstance } from "../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "../../../src/render/theme/theme";
 
 // Strip SGR colors so assertions see visible text only.
 const stripAnsi = (text: string): string => text.replace(/\x1b\[[0-9;]*m/g, "");

@@ -1,5 +1,5 @@
 import { Text } from "@musepi/pi-tui";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /**
  * Dim transcript marker for tool calls stripped from the resolved branch

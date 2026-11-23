@@ -171,7 +171,6 @@ import { MEMORY_RECALL_CHANGES_MESSAGE_TYPE } from "../memory-backend/recall-ent
 import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsMagicKeyword, listMagicKeywords } from "../modes/magic-keyword-registry";
-import { theme } from "../modes/theme/theme";
 import { parseTurnBudget } from "../modes/turn-budget";
 import { computeNonMessageTokens } from "../modes/utils/context-usage";
 import { type PlanApprovalDetails, resolveApprovedPlan } from "../plan-mode/approved-plan";
@@ -193,6 +192,8 @@ import sideChannelNoToolsReminder from "../prompts/system/side-channel-no-tools.
 import vibeModeActivePrompt from "../prompts/system/vibe-mode-active.md" with { type: "text" };
 import vibeModeClearedPrompt from "../prompts/system/vibe-mode-cleared.md" with { type: "text" };
 import type { PromptContextMessage } from "../prompts/types";
+import { normalizeLocalScheme, resolveToCwd } from "../render/path-utils";
+import { theme } from "../render/theme/theme";
 import {
 	deobfuscateAssistantContent,
 	deobfuscateSessionContext,
@@ -215,7 +216,6 @@ import { type AskToolDetails, type AskToolInput, recoverAskQuestions } from "../
 import { releaseTabsForOwner } from "../tools/browser/tab-supervisor";
 import type { CheckpointState, CompletedRewindState } from "../tools/checkpoint";
 import { releaseComputerSessionsForOwner } from "../tools/computer/supervisor";
-import { normalizeLocalScheme, resolveToCwd } from "../tools/path-utils";
 import {
 	buildResolveReminderMessage,
 	isPreviewResolutionToolCall,

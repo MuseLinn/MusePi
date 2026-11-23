@@ -17,7 +17,7 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import type { ComposerShape } from "../../config/settings-schema";
-import { theme } from "../theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /**
  * Real status renderer the preview borrows rows from — structurally satisfied

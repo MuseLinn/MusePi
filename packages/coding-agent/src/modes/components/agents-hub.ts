@@ -41,13 +41,13 @@ import {
 import type { Settings } from "../../config/settings";
 import agentCreationArchitectPrompt from "../../prompts/system/agent-creation-architect.md" with { type: "text" };
 import agentCreationUserPrompt from "../../prompts/system/agent-creation-user.md" with { type: "text" };
+import { shortenPath } from "../../render/render-utils";
+import { getEditorTheme, theme } from "../../render/theme/theme";
 import { createAgentSession } from "../../sdk";
 import { refreshAgentDiscovery } from "../../task";
 import { discoverAgents } from "../../task/discovery";
 import { resolveAgentPrewalkDefault } from "../../task/prewalk";
 import type { AgentDefinition, AgentSource } from "../../task/types";
-import { shortenPath } from "../../tools/render-utils";
-import { getEditorTheme, theme } from "../theme/theme";
 import {
 	matchesAppFollowUp,
 	matchesSelectCancel,

@@ -3,7 +3,7 @@ import { ExtensionList } from "@musepi/pi-coding-agent/extensibility/extensions-
 import { applyPluginState } from "@musepi/pi-coding-agent/extensibility/extensions-center/state-manager";
 import type { DashboardState, Extension } from "@musepi/pi-coding-agent/extensibility/extensions-center/types";
 import { setLocale } from "@musepi/pi-coding-agent/i18n/index.js";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme(false);

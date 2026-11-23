@@ -11,10 +11,10 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@musepi/pi-tui";
+import { theme } from "../../render/theme/theme";
 import { convertImageToPng } from "../../utils/image-loading";
 import { attachmentSgr } from "../composer-attachments";
 import { cachedImageDimensions, setCachedImageDimensions } from "../image-references";
-import { theme } from "../theme/theme";
 import type { ComposerChipDescriptor, CustomEditor, TextAttachment } from "./custom-editor";
 
 /** Chip card geometry (mirrors omp2): a 12x4 content area inside a 1-cell rounded border. */

@@ -12,8 +12,8 @@ import {
 } from "@musepi/pi-tui";
 import { settings } from "../../config/settings";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
+import { theme } from "../../render/theme/theme";
 import type { AuthStorage, CredentialOriginKind } from "../../session/auth-storage";
 import { DynamicBorder } from "./dynamic-border";
 

@@ -23,9 +23,9 @@
 import { beforeAll, describe, expect, mock, test } from "bun:test";
 import type { ImageContent } from "@musepi/pi-ai";
 import { InputController } from "@musepi/pi-coding-agent/modes/controllers/input-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { CompactionQueuedMessage, InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { RestoredQueuedMessage } from "@musepi/pi-coding-agent/session/agent-session";
 
 beforeAll(() => {

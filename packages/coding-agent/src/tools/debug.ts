@@ -38,14 +38,8 @@ import {
 	selectAttachAdapter,
 	selectLaunchAdapter,
 } from "../dap";
-import type { Theme } from "../modes/theme/theme";
 import debugDescription from "../prompts/tools/debug.md" with { type: "text" };
-import { renderStatusLine } from "../tui";
-import { CachedOutputBlock, markFramedBlockComponent } from "../tui/output-block";
-import type { ToolSession } from ".";
-import { truncateForPrompt } from "./approval";
-import type { OutputMeta } from "./output-meta";
-import { formatPathRelativeToCwd, resolveToCwd } from "./path-utils";
+import { formatPathRelativeToCwd, resolveToCwd } from "../render/path-utils";
 import {
 	formatExpandHint,
 	formatStatusIcon,
@@ -54,7 +48,13 @@ import {
 	shortenPath,
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
-} from "./render-utils";
+} from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
+import { renderStatusLine } from "../tui";
+import { CachedOutputBlock, markFramedBlockComponent } from "../tui/output-block";
+import type { ToolSession } from ".";
+import { truncateForPrompt } from "./approval";
+import type { OutputMeta } from "./output-meta";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { clampTimeout } from "./tool-timeouts";

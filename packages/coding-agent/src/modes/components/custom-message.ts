@@ -1,7 +1,7 @@
 import type { Component } from "@musepi/pi-tui";
 import { Box, Container } from "@musepi/pi-tui";
 import type { MessageRenderer } from "../../extensibility/extensions/types";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 import { type CustomMessage, LIVE_DELEGATION_MESSAGE_TYPE } from "../../session/messages";
 import { renderFramedMessage } from "./message-frame";
 

@@ -11,7 +11,7 @@
 import type { TextContent } from "@musepi/pi-ai";
 import type { Box, Component } from "@musepi/pi-tui";
 import { Markdown, Spacer, Text } from "@musepi/pi-tui";
-import { getMarkdownTheme, type Theme, type ThemeColor, theme } from "../../modes/theme/theme";
+import { getMarkdownTheme, type Theme, type ThemeColor, theme } from "../../render/theme/theme";
 
 /** Message shape consumed by the shared frame. */
 export interface FramedMessage {

@@ -5,7 +5,7 @@
 import { Args, Command, Flags, renderCommandHelp } from "@musepi/pi-utils/cli";
 import { type AgentsAction, type AgentsCommandArgs, runAgentsCommand } from "../cli/agents-cli";
 import { agentsHelp as commandHelp } from "../cli/command-help";
-import { initTheme } from "../modes/theme/theme";
+import { initTheme } from "../render/theme/theme";
 
 const ACTIONS: AgentsAction[] = ["unpack"];
 

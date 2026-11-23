@@ -43,7 +43,7 @@ import type {
 } from "../../config/settings-schema";
 import { SETTING_TABS, TAB_METADATA } from "../../config/settings-schema";
 import { t } from "../../i18n/index.js";
-import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
+import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme, theme } from "../../render/theme/theme";
 import { AUTO_THINKING, type ConfiguredThinkingLevel } from "../../thinking";
 import { getTabBarTheme } from "../shared";
 import { type ComposerPreviewStatusSource, ComposerShapePreview } from "./composer-shape-preview";

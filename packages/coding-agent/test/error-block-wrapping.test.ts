@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { ErrorBannerComponent } from "../src/modes/components/error-banner";
 import { formatErrorBlock } from "../src/modes/components/error-block";
-import { initTheme } from "../src/modes/theme/theme";
+import { initTheme } from "../src/render/theme/theme";
 
 beforeAll(async () => {
 	// The banner and the style helpers read the active theme; without this the

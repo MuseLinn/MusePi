@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { Settings } from "../../../../src/config/settings";
 import { StatusLineComponent } from "../../../../src/modes/components/status-line/component";
-import { getThemeByName, setThemeInstance } from "../../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "../../../../src/render/theme/theme";
 import type { AgentSession } from "../../../../src/session/agent-session";
 
 function makeSessionWithLastMessage(

@@ -1,5 +1,6 @@
 // UI Components barrel export
 
+export * from "../../render/visual-truncate";
 export * from "./advisor-config";
 export * from "./assistant-message";
 export * from "./bash-execution";
@@ -38,5 +39,4 @@ export * from "./tree-selector";
 export * from "./ttsr-notification";
 export * from "./user-message";
 export * from "./user-message-selector";
-export * from "./visual-truncate";
 export * from "./welcome";

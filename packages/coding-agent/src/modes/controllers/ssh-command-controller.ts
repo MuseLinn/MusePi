@@ -7,9 +7,9 @@ import { getProjectDir, getSSHConfigPath } from "@musepi/pi-utils";
 import { reset as resetCapabilities } from "../../capability";
 import { type SSHHost, sshCapability } from "../../capability/ssh";
 import { loadCapability } from "../../discovery";
+import { theme } from "../../render/theme/theme";
 import { addSSHHost, readSSHConfigFile, removeSSHHost, type SSHHostConfig } from "../../ssh/config-writer";
 import { parseCommandArgs } from "../shared";
-import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
 import {
 	groupBySource,

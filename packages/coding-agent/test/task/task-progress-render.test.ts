@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { RenderResultOptions } from "@musepi/pi-agent-core";
 import type { SettingPath, SettingValue } from "@musepi/pi-coding-agent/config/settings";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { taskToolRenderer } from "@musepi/pi-coding-agent/task/renderer";
 import type { AgentProgress, SingleResult, TaskToolDetails } from "@musepi/pi-coding-agent/task/types";
 

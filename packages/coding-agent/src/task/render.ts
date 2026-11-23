@@ -10,9 +10,7 @@ import { Container, Markdown, Text } from "@musepi/pi-tui";
 import { formatNumber, sanitizeText } from "@musepi/pi-utils";
 import { settings } from "../config/settings";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { formatContextUsage } from "../modes/components/status-line/context-thresholds";
-import { getMarkdownTheme, type Theme } from "../modes/theme/theme";
-import { stripGeneratedOutputNotice, stripRawOutputArtifactNotice } from "../tools/output-meta";
+import { formatContextUsage } from "../render/context-thresholds";
 import {
 	capPreviewLines,
 	formatBadge,
@@ -25,7 +23,9 @@ import {
 	replaceTabs,
 	type ToolUIStatus,
 	truncateToWidth,
-} from "../tools/render-utils";
+} from "../render/render-utils";
+import { getMarkdownTheme, type Theme } from "../render/theme/theme";
+import { stripGeneratedOutputNotice, stripRawOutputArtifactNotice } from "../tools/output-meta";
 import {
 	type FindingDetails,
 	type FindingPriority,

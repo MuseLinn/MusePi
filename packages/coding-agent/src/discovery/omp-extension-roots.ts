@@ -22,7 +22,7 @@ import { getAgentDir, getProjectAgentDir, isEnoent, logger, tryParseJson } from 
 import { readDirEntries, readFile } from "../capability/fs";
 import type { LoadContext } from "../capability/types";
 import { getEnabledPlugins } from "../extensibility/plugins/runtime/loader";
-import { expandTilde } from "../tools/path-utils";
+import { expandTilde } from "../render/path-utils";
 import { listClaudePluginRoots } from "./helpers";
 
 /** A resolved extension package directory wired into the discovery surfaces. */

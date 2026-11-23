@@ -5,13 +5,13 @@ import type { Tool as AiTool, Model } from "@musepi/pi-ai";
 import { toolWireSchema } from "@musepi/pi-ai/utils/schema";
 import { formatNumber } from "@musepi/pi-utils";
 import type { Skill } from "../../extensibility/skills";
+import type { theme as Theme } from "../../render/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { resolveSpeculationMethod } from "../../session/compaction-methods";
 import { resolveModelCompactionSettings } from "../../session/model-compaction-threshold";
 import { estimateInlineSavings, type SnapcompactSavingsEstimate } from "../../session/snapcompact-inline";
 import { resolveSpeculationLeadTokens } from "../../session/speculation-lead";
 import type { Tool } from "../../tools";
-import type { theme as Theme } from "../theme/theme";
 
 const GRID_COLS = 20;
 const GRID_ROWS = 10;

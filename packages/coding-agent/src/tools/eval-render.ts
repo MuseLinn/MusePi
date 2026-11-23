@@ -15,9 +15,20 @@ import { formatNumber } from "@musepi/pi-utils";
 import { settings } from "../config/settings";
 import type { EvalCellResult, EvalLanguage, EvalStatusEvent, EvalToolDetails } from "../eval/types";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { formatContextUsage } from "../modes/components/status-line/context-thresholds";
-import { truncateToVisualLines } from "../modes/components/visual-truncate";
-import { getMarkdownTheme, type Theme } from "../modes/theme/theme";
+import { formatContextUsage } from "../render/context-thresholds";
+import {
+	formatBadge,
+	formatDuration,
+	formatStatusIcon,
+	formatTitle,
+	previewWindowRows,
+	replaceTabs,
+	shortenPath,
+	truncateToWidth,
+	wrapBrackets,
+} from "../render/render-utils";
+import { getMarkdownTheme, type Theme } from "../render/theme/theme";
+import { truncateToVisualLines } from "../render/visual-truncate";
 import { markFramedBlockComponent, outputBlockContentWidth, renderCodeCell } from "../tui";
 import { formatEvalCodeForDisplay } from "./eval-format";
 import {
@@ -30,17 +41,6 @@ import {
 	renderJsonTreeLines,
 } from "./json-tree";
 import { formatStyledTruncationWarning, stripOutputNotice } from "./output-meta";
-import {
-	formatBadge,
-	formatDuration,
-	formatStatusIcon,
-	formatTitle,
-	previewWindowRows,
-	replaceTabs,
-	shortenPath,
-	truncateToWidth,
-	wrapBrackets,
-} from "./render-utils";
 export const EVAL_DEFAULT_PREVIEW_LINES = 10;
 
 function languageForHighlighter(language: EvalLanguage | undefined): "python" | "javascript" | "ruby" | "julia" {

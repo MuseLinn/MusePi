@@ -15,8 +15,8 @@ import {
 	PlanReviewOverlay,
 } from "@musepi/pi-coding-agent/modes/components/plan-review-overlay";
 import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { SubmittedUserInput } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@musepi/pi-coding-agent/session/messages";

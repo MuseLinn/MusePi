@@ -8,7 +8,7 @@ import { APP_NAME, getProjectDir, getPythonEnvDir } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import { Settings, settings } from "../config/settings";
 import { checkPythonKernelAvailability } from "../eval/py/kernel";
-import { theme } from "../modes/theme/theme";
+import { theme } from "../render/theme/theme";
 import { downloadSttModel, isSttModelCached } from "../stt/downloader";
 import { isSttModelKey, STT_MODEL_OPTIONS } from "../stt/models";
 import { downloadTtsModel, isTtsLocalModelKey, isTtsModelCached, TTS_LOCAL_MODEL_OPTIONS } from "../tts";

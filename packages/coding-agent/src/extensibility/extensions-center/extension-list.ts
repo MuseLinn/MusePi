@@ -15,8 +15,8 @@ import {
 	renderScrollableList,
 	searchableChar,
 } from "../../modes/components/selector-helpers";
-import { theme } from "../../modes/theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
+import { theme } from "../../render/theme/theme";
 import { applyFilter } from "./state-manager";
 import type { Extension, ExtensionKind, ExtensionState } from "./types";
 

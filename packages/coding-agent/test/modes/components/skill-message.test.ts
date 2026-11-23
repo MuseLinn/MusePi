@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { Settings } from "../../../src/config/settings";
 import { setLocale } from "../../../src/i18n/index.ts";
 import { SkillMessageComponent } from "../../../src/modes/components/skill-message";
-import { getThemeByName, setThemeInstance, type Theme } from "../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "../../../src/render/theme/theme";
 import type { CustomMessage, SkillPromptDetails } from "../../../src/session/messages";
 
 beforeAll(() => {

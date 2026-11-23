@@ -3,8 +3,8 @@ import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import { Text } from "@musepi/pi-tui";
 import type { ToolDefinition } from "../../extensibility/extensions";
-import type { Theme } from "../../modes/theme/theme";
-import { replaceTabs, truncateToWidth } from "../../tools/render-utils";
+import { replaceTabs, truncateToWidth } from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
 import * as git from "../../utils/git";
 import { computeRunModifiedPaths, getCurrentAutoresearchBranch, parseWorkDirDirtyPaths } from "../git";
 import {

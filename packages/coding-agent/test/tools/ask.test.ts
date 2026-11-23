@@ -8,7 +8,7 @@ import type {
 	ExtensionAskDialogResult,
 	ExtensionUISelectItem,
 } from "@musepi/pi-coding-agent/extensibility/extensions";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { AskTool, askToolRenderer } from "@musepi/pi-coding-agent/tools/ask";
 import { ToolAbortError } from "@musepi/pi-coding-agent/tools/tool-errors";

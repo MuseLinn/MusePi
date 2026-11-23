@@ -9,8 +9,6 @@ import { sanitizeText } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { FileDiagnosticsResult } from "../lsp";
 import { renderDiff as renderDiffColored } from "../modes/components/diff";
-import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
-import type { OutputMeta } from "../tools/output-meta";
 import {
 	cachedRenderedString,
 	createRenderedStringCache,
@@ -27,7 +25,9 @@ import {
 	replaceTabs,
 	shortenPath,
 	truncateDiffByHunk,
-} from "../tools/render-utils";
+} from "../render/render-utils";
+import { getLanguageFromPath, type Theme } from "../render/theme/theme";
+import type { OutputMeta } from "../tools/output-meta";
 import {
 	fileHyperlink,
 	framedBlock,

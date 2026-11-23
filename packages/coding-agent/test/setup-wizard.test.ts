@@ -16,8 +16,8 @@ import { providersSetupScene } from "@musepi/pi-coding-agent/modes/setup-wizard/
 import { themeSetupScene } from "@musepi/pi-coding-agent/modes/setup-wizard/scenes/theme";
 import { WebSearchTab } from "@musepi/pi-coding-agent/modes/setup-wizard/scenes/web-search";
 import { SetupWizardComponent } from "@musepi/pi-coding-agent/modes/setup-wizard/wizard-overlay";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { SEARCH_PROVIDER_OPTIONS, SEARCH_PROVIDER_ORDER } from "@musepi/pi-coding-agent/web/search/types";
 
 function fakeContextWithConfiguredModel(): InteractiveModeContext {

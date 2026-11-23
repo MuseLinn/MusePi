@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { getThemeByName, highlightCode, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, highlightCode, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 
 const unifiedDiffChunks = [
 	[

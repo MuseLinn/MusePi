@@ -13,7 +13,7 @@ import { buildModel } from "@musepi/pi-catalog/build";
 import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { AgentsHubComponent } from "@musepi/pi-coding-agent/modes/components/agents-hub";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import * as discovery from "@musepi/pi-coding-agent/task/discovery";
 import type { TUI } from "@musepi/pi-tui";
 import { removeWithRetries } from "@musepi/pi-utils";

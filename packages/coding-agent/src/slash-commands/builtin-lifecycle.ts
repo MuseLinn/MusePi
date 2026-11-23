@@ -6,12 +6,12 @@ import { applyProviderGlobalsFromSettings } from "../config/provider-globals";
 import { t } from "../i18n/index.js";
 import { memoryStatsUnavailableMessage, resolveMemoryBackend } from "../memory-backend";
 import btwUserPrompt from "../prompts/system/btw-user.md" with { type: "text" };
+import { resolveToCwd } from "../render/path-utils";
 import type { FreshSessionResult } from "../session/agent-session";
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
 import { toggleSessionPin } from "../session/session-pins";
 import { formatShakeSummary, type ShakeMode } from "../session/shake-types";
-import { resolveToCwd } from "../tools/path-utils";
 import { commandConsumed, errorMessage, usage } from "./helpers/parse";
 import { handleSshAcp } from "./helpers/ssh";
 import type {

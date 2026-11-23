@@ -6,7 +6,7 @@ import {
 	CodexResetFireworksController,
 	detectCodexResetFireworks,
 } from "../../../src/modes/components/codex-reset-fireworks";
-import { getThemeByName, setThemeInstance, type Theme, theme } from "../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme, theme } from "../../../src/render/theme/theme";
 
 type CodexResetFireworksHost = ConstructorParameters<typeof CodexResetFireworksController>[0];
 

@@ -9,7 +9,7 @@ import type { ModelRegistry, ProviderDiscoveryState } from "@musepi/pi-coding-ag
 import { ModelRegistry as ModelRegistryImpl } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ModelHubComponent } from "@musepi/pi-coding-agent/modes/components/model-hub";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import type { TUI } from "@musepi/pi-tui";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";

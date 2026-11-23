@@ -4,12 +4,12 @@ import { type Component, padding, truncateToWidth, visibleWidth } from "@musepi/
 import { formatNumber, getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../config/settings";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
+import { formatContextUsage, getContextUsageLevel, getContextUsageThemeColor } from "../../render/context-thresholds";
+import { shortenPath } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
-import { shortenPath } from "../../tools/render-utils";
 import * as git from "../../utils/git";
 import { sanitizeStatusText } from "../shared";
-import { formatContextUsage, getContextUsageLevel, getContextUsageThemeColor } from "./status-line/context-thresholds";
 
 /**
  * Footer component that shows pwd, token stats, and context usage

@@ -14,7 +14,6 @@ import {
 } from "@musepi/pi-tui";
 import type { TreeFilterMode } from "../../config/settings-schema";
 import { t } from "../../i18n/index.js";
-import { type ThemeColor, theme } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
 	matchesSelectDown,
@@ -22,10 +21,11 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
+import { toPathList } from "../../render/path-utils";
+import { shortenPath } from "../../render/render-utils";
+import { type ThemeColor, theme } from "../../render/theme/theme";
 import type { SessionEntry, SessionTreeNode } from "../../session/session-entries";
 import { isHiddenByDefaultEntry } from "../../session/transcript-records";
-import { toPathList } from "../../tools/path-utils";
-import { shortenPath } from "../../tools/render-utils";
 import { canonicalizeMessage } from "../../utils/thinking-display";
 import { resolveAssistantErrorPresentation } from "../utils/transcript-render-helpers";
 import { DynamicBorder } from "./dynamic-border";

@@ -2,7 +2,7 @@
  * Shared helpers for tool-rendered UI components.
  */
 import { padding, visibleWidth } from "@musepi/pi-tui";
-import type { Theme, ThemeBg } from "../modes/theme/theme";
+import type { Theme, ThemeBg } from "../render/theme/theme";
 import type { State } from "./types";
 
 export { Ellipsis, truncateToWidth } from "@musepi/pi-tui";

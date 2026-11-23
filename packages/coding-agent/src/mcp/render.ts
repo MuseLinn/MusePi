@@ -7,7 +7,8 @@
 import { type Component, Markdown } from "@musepi/pi-tui";
 import { settings } from "../config/settings";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { getMarkdownTheme, type Theme } from "../modes/theme/theme";
+import { formatExpandHint, truncateToWidth } from "../render/render-utils";
+import { getMarkdownTheme, type Theme } from "../render/theme/theme";
 import {
 	formatArgsInline,
 	JSON_TREE_MAX_DEPTH_COLLAPSED,
@@ -19,7 +20,6 @@ import {
 	renderJsonTreeLines,
 } from "../tools/json-tree";
 import { formatStyledTruncationWarning, stripOutputNotice } from "../tools/output-meta";
-import { formatExpandHint, truncateToWidth } from "../tools/render-utils";
 import { renderStatusLine, WidthAwareText } from "../tui";
 import type { MCPToolDetails } from "./tool-bridge";
 

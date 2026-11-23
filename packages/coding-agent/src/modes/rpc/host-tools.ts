@@ -2,7 +2,7 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback, ToolLoadMode 
 import type { Static, TSchema } from "@musepi/pi-ai";
 import { Snowflake } from "@musepi/pi-utils";
 import { applyToolProxy } from "../../extensibility/tool-proxy";
-import type { Theme } from "../../modes/theme/theme";
+import type { Theme } from "../../render/theme/theme";
 import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import type {
 	RpcHostToolCallRequest,

@@ -1,5 +1,5 @@
-import type { LineRange } from "./path-utils";
-import { parseLineRanges } from "./path-utils";
+import type { LineRange } from "../render/path-utils";
+import { parseLineRanges } from "../render/path-utils";
 import { ToolError } from "./tool-errors";
 /** Parsed representation of a path-embedded selector. */
 export type ParsedSelector =

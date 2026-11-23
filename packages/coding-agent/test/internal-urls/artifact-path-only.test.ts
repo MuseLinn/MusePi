@@ -9,7 +9,7 @@ import {
 	resetRegisteredArtifactDirsForTests,
 } from "@musepi/pi-coding-agent/internal-urls/registry-helpers";
 import { InternalUrlRouter } from "@musepi/pi-coding-agent/internal-urls/router";
-import { resolveToolSearchScope } from "@musepi/pi-coding-agent/tools/path-utils";
+import { resolveToolSearchScope } from "../../src/render/path-utils";
 
 /**
  * Path-only callers (search/grep, bash URL expansion) only need the artifact's

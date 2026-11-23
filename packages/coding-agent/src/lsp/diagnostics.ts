@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import path from "node:path";
 import { logger } from "@musepi/pi-utils";
-import { formatPathRelativeToCwd } from "../tools/path-utils";
+import { formatPathRelativeToCwd } from "../render/path-utils";
 import { throwIfAborted } from "../tools/tool-errors";
 import { getOrCreateClient, sendRequest, supportsDocumentDiagnostics, waitForProjectLoaded } from "./client";
 import { getLinterClient } from "./clients";

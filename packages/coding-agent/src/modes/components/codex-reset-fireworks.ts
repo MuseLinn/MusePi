@@ -8,7 +8,7 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { type ThemeColor, theme } from "../theme/theme";
+import { type ThemeColor, theme } from "../../render/theme/theme";
 
 const FRAME_INTERVAL_MS = 85;
 const FRAME_COUNT = 34;

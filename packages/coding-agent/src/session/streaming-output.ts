@@ -1,6 +1,6 @@
 import type { AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import { sanitizeText } from "@musepi/pi-utils";
-import { formatBytes } from "../tools/render-utils";
+import { formatBytes } from "../render/render-utils";
 import { sanitizeWithOptionalSixelPassthrough } from "../utils/sixel";
 
 // =============================================================================

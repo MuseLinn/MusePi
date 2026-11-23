@@ -7,7 +7,7 @@ import type { StatusLineSegmentId } from "@musepi/pi-coding-agent/config/setting
 import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
 import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
 import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getSessionAccentAnsi, getSessionAccentHex } from "@musepi/pi-coding-agent/utils/session-color";
 import { visibleWidth } from "@musepi/pi-tui";
 import { getProjectDir, setProjectDir } from "@musepi/pi-utils";

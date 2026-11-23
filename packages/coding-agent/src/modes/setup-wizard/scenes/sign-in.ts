@@ -11,9 +11,9 @@ import {
 } from "@musepi/pi-tui";
 import { getAgentDbPath } from "@musepi/pi-utils";
 import { t } from "../../../i18n/index.js";
+import { theme } from "../../../render/theme/theme";
 import { copyToClipboard } from "../../../utils/clipboard";
 import { OAuthSelectorComponent } from "../../components/oauth-selector";
-import { theme } from "../../theme/theme";
 import type { SetupSceneHost, SetupTab } from "./types";
 
 function loginUrlLink(url: string): string {

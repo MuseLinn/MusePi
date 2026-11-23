@@ -13,8 +13,8 @@ import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { AgentHubRemote } from "@musepi/pi-coding-agent/modes/components/agent-hub";
 import { AgentTranscriptViewer } from "@musepi/pi-coding-agent/modes/components/agent-transcript-viewer";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { CURRENT_SESSION_VERSION } from "@musepi/pi-coding-agent/session/session-entries";
 import {
 	getKittyGraphics,

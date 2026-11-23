@@ -4,7 +4,7 @@ import {
 	createHandoffSummaryMessageComponent,
 	HandoffSummaryMessageComponent,
 } from "@musepi/pi-coding-agent/modes/components/compaction-summary-message";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { CustomMessage } from "@musepi/pi-coding-agent/session/messages";
 
 beforeAll(async () => {

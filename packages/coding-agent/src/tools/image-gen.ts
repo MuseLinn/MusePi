@@ -27,6 +27,7 @@ import { settings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { resolveXAIHttpCredentials } from "../lib/xai-http";
 import imageGenDescription from "../prompts/tools/image-gen.md" with { type: "text" };
+import { resolveReadPath } from "../render/path-utils";
 import {
 	AUTO_IMAGE_PROVIDER_ORDER,
 	getExtensionMediaProvider,
@@ -34,7 +35,6 @@ import {
 	type ImageProvider,
 	isImageProviderId,
 } from "./image-providers";
-import { resolveReadPath } from "./path-utils";
 
 const DEFAULT_MODEL = "gemini-3-pro-image-preview";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-3-pro-image-preview";

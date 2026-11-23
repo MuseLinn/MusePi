@@ -5,7 +5,7 @@
 
 import { Container, type Loader, Text, type TUI } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
-import { highlightCode, theme } from "../../modes/theme/theme";
+import { highlightCode, theme } from "../../render/theme/theme";
 import type { TruncationMeta } from "../../tools/output-meta";
 import {
 	buildExecutionFrame,

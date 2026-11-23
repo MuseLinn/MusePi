@@ -39,10 +39,10 @@ import type { ModelRegistry } from "../../config/model-registry";
 import { formatModelSelectorValue } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
 import { t } from "../../i18n/index.js";
+import { getSelectListTheme, theme } from "../../render/theme/theme";
 import type { PerAdvisorStat } from "../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../session/auth-storage";
 import { formatCompactQuota } from "../controllers/command-controller";
-import { getSelectListTheme, theme } from "../theme/theme";
 import { HookEditorComponent } from "./hook-editor";
 import { buildBrowserItems, ModelBrowser, sortModelItems } from "./model-browser";
 import {

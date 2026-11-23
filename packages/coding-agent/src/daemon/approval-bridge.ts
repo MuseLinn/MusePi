@@ -19,7 +19,7 @@ import type {
 	ExtensionAskDialogResult,
 	ExtensionUIContext,
 } from "../extensibility/extensions/types";
-import type { Theme } from "../modes/theme/theme";
+import type { Theme } from "../render/theme/theme";
 import type { AgentSecretAnswer, AgentSecretRequest, AgentSecretUIContext } from "../secrets/agent-store";
 
 export interface PendingApproval {

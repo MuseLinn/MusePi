@@ -14,8 +14,8 @@ import { EDIT_MODE_STRATEGIES } from "@musepi/pi-coding-agent/edit";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
 import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
 import { STREAMING_REVEAL_FRAME_MS } from "@musepi/pi-coding-agent/modes/controllers/streaming-reveal";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 
 beforeAll(async () => {

@@ -21,13 +21,13 @@ import {
 	wrapTextWithAnsi,
 } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getMarkdownTheme, type ThemeColor, theme } from "../../modes/theme/theme";
 import {
 	matchesAppExternalEditor,
 	matchesSelectCancel,
 	matchesSelectDown,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
+import { getMarkdownTheme, type ThemeColor, theme } from "../../render/theme/theme";
 import { CountdownTimer } from "./countdown-timer";
 import { DynamicBorder } from "./dynamic-border";
 import { renderSegmentTrack } from "./segment-track";

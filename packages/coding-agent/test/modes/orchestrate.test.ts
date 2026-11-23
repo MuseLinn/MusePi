@@ -4,8 +4,8 @@ import {
 	highlightOrchestrate,
 	renderOrchestrateNotice,
 } from "@musepi/pi-coding-agent/modes/orchestrate";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { containsUltrathink, highlightUltrathink } from "@musepi/pi-coding-agent/modes/ultrathink";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { clearBundledCommandsCache, loadBundledCommands } from "@musepi/pi-coding-agent/task/commands";
 
 beforeAll(() => {

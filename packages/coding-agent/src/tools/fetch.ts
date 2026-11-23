@@ -11,7 +11,9 @@ import { type ArchiveFormat, listArchiveRoot, sniffArchiveFormat } from "@musepi
 import type { Settings } from "../config/settings";
 import { readEditableNotebookText } from "../edit/notebook";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { type Theme, theme } from "../modes/theme/theme";
+import { isReadableUrlPath, type LineRange, parseLineRanges } from "../render/path-utils";
+import { formatBytes, formatExpandHint, getDomain, replaceTabs } from "../render/render-utils";
+import { type Theme, theme } from "../render/theme/theme";
 import type { ToolSession } from "../sdk";
 import type { AgentStorage } from "../session/agent-storage";
 import { DEFAULT_MAX_BYTES, truncateHead } from "../session/streaming-output";
@@ -27,8 +29,6 @@ import { finalizeOutput, loadPage, looksLikeHtml, MAX_BYTES, MAX_OUTPUT_CHARS } 
 import { convertWithMarkit, fetchBinary } from "../web/scrapers/utils";
 import { applyListLimit } from "./list-limit";
 import { formatStyledArtifactReference, type OutputMeta } from "./output-meta";
-import { isReadableUrlPath, type LineRange, parseLineRanges } from "./path-utils";
-import { formatBytes, formatExpandHint, getDomain, replaceTabs } from "./render-utils";
 import { listTables, looksLikeSqlite, openSqliteReadConnection, renderTableList } from "./sqlite-reader";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";

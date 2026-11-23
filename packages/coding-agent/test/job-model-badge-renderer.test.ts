@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AsyncJobManager } from "../src/async/job-manager";
 import { Settings, settings } from "../src/config/settings";
-import { getThemeByName, setThemeInstance, type Theme } from "../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "../src/render/theme/theme";
 import type { ToolSession } from "../src/tools";
 import { jobsRenderResult, snapshotJobs } from "../src/tools/hub/jobs";
 import type { CoordinationDetails } from "../src/tools/hub/types";

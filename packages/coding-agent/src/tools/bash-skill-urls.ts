@@ -5,7 +5,7 @@ import type { Skill } from "../extensibility/skills";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import { validateRelativePath } from "../internal-urls/skill-protocol";
 import type { InternalResource, ResolveContext } from "../internal-urls/types";
-import { normalizeLocalScheme } from "./path-utils";
+import { normalizeLocalScheme } from "../render/path-utils";
 import { ToolError } from "./tool-errors";
 
 /** Regex to find skill:// tokens in command text. */

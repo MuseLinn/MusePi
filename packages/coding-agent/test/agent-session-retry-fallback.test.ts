@@ -22,7 +22,7 @@ import { parseModelPattern, parseModelString } from "@musepi/pi-coding-agent/con
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
 import { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import type { ServingModel } from "@musepi/pi-coding-agent/session/retry-fallback-chains";

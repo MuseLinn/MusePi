@@ -1,7 +1,7 @@
 import { type Component, Container, Markdown, Spacer, Text, type TUI } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { replaceTabs } from "../../tools/render-utils";
-import { getMarkdownTheme, theme } from "../theme/theme";
+import { replaceTabs } from "../../render/render-utils";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
 type BtwPanelState = "running" | "complete" | "branching" | "aborted" | "error";

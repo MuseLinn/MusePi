@@ -45,7 +45,7 @@ import {
 	resolveSymbolColumn,
 	uriToFile,
 } from "@musepi/pi-coding-agent/lsp/utils";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { ToolAbortError } from "@musepi/pi-coding-agent/tools/tool-errors";
 import { clampTimeout } from "@musepi/pi-coding-agent/tools/tool-timeouts";

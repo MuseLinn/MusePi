@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import { writeToolRenderer } from "@musepi/pi-coding-agent/tools/write";
 
 const stripAnsi = (s: string): string => s.replace(/\[[0-9;]*m/g, "");

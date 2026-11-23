@@ -421,7 +421,7 @@ export class SettingsService implements DaemonService {
 				// theme registry is fs-backed (builtins + ~/.musepi/themes),
 				// so it enumerates without a terminal.
 				if ((ui as { options?: unknown }).options === "runtime") {
-					const { getAvailableThemes } = await import("../../modes/theme/loader");
+					const { getAvailableThemes } = await import("../../render/theme/loader");
 					item.runtimeOptions = await getAvailableThemes();
 				}
 				items.push(item);

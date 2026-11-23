@@ -21,9 +21,9 @@ import {
 import { getSessionsDir } from "@musepi/pi-utils";
 import { DynamicBorder } from "../modes/components/dynamic-border";
 import { TranscriptBlock } from "../modes/components/transcript-container";
-import { getSelectListTheme, getSymbolTheme, theme } from "../modes/theme/theme";
 import type { InteractiveModeContext } from "../modes/types";
-import { formatBytes } from "../tools/render-utils";
+import { formatBytes } from "../render/render-utils";
+import { getSelectListTheme, getSymbolTheme, theme } from "../render/theme/theme";
 import { openPath } from "../utils/open";
 import { DebugLogViewerComponent } from "./log-viewer";
 import { generateHeapSnapshotData, type ProfilerSession, startCpuProfile } from "./profiler";

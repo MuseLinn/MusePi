@@ -1,7 +1,7 @@
 import { diffWords } from "@musepi/pi-natives";
 import { DEFAULT_TAB_WIDTH, sanitizeText } from "@musepi/pi-utils";
-import { theme as activeTheme, getLanguageFromPath, highlightCode, type Theme } from "../../modes/theme/theme";
-import { type CodeFrameMarker, formatCodeFrameLine, replaceTabs } from "../../tools/render-utils";
+import { type CodeFrameMarker, formatCodeFrameLine, replaceTabs } from "../../render/render-utils";
+import { theme as activeTheme, getLanguageFromPath, highlightCode, type Theme } from "../../render/theme/theme";
 
 /** SGR dim on / normal intensity — additive, preserves fg/bg colors. */
 const DIM = "\x1b[2m";

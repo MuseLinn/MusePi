@@ -36,11 +36,13 @@ import { DynamicBorder } from "../../modes/components/dynamic-border";
 import { EvalExecutionComponent } from "../../modes/components/eval-execution";
 import { MoveOverlay, type MoveOverlayResult } from "../../modes/components/move-overlay";
 import { TranscriptBlock } from "../../modes/components/transcript-container";
-import { getMarkdownTheme, getSymbolTheme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext } from "../../modes/types";
 import { computeContextBreakdown, renderContextUsage } from "../../modes/utils/context-usage";
 import { buildHotkeysMarkdown } from "../../modes/utils/hotkeys-markdown";
 import { buildToolsMarkdown } from "../../modes/utils/tools-markdown";
+import { resolveToCwd, stripOuterDoubleQuotes } from "../../render/path-utils";
+import { replaceTabs, truncateToWidth } from "../../render/render-utils";
+import { getMarkdownTheme, getSymbolTheme, theme } from "../../render/theme/theme";
 import type { AsyncJobSnapshotItem } from "../../session/agent-session";
 import type { AuthStorage, OAuthAccountIdentity } from "../../session/auth-storage";
 import type { CompactMode } from "../../session/compact-modes";
@@ -48,8 +50,6 @@ import type { NewSessionOptions } from "../../session/session-entries";
 import { formatShakeSummary, type ShakeMode, type ShakeResult } from "../../session/shake-types";
 import { formatActiveAccountLabel, limitMatchesActiveAccount } from "../../slash-commands/helpers/active-oauth-account";
 import { outputMeta } from "../../tools/output-meta";
-import { resolveToCwd, stripOuterDoubleQuotes } from "../../tools/path-utils";
-import { replaceTabs, truncateToWidth } from "../../tools/render-utils";
 import {
 	getChangelogPath,
 	parseChangelog,

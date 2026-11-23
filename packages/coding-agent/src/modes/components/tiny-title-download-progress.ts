@@ -1,9 +1,9 @@
 import { type Component, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { formatBytes } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import { getTinyTitleModelSpec, type TinyTitleLocalModelKey } from "../../tiny/models";
 import type { TinyTitleProgressEvent } from "../../tiny/title-protocol";
-import { theme } from "../theme/theme";
 
 const DEFAULT_BAR_WIDTH = 24;
 

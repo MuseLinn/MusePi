@@ -25,6 +25,7 @@ import { MCPManager } from "../mcp/manager";
 import vibeTurnResultTemplate from "../prompts/tools/vibe-turn-result.md" with { type: "text" };
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { formatDuration } from "../render/render-utils";
 import { SessionManager, SessionPersistenceIndeterminateError } from "../session/session-manager";
 import { getBundledAgent } from "../task/agents";
 import {
@@ -37,7 +38,6 @@ import { generateTaskName } from "../task/name-generator";
 import { AgentOutputManager } from "../task/output-manager";
 import { type AgentDefinition, type AgentProgress, oneLineLabel, type SingleResult } from "../task/types";
 import type { ToolSession } from "../tools";
-import { formatDuration } from "../tools/render-utils";
 import { ToolError } from "../tools/tool-errors";
 import { calculateTokensPerSecond } from "../utils/token-rate";
 

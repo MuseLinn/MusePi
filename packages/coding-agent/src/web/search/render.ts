@@ -7,7 +7,6 @@
 import type { Component } from "@musepi/pi-tui";
 import { Markdown, Text, wrapTextWithAnsi } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
-import { getMarkdownTheme, type Theme } from "../../modes/theme/theme";
 import {
 	formatAge,
 	formatCount,
@@ -18,7 +17,8 @@ import {
 	PREVIEW_LIMITS,
 	replaceTabs,
 	truncateToWidth,
-} from "../../tools/render-utils";
+} from "../../render/render-utils";
+import { getMarkdownTheme, type Theme } from "../../render/theme/theme";
 import { renderStatusLine, renderTreeList, urlHyperlink } from "../../tui";
 import { CachedOutputBlock, markFramedBlockComponent, outputBlockContentWidth } from "../../tui/output-block";
 import { getSearchProviderLabel } from "./provider";

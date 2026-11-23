@@ -5,7 +5,7 @@ import { Settings, settings } from "../../../src/config/settings";
 import { renderMCPResult } from "../../../src/mcp/render";
 import type { MCPToolDetails } from "../../../src/mcp/tool-bridge";
 import { ToolExecutionComponent, type ToolExecutionUi } from "../../../src/modes/components/tool-execution";
-import { getThemeByName, setThemeInstance, theme } from "../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, theme } from "../../../src/render/theme/theme";
 
 class BoldTypeErrorComponent implements Component {
 	render(_width: number): readonly string[] {

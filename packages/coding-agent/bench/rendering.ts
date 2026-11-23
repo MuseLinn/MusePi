@@ -6,7 +6,7 @@ import { Editor } from "@musepi/pi-tui";
 import { Settings } from "../src/config/settings";
 import { AssistantMessageComponent } from "../src/modes/components/assistant-message";
 import { TranscriptContainer } from "../src/modes/components/transcript-container";
-import { truncateToVisualLines } from "../src/modes/components/visual-truncate";
+import { truncateToVisualLines } from "../src/render/visual-truncate";
 import { WelcomeComponent } from "../src/modes/components/welcome";
 import {
 	BlockUnitCounter,
@@ -14,7 +14,7 @@ import {
 	nextStep,
 	visibleUnits,
 } from "../src/modes/controllers/streaming-reveal";
-import { getEditorTheme, initTheme } from "../src/modes/theme/theme";
+import { getEditorTheme, initTheme } from "../src/render/theme/theme";
 import type { ToolSession } from "../src/tools";
 import { ReadTool } from "../src/tools/read";
 

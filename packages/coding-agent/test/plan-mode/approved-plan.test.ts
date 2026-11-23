@@ -6,7 +6,7 @@ import {
 	resolveApprovedPlan,
 	resolvePlanTitle,
 } from "@musepi/pi-coding-agent/plan-mode/approved-plan";
-import { normalizeLocalScheme } from "@musepi/pi-coding-agent/tools/path-utils";
+import { normalizeLocalScheme } from "../../src/render/path-utils";
 
 describe("planFileUrlForSlug", () => {
 	it("maps a slug to its local plan URL", () => {

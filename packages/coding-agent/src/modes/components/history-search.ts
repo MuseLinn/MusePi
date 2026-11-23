@@ -11,7 +11,6 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
 	matchesSelectDown,
@@ -19,6 +18,7 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
+import { theme } from "../../render/theme/theme";
 import type { HistoryEntry, HistoryStorage } from "../../session/history-storage";
 import { DynamicBorder } from "./dynamic-border";
 import { rawKeyHint } from "./keybinding-hints";

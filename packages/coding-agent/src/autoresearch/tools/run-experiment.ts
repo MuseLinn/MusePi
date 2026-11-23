@@ -5,9 +5,9 @@ import { Text } from "@musepi/pi-tui";
 import { formatBytes } from "@musepi/pi-utils";
 import { executeBash } from "../../exec/bash-executor";
 import type { ToolDefinition } from "../../extensibility/extensions";
-import type { Theme } from "../../modes/theme/theme";
+import { replaceTabs, shortenPath } from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, TailBuffer, truncateTail } from "../../session/streaming-output";
-import { replaceTabs, shortenPath } from "../../tools/render-utils";
 import * as git from "../../utils/git";
 import { parseWorkDirDirtyPaths } from "../git";
 import {

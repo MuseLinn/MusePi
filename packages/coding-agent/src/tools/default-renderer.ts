@@ -1,7 +1,8 @@
 import type { Component } from "@musepi/pi-tui";
 import { isRecord } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
+import { formatExpandHint, replaceTabs, truncateToWidth } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { renderStatusLine, WidthAwareText } from "../tui";
 import {
 	formatArgsInline,
@@ -13,7 +14,6 @@ import {
 	JSON_TREE_SCALAR_LEN_EXPANDED,
 	renderJsonTreeLines,
 } from "./json-tree";
-import { formatExpandHint, replaceTabs, truncateToWidth } from "./render-utils";
 
 /** Inputs rendered by the fallback card used when a tool has no bespoke renderer. */
 export interface DefaultToolRenderInput {

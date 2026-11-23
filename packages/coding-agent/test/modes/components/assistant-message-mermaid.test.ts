@@ -4,8 +4,8 @@ import type { AssistantMessage } from "@musepi/pi-ai";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { AssistantThinkingRenderer } from "@musepi/pi-coding-agent/extensibility/extensions";
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
-import { clearMermaidCache } from "@musepi/pi-coding-agent/modes/theme/mermaid-cache";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { clearMermaidCache } from "@musepi/pi-coding-agent/render/theme/mermaid-cache";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { ImageProtocol, setTerminalImageProtocol, TERMINAL, Text } from "@musepi/pi-tui";
 
 const originalImageProtocol = TERMINAL.imageProtocol;

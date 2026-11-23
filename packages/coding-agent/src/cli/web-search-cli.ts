@@ -8,7 +8,7 @@ import { APP_NAME, getProjectDir } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import { applyProviderGlobalsFromSettings } from "../config/provider-globals";
 import { Settings } from "../config/settings";
-import { initTheme, theme } from "../modes/theme/theme";
+import { initTheme, theme } from "../render/theme/theme";
 import { runSearchQuery, type SearchQueryParams } from "../web/search/index";
 import { SEARCH_PROVIDER_ORDER } from "../web/search/provider";
 import { renderSearchResult } from "../web/search/render";

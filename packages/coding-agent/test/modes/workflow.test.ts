@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { containsWorkflow, highlightWorkflow } from "@musepi/pi-coding-agent/modes/workflow";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(() => {
 	// highlightWorkflow reads the global theme's color mode.

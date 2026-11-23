@@ -14,9 +14,17 @@ import type { Settings } from "../config/settings";
 import { applyDirenvPreflight, type BashMinimization, type BashResult, executeBash } from "../exec/bash-executor";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { InternalUrlRouter } from "../internal-urls";
-import { truncateToVisualLines } from "../modes/components/visual-truncate";
-import { highlightCode, type Theme } from "../modes/theme/theme";
 import bashDescription from "../prompts/tools/bash.md" with { type: "text" };
+import { resolveToCwd } from "../render/path-utils";
+import {
+	capPreviewLines,
+	DEFAULT_TERMINAL_PREVIEW_LINES,
+	formatToolWorkingDirectory,
+	previewWindowRows,
+	replaceTabs,
+} from "../render/render-utils";
+import { highlightCode, type Theme } from "../render/theme/theme";
+import { truncateToVisualLines } from "../render/visual-truncate";
 import { type AgentSecretSnapshot, agentSecretSnapshot } from "../secrets/agent-runtime";
 import type {
 	ClientBridgeTerminalExitStatus,
@@ -42,14 +50,6 @@ import {
 	stripOutputNotice,
 	stripRawOutputArtifactNotice,
 } from "./output-meta";
-import { resolveToCwd } from "./path-utils";
-import {
-	capPreviewLines,
-	DEFAULT_TERMINAL_PREVIEW_LINES,
-	formatToolWorkingDirectory,
-	previewWindowRows,
-	replaceTabs,
-} from "./render-utils";
 import { extractLeadingCdTarget, tokenizeShellSegments } from "./shell-tokenize";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";

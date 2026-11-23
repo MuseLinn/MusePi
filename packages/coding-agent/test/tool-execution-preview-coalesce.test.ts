@@ -5,7 +5,7 @@ import * as path from "node:path";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import { EDIT_MODE_STRATEGIES, type PerFileDiffPreview } from "@musepi/pi-coding-agent/edit";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { TUI } from "@musepi/pi-tui";
 import { removeWithRetries } from "@musepi/pi-utils";
 

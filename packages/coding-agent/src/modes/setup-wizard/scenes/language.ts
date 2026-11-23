@@ -1,6 +1,6 @@
 import { routeSelectListMouse, type SelectItem, SelectList, type SgrMouseEvent } from "@musepi/pi-tui";
 import { t } from "../../../i18n/index.js";
-import { getSelectListTheme } from "../../theme/theme.js";
+import { getSelectListTheme } from "../../../render/theme/theme.js";
 import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 
 class LanguageSceneController implements SetupSceneController {

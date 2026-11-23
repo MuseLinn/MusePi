@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
 import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getProjectDir, removeSyncWithRetries, setProjectDir } from "@musepi/pi-utils";
 
 const originalProjectDir = getProjectDir();

@@ -27,7 +27,7 @@ import {
 	type ShapeTarget,
 	type ShapeVariantName,
 } from "@musepi/snapcompact";
-import { theme } from "../theme/theme";
+import { theme } from "../../render/theme/theme";
 import sampleDoc from "./snapcompact-shape-preview-doc.md" with { type: "text" };
 
 /** Mini-frame edge in px — a small page from the real rasterizer ≈ a zoomed crop. */

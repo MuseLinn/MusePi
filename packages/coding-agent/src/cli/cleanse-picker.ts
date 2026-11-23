@@ -7,7 +7,7 @@
  */
 import { Input, ProcessTerminal, type SelectItem, SelectList, TUI } from "@musepi/pi-tui";
 import type { CleanseCheckerDescriptor } from "../cleanse/checkers";
-import { getSelectListTheme } from "../modes/theme/theme";
+import { getSelectListTheme } from "../render/theme/theme";
 
 /** Outcome of the interactive cleanse target picker. */
 export type CleanseTargetChoice =

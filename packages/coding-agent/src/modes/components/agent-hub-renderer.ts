@@ -4,10 +4,10 @@ import { formatDuration, formatNumber, sanitizeText } from "@musepi/pi-utils";
 import { getRoleInfo } from "../../config/model-roles";
 import type { Settings } from "../../config/settings";
 import { type AgentRef, MAIN_AGENT_ID } from "../../registry/agent-registry";
+import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import { parseThinkingLevel } from "../../thinking";
-import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
 import type { ObservableSession } from "../session-observer-registry";
-import { theme } from "../theme/theme";
 import type { AgentMetrics } from "./agent-hub-projection";
 
 export interface RosterRender {

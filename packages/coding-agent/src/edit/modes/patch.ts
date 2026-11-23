@@ -17,6 +17,7 @@ import {
 	type WritethroughDeferredHandle,
 } from "../../lsp";
 import { FileChangeType, notifyWorkspaceWatchedFiles } from "../../lsp/client";
+import { resolveToCwd } from "../../render/path-utils";
 import type { ToolSession } from "../../tools";
 import { routeWriteThroughBridge } from "../../tools/acp-bridge";
 import { assertEditableFile } from "../../tools/auto-generated-guard";
@@ -32,7 +33,6 @@ import {
 	invalidateFsScanAfterWrite,
 } from "../../tools/fs-cache-invalidation";
 import { outputMeta } from "../../tools/output-meta";
-import { resolveToCwd } from "../../tools/path-utils";
 import { enforcePlanModeWrite, resolvePlanPath } from "../../tools/plan-mode-guard";
 import { ToolError } from "../../tools/tool-errors";
 import {

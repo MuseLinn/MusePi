@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
 import type { UsageReport } from "@musepi/pi-ai";
 import { UsageDashboard } from "@musepi/pi-coding-agent/modes/components/usage-dashboard";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

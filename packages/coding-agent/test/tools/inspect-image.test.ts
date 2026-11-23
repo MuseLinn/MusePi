@@ -7,7 +7,7 @@ import { AuthStorage, type completeSimple, Effort, type ImageContent, type Model
 import { buildModel } from "@musepi/pi-catalog/build";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName } from "@musepi/pi-coding-agent/render/theme/theme";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";

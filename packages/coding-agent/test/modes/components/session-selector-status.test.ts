@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { SessionSelectorComponent } from "@musepi/pi-coding-agent/modes/components/session-selector";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionInfo, SessionStatus } from "@musepi/pi-coding-agent/session/session-listing";
 
 beforeAll(async () => {

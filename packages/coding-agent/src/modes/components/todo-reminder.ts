@@ -1,5 +1,5 @@
 import { Box, Container, Spacer, Text } from "@musepi/pi-tui";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 import type { TodoItem } from "../../tools/todo";
 
 /**

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as url from "node:url";
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { theme as activeTheme, getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { theme as activeTheme, getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { readToolRenderer } from "@musepi/pi-coding-agent/tools/read";
 import type { TUI } from "@musepi/pi-tui";
 

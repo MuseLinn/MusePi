@@ -15,7 +15,7 @@ import {
 	type ModelHubOptions,
 	resetProviderAutoRefreshGuard,
 } from "@musepi/pi-coding-agent/modes/components/model-hub";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
 import type { TUI } from "@musepi/pi-tui";
 

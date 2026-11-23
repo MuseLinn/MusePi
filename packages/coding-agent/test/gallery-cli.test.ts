@@ -7,7 +7,7 @@ import {
 } from "@musepi/pi-coding-agent/cli/gallery-cli";
 import type { GalleryFixture } from "@musepi/pi-coding-agent/cli/gallery-fixtures";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { toolRenderers } from "@musepi/pi-coding-agent/tools/renderers";
 
 beforeAll(async () => {

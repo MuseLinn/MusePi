@@ -15,9 +15,9 @@ import type { ImageContent, TextContent, VideoContent } from "@musepi/pi-ai";
 import { logger } from "@musepi/pi-utils";
 import { getDefault, type Settings } from "../config/settings";
 import { formatGroupedDiagnosticMessages } from "../lsp/utils";
-import type { Theme } from "../modes/theme/theme";
+import { formatBytes, wrapBrackets } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { type OutputSummary, type TruncationResult, truncateMiddle, truncateTail } from "../session/streaming-output";
-import { formatBytes, wrapBrackets } from "./render-utils";
 import { renderError } from "./tool-errors";
 
 /**

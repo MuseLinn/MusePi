@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getProjectDir, setProjectDir } from "@musepi/pi-utils";
 
 const originalProjectDir = getProjectDir();

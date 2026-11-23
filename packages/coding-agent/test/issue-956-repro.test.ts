@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as mcpClient from "@musepi/pi-coding-agent/mcp/client";
 import { MCPCommandController } from "@musepi/pi-coding-agent/modes/controllers/mcp-command-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getConfigRootDir, getProjectDir, removeWithRetries, setAgentDir, setProjectDir } from "@musepi/pi-utils";
 
 const originalProjectDir = getProjectDir();

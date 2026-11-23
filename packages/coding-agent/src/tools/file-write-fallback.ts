@@ -131,7 +131,7 @@ import * as path from "node:path";
 import { isEnoent, isFsError, logger } from "@musepi/pi-utils";
 import type { BunFile } from "bun";
 import type { ExtensionContext } from "../extensibility/extensions/types";
-import { resolveSyscallTarget } from "./path-utils";
+import { resolveSyscallTarget } from "../render/path-utils";
 
 /** A denied write, captured for a registered fallback to retry through a privileged channel. */
 export interface FileWriteFallbackRequest {

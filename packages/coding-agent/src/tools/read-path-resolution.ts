@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { getRemoteDir } from "@musepi/pi-utils";
+import { findUniqueWorkspaceSuffix } from "../render/path-utils";
 import type { ToolSession } from "../sdk";
-import { findUniqueWorkspaceSuffix } from "./path-utils";
 
 // Remote mount path prefix (sshfs mounts) - skip fuzzy matching to avoid hangs
 const REMOTE_MOUNT_PREFIX = getRemoteDir() + path.sep;

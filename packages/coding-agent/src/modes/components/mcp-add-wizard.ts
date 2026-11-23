@@ -18,8 +18,8 @@ import { t } from "../../i18n/index.js";
 import { validateServerName } from "../../mcp/config-writer";
 import { analyzeAuthError, discoverOAuthEndpoints, fetchResourceMetadataScopes } from "../../mcp/oauth-discovery";
 import type { MCPHttpServerConfig, MCPServerConfig, MCPSseServerConfig, MCPStdioServerConfig } from "../../mcp/types";
-import { shortenPath } from "../../tools/render-utils";
-import { theme } from "../theme/theme";
+import { shortenPath } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import { DynamicBorder } from "./dynamic-border";
 

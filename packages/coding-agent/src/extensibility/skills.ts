@@ -15,8 +15,8 @@ import { compareSkillOrder, scanSkillsFromDir } from "../discovery/helpers";
 import { currentOmpExtensionRootFingerprint } from "../discovery/omp-extension-roots";
 import autoloadTemplate from "../prompts/skills/autoload.md" with { type: "text" };
 import userInvocationTemplate from "../prompts/skills/user-invocation.md" with { type: "text" };
+import { expandTilde } from "../render/path-utils";
 import type { SkillPromptDetails } from "../session/messages";
-import { expandTilde } from "../tools/path-utils";
 export interface Skill {
 	name: string;
 	description: string;

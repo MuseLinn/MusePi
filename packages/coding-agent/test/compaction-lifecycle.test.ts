@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { CompactionCancelledError, type CompactionResult } from "@musepi/pi-agent-core/compaction";
 import { CommandController } from "@musepi/pi-coding-agent/modes/controllers/command-controller";
-import { getThemeByName, setThemeInstance, type Theme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { getThemeByName, setThemeInstance, type Theme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { Container, Spacer } from "@musepi/pi-tui";
 
 /**

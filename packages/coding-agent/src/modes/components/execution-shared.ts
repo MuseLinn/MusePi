@@ -8,10 +8,10 @@
  */
 
 import { type Component, Container, Loader, Text, type TUI } from "@musepi/pi-tui";
-import { getSymbolTheme, theme } from "../../modes/theme/theme";
+import { getSymbolTheme, theme } from "../../render/theme/theme";
+import { truncateToVisualLines } from "../../render/visual-truncate";
 import { formatTruncationMetaNotice, type TruncationMeta } from "../../tools/output-meta";
 import { DynamicBorder } from "./dynamic-border";
-import { truncateToVisualLines } from "./visual-truncate";
 
 export type ExecutionStatus = "running" | "complete" | "cancelled" | "error";
 

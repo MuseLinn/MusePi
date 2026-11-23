@@ -18,6 +18,7 @@ import type { AdvisorMessageDetails } from "../../advisor";
 import { COLLAB_PROMPT_MESSAGE_TYPE, type CollabPromptDetails } from "../../collab/protocol";
 import { settings } from "../../config/settings";
 import type { MessageRenderer } from "../../extensibility/extensions/types";
+import { theme } from "../../render/theme/theme";
 import { LAUNCH_COMPLETION_MESSAGE_TYPE } from "../../session/launch-completion";
 import {
 	BACKGROUND_TAN_DISPATCH_MESSAGE_TYPE,
@@ -27,7 +28,6 @@ import {
 	type SkillPromptDetails,
 } from "../../session/messages";
 import type { SessionMessageEntry } from "../../session/session-entries";
-import { theme } from "../theme/theme";
 import {
 	assistantHasVisibleContent,
 	assistantUsageIsBilled,

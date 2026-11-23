@@ -14,11 +14,11 @@ import { sanitizeText } from "@musepi/pi-utils";
 import type * as XtermModule from "@musepi/pi-utils/vterm";
 import type { Terminal as XtermTerminalType } from "@musepi/pi-utils/vterm";
 import { Settings } from "../config/settings";
-import type { Theme } from "../modes/theme/theme";
+import { formatStatusIcon, replaceTabs } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { OutputSink, type OutputSummary } from "../session/streaming-output";
 import { sanitizeWithOptionalSixelPassthrough } from "../utils/sixel";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "./output-meta";
-import { formatStatusIcon, replaceTabs } from "./render-utils";
 import { readTerminalRows, styleTerminalRow } from "./terminal-output";
 
 export interface BashInteractiveResult extends OutputSummary {

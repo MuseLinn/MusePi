@@ -1,7 +1,7 @@
 import { Patch } from "@musepi/hashline";
 import { isRecord, stringProperty } from "@musepi/pi-utils";
 import { expandApplyPatchToEntries } from "../edit";
-import { resolveToCwd } from "../tools/path-utils";
+import { resolveToCwd } from "../render/path-utils";
 import type { ClientBridgePermissionOption } from "./client-bridge";
 
 /** Tools that require user permission before execution when an ACP client is connected. */

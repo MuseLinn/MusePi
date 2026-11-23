@@ -11,7 +11,7 @@ import type {
 import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema, VideoContent } from "@musepi/pi-ai";
 import { sanitizeText, untilAborted } from "@musepi/pi-utils";
 import type { Settings } from "../../config/settings";
-import type { Theme } from "../../modes/theme/theme";
+import type { Theme } from "../../render/theme/theme";
 import { type ApprovalMode, formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
 import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import { withFileMutationSession } from "../../tools/file-write-fallback";

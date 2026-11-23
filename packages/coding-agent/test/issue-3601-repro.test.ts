@@ -27,8 +27,8 @@ import type { ImageContent } from "@musepi/pi-ai";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
 import { InputController } from "@musepi/pi-coding-agent/modes/controllers/input-controller";
-import { getEditorTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { getEditorTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";

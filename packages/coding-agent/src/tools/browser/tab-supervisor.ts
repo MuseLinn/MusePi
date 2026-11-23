@@ -1,9 +1,9 @@
 import { getPuppeteerDir, logger, postmortem, Snowflake, withTimeout, workerHostEntry } from "@musepi/pi-utils";
 import type { CDPSession, Page, Target } from "puppeteer-core";
 import { callSessionTool } from "../../eval/js/tool-bridge";
+import { expandPath } from "../../render/path-utils";
 import { webpExclusionForModel } from "../../utils/image-loading";
 import type { ToolSession } from "../index";
-import { expandPath } from "../path-utils";
 import { ToolAbortError, ToolError } from "../tool-errors";
 import { agentCdpParams, type BrowserAgentIdentity, isUnknownCdpMethodError } from "./agent-identity";
 import { pickElectronTarget, shouldPreserveConnectedBrowserFocus } from "./attach";

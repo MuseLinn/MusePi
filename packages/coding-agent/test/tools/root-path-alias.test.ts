@@ -5,8 +5,8 @@ import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ToolChoiceQueue } from "@musepi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
-import { resolveToCwd } from "@musepi/pi-coding-agent/tools/path-utils";
 import { removeWithRetries } from "@musepi/pi-utils";
+import { resolveToCwd } from "../../src/render/path-utils";
 
 function createTestSession(cwd: string, overrides: Partial<ToolSession> = {}): ToolSession {
 	return {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import CommitCommand from "@musepi/pi-coding-agent/commands/commit";
 import * as commitModule from "@musepi/pi-coding-agent/commit";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import { postmortem } from "@musepi/pi-utils";
 
 describe("omp commit command lifecycle (issue #1041)", () => {

@@ -20,9 +20,9 @@
 
 import { beforeAll, describe, expect, mock, test } from "bun:test";
 import { AgentBusyError } from "@musepi/pi-agent-core";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { CompactionQueuedMessage, InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(() => {
 	initTheme();

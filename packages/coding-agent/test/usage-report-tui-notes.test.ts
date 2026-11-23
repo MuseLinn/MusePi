@@ -17,7 +17,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
 import type { UsageReport } from "@musepi/pi-ai";
 import { renderUsageReports } from "@musepi/pi-coding-agent/modes/controllers/command-controller";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 const HOUR = 3_600_000;
 

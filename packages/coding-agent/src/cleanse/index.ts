@@ -1,7 +1,7 @@
 import { getProjectDir, sanitizeText } from "@musepi/pi-utils";
 import { pickCleanseTarget, promptCleanseRequest } from "../cli/cleanse-picker";
 import { createProgressReporter } from "../cli/progress-reporter";
-import { shortenPath } from "../tools/render-utils";
+import { shortenPath } from "../render/render-utils";
 import { type CleanseAgentHooks, type CleanseAgentRuntime, createCleanseAgentRuntime } from "./agent";
 import { groupDiagnosticsByFile } from "./balance";
 import { buildCustomCleanseSuite, type CleanseDiagnosticSuite, discoverCleanseDiagnosticSuite } from "./checkers";

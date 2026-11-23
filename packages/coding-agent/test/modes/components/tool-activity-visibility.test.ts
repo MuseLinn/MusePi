@@ -5,7 +5,7 @@ import { TodoReminderComponent } from "@musepi/pi-coding-agent/modes/components/
 import { ToolActivityContainer } from "@musepi/pi-coding-agent/modes/components/tool-activity";
 import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
 import { TtsrNotificationComponent } from "@musepi/pi-coding-agent/modes/components/ttsr-notification";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { Text } from "@musepi/pi-tui";
 
 const darkTheme = await getThemeByName("dark");

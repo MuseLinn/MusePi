@@ -5,7 +5,7 @@ import {
 	setTheme,
 	setThemeInstance,
 	type Theme,
-} from "@musepi/pi-coding-agent/modes/theme/theme";
+} from "@musepi/pi-coding-agent/render/theme/theme";
 
 /**
  * Contract: every change to the *active* theme bumps the theme epoch — including

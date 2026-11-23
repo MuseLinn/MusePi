@@ -3,7 +3,7 @@ import {
 	rankSessionSearchMatches,
 	SessionSelectorComponent,
 } from "@musepi/pi-coding-agent/modes/components/session-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionInfo } from "@musepi/pi-coding-agent/session/session-listing";
 
 /**

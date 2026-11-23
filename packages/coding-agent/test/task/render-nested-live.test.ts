@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentProgress, SingleResult, TaskToolDetails } from "@musepi/pi-coding-agent/task";
 import { taskToolRenderer } from "@musepi/pi-coding-agent/task/renderer";
 import { formatDuration, formatNumber } from "@musepi/pi-utils";

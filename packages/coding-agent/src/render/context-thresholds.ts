@@ -1,5 +1,5 @@
 import { formatNumber } from "@musepi/pi-utils";
-import type { ThemeColor } from "../../../modes/theme/theme";
+import type { ThemeColor } from "./theme/theme";
 
 export type ContextUsageLevel = "normal" | "warning" | "purple" | "error";
 

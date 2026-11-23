@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "bun:test";
 import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
-import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 describe("CustomEditor keybindings", () => {
 	beforeAll(async () => {

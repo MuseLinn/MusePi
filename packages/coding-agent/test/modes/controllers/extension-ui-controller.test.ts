@@ -5,8 +5,8 @@ import type { ExtensionAskDialogQuestion, ExtensionUIContext } from "../../../sr
 import { AskDialogComponent } from "../../../src/modes/components/ask-dialog";
 import { CustomEditor } from "../../../src/modes/components/custom-editor";
 import { ExtensionUiController } from "../../../src/modes/controllers/extension-ui-controller";
-import { getEditorTheme, getThemeByName, setThemeInstance } from "../../../src/modes/theme/theme";
 import type { InteractiveModeContext } from "../../../src/modes/types";
+import { getEditorTheme, getThemeByName, setThemeInstance } from "../../../src/render/theme/theme";
 
 afterEach(() => {
 	setKeybindings(KeybindingsManager.inMemory());

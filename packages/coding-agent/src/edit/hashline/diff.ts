@@ -33,7 +33,7 @@ import {
 	stripBom,
 	validateClipboardSequence,
 } from "@musepi/hashline";
-import { resolveToCwd } from "../../tools/path-utils";
+import { resolveToCwd } from "../../render/path-utils";
 import { generateDiffString } from "../diff";
 import { canonicalSnapshotKey } from "../file-snapshot-store";
 import { readEditFileText } from "../read-file";

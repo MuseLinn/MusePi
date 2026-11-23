@@ -1,7 +1,7 @@
 import { Container, matchesKey, ScrollView, Spacer, TruncatedText } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
+import { theme } from "../../render/theme/theme";
 import type { ResetUsageAccount } from "../../slash-commands/helpers/reset-usage";
 import { DynamicBorder } from "./dynamic-border";
 

@@ -1,7 +1,7 @@
 import { Container, Text } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { formatDiagnostics } from "../../tools/render-utils";
-import { getLanguageFromPath, theme } from "../theme/theme";
+import { formatDiagnostics } from "../../render/render-utils";
+import { getLanguageFromPath, theme } from "../../render/theme/theme";
 
 /** One file's worth of late LSP diagnostics, as carried on the transcript message. */
 export interface LateDiagnosticsFile {

@@ -19,7 +19,7 @@ import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { StatusLineSettings } from "@musepi/pi-coding-agent/modes/components/status-line";
 import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { GitHeadState, GitRefHead, GitRepository } from "@musepi/pi-coding-agent/utils/git";
 import * as git from "@musepi/pi-coding-agent/utils/git";
 import * as jj from "@musepi/pi-coding-agent/utils/jj";

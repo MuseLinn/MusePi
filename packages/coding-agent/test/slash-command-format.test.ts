@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as settingsModule from "@musepi/pi-coding-agent/config/settings";
-import type { Theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { Theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { renderAsciiBar } from "@musepi/pi-coding-agent/slash-commands/helpers/format";
 
 const testTheme = {

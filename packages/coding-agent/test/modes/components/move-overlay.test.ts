@@ -11,7 +11,7 @@ import {
 	resolveExistingDirectory,
 	resolveMovePath,
 } from "../../../src/modes/components/move-overlay";
-import { getThemeByName, setThemeInstance, type Theme } from "../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "../../../src/render/theme/theme";
 
 // Strip SGR colors so assertions see visible text only.
 const stripAnsi = (text: string): string => text.replace(/\x1b\[[0-9;]*m/g, "");

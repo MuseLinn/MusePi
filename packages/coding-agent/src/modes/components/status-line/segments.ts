@@ -12,13 +12,17 @@ import {
 	relativePathWithinRoot,
 } from "@musepi/pi-utils";
 import { t } from "../../../i18n/index.js";
-import { type ThemeColor, theme } from "../../../modes/theme/theme";
-import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../../tools/render-utils";
+import {
+	formatContextUsage,
+	getContextUsageLevel,
+	getContextUsageThemeColor,
+} from "../../../render/context-thresholds";
+import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../../render/render-utils";
+import { type ThemeColor, theme } from "../../../render/theme/theme";
 import { fileHyperlink } from "../../../tui/hyperlink";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/session-color";
 import { sanitizeStatusText } from "../../shared";
 import { cacheHitRate } from "../../utils/cache-hit";
-import { formatContextUsage, getContextUsageLevel, getContextUsageThemeColor } from "./context-thresholds";
 import type { RenderedSegment, SegmentContext, StatusLineSegment, StatusLineSegmentId } from "./types";
 
 export type { SegmentContext } from "./types";

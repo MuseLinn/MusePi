@@ -5,7 +5,7 @@ import * as path from "node:path";
 import type { SourceMeta } from "@musepi/pi-coding-agent/capability/types";
 import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 import { MCPCommandController } from "@musepi/pi-coding-agent/modes/controllers/mcp-command-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import {
 	getConfigRootDir,
 	getMCPConfigPath,

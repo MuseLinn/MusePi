@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test, vi } from "bun:test";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext, RenderSessionContextOptions } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { buildSessionContext, type SessionContext } from "@musepi/pi-coding-agent/session/session-context";
 import { type Component, Container } from "@musepi/pi-tui";
 

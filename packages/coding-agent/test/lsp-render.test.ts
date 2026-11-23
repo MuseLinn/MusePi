@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { renderResult } from "@musepi/pi-coding-agent/lsp/render";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await themeModule.initTheme(false, undefined, undefined, "dark", "light");

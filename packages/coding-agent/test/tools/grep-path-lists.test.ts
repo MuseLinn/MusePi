@@ -13,9 +13,9 @@ import type {
 	ObservableSession,
 	SessionObserverRegistry,
 } from "@musepi/pi-coding-agent/modes/session-observer-registry";
-import type { Theme } from "@musepi/pi-coding-agent/modes/theme/theme";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import type { Theme } from "@musepi/pi-coding-agent/render/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionEntry, SessionTreeNode } from "@musepi/pi-coding-agent/session/session-entries";
 import { ToolChoiceQueue } from "@musepi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";

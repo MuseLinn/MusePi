@@ -14,7 +14,7 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 import type { TruncationMeta } from "../../tools/output-meta";
 import { getSixelLineMask, isSixelPassthroughEnabled, sanitizeWithOptionalSixelPassthrough } from "../../utils/sixel";
 import {

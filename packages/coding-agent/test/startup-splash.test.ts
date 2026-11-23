@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { runStartupSplash } from "@musepi/pi-coding-agent/modes/setup-wizard/startup-splash";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { shouldShowStartupSplash } from "@musepi/pi-coding-agent/startup-splash";
 import type { Component } from "@musepi/pi-tui";
 

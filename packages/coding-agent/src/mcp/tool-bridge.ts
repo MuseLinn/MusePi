@@ -16,9 +16,9 @@ import type {
 	RenderResultOptions,
 } from "../extensibility/custom-tools/types";
 import { resolveLocalUrlToFile } from "../internal-urls/local-protocol";
-import type { Theme } from "../modes/theme/theme";
+import { normalizeLocalScheme } from "../render/path-utils";
+import type { Theme } from "../render/theme/theme";
 import type { OutputMeta } from "../tools/output-meta";
-import { normalizeLocalScheme } from "../tools/path-utils";
 import { ToolAbortError, throwIfAborted } from "../tools/tool-errors";
 import { callTool } from "./client";
 import { renderMCPCall, renderMCPResult } from "./render";

@@ -6,11 +6,11 @@ import { renderMCPResult } from "@musepi/pi-coding-agent/mcp/render";
 import { DeferredMCPTool, MCPTool, type MCPToolDetails } from "@musepi/pi-coding-agent/mcp/tool-bridge";
 import type { MCPServerConnection, MCPToolDefinition, MCPTransport } from "@musepi/pi-coding-agent/mcp/types";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { theme as activeTheme, getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { theme as activeTheme, getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { formatOutputNotice, type OutputMeta } from "@musepi/pi-coding-agent/tools/output-meta";
-import { formatStatusIcon } from "@musepi/pi-coding-agent/tools/render-utils";
 import { TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal";
+import { formatStatusIcon } from "../src/render/render-utils";
 
 beforeAll(async () => {
 	resetSettingsForTest();

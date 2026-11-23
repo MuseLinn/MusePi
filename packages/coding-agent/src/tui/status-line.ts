@@ -1,9 +1,10 @@
 /**
  * Standardized status header rendering for tool output.
  */
-import type { Theme, ThemeColor } from "../modes/theme/theme";
-import type { ToolUIStatus } from "../tools/render-utils";
-import { formatStatusIcon } from "../tools/render-utils";
+
+import type { ToolUIStatus } from "../render/render-utils";
+import { formatStatusIcon } from "../render/render-utils";
+import type { Theme, ThemeColor } from "../render/theme/theme";
 
 export interface StatusLineOptions {
 	icon?: ToolUIStatus;

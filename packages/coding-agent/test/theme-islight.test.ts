@@ -3,9 +3,9 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { generateThemeVars } from "@musepi/pi-coding-agent/export/html";
-import { defaultThemes } from "@musepi/pi-coding-agent/modes/theme/defaults";
-import { getResolvedThemeColors, getThemeByName, isLightTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getResolvedThemeColors, getThemeByName, isLightTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getAgentDir, getCustomThemesDir, removeWithRetries, setAgentDir } from "@musepi/pi-utils";
+import { defaultThemes } from "../src/render/theme/defaults/index";
 
 describe("Theme.isLight", () => {
 	it("classifies built-in themes by their status-line surface", async () => {

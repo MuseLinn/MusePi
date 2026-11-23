@@ -1,7 +1,7 @@
 import type { Component } from "@musepi/pi-tui";
 import { Box, Container } from "@musepi/pi-tui";
 import type { HookMessageRenderer } from "../../extensibility/hooks/types";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 import type { HookMessage } from "../../session/messages";
 import { renderFramedMessage } from "./message-frame";
 

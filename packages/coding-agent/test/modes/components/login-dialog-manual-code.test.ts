@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { TUI } from "@musepi/pi-tui";
 import { LoginDialogComponent } from "../../../src/modes/components/login-dialog";
-import { initTheme } from "../../../src/modes/theme/theme";
+import { initTheme } from "../../../src/render/theme/theme";
 
 /** Minimal TUI stub — the dialog only calls requestRender/setFocus. */
 function makeDialog(): LoginDialogComponent {

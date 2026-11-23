@@ -8,11 +8,11 @@ import type {
 	ToolApprovalDecision,
 } from "@musepi/pi-agent-core";
 import { logger, prompt, untilAborted } from "@musepi/pi-utils";
-import { type Theme, theme } from "../modes/theme/theme";
 import lspDescription from "../prompts/tools/lsp.md" with { type: "text" };
+import { formatPathRelativeToCwd, resolveToCwd } from "../render/path-utils";
+import { type Theme, theme } from "../render/theme/theme";
 import type { ToolSession } from "../tools";
 import { truncateForPrompt } from "../tools/approval";
-import { formatPathRelativeToCwd, resolveToCwd } from "../tools/path-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tools/tool-errors";
 import { clampTimeout } from "../tools/tool-timeouts";
 import {

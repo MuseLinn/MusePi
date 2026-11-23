@@ -4,7 +4,7 @@ import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { InternalUrlRouter } from "@musepi/pi-coding-agent/internal-urls/router";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { GlobTool } from "@musepi/pi-coding-agent/tools/glob";
-import { resolveToolSearchScope } from "@musepi/pi-coding-agent/tools/path-utils";
+import { resolveToolSearchScope } from "../../src/render/path-utils";
 
 // Minimal ToolSession stub (ssh-url-approval.test.ts shape). The ssh:// guard
 // fires before any session/SSH access, so no real cwd/fs is needed.

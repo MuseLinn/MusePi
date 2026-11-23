@@ -3,8 +3,8 @@
  */
 import { Container, Input, Markdown, matchesKey, Spacer, Text, type TUI } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import { CountdownTimer } from "./countdown-timer";
 import { DynamicBorder } from "./dynamic-border";
 

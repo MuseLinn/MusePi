@@ -3,7 +3,7 @@ import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import type { Model } from "@musepi/pi-ai";
 import { type Component, Markdown } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { getMarkdownTheme, type Theme } from "../modes/theme/theme";
+import { getMarkdownTheme, type Theme } from "../render/theme/theme";
 
 /** Whether a model transport can suppress native reasoning while private scratchpad thoughts are active. */
 export function supportsExternalThinking(model: Model | null | undefined): boolean {

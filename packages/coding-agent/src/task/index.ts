@@ -18,15 +18,15 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musep
 import type { Usage } from "@musepi/pi-ai";
 import { $env, logger, prompt } from "@musepi/pi-utils";
 import type { ToolSession } from "..";
-import type { Theme } from "../modes/theme/theme";
 import subagentUserPromptTemplate from "../prompts/system/subagent-user-prompt.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
 import taskAsyncContractTemplate from "../prompts/tools/task-async-contract.md" with { type: "text" };
 import taskSummaryTemplate from "../prompts/tools/task-summary.md" with { type: "text" };
+import { formatBytes, formatDuration } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { TASK_EFFORTS, type TaskEffort } from "../thinking";
 import { truncateForPrompt } from "../tools/approval";
 import { isIrcEnabled } from "../tools/hub";
-import { formatBytes, formatDuration } from "../tools/render-utils";
 import { isReadOnlyAgent } from "./read-only-policy";
 import { isScoutSpawnable, resolveSpawnPolicy } from "./spawn-policy";
 import {

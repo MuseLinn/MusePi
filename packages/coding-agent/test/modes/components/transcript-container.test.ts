@@ -4,7 +4,7 @@ import type { AssistantMessage } from "@musepi/pi-ai";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
 import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { USER_INTERRUPT_LABEL } from "@musepi/pi-coding-agent/session/messages";
 import { type Component, Container, Text } from "@musepi/pi-tui";
 

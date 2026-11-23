@@ -13,10 +13,7 @@ import type { RenderResultOptions } from "../../extensibility/custom-tools/types
 import { type DaemonBrokerClient, DaemonBrokerRejectedError, daemonClientForProject } from "../../launch/client";
 import type { DaemonOperation, DaemonRpcResult, DaemonSnapshot, DaemonSpec, DaemonState } from "../../launch/protocol";
 import { renderTerminalOutputIsolated } from "../../launch/terminal-output-worker-client";
-import type { Theme, ThemeColor } from "../../modes/theme/theme";
-import { framedBlock, outputBlockContentWidth, renderStatusLine } from "../../tui";
-import type { ToolSession } from "..";
-import { resolveToCwd } from "../path-utils";
+import { resolveToCwd } from "../../render/path-utils";
 import {
 	capPreviewLines,
 	createCachedComponent,
@@ -31,7 +28,10 @@ import {
 	shortenPath,
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
-} from "../render-utils";
+} from "../../render/render-utils";
+import type { Theme, ThemeColor } from "../../render/theme/theme";
+import { framedBlock, outputBlockContentWidth, renderStatusLine } from "../../tui";
+import type { ToolSession } from "..";
 import { styleTerminalRow } from "../terminal-output";
 import { ToolError } from "../tool-errors";
 

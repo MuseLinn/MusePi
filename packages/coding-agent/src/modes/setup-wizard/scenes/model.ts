@@ -1,13 +1,13 @@
 import type { Model } from "@musepi/pi-ai";
 import type { SgrMouseEvent } from "@musepi/pi-tui";
 import { t } from "../../../i18n/index.js";
+import { theme } from "../../../render/theme/theme";
 import {
 	buildBrowserItems,
 	ModelBrowser,
 	resolveRoleAssignments,
 	sortModelItems,
 } from "../../components/model-browser";
-import { theme } from "../../theme/theme";
 import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 
 const MAX_VISIBLE_MODELS = 10;

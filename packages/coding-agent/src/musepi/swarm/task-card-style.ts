@@ -21,7 +21,7 @@
 import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { settings } from "../../config/settings";
 import type { ExtensionFactory, ExtensionUIContext, PluginAPI } from "../../extensibility/extensions/types";
-import type { Theme, ThemeColor } from "../../modes/theme/theme";
+import type { Theme, ThemeColor } from "../../render/theme/theme";
 
 // ============================================================
 // Constants (kimi-code swarm parity — pi-muselinn-harness port)

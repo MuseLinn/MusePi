@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent } from "@musepi/pi-utils";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
-import { normalizeLocalScheme, resolveToCwd } from "../tools/path-utils";
+import { normalizeLocalScheme, resolveToCwd } from "../render/path-utils";
 
 /** Reads a plan from a local URL or cwd-relative filesystem path. */
 export async function readPlanFile(

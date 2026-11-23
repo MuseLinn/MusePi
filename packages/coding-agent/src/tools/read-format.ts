@@ -8,7 +8,9 @@ import {
 import type { AgentToolResult } from "@musepi/pi-agent-core";
 import { canonicalSnapshotKey, getFileSnapshotStore, recordSeenLines } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
-import { isMarkdownPath } from "../modes/theme/theme";
+import { formatPathRelativeToCwd, type LineRange } from "../render/path-utils";
+import { formatBytes, shortenPath } from "../render/render-utils";
+import { isMarkdownPath } from "../render/theme/theme";
 import type { ToolSession } from "../sdk";
 import {
 	DEFAULT_MAX_BYTES,
@@ -19,9 +21,7 @@ import {
 } from "../session/streaming-output";
 import { buildLineEntriesWithBlockContext, type LineEntry, lineEntriesToPlainText } from "../utils/block-context";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import { formatPathRelativeToCwd, type LineRange } from "./path-utils";
 import type { ReadToolDetails } from "./read";
-import { formatBytes, shortenPath } from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

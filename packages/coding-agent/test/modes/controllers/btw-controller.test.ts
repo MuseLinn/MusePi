@@ -2,8 +2,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import type { AssistantMessage, Usage } from "@musepi/pi-ai";
 import { BtwPanelComponent } from "@musepi/pi-coding-agent/modes/components/btw-panel";
 import { BtwController } from "@musepi/pi-coding-agent/modes/controllers/btw-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import * as clipboard from "@musepi/pi-coding-agent/utils/clipboard";
 import { Container, replaceTabs, type TUI } from "@musepi/pi-tui";
 

@@ -11,7 +11,7 @@ import {
 	StreamingRevealController,
 	visibleUnits,
 } from "@musepi/pi-coding-agent/modes/controllers/streaming-reveal";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getSegmenter } from "@musepi/pi-tui";
 
 beforeAll(async () => {

@@ -4,7 +4,7 @@ import {
 	decodeStreamedToolArgs,
 	streamingStringKeysForTool,
 } from "@musepi/pi-coding-agent/modes/controllers/tool-args-reveal";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import { writeToolRenderer } from "@musepi/pi-coding-agent/tools/write";
 import type { TUI } from "@musepi/pi-tui";
 

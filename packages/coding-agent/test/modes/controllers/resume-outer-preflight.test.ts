@@ -4,7 +4,7 @@ import * as core from "@musepi/pi-agent-core";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";

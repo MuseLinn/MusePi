@@ -1,9 +1,9 @@
 import type { Database } from "bun:sqlite";
 import type { AgentToolResult } from "@musepi/pi-agent-core";
+import { resolveReadPath } from "../render/path-utils";
 import type { ToolSession } from "../sdk";
 import { DEFAULT_MAX_LINES, truncateHead } from "../session/streaming-output";
 import { applyListLimit } from "./list-limit";
-import { resolveReadPath } from "./path-utils";
 import type { ReadToolDetails } from "./read";
 import { prependSuffixResolutionNotice } from "./read-format";
 import {

@@ -1,5 +1,5 @@
+import { theme } from "../render/theme/theme";
 import { maskNonProse } from "./markdown-prose";
-import { theme } from "./theme/theme";
 
 /** A gradient keyword highlighter.
  *

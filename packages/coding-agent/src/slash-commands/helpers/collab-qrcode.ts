@@ -1,5 +1,5 @@
 import { type Component, visibleWidth } from "@musepi/pi-tui";
-import { fgOrPlain } from "../../modes/theme/theme";
+import { fgOrPlain } from "../../render/theme/theme";
 import { QrCode, renderQrHalfBlocks } from "../../utils/qrcode";
 
 /**

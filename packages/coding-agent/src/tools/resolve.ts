@@ -20,14 +20,14 @@ import { Text } from "@musepi/pi-tui";
 import { prompt } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { parseXdUrl, XD_URL_PREFIX } from "../internal-urls/xd-protocol";
-import type { Theme } from "../modes/theme/theme";
 import resolveReminderPrompt from "../prompts/system/resolve-device-reminder.md" with { type: "text" };
+import type { Theme } from "../render/theme/theme";
 import { Ellipsis, padToWidth, renderStatusLine, truncateToWidth } from "../tui";
 import type { ToolSession } from ".";
 
 export type { PlanProposalHandler } from "./contract";
 
-import { replaceTabs } from "./render-utils";
+import { replaceTabs } from "../render/render-utils";
 import { ToolError } from "./tool-errors";
 import type { XdevDispatch } from "./xdev";
 

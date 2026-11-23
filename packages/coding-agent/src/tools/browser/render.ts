@@ -8,12 +8,12 @@
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
-import type { Theme } from "../../modes/theme/theme";
+import { replaceTabs, shortenPath } from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
 import { Hasher, isFramedBlockComponent, markFramedBlockComponent, renderCodeCell, renderStatusLine } from "../../tui";
 import type { BrowserToolDetails } from "../browser";
 import { formatJavaScriptForDisplay } from "../eval-format/javascript";
 import { formatStyledTruncationWarning, stripOutputNotice } from "../output-meta";
-import { replaceTabs, shortenPath } from "../render-utils";
 
 const BROWSER_DEFAULT_PREVIEW_LINES = 10;
 

@@ -1,13 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { Markdown } from "@musepi/pi-tui";
 import { Settings } from "../../../src/config/settings";
-import { createTheme, getBuiltinThemes } from "../../../src/modes/theme/loader";
+import { createTheme, getBuiltinThemes } from "../../../src/render/theme/loader";
 import {
 	getMarkdownTheme,
 	getThemeByName,
 	setMarkdownMermaidRendering,
 	setThemeInstance,
-} from "../../../src/modes/theme/theme";
+} from "../../../src/render/theme/theme";
 import { buildSystemPrompt } from "../../../src/system-prompt";
 
 const workspaceTree = {

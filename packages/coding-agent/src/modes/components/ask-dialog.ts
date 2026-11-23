@@ -21,8 +21,8 @@ import type {
 	ExtensionAskDialogSubmitResult,
 } from "../../extensibility/extensions";
 import { t } from "../../i18n/index.js";
+import { getMarkdownTheme, highlightCode, theme } from "../../render/theme/theme";
 import { getTabBarTheme } from "../shared";
-import { getMarkdownTheme, highlightCode, theme } from "../theme/theme";
 import {
 	matchesSelectCancel,
 	matchesSelectDown,

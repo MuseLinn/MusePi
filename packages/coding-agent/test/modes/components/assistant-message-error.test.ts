@@ -5,7 +5,7 @@ import {
 	AssistantMessageComponent,
 	resetThinkingSpeedTracker,
 } from "@musepi/pi-coding-agent/modes/components/assistant-message";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { setTerminalImageProtocol, TERMINAL, visibleWidth } from "@musepi/pi-tui";
 
 const originalImageProtocol = TERMINAL.imageProtocol;

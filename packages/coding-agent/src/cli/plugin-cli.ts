@@ -15,7 +15,7 @@ import {
 	getPluginsCacheDir,
 	MarketplaceManager,
 } from "../extensibility/plugins/marketplace/index.js";
-import { theme } from "../modes/theme/theme";
+import { theme } from "../render/theme/theme";
 import { packPlugin } from "./plugin-pack";
 
 // =============================================================================

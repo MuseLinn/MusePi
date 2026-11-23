@@ -3,9 +3,9 @@ export { truncate } from "@musepi/pi-utils";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import { isEnoent } from "@musepi/pi-utils";
-import { type Theme, theme } from "../modes/theme/theme";
+import { formatPathRelativeToCwd, resolveToCwd } from "../render/path-utils";
+import { type Theme, theme } from "../render/theme/theme";
 import { formatGroupedFiles } from "../tools/grouped-file-output";
-import { formatPathRelativeToCwd, resolveToCwd } from "../tools/path-utils";
 import type {
 	CodeAction,
 	Command,

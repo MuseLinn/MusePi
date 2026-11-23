@@ -4,10 +4,10 @@ import * as path from "node:path";
 import { logger, postmortem, Snowflake, untilAborted } from "@musepi/pi-utils";
 import { JsRuntime, type RuntimeHooks } from "../../../eval/js/shared/runtime";
 import { callSessionTool } from "../../../eval/js/tool-bridge";
+import { resolveToCwd } from "../../../render/path-utils";
+import { formatScreenshot } from "../../../render/render-utils";
 import { resizeImage } from "../../../utils/image-resize";
 import type { ToolSession } from "../../index";
-import { resolveToCwd } from "../../path-utils";
-import { formatScreenshot } from "../../render-utils";
 import {
 	bindRunFacade,
 	isBrowserRunOwnedRejection,

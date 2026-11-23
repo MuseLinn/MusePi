@@ -16,13 +16,13 @@ import {
 } from "@musepi/pi-tui";
 import { getProjectDir, logger, sanitizeText } from "@musepi/pi-utils";
 import { EDIT_MODE_STRATEGIES, type EditMode, type PerFileDiffPreview } from "../../edit";
-import type { Theme } from "../../modes/theme/theme";
-import { getThemeEpoch, theme } from "../../modes/theme/theme";
+import { formatStatusIcon, replaceTabs, resolveImageOptions } from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
+import { getThemeEpoch, theme } from "../../render/theme/theme";
 import { BASH_DEFAULT_PREVIEW_LINES } from "../../tools/bash";
 import { formatDefaultToolExecution } from "../../tools/default-renderer";
 import { EVAL_DEFAULT_PREVIEW_LINES } from "../../tools/eval";
 import { isWaitingPollDetails } from "../../tools/hub";
-import { formatStatusIcon, replaceTabs, resolveImageOptions } from "../../tools/render-utils";
 import { type FirstResultViewportRepaint, type ToolRenderer, toolRenderers } from "../../tools/renderers";
 import { TODO_STRIKE_TOTAL_FRAMES, type TodoToolDetails } from "../../tools/todo";
 import type { XdevState } from "../../tools/xdev";

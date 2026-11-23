@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { BashExecutionComponent } from "@musepi/pi-coding-agent/modes/components/bash-execution";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { TUI } from "@musepi/pi-tui";
 import { visibleWidth } from "@musepi/pi-tui";
 

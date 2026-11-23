@@ -4,7 +4,7 @@ import {
 	resolveSegmentPalette,
 	type TrackSegment,
 } from "@musepi/pi-coding-agent/modes/components/segment-track";
-import { initTheme, type ThemeColor, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, type ThemeColor, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();

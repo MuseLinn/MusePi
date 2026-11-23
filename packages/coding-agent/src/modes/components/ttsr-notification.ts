@@ -1,7 +1,7 @@
 import { Box, Container, Spacer, Text } from "@musepi/pi-tui";
 import type { Rule } from "../../capability/rule";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /** Collapsed view shows at most this many rules before eliding the rest. */
 const MAX_COLLAPSED_RULES = 4;

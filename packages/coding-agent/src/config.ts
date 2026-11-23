@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getConfigAgentDirName, getProjectDir } from "@musepi/pi-utils";
 import { resolveClaudePaths } from "./config/claude-paths";
-import { expandTilde } from "./tools/path-utils";
+import { expandTilde } from "./render/path-utils";
 
 export * from "./config/config-file";
 

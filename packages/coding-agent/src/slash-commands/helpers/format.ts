@@ -1,5 +1,5 @@
-import { shimmerText } from "../../modes/theme/shimmer";
-import { theme as currentTheme, type Theme } from "../../modes/theme/theme";
+import { shimmerText } from "../../render/theme/shimmer";
+import { theme as currentTheme, type Theme } from "../../render/theme/theme";
 
 /** Format a millisecond duration as a coarse-grained human label. */
 export function formatDuration(ms: number): string {

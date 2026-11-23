@@ -19,7 +19,7 @@ import {
 	setColorBlindMode,
 	setSymbolPreset,
 	theme,
-} from "../../theme/theme";
+} from "../../../render/theme/theme";
 import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 
 type ThemeMode = "curated" | "all";

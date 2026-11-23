@@ -33,6 +33,8 @@ import {
 	MarketplaceManager,
 } from "../../extensibility/plugins/marketplace";
 import { setLocale } from "../../i18n/index.js";
+import type { InteractiveModeContext } from "../../modes/types";
+import { shortenPath } from "../../render/render-utils";
 import {
 	getAvailableThemes,
 	getSymbolTheme,
@@ -42,8 +44,7 @@ import {
 	setSymbolPreset,
 	setTheme,
 	theme,
-} from "../../modes/theme/theme";
-import type { InteractiveModeContext } from "../../modes/types";
+} from "../../render/theme/theme";
 import type { SessionOAuthAccountList } from "../../session/agent-session-types";
 import type { ResetCreditAccountStatus, ResetCreditRedeemOutcome } from "../../session/auth-storage";
 import {
@@ -77,7 +78,6 @@ import {
 	type ToolSession,
 } from "../../tools";
 import { AskTool, type AskToolDetails, type AskToolInput } from "../../tools/ask";
-import { shortenPath } from "../../tools/render-utils";
 import { ToolAbortError } from "../../tools/tool-errors";
 import { copyToClipboard } from "../../utils/clipboard";
 import { repo } from "../../utils/git";

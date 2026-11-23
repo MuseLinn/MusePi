@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { createCompactionSummaryMessage } from "@musepi/pi-agent-core/compaction";
 import type { ImageContent } from "@musepi/pi-ai";
 import { CompactionSummaryMessageComponent } from "@musepi/pi-coding-agent/modes/components/compaction-summary-message";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(() => {
 	initTheme();

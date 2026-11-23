@@ -10,11 +10,6 @@ import { Text } from "@musepi/pi-tui";
 import type { AsyncJob, AsyncJobManager } from "../../async";
 import { settings } from "../../config/settings";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
-import { shimmerEnabled, shimmerText } from "../../modes/theme/shimmer";
-import type { Theme } from "../../modes/theme/theme";
-import { USER_INTERRUPT_LABEL } from "../../session/messages";
-import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../../tui";
-import type { ToolSession } from "..";
 import {
 	formatBadge,
 	formatDuration,
@@ -25,7 +20,12 @@ import {
 	replaceTabs,
 	type ToolUIColor,
 	type ToolUIStatus,
-} from "../render-utils";
+} from "../../render/render-utils";
+import { shimmerEnabled, shimmerText } from "../../render/theme/shimmer";
+import type { Theme } from "../../render/theme/theme";
+import { USER_INTERRUPT_LABEL } from "../../session/messages";
+import { Ellipsis, Hasher, type RenderCache, renderStatusLine, renderTreeList, truncateToWidth } from "../../tui";
+import type { ToolSession } from "..";
 import type { AgentActivitySnapshot, CancelOutcome, CoordinationDetails, HubRenderArgs, JobSnapshot } from "./types";
 
 const WAIT_DURATION_MS: Record<string, number> = {

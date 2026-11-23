@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { DynamicBorder } from "../../../src/modes/components/dynamic-border";
-import { getThemeByName, setThemeInstance, theme } from "../../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance, theme } from "../../../src/render/theme/theme";
 
 const componentPath = path.resolve(import.meta.dir, "../../../src/modes/components/dynamic-border.ts");
 

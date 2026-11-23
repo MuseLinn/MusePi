@@ -27,10 +27,10 @@ import { installExtensionComposerShape } from "../../modes/components/composer-s
 import { HookEditorComponent } from "../../modes/components/hook-editor";
 import { HookInputComponent } from "../../modes/components/hook-input";
 import { HookSelectorComponent, type HookSelectorSlider } from "../../modes/components/hook-selector";
-import { getAvailableThemesWithPaths, getThemeByName, setTheme, type Theme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext, InteractiveSelectorDialogOptions } from "../../modes/types";
+import { previewLine, TRUNCATE_LENGTHS } from "../../render/render-utils";
+import { getAvailableThemesWithPaths, getThemeByName, setTheme, type Theme, theme } from "../../render/theme/theme";
 import { normalizeCustomMessagePayload, USER_INTERRUPT_LABEL } from "../../session/messages";
-import { previewLine, TRUNCATE_LENGTHS } from "../../tools/render-utils";
 import { setExtensionTerminalTitle, setSessionTerminalTitle } from "../../utils/title-generator";
 
 const MAX_WIDGET_LINES = 10;

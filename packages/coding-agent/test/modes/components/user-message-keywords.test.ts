@@ -6,10 +6,10 @@ import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/s
 import { CustomEditor } from "@musepi/pi-coding-agent/modes/components/custom-editor";
 import { UserMessageComponent } from "@musepi/pi-coding-agent/modes/components/user-message";
 import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
-import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
 import { ensureBundledPluginsLoaded, resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/plugins-runtime/loader";
+import { getEditorTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { Container } from "@musepi/pi-tui";
 
 beforeAll(async () => {

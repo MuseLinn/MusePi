@@ -32,8 +32,8 @@ import { type ModelRoleLookup, type ResolvedModelRoleValue, resolveModelRoleValu
 import { getKnownRoleIds, getRoleInfo } from "../../config/model-roles";
 import type { Settings } from "../../config/settings";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import { AUTO_THINKING, type ConfiguredThinkingLevel, getConfiguredThinkingLevelMetadata } from "../../thinking";
-import { theme } from "../theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import {
 	buildBrowserItems,

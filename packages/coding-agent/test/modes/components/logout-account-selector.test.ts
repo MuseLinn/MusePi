@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { LogoutAccountSelectorComponent } from "@musepi/pi-coding-agent/modes/components/logout-account-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { StoredAuthCredential } from "@musepi/pi-coding-agent/session/auth-storage";
 import { toLogoutAccounts } from "@musepi/pi-coding-agent/slash-commands/helpers/logout";
 

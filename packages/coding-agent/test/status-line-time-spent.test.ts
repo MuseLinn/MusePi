@@ -16,7 +16,7 @@ import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/s
 import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
 import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
 import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	resetSettingsForTest();

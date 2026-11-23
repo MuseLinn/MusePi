@@ -1,8 +1,8 @@
 import type { TextContent } from "@musepi/pi-ai";
 import { Container, Markdown, Text } from "@musepi/pi-tui";
 import type { CollabPromptDetails } from "../../collab/protocol";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import type { CustomMessage } from "../../session/messages";
-import { getMarkdownTheme, theme } from "../theme/theme";
 
 /**
  * Renders a collab guest prompt on every participant's transcript: a

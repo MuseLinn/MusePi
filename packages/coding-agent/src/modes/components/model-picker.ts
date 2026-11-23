@@ -9,8 +9,8 @@ import type { Component, TUI } from "@musepi/pi-tui";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import type { ResolvedRoleModel } from "../../session/agent-session";
-import { theme } from "../theme/theme";
 import {
 	buildBrowserItems,
 	ModelBrowser,

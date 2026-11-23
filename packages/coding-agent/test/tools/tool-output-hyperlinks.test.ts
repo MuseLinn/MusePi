@@ -5,7 +5,7 @@ import * as path from "node:path";
 import * as url from "node:url";
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
 import { editToolRenderer } from "@musepi/pi-coding-agent/edit/renderer";
-import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { astGrepToolRenderer } from "@musepi/pi-coding-agent/tools/ast-grep";
 import { ReadTool, readToolRenderer } from "@musepi/pi-coding-agent/tools/read";

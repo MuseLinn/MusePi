@@ -3,7 +3,7 @@ import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agen
 import { SETTING_TABS } from "@musepi/pi-coding-agent/config/settings-schema";
 import { loadHindsightConfig } from "@musepi/pi-coding-agent/hindsight/config";
 import { SettingsSelectorComponent } from "@musepi/pi-coding-agent/modes/components/settings-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();

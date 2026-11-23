@@ -6,7 +6,7 @@
 import * as path from "node:path";
 import type { AssistantMessage } from "@musepi/pi-ai";
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { ProcessTerminal, TUI } from "@musepi/pi-tui";
 import { sleep } from "bun";
 

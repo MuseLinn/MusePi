@@ -1,15 +1,5 @@
 import { type Component, padding, Text, visibleWidth } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme, ThemeColor } from "../modes/theme/theme";
-import { framedBlock, outputBlockContentWidth, renderStatusLine } from "../tui";
-import type {
-	GhRunWatchFailedLogDetails,
-	GhRunWatchJobDetails,
-	GhRunWatchRunDetails,
-	GhRunWatchViewDetails,
-	GhToolDetails,
-} from "./gh";
-import { formatShortSha } from "./gh-format";
 import {
 	formatExpandHint,
 	formatMoreItems,
@@ -20,7 +10,17 @@ import {
 	type ToolUIStatus,
 	TRUNCATE_LENGTHS,
 	truncateToWidth as truncateVisualWidth,
-} from "./render-utils";
+} from "../render/render-utils";
+import type { Theme, ThemeColor } from "../render/theme/theme";
+import { framedBlock, outputBlockContentWidth, renderStatusLine } from "../tui";
+import type {
+	GhRunWatchFailedLogDetails,
+	GhRunWatchJobDetails,
+	GhRunWatchRunDetails,
+	GhRunWatchViewDetails,
+	GhToolDetails,
+} from "./gh";
+import { formatShortSha } from "./gh-format";
 
 type GithubToolRenderArgs = {
 	op?: string;

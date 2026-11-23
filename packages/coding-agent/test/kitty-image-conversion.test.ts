@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:
 import type { ImageContent } from "@musepi/pi-ai";
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { ImageProtocol, setTerminalImageProtocol, TERMINAL } from "@musepi/pi-tui";
 
 const IMAGE: ImageContent = {

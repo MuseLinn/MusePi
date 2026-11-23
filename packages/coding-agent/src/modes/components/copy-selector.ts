@@ -1,7 +1,7 @@
 import { type Component, matchesKey, padding, Text, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { replaceTabs } from "../../tools/render-utils";
-import { highlightCode, theme } from "../theme/theme";
+import { replaceTabs } from "../../render/render-utils";
+import { highlightCode, theme } from "../../render/theme/theme";
 import type { CopyTarget } from "../utils/copy-targets";
 import {
 	matchesSelectCancel,

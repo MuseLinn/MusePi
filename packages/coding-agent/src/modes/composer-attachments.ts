@@ -1,5 +1,5 @@
-import { SYMBOL_PRESETS } from "./theme/symbols";
-import { theme } from "./theme/theme";
+import { SYMBOL_PRESETS } from "../render/theme/symbols";
+import { theme } from "../render/theme/theme";
 
 /** Attachment chip kinds staged in the composer: pasted images and large text pastes. */
 export type ChipKind = "image" | "paste";

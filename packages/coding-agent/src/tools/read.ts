@@ -27,6 +27,19 @@ import { resolveBlobFile } from "../internal-urls/blob-protocol";
 import { parseInternalUrl } from "../internal-urls/parse";
 import type { InternalUrl } from "../internal-urls/types";
 import readDescription from "../prompts/tools/read.md" with { type: "text" };
+import {
+	expandPath,
+	formatPathRelativeToCwd,
+	type LineRange,
+	pathTargetsSsh,
+	probeLiteralPathExists,
+	resolveReadPath,
+	splitDelimitedPathEntry,
+	splitInternalUrlSel,
+	splitPathAndSel,
+	splitPathAndSelPreferringLiteral,
+} from "../render/path-utils";
+import { formatBytes, shortenPath } from "../render/render-utils";
 import type { ToolSession } from "../sdk";
 import {
 	DEFAULT_MAX_BYTES,
@@ -62,18 +75,6 @@ import {
 } from "./conflict-detect";
 import { executeReadUrl, fetchReadUrl, parseReadUrlTarget } from "./fetch";
 import { type OutputMeta, resolveOutputMaxColumns } from "./output-meta";
-import {
-	expandPath,
-	formatPathRelativeToCwd,
-	type LineRange,
-	pathTargetsSsh,
-	probeLiteralPathExists,
-	resolveReadPath,
-	splitDelimitedPathEntry,
-	splitInternalUrlSel,
-	splitPathAndSel,
-	splitPathAndSelPreferringLiteral,
-} from "./path-utils";
 import { readArchive, resolveArchiveReadPath } from "./read-archive";
 import {
 	BRACKET_CONTEXT_ELLIPSIS,
@@ -106,7 +107,6 @@ import { type PdfImageReadTarget, renderPdfPageScreenshot, splitPdfImageReadPath
 import { isMultiRange, isRawSelector, type ParsedSelector, parseSel, selToOffsetLimit } from "./read-selector";
 import { readSqlite, resolveSqliteReadPath } from "./read-sqlite";
 import { isProseSummaryPath, renderSummary, routeReadThroughBridge, trySummarize } from "./read-summary";
-import { formatBytes, shortenPath } from "./render-utils";
 import { REPORT_ISSUE_DEVICE_NAME, reportIssueDeviceUsage } from "./report-tool-issue";
 import { isResolutionDeviceName, resolutionDeviceUsage } from "./resolve";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";

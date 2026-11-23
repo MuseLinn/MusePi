@@ -25,7 +25,7 @@ import {
 import chalk from "@musepi/pi-utils/chalk";
 import { withFileLock } from "@musepi/pi-utils/file-lock";
 import { $ } from "bun";
-import { theme } from "../modes/theme/theme";
+import { theme } from "../render/theme/theme";
 import { isTimeoutError, withTimeoutSignal } from "../utils/fetch-timeout";
 
 const REPO = "MuseLinn/MusePi";

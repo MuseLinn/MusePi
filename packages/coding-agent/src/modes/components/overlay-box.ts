@@ -5,7 +5,7 @@
  * colors so all outlined overlays read identically.
  */
 import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
-import { theme } from "../theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /** Pad or truncate a (possibly ANSI-styled) string to exactly `width` columns. */
 export function fit(text: string, width: number): string {

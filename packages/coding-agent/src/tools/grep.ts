@@ -25,8 +25,34 @@ import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { LocalProtocolOptions } from "../internal-urls/local-protocol";
 import { InternalUrlRouter } from "../internal-urls/router";
 import type { InternalResource, ResolveContext } from "../internal-urls/types";
-import type { Theme } from "../modes/theme/theme";
 import grepDescription from "../prompts/tools/grep.md" with { type: "text" };
+import {
+	expandDelimitedPathEntries,
+	hasGlobPathChars,
+	isLineInRanges,
+	type LineRange,
+	parseLineRanges,
+	pathTargetsSsh,
+	type ResolvedSearchTarget,
+	resolveReadPath,
+	resolveToolSearchScope,
+	selectorLineRanges,
+	splitInternalUrlSel,
+	splitPathAndSel,
+	splitPathAndSelPreferringLiteral,
+	toPathList,
+} from "../render/path-utils";
+import {
+	createCachedComponent,
+	formatCodeFrameLine,
+	formatCount,
+	formatEmptyMessage,
+	formatErrorMessage,
+	formatMoreItems,
+	PREVIEW_LIMITS,
+	replaceTabs,
+} from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead, truncateLine } from "../session/streaming-output";
 import { isScoutSpawnable } from "../task/spawn-policy";
 import {
@@ -47,32 +73,6 @@ import { createFileRecorder, formatResultPath } from "./file-recorder";
 import { classifyGroupedLines, formatGroupedFiles, groupLineIndicesByBlank } from "./grouped-file-output";
 import { formatMatchLine } from "./match-line-format";
 import type { OutputMeta } from "./output-meta";
-import {
-	expandDelimitedPathEntries,
-	hasGlobPathChars,
-	isLineInRanges,
-	type LineRange,
-	parseLineRanges,
-	pathTargetsSsh,
-	type ResolvedSearchTarget,
-	resolveReadPath,
-	resolveToolSearchScope,
-	selectorLineRanges,
-	splitInternalUrlSel,
-	splitPathAndSel,
-	splitPathAndSelPreferringLiteral,
-	toPathList,
-} from "./path-utils";
-import {
-	createCachedComponent,
-	formatCodeFrameLine,
-	formatCount,
-	formatEmptyMessage,
-	formatErrorMessage,
-	formatMoreItems,
-	PREVIEW_LIMITS,
-	replaceTabs,
-} from "./render-utils";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

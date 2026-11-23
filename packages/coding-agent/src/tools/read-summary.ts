@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { type SummaryResult, summarizeCode } from "@musepi/pi-natives";
 import { LRUCache } from "@musepi/pi-utils/lru";
-import { isMarkdownPath } from "../modes/theme/theme";
+import { isMarkdownPath } from "../render/theme/theme";
 import type { ToolSession } from "../sdk";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
 import {

@@ -29,7 +29,7 @@ import type { Settings } from "../../src/config/settings";
 import { setLocale } from "../../src/i18n";
 import { type AdvisorConfigDeps, AdvisorConfigOverlayComponent } from "../../src/modes/components/advisor-config";
 import { createAdvisorMessageCard } from "../../src/modes/components/advisor-message";
-import { getThemeByName, setThemeInstance } from "../../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "../../src/render/theme/theme";
 import { SecretObfuscator } from "../../src/secrets/obfuscator";
 import { formatSessionHistoryMarkdown } from "../../src/session/session-history-format";
 import { YieldQueue } from "../../src/session/yield-queue";

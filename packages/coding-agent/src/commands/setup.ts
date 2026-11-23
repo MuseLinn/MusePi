@@ -7,7 +7,7 @@ import { parseArgs } from "../cli/args";
 import { runSetupCommand, type SetupCommandArgs, type SetupComponent } from "../cli/setup-cli";
 import { t } from "../i18n/index.js";
 import { runRootCommand } from "../main";
-import { initTheme } from "../modes/theme/theme";
+import { initTheme } from "../render/theme/theme";
 
 const COMPONENTS: SetupComponent[] = ["python", "speech"];
 

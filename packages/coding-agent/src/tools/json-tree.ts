@@ -2,8 +2,8 @@
  * JSON tree rendering utilities shared across tool renderers.
  */
 import { INTENT_FIELD } from "@musepi/pi-wire";
-import type { Theme } from "../modes/theme/theme";
-import { truncateToWidth } from "./render-utils";
+import { truncateToWidth } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 
 /** Max depth for JSON tree rendering */
 export const JSON_TREE_MAX_DEPTH_COLLAPSED = 2;

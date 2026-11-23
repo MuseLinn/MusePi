@@ -21,8 +21,8 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
+import { theme } from "../../render/theme/theme";
 import { formatDuration } from "../../slash-commands/helpers/format";
-import { theme } from "../theme/theme";
 import { matchesAppInterrupt } from "../utils/keybinding-matchers";
 
 /**

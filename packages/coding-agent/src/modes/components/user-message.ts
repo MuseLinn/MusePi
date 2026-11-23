@@ -1,7 +1,7 @@
 import { type Component, Container, Markdown } from "@musepi/pi-tui";
 import { formatBytes } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
-import { getMarkdownTheme, theme } from "../../modes/theme/theme";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import { attachmentSgr, collapseImageMarkers, renderPlaceholders } from "../composer-attachments";
 import { imageReferenceHyperlink } from "../image-references";
 import { highlightMagicKeywords } from "../magic-keywords";

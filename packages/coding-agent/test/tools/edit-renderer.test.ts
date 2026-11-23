@@ -9,7 +9,7 @@ import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/s
 import { editToolRenderer } from "@musepi/pi-coding-agent/edit/renderer";
 import { renderDiff } from "@musepi/pi-coding-agent/modes/components/diff";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import { Text, type TUI, visibleWidth } from "@musepi/pi-tui";
 import { removeWithRetries } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";

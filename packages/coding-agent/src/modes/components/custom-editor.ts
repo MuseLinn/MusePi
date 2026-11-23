@@ -13,6 +13,7 @@ import {
 import { BracketedPasteHandler } from "@musepi/pi-tui/bracketed-paste";
 import type { AppKeybinding } from "../../config/keybindings";
 import { isSettingsInitialized, settings } from "../../config/settings";
+import { fgOrPlain, theme } from "../../render/theme/theme";
 import {
 	attachmentSgr,
 	COMPOSER_TOKEN_REGEX,
@@ -23,7 +24,6 @@ import {
 import { imageReferenceHyperlink } from "../image-references";
 import { hasMagicKeyword, highlightMagicKeywords } from "../magic-keywords";
 import { isQueuedMessageList, parseQueueShorthand, QUEUE_LIST_MARKER_RE } from "../queue-input";
-import { fgOrPlain, theme } from "../theme/theme";
 
 /** A large text paste staged as a composer chip. `content` feeds the band card's snippet and
  *  captions; the submit-time expansion (verbatim content or a wrapped block) lives in the

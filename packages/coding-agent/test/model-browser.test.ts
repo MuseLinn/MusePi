@@ -7,7 +7,7 @@ import {
 	ModelBrowser,
 	sortModelItems,
 } from "@musepi/pi-coding-agent/modes/components/model-browser";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 function makeModel(provider: string, id: string): Model {
 	return buildModel({

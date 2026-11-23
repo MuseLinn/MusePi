@@ -7,8 +7,8 @@ import type {
 	ToolKind,
 } from "@musepi/pi-utils/acp";
 import { parseXdUrl } from "../../internal-urls/xd-protocol";
+import { resolveToCwd } from "../../render/path-utils";
 import type { AgentSessionEvent } from "../../session/agent-session";
-import { resolveToCwd } from "../../tools/path-utils";
 import type { TodoStatus } from "../../tools/todo";
 import { canonicalizeMessage } from "../../utils/thinking-display";
 

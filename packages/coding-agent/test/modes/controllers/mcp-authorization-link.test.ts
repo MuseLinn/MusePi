@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
 import { MCPAuthorizationLinkPrompt } from "@musepi/pi-coding-agent/modes/controllers/mcp-command-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { visibleWidth } from "@musepi/pi-tui";
 
 const OSC = "\x1b]";

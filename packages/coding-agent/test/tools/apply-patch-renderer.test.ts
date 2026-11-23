@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import { toolRenderers } from "@musepi/pi-coding-agent/tools/renderers";
 import type { TUI } from "@musepi/pi-tui";
 import { removeWithRetries } from "@musepi/pi-utils";

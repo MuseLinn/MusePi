@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import {
 	dispatchResolutionDevice,

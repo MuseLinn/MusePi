@@ -1,6 +1,6 @@
 import { Container, type SelectItem, SelectList, type SgrMouseEvent, Spacer, TruncatedText } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { getSelectListTheme, theme } from "../../modes/theme/theme";
+import { getSelectListTheme, theme } from "../../render/theme/theme";
 import type { SessionPinAccount } from "../../slash-commands/helpers/session-pin";
 import { DynamicBorder } from "./dynamic-border";
 

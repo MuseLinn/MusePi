@@ -5,7 +5,7 @@ import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registr
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ModelHubComponent } from "@musepi/pi-coding-agent/modes/components/model-hub";
 import { SessionSelectorComponent } from "@musepi/pi-coding-agent/modes/components/session-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionInfo } from "@musepi/pi-coding-agent/session/session-listing";
 import { setKeybindings, type TUI } from "@musepi/pi-tui";
 

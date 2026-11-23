@@ -5,7 +5,7 @@ import { getBundledModel } from "@musepi/pi-catalog/models";
 import { isSubcommand } from "@musepi/pi-coding-agent/cli-commands";
 import { getDefault, getEnumValues, getUi } from "@musepi/pi-coding-agent/config/settings-schema";
 import { TinyTitleDownloadProgressComponent } from "@musepi/pi-coding-agent/modes/components/tiny-title-download-progress";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { RefCountedWorkerHandle } from "@musepi/pi-coding-agent/subprocess/worker-client";
 import {
 	TINY_MODEL_DEVICE_DEFAULT,

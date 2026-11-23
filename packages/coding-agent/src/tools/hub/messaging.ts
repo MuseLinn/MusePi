@@ -15,11 +15,8 @@ import { formatAge, formatDuration } from "@musepi/pi-utils";
 import type { Settings } from "../../config/settings";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import { IrcBus, type IrcDeliveryReceipt, type IrcMessage } from "../../irc/bus";
-import type { Theme } from "../../modes/theme/theme";
 import { type AgentRegistry, isMainAgentId, MAIN_AGENT_ID } from "../../registry/agent-registry";
 import { registerPersistedSubagents } from "../../registry/persisted-agents";
-import { canSpawnAtDepth } from "../../task/types";
-import { Ellipsis, renderStatusLine, renderTreeList, truncateToWidth } from "../../tui";
 import {
 	createCachedComponent,
 	formatBadge,
@@ -28,7 +25,10 @@ import {
 	PREVIEW_LIMITS,
 	replaceTabs,
 	type ToolUIColor,
-} from "../render-utils";
+} from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
+import { canSpawnAtDepth } from "../../task/types";
+import { Ellipsis, renderStatusLine, renderTreeList, truncateToWidth } from "../../tui";
 import { type CoordinationDetails, type HubRenderArgs, hubErrorResult } from "./types";
 
 export const DEFAULT_IRC_TIMEOUT_MS = 120_000;

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
-import { getThemeByName, setThemeInstance, type Theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance, type Theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { TaskParams } from "@musepi/pi-coding-agent/task";
 import { taskToolRenderer } from "@musepi/pi-coding-agent/task/renderer";
 

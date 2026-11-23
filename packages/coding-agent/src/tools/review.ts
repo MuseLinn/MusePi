@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isRecord } from "@musepi/pi-utils";
-import type { ThemeColor } from "../modes/theme/theme";
+import type { ThemeColor } from "../render/theme/theme";
 export type FindingPriority = "P0" | "P1" | "P2" | "P3";
 
 export interface FindingPriorityInfo {

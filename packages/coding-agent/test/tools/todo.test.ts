@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import {
 	markdownToPhases,

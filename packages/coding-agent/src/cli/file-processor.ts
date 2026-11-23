@@ -6,8 +6,8 @@ import * as path from "node:path";
 import type { ImageContent } from "@musepi/pi-ai";
 import { getProjectDir, isEnoent, readImageMetadata } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
-import { resolveReadPath } from "../tools/path-utils";
-import { formatBytes } from "../tools/render-utils";
+import { resolveReadPath } from "../render/path-utils";
+import { formatBytes } from "../render/render-utils";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize";
 import { CONVERTIBLE_EXTENSIONS, convertFileWithMarkit } from "../utils/markit";
 

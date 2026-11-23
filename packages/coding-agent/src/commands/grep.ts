@@ -6,7 +6,7 @@ import { GrepOutputMode } from "@musepi/pi-natives";
 import { Args, Command, Flags } from "@musepi/pi-utils/cli";
 import { grepHelp as commandHelp } from "../cli/command-help";
 import { type GrepCommandArgs, runGrepCommand } from "../cli/grep-cli";
-import { initTheme } from "../modes/theme/theme";
+import { initTheme } from "../render/theme/theme";
 
 export default class Grep extends Command {
 	static description = commandHelp.description;

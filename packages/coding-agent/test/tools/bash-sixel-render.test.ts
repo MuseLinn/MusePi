@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { RenderResultOptions } from "@musepi/pi-agent-core";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import { bashToolRenderer } from "@musepi/pi-coding-agent/tools/bash";
-import { previewWindowRows } from "@musepi/pi-coding-agent/tools/render-utils";
 import { ImageProtocol, TERMINAL } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
+import { previewWindowRows } from "../../src/render/render-utils";
 
 type MutableTerminalInfo = {
 	imageProtocol: ImageProtocol | null;

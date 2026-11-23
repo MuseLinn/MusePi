@@ -13,7 +13,7 @@ import {
 	type PluginListEntry,
 	PluginSettingsComponent,
 } from "@musepi/pi-coding-agent/modes/components/plugin-settings";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
 beforeAll(async () => {
 	await initTheme();

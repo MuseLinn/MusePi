@@ -6,8 +6,8 @@ import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { AssistantMessage, Usage } from "@musepi/pi-ai";
 import type { Rule } from "@musepi/pi-coding-agent/capability/rule";
 import { OmfgController } from "@musepi/pi-coding-agent/modes/controllers/omfg-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { Container, type TUI } from "@musepi/pi-tui";
 import { getProjectAgentDir, removeWithRetries } from "@musepi/pi-utils";
 

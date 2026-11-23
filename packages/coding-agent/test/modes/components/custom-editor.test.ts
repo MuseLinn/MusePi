@@ -15,7 +15,7 @@ import {
 	SPACE_HOLD_RELEASE_MS,
 	SPACE_REPEAT_MAX_GAP_MS,
 } from "../../../src/modes/components/custom-editor";
-import { getEditorTheme, initTheme, theme } from "../../../src/modes/theme/theme";
+import { getEditorTheme, initTheme, theme } from "../../../src/render/theme/theme";
 
 function makeEditor() {
 	const editor = new CustomEditor(getEditorTheme());

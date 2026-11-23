@@ -5,7 +5,7 @@
 import { Args, Command } from "@musepi/pi-utils/cli";
 import { readHelp as commandHelp } from "../cli/command-help";
 import { type ReadCommandArgs, runReadCommand } from "../cli/read-cli";
-import { initTheme } from "../modes/theme/theme";
+import { initTheme } from "../render/theme/theme";
 
 export default class Read extends Command {
 	static description = commandHelp.description;

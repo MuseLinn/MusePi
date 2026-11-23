@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:te
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
 import { ReadToolGroupComponent } from "@musepi/pi-coding-agent/modes/components/read-tool-group";
 import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
-import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as themeModule from "@musepi/pi-coding-agent/render/theme/theme";
 import type { Component } from "@musepi/pi-tui";
 
 /** Minimal transcript block whose finalized state is fixed at construction. */

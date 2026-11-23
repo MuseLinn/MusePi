@@ -21,9 +21,9 @@ import { beforeAll, describe, expect, it, vi } from "bun:test";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { AssistantMessage, Usage } from "@musepi/pi-ai";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext, RenderSessionContextOptions } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionContext } from "@musepi/pi-coding-agent/session/session-context";
 import { Container } from "@musepi/pi-tui";
 

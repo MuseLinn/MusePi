@@ -2,8 +2,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, type Mock, vi }
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { SelectorController } from "@musepi/pi-coding-agent/modes/controllers/selector-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionTreeNode } from "@musepi/pi-coding-agent/session/session-entries";
 import { setKittyProtocolActive } from "@musepi/pi-tui/keys";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";

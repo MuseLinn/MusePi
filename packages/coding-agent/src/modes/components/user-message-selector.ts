@@ -10,8 +10,8 @@ import {
 	truncateToWidth,
 } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
+import { theme } from "../../render/theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 
 interface UserMessageItem {

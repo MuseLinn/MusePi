@@ -101,6 +101,22 @@ import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compa
 	type: "text",
 };
 import { type AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { normalizeLocalScheme } from "../render/path-utils";
+import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
+import { clearMermaidCache } from "../render/theme/mermaid-cache";
+import { type ShimmerPalette, shimmerEnabled, shimmerSegments, shimmerText } from "../render/theme/shimmer";
+import type { Theme } from "../render/theme/theme";
+import {
+	getEditorTheme,
+	getMarkdownTheme,
+	getSymbolTheme,
+	onTerminalAppearanceChange,
+	onThemeChange,
+	setMarkdownMermaidRendering,
+	startMacOSAppearanceReprobeFallback,
+	theme,
+} from "../render/theme/theme";
+import { getSlashCommandTypeIcon } from "../render/theme/tui-adapters";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -121,17 +137,15 @@ import { discoverTitleSystemPromptFile, resolvePromptInput } from "../system-pro
 import { formatTaskId } from "../task/render";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import { tinyTitleClient } from "../tiny/title-client";
-import type { LspStartupServerInfo } from "../tools";
-import { normalizeLocalScheme } from "../tools/path-utils";
-import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../tools/render-utils";
-import { setAutoQaConsentHandler } from "../tools/report-tool-issue";
 import {
 	formatPhaseDisplayName,
 	isClosedTodo,
 	selectCollapsedTodos,
 	setActiveTodoDescriptionsProvider,
 	todoMatchesAnyDescription,
-} from "../tools/todo";
+} from "../todo/policy";
+import type { LspStartupServerInfo } from "../tools";
+import { setAutoQaConsentHandler } from "../tools/report-tool-issue";
 import { vocalizer } from "../tts/vocalizer";
 import { renderTreeList } from "../tui/tree-list";
 import { formatStartupChangelogSummary, type StartupChangelogSelection } from "../utils/changelog";
@@ -205,20 +219,6 @@ import { createSessionTeardown, type SessionTeardown } from "./session-teardown"
 import { runProviderSetupWizard } from "./setup-wizard/lazy";
 import { interruptHint } from "./shared";
 import { invokeSkillCommandFromText, isKnownSkillCommand } from "./skill-command";
-import { clearMermaidCache } from "./theme/mermaid-cache";
-import { type ShimmerPalette, shimmerEnabled, shimmerSegments, shimmerText } from "./theme/shimmer";
-import type { Theme } from "./theme/theme";
-import {
-	getEditorTheme,
-	getMarkdownTheme,
-	getSymbolTheme,
-	onTerminalAppearanceChange,
-	onThemeChange,
-	setMarkdownMermaidRendering,
-	startMacOSAppearanceReprobeFallback,
-	theme,
-} from "./theme/theme";
-import { getSlashCommandTypeIcon } from "./theme/tui-adapters";
 import type {
 	CompactionQueuedMessage,
 	InteractiveModeContext,

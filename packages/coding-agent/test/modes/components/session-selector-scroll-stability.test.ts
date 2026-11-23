@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { SessionSelectorComponent } from "@musepi/pi-coding-agent/modes/components/session-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { SessionInfo } from "@musepi/pi-coding-agent/session/session-listing";
 import { TUI } from "@musepi/pi-tui";
 import { StressRenderScheduler } from "../../../../tui/test/render-stress-scheduler";

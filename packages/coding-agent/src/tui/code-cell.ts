@@ -2,14 +2,14 @@
  * Render a code or markdown cell with optional output section.
  */
 import { Markdown } from "@musepi/pi-tui";
-import { getMarkdownTheme, highlightCode, type Theme } from "../modes/theme/theme";
 import {
 	formatDuration,
 	formatExpandHint,
 	formatMoreItems,
 	formatStatusIcon,
 	replaceTabs,
-} from "../tools/render-utils";
+} from "../render/render-utils";
+import { getMarkdownTheme, highlightCode, type Theme } from "../render/theme/theme";
 import { outputBlockContentWidth, renderOutputBlock } from "./output-block";
 import type { State } from "./types";
 

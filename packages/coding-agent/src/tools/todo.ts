@@ -6,8 +6,8 @@ import { Text } from "@musepi/pi-tui";
 import { isRecord, prompt, sanitizeText } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
 import todoDescription from "../prompts/tools/todo.md" with { type: "text" };
+import type { Theme } from "../render/theme/theme";
 import type { ToolSession } from "../sdk";
 import type { SessionEntry } from "../session/session-entries";
 import { framedBlock, renderStatusLine, renderTreeList } from "../tui";
@@ -15,8 +15,26 @@ import type { TodoItem, TodoPhase, TodoStatus } from "./contract";
 
 export type { TodoItem, TodoPhase, TodoStatus } from "./contract";
 
-import { normalizePathLikeInput, resolveToCwd } from "./path-utils";
-import { formatErrorDetail, formatMoreItems, PREVIEW_LIMITS, pluralize, replaceTabs } from "./render-utils";
+import { normalizePathLikeInput, resolveToCwd } from "../render/path-utils";
+import { formatErrorDetail, PREVIEW_LIMITS, replaceTabs } from "../render/render-utils";
+import {
+	activeTodoDescriptions,
+	formatPhaseDisplayName,
+	isClosedTodo,
+	selectCollapsedTodos,
+	todoMatchesAnyDescription,
+} from "../todo/policy";
+
+export {
+	activeTodoDescriptions,
+	type CollapsedTodoSelection,
+	formatPhaseDisplayName,
+	isClosedTodo,
+	phaseRomanNumeral,
+	selectCollapsedTodos,
+	setActiveTodoDescriptionsProvider,
+	todoMatchesAnyDescription,
+} from "../todo/policy";
 
 // =============================================================================
 // Types
@@ -186,152 +204,6 @@ export function getLatestTodoPhasesFromEntries(entries: SessionEntry[]): TodoPha
 	}
 
 	return [];
-}
-
-/** Minimum overlap (after normalization) required for a substring match.
- * Picked at six chars to admit single-word identifiers like "review" /
- * "Sonnet" without admitting tiny common substrings like "test" / "fix"
- * that would collide across unrelated todos. */
-const TODO_DESCRIPTION_MIN_OVERLAP = 6;
-
-function normalizeForTodoMatch(value: string): string {
-	return value
-		.toLowerCase()
-		.replace(/[^\p{L}\p{N}]+/gu, " ")
-		.trim();
-}
-
-/**
- * Report whether `content` likely names the same work as any entry in
- * `descriptions`. Used by the sticky todo panel to light up a pending todo
- * when an in-flight subagent is doing the work for it, without requiring
- * the caller to flip the todo's status.
- *
- * Matching is normalize-then-equal first (lowercased; punctuation and
- * whitespace runs both collapsed to a single space; trimmed), with a
- * substring fallback in either direction so minor wording drift
- * ("Sonnet #2: bug scan" vs "Sonnet #2") still links up. The substring
- * fallback requires at least {@link TODO_DESCRIPTION_MIN_OVERLAP} chars on
- * the contained side.
- */
-export function todoMatchesAnyDescription(content: string, descriptions: readonly string[]): boolean {
-	const target = normalizeForTodoMatch(content);
-	if (!target) return false;
-	for (const desc of descriptions) {
-		const candidate = normalizeForTodoMatch(desc);
-		if (!candidate) continue;
-		if (target === candidate) return true;
-		if (target.length >= TODO_DESCRIPTION_MIN_OVERLAP && candidate.includes(target)) return true;
-		if (candidate.length >= TODO_DESCRIPTION_MIN_OVERLAP && target.includes(candidate)) return true;
-	}
-	return false;
-}
-
-/** Whether a todo is settled: completed or deliberately abandoned. Shared so
- *  the collapsed viewport, the HUD progress counters, and the HUD's closed-todo
- *  auto-clear can never disagree about what "done" hides. */
-export function isClosedTodo<T extends { status: TodoStatus }>(task: T): boolean {
-	return task.status === "completed" || task.status === "abandoned";
-}
-
-/**
- * A todo the collapsed viewport treats as current work: the literal
- * `in_progress` task or a pending task a live subagent is executing. Both
- * collapsed views (transient tool result + sticky HUD) run this same policy so
- * they can never disagree about what the agent is doing (#5873).
- */
-function isActiveTodo<T extends { status: TodoStatus }>(task: T, isMatched: (task: T) => boolean): boolean {
-	return task.status === "in_progress" || (task.status === "pending" && isMatched(task));
-}
-
-/** Result of {@link selectCollapsedTodos}: the rows to render plus an optional
- *  summary line (empty string ⇒ no summary row). */
-export interface CollapsedTodoSelection<T> {
-	items: T[];
-	summary: string;
-}
-
-/**
- * Closed rows kept directly above the open window so finishing a task is
- * visible as it happens. Without this the collapsed viewport only ever renders
- * unchecked boxes while a phase has open work: every completion silently
- * removes a row, so a plan mid-flight looks untouched, and the card's
- * completion strike animation (`completedTasks` → {@link TODO_STRIKE_TOTAL_FRAMES})
- * animated a row that was never rendered.
- */
-const COLLAPSED_CLOSED_CONTEXT = 1;
-
-/**
- * Rows to show for a display base already reduced to the relevant tasks.
- *
- * 1. Every active task (in-progress, or pending matched to a live subagent) is
- *    placed at the head in stable todo order — never dropped for lying outside
- *    an ordinary window.
- * 2. Remaining rows up to `cap` are filled with the pending tasks that follow
- *    the first active one, in todo order (falling back to leading pending tasks
- *    when no active task exists), so a freshly-promoted task leads the preview.
- * 3. When active tasks alone exceed `cap`, only the first `cap` active tasks are
- *    shown and the summary counts the hidden *active* todos, never replacing
- *    them with unrelated pending rows.
- */
-function selectWithinCap<T extends { status: TodoStatus }>(
-	base: T[],
-	isMatched: (task: T) => boolean,
-	cap: number,
-): CollapsedTodoSelection<T> {
-	if (base.length <= cap) return { items: base, summary: "" };
-
-	const active = base.filter(task => isActiveTodo(task, isMatched));
-	// Only when active work strictly exceeds the cap do we drop pending rows and
-	// count hidden *actives*. At exactly `cap` actives, fall through so the normal
-	// branch still surfaces any following pending work in the summary.
-	if (active.length > cap) {
-		const hiddenActive = active.length - cap;
-		return {
-			items: active.slice(0, cap),
-			summary: `… ${hiddenActive} more active ${pluralize("todo", hiddenActive)}`,
-		};
-	}
-
-	// Fill trailing rows with tasks following the first active one, so the
-	// promoted/current task leads and its successors follow in todo order.
-	const firstActiveIdx = active.length > 0 ? base.indexOf(active[0]) : 0;
-	const fill: T[] = [];
-	for (let i = firstActiveIdx; i < base.length && active.length + fill.length < cap; i++) {
-		const task = base[i];
-		if (isActiveTodo(task, isMatched)) continue;
-		fill.push(task);
-	}
-	const items = [...active, ...fill];
-	const hidden = base.length - items.length;
-	return { items, summary: hidden > 0 ? formatMoreItems(hidden, "todo") : "" };
-}
-
-/**
- * Walking-viewport selection for a phase's collapsed todo preview (#5873).
- *
- * Applied to `tasks` in todo order: the open tasks run through
- * {@link selectWithinCap}, led by the last {@link COLLAPSED_CLOSED_CONTEXT}
- * closed tasks in todo order so a checked row remains visible even when callers
- * complete work out of sequence. The lead is additive — it never costs an open
- * row — and a phase with no open work left falls back to its closed tasks so the
- * sticky HUD's closed-todo persistence still has something to render.
- *
- * `summary` counts the open tasks that did not fit; the closed lead is context,
- * not part of the budget.
- */
-export function selectCollapsedTodos<T extends { status: TodoStatus }>(
-	tasks: T[],
-	isMatched: (task: T) => boolean,
-	cap: number,
-): CollapsedTodoSelection<T> {
-	const open = tasks.filter(task => !isClosedTodo(task));
-	// Closed tasks are never active, so a settled phase selects over itself.
-	if (open.length === 0) return selectWithinCap(tasks, isMatched, cap);
-	// `done` accepts any named task, so closed tasks are not necessarily a prefix.
-	const lead = tasks.filter(isClosedTodo).slice(-COLLAPSED_CLOSED_CONTEXT);
-	const selected = selectWithinCap(open, isMatched, cap);
-	return { items: [...lead, ...selected.items], summary: selected.summary };
 }
 
 function resolveTaskOrError(
@@ -924,35 +796,9 @@ function normalizeTodoArg(args: TodoRenderArgs | undefined): TodoRenderOp[] {
 // Phase numbering (display-only)
 // =============================================================================
 
-const ROMAN_PAIRS: Array<[number, string]> = [
-	[1000, "M"],
-	[900, "CM"],
-	[500, "D"],
-	[400, "CD"],
-	[100, "C"],
-	[90, "XC"],
-	[50, "L"],
-	[40, "XL"],
-	[10, "X"],
-	[9, "IX"],
-	[5, "V"],
-	[4, "IV"],
-	[1, "I"],
-];
-
-/** One-based ASCII roman numeral for display (I, II, III, IV, …). */
-export function phaseRomanNumeral(oneBasedIndex: number): string {
-	if (oneBasedIndex <= 0) return "";
-	let out = "";
-	let rem = oneBasedIndex;
-	for (const [value, sym] of ROMAN_PAIRS) {
-		while (rem >= value) {
-			out += sym;
-			rem -= value;
-		}
-	}
-	return out;
-}
+export const TODO_STRIKE_HOLD_FRAMES = 2;
+export const TODO_STRIKE_REVEAL_FRAMES = 12;
+export const TODO_STRIKE_TOTAL_FRAMES = TODO_STRIKE_HOLD_FRAMES + TODO_STRIKE_REVEAL_FRAMES;
 
 /**
  * Every render boundary in this file funnels display text through here.
@@ -966,20 +812,6 @@ function forDisplay(text: string): string {
 	return replaceTabs(sanitizeText(text));
 }
 
-/**
- * Display-only phase header: `I. Foundation`. State and prompts never see this.
- *
- * Sanitized for the same reason task labels are: this is a render boundary and
- * the name may carry provider or session text holding control sequences. The
- * raw `phase.name` stays the lookup key everywhere else.
- */
-export function formatPhaseDisplayName(name: string, oneBasedIndex: number): string {
-	return `${phaseRomanNumeral(oneBasedIndex)}. ${forDisplay(name)}`;
-}
-
-export const TODO_STRIKE_HOLD_FRAMES = 2;
-export const TODO_STRIKE_REVEAL_FRAMES = 12;
-export const TODO_STRIKE_TOTAL_FRAMES = TODO_STRIKE_HOLD_FRAMES + TODO_STRIKE_REVEAL_FRAMES;
 const EMPTY_COMPLETION_KEYS = new Set<string>();
 const STRIKE_START = "\x1b[9m";
 const STRIKE_END = "\x1b[29m";
@@ -1104,12 +936,6 @@ function formatPhaseSummary(phase: TodoPhase, oneBasedIndex: number, uiTheme: Th
  * interactive session (tests, SDK, transcript rebuilds), where only literal
  * `in_progress` counts as active.
  */
-let activeTodoDescriptionsProvider: () => readonly string[] = () => [];
-
-/** Wire the live-subagent description source for {@link todoToolRenderer}. */
-export function setActiveTodoDescriptionsProvider(provider: () => readonly string[]): void {
-	activeTodoDescriptionsProvider = provider;
-}
 
 export const todoToolRenderer = {
 	renderCall(args: TodoRenderArgs, options: RenderResultOptions, uiTheme: Theme): Component {
@@ -1200,7 +1026,7 @@ export const todoToolRenderer = {
 			// A pending todo counts as active work when an in-flight subagent is
 			// executing it — the transient result surfaces the same active set the
 			// sticky HUD does (#5873). Empty outside an interactive session.
-			const activeDescs = expanded ? [] : activeTodoDescriptionsProvider();
+			const activeDescs = expanded ? [] : activeTodoDescriptions();
 			const isMatched = (task: TodoItem): boolean =>
 				activeDescs.length > 0 && todoMatchesAnyDescription(task.content, activeDescs);
 			const bodyLines: string[] = [];
@@ -1233,13 +1059,17 @@ export const todoToolRenderer = {
 							uiTheme,
 						)
 					: (() => {
-							const selection = selectCollapsedTodos(phase.tasks, isMatched, PREVIEW_LIMITS.COLLAPSED_ITEMS);
+							const selection = selectCollapsedTodos<TodoItem>(
+								phase.tasks,
+								isMatched,
+								PREVIEW_LIMITS.COLLAPSED_ITEMS,
+							);
 							return renderTreeList(
 								{
 									items: selection.items,
 									itemType: "todo",
 									trailingSummary: selection.summary,
-									renderItem: todo =>
+									renderItem: (todo: TodoItem) =>
 										formatTodoLine(todo, uiTheme, "", completionKeys, spinnerFrame, isMatched(todo)),
 								},
 								uiTheme,

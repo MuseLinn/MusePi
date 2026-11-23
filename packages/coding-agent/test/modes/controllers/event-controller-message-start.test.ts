@@ -2,9 +2,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import type { TextContent, UserMessage } from "@musepi/pi-ai";
 import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
 import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { CustomMessage } from "@musepi/pi-coding-agent/session/messages";
 import type { Component } from "@musepi/pi-tui";
 

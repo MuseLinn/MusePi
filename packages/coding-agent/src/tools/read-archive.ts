@@ -6,10 +6,11 @@ import {
 	openArchive,
 	parseArchivePathCandidates,
 } from "@musepi/pi-utils/ar";
+import { resolveReadPath } from "../render/path-utils";
+import { formatBytes } from "../render/render-utils";
 import type { ToolSession } from "../sdk";
 import { truncateHead } from "../session/streaming-output";
 import { applyListLimit } from "./list-limit";
-import { resolveReadPath } from "./path-utils";
 import type { ReadToolDetails } from "./read";
 import {
 	buildInMemoryMultiRangeResult,
@@ -25,7 +26,6 @@ import {
 	type SuffixMatchCache,
 } from "./read-path-resolution";
 import { isMultiRange, isRawSelector, type ParsedSelector, parseSel, selToOffsetLimit } from "./read-selector";
-import { formatBytes } from "./render-utils";
 import { ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

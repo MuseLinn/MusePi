@@ -1,7 +1,7 @@
 import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { t } from "../../../i18n/index.js";
+import { theme } from "../../../render/theme/theme";
 import { gradientEscape, gradientLogo, PI_LOGO, type ShineConfig } from "../../components/welcome";
-import { theme } from "../../theme/theme";
 
 export const SETUP_SPLASH_MS = 2600;
 export const SETUP_TICK_MS = 33;

@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
-import { resolveExplicitSearchPaths } from "@musepi/pi-coding-agent/tools/path-utils";
 import { removeWithRetries } from "@musepi/pi-utils";
+import { resolveExplicitSearchPaths } from "../../src/render/path-utils";
 
 const isWindows = process.platform === "win32";
 

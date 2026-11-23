@@ -6,7 +6,7 @@ import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { GoalTool } from "@musepi/pi-coding-agent/goals/tools/goal-tool";
 import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";

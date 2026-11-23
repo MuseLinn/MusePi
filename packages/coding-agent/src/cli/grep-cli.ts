@@ -7,7 +7,7 @@ import * as path from "node:path";
 import { GrepOutputMode, grep } from "@musepi/pi-natives";
 import { APP_NAME } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
-import { expandPath } from "../tools/path-utils";
+import { expandPath } from "../render/path-utils";
 
 export interface GrepCommandArgs {
 	pattern: string;

@@ -31,8 +31,8 @@ import {
 } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
+import { getMarkdownTheme, theme } from "../../render/theme/theme";
 import { sanitizeStatusText } from "../shared";
-import { getMarkdownTheme, theme } from "../theme/theme";
 import {
 	matchesAppExternalEditor,
 	matchesSelectCancel,

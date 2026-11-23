@@ -3,10 +3,10 @@ import { logger } from "@musepi/pi-utils";
 import { LiveSessionController, type LiveSessionControllerOptions, type LiveTranscript } from "../../live/controller";
 import { LIVE_MODEL } from "../../live/protocol";
 import { LiveVisualizer } from "../../live/visualizer";
+import { theme } from "../../render/theme/theme";
 import { vocalizer } from "../../tts/vocalizer";
 import type { AssistantMessageComponent } from "../components/assistant-message";
 import type { CustomEditor } from "../components/custom-editor";
-import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
 import { createAssistantMessageComponent } from "../utils/interactive-context-helpers";
 

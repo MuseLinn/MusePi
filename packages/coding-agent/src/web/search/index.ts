@@ -12,12 +12,12 @@ import { prompt } from "@musepi/pi-utils";
 import { ModelRegistry } from "../../config/model-registry";
 import { settings } from "../../config/settings";
 import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../extensibility/custom-tools/types";
-import type { Theme } from "../../modes/theme/theme";
 import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { type: "text" };
 import webSearchDescription from "../../prompts/tools/web-search.md" with { type: "text" };
+import { formatAge } from "../../render/render-utils";
+import type { Theme } from "../../render/theme/theme";
 import { discoverAuthStorage } from "../../sdk";
 import type { ToolSession } from "../../tools";
-import { formatAge } from "../../tools/render-utils";
 import { throwIfAborted } from "../../tools/tool-errors";
 import {
 	clearSearchProviderConnectivityFailure,

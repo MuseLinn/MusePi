@@ -8,7 +8,7 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
-import { type ThemeColor, theme } from "../modes/theme/theme";
+import { type ThemeColor, theme } from "../render/theme/theme";
 
 /** Distinct states of a realtime call connection. */
 export type LivePhase = "connecting" | "listening" | "working" | "speaking" | "muted" | "error";

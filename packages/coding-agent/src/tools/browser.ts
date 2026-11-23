@@ -6,6 +6,7 @@ import type { ToolExample } from "@musepi/pi-ai";
 import { prompt, Snowflake, untilAborted } from "@musepi/pi-utils";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
+import { resolveToCwd } from "../render/path-utils";
 import type { ToolSession } from "../sdk";
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
@@ -67,7 +68,6 @@ import {
 import { type BrowserVisualCrop, resolveVisualCrop } from "./browser/visual-crop";
 import { type BrowserWaitResult, pageWaitCode } from "./browser/wait";
 import type { OutputMeta } from "./output-meta";
-import { resolveToCwd } from "./path-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { clampTimeout } from "./tool-timeouts";

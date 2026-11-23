@@ -3,7 +3,7 @@
  */
 import type { AgentTool, AgentToolUpdateCallback, ToolLoadMode } from "@musepi/pi-agent-core";
 import type { Static, TSchema } from "@musepi/pi-ai";
-import type { Theme } from "../../modes/theme/theme";
+import type { Theme } from "../../render/theme/theme";
 import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import { applyToolProxy } from "../tool-proxy";
 import type { CustomTool, CustomToolContext } from "./types";

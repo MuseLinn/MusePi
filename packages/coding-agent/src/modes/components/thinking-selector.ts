@@ -1,6 +1,6 @@
 import type { Effort } from "@musepi/pi-ai";
 import { Container, type SelectItem, SelectList, type SgrMouseEvent } from "@musepi/pi-tui";
-import { getSelectListTheme } from "../../modes/theme/theme";
+import { getSelectListTheme } from "../../render/theme/theme";
 import { getThinkingLevelMetadata } from "../../thinking";
 import { DynamicBorder } from "./dynamic-border";
 import { routeSelectListMouseWithTopBorder } from "./select-list-mouse-routing";

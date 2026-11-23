@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { OAuthSelectorComponent } from "@musepi/pi-coding-agent/modes/components/oauth-selector";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 
 beforeAll(async () => {

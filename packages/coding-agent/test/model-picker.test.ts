@@ -6,7 +6,7 @@ import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registr
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ModelPickerComponent, type ModelPickerOptions } from "@musepi/pi-coding-agent/modes/components/model-picker";
 import { resolveSegmentPalette } from "@musepi/pi-coding-agent/modes/components/segment-track";
-import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ResolvedRoleModel } from "@musepi/pi-coding-agent/session/agent-session";
 import type { TUI } from "@musepi/pi-tui";
 

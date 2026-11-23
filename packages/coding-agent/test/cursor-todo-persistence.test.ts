@@ -3,7 +3,7 @@ import type { AgentEvent } from "@musepi/pi-agent-core";
 import type { AssistantMessage } from "@musepi/pi-ai";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { CursorExecHandlers } from "@musepi/pi-coding-agent/cursor";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import {
 	getLatestTodoPhasesFromEntries,
 	type TodoPhase,

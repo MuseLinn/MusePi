@@ -41,11 +41,11 @@ import {
 	MAIN_AGENT_ID,
 } from "../../registry/agent-registry";
 import { registerPersistedSubagents } from "../../registry/persisted-agents";
+import { shortenPath, truncateToWidth } from "../../render/render-utils";
+import { theme } from "../../render/theme/theme";
 import { USER_INTERRUPT_LABEL } from "../../session/messages";
-import { shortenPath, truncateToWidth } from "../../tools/render-utils";
 import { formatLocalDateTimeWithOffset } from "../../utils/local-date";
 import type { ObservableSession, SessionObserverRegistry } from "../session-observer-registry";
-import { theme } from "../theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../utils/keybinding-matchers";
 import {
 	type AgentMetrics,

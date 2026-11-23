@@ -6,7 +6,7 @@
  * replace.
  */
 import { extractPrintableText, matchesKey, ScrollView } from "@musepi/pi-tui";
-import { theme } from "../theme/theme";
+import { theme } from "../../render/theme/theme";
 
 /**
  * Render `rows` through a {@link ScrollView} with the shared list theme (muted

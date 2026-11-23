@@ -2,10 +2,10 @@ import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import { sanitizeText } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import type { Theme } from "../modes/theme/theme";
+import { PREVIEW_LIMITS, replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../render/render-utils";
+import type { Theme } from "../render/theme/theme";
 import { framedBlock, renderStatusLine } from "../tui";
 import type { ComputerToolDetails } from "./computer";
-import { PREVIEW_LIMITS, replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "./render-utils";
 
 interface ComputerRenderArgs {
 	code?: unknown;

@@ -2,15 +2,15 @@ import * as path from "node:path";
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
-import { getLanguageFromPath, type Theme } from "../modes/theme/theme";
+import { isReadableUrlPath, splitInternalUrlSel, splitPathAndSel } from "../render/path-utils";
+import { formatBytes, replaceTabs, shortenPath, wrapBrackets } from "../render/render-utils";
+import { getLanguageFromPath, type Theme } from "../render/theme/theme";
 import { fileHyperlink, renderCodeCell, renderMarkdownCell, renderStatusLine, tryResolveInternalUrlSync } from "../tui";
 import { CachedOutputBlock, markFramedBlockComponent } from "../tui/output-block";
 import { type ReadUrlToolDetails, renderReadUrlCall, renderReadUrlResult } from "./fetch";
 import { formatFullOutputReference, formatStyledTruncationWarning, stripOutputNotice } from "./output-meta";
-import { isReadableUrlPath, splitInternalUrlSel, splitPathAndSel } from "./path-utils";
 import type { ReadToolDetails } from "./read";
 import { isRawSelector, parseSel } from "./read-selector";
-import { formatBytes, replaceTabs, shortenPath, wrapBrackets } from "./render-utils";
 
 // =============================================================================
 // TUI Renderer

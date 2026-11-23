@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { CodexResetFireworksEvent } from "@musepi/pi-coding-agent/modes/components/codex-reset-fireworks";
 import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 
 async function flushMicrotasks(): Promise<void> {

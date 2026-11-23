@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { IrcMessage } from "@musepi/pi-coding-agent/irc/bus";
-import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { getThemeByName } from "@musepi/pi-coding-agent/render/theme/theme";
 import { type CoordinationDetails, hubToolRenderer } from "@musepi/pi-coding-agent/tools/hub";
 import { sanitizeText } from "@musepi/pi-utils";
 

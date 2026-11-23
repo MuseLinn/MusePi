@@ -4,12 +4,12 @@ import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/s
 import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
 import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
-import { theme as activeTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { theme as activeTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentProgress, TaskToolDetails } from "@musepi/pi-coding-agent/task/types";
 import { evalToolRenderer } from "@musepi/pi-coding-agent/tools/eval-render";
-import { previewWindowRows } from "@musepi/pi-coding-agent/tools/render-utils";
 import { type Component, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal";
+import { previewWindowRows } from "../src/render/render-utils";
 
 // Long, path-like output that wraps at the box's inner width — the case that
 // made a fixed 10-line preview overflow the viewport once committed.

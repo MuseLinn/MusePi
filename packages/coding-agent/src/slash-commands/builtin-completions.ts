@@ -5,7 +5,7 @@ import type { AutocompleteItem } from "@musepi/pi-tui";
 import { getMCPConfigPath, getProjectDir, logger } from "@musepi/pi-utils";
 import { readMCPConfigFile } from "../mcp/config-writer";
 import { collectMcpServerNames } from "../modes/controllers/mcp-command-controller";
-import { expandTilde } from "../tools/path-utils";
+import { expandTilde } from "../render/path-utils";
 import type { SubcommandDef, TuiSlashCommandRuntime } from "./types";
 
 /**

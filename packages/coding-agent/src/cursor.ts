@@ -29,9 +29,9 @@ import {
 } from "@musepi/pi-ai/providers/cursor/exec-modern";
 import { sanitizeText } from "@musepi/pi-utils";
 import type { MCPResourceReadResult } from "./mcp/types";
+import { confineToWorkspace, resolveToCwd } from "./render/path-utils";
 import type { ApprovalMode } from "./tools/approval";
 import { resolveApproval } from "./tools/approval";
-import { confineToWorkspace, resolveToCwd } from "./tools/path-utils";
 import type { TodoPhase, TodoStatus } from "./tools/todo";
 
 /** Phase used for Cursor-owned tasks with no local phase grouping. */

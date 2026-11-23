@@ -1,6 +1,6 @@
 import { routeSelectListMouse, type SelectItem, SelectList, type SgrMouseEvent } from "@musepi/pi-tui";
 import { t } from "../../../i18n/index.js";
-import { getSelectListTheme, type SymbolPreset, setSymbolPreset, theme } from "../../theme/theme";
+import { getSelectListTheme, type SymbolPreset, setSymbolPreset, theme } from "../../../render/theme/theme";
 import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 
 const GLYPH_PRESETS = ["nerd", "unicode", "ascii"] as const satisfies readonly SymbolPreset[];

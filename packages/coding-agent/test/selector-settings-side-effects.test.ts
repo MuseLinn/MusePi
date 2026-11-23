@@ -12,8 +12,8 @@ import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/compone
 import { ReadToolGroupComponent } from "@musepi/pi-coding-agent/modes/components/read-tool-group";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
 import { SelectorController } from "@musepi/pi-coding-agent/modes/controllers/selector-controller";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { ResolvedRoleModel } from "@musepi/pi-coding-agent/session/agent-session";
 import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
 import { getProjectAgentDir, removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";

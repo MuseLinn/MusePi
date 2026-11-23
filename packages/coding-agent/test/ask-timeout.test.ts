@@ -3,7 +3,7 @@ import type { AgentToolContext, AgentToolResult } from "@musepi/pi-agent-core";
 import type { TUI } from "@musepi/pi-tui";
 import type { ExtensionUIDialogOptions, ExtensionUISelectItem } from "../src/extensibility/extensions";
 import { HookSelectorComponent } from "../src/modes/components/hook-selector";
-import { getThemeByName, setThemeInstance } from "../src/modes/theme/theme";
+import { getThemeByName, setThemeInstance } from "../src/render/theme/theme";
 import type { ToolSession } from "../src/tools";
 import { AskTool, type AskToolDetails } from "../src/tools/ask";
 

@@ -5,7 +5,7 @@
  * used when not in patch mode.
  */
 import { diffLines, structuredPatchHunks } from "@musepi/pi-natives";
-import { resolveToCwd } from "../tools/path-utils";
+import { resolveToCwd } from "../render/path-utils";
 import { type BlockContextSource, findBlockContextLines } from "../utils/block-context";
 import { DEFAULT_FUZZY_THRESHOLD, EditMatchError, findMatch } from "./modes/replace";
 import { adjustIndentation, normalizeToLF, stripBom } from "./normalize";

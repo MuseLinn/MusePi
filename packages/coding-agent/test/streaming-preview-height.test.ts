@@ -6,11 +6,11 @@ import type { AgentTool } from "@musepi/pi-agent-core";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { EDIT_MODE_STRATEGIES } from "@musepi/pi-coding-agent/edit";
 import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
-import { theme as activeTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
-import { previewWindowRows } from "@musepi/pi-coding-agent/tools/render-utils";
+import { theme as activeTheme, initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import { TUI, visibleWidth } from "@musepi/pi-tui";
 import { removeWithRetries } from "@musepi/pi-utils";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal";
+import { previewWindowRows } from "../src/render/render-utils";
 
 // The streaming edit preview is a fixed-height tail window ("cursor"): the last
 // EDIT_STREAMING_PREVIEW_LINES rows of the recomputed diff are pinned to the

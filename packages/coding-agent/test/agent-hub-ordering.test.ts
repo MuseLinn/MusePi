@@ -11,8 +11,8 @@ import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { IrcBus } from "@musepi/pi-coding-agent/irc/bus";
 import { type AgentHubDeps, AgentHubOverlayComponent } from "@musepi/pi-coding-agent/modes/components/agent-hub";
 import { SessionObserverRegistry } from "@musepi/pi-coding-agent/modes/session-observer-registry";
-import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import { initTheme, theme } from "@musepi/pi-coding-agent/render/theme/theme";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { visibleWidth } from "@musepi/pi-tui/utils";
 

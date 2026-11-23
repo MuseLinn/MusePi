@@ -3,7 +3,7 @@
  */
 import type { Component } from "@musepi/pi-tui";
 import { ImageProtocol, padding, TERMINAL, visibleWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
-import type { Theme, ThemeColor } from "../modes/theme/theme";
+import type { Theme, ThemeColor } from "../render/theme/theme";
 import { getSixelLineMask } from "../utils/sixel";
 import type { State } from "./types";
 import type { RenderCache } from "./utils";

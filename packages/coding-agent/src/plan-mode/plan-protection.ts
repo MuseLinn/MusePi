@@ -1,5 +1,5 @@
 import { getReadToolPath, type ProtectedToolContext } from "@musepi/pi-agent-core/compaction/tool-protection";
-import { normalizeLocalScheme } from "../tools/path-utils";
+import { normalizeLocalScheme } from "../render/path-utils";
 
 /** Canonical plan alias every session's `local://` root resolves. */
 const LOCAL_PLAN_ALIAS = "local://PLAN.md";

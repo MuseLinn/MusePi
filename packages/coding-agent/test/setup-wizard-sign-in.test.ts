@@ -3,7 +3,7 @@ import type { AuthStorage } from "@musepi/pi-ai";
 import type { OAuthLoginCallbacks, OAuthProviderId } from "@musepi/pi-ai/oauth/types";
 import { SignInTab } from "@musepi/pi-coding-agent/modes/setup-wizard/scenes/sign-in";
 import type { SetupSceneHost } from "@musepi/pi-coding-agent/modes/setup-wizard/scenes/types";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import * as clipboard from "@musepi/pi-coding-agent/utils/clipboard";
 import type { Component } from "@musepi/pi-tui";
 

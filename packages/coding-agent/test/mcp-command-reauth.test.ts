@@ -9,7 +9,7 @@ import * as oauthFlow from "@musepi/pi-coding-agent/mcp/oauth-flow";
 import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 import { MCPCommandController } from "@musepi/pi-coding-agent/modes/controllers/mcp-command-controller";
 import { OAuthManualInputManager } from "@musepi/pi-coding-agent/modes/oauth-manual-input";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 import {
 	getConfigRootDir,
 	getMCPConfigPath,
