@@ -72,7 +72,7 @@ import type { PlanProposalHandler } from "./resolve";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
 import { type TodoPhase, TodoTool } from "./todo";
-import { isToolOwnerActive } from "./tool-ownership";
+import { isToolOwnerActive, resolveToolImplementation } from "./tool-ownership";
 import { WriteTool } from "./write";
 import { isMountableUnderXdev, type XdevState } from "./xdev";
 import { YieldTool } from "./yield";
@@ -447,6 +447,17 @@ export interface ToolSession {
 export type ToolFactory = (session: ToolSession) => Tool | null | Promise<Tool | null>;
 
 /**
+ * A plugin package supplying a built-in tool's implementation.
+ *
+ * The core factory table stays as the default (and the fallback when no
+ * package is mounted), but a package that ships a tool family can take the
+ * tool over. Ownership decides *whether* the tool may exist; the provider
+ * decides *what runs*. Both are needed to make a tool genuinely pluggable
+ * without breaking sessions where no package is mounted.
+ */
+export type ToolProvider = (session: ToolSession) => Tool | null | Promise<Tool | null>;
+
+/**
  * Public callable factory map. External callers may invoke `BUILTIN_TOOLS.read(session)` or
  * `BUILTIN_TOOLS[name](session)` to construct a tool directly.
  */
@@ -734,7 +745,13 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 
 	const baseResults = await Promise.all(
 		baseEntries.map(async ([name, factory]) => {
-			const tool = await logger.time(`createTools:${name}`, factory as ToolFactory, session);
+			// Layer resolution: a package-provided implementation shadows the core
+			// factory. A session-layer registration already owns the name (the tool
+			// classes skip themselves via extensionOwnsTool), so only the plugin
+			// layer can redirect construction here; otherwise the factory runs.
+			const provider = resolveToolImplementation(session, name);
+			const build = provider ?? (factory as ToolFactory);
+			const tool = await logger.time(`createTools:${name}`, build, session);
 			return tool ? wrapToolWithMetaNotice(tool) : null;
 		}),
 	);

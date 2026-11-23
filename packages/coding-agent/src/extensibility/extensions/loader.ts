@@ -1355,6 +1355,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 	return {
 		path: extensionPath,
 		resolvedPath,
+		track: "extension",
 		tools: new Map(),
 		toolRegistrationListeners: new Set(),
 		assistantThinkingRenderers: [],

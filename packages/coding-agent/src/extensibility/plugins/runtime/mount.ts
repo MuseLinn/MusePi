@@ -225,6 +225,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 	return {
 		path: entryPath,
 		resolvedPath,
+		track: "plugin",
 		tools: new Map(),
 		assistantThinkingRenderers: [],
 		fileWriteFallbackHandlers: [],

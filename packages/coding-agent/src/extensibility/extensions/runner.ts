@@ -1222,6 +1222,16 @@ export class ExtensionRunner {
 		return this.extensions.find(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
 	}
 
+	/**
+	 * The loaded extension that registered `toolName`, or undefined.
+	 *
+	 * Both tracks register into the same `tools` map, so callers that must tell
+	 * a Track A plugin from a Track B extension ask this and read `track`.
+	 */
+	getExtensionForTool(toolName: string): Extension | undefined {
+		return this.extensions.find(ext => ext.tools.has(toolName));
+	}
+
 	/** Tool names registered by one loaded extension (modes v2 disable
 	 *  direction: the caller drops them from the session registry). */
 	getExtensionToolNames(entryPath: string): string[] {

@@ -1,35 +1,143 @@
 /**
- * Tool ownership: which plugin component owns which built-in tool, and whether
- * an extension has already registered the tool for this session.
+ * Layered tool registry.
  *
- * Two independent questions, one module:
- * - {@link extensionOwnsTool} — registration wins: an extension that registers
- *   a tool of this name replaces the core factory for the session.
- * - {@link isToolOwnerActive} — a packaged tool follows the component that
- *   owns it, so unloading or denying that component removes the tool.
+ * A tool is resolved through three layers, farthest to nearest:
  *
- * Both answer "who provides this tool", which is why they live together: a tool
- * has exactly one provider, and the core factory only runs when nobody else
- * provides it.
+ * | layer | who registers | lifetime |
+ * | --- | --- | --- |
+ * | `core` | the built-in factory table | process |
+ * | `plugin` | capability packages (`registerToolProvider`) | package mount |
+ * | `session` | tools registered on the session's extension runner | session |
+ *
+ * Nearer registrations shadow farther ones, and a duplicate inside one layer is
+ * an error rather than a silent replacement — the same relation the reference
+ * harness's registry enforces, where a nearer registration wins and a
+ * same-layer collision fails. The core table is the global layer: it answers
+ * only when neither a package nor the session provides the name, so a session
+ * with nothing mounted behaves exactly as before.
+ *
+ * `pluginOwnsTool` and `extensionOwnsTool` are the two non-core layers, and
+ * they are deliberately distinct: a package taking a tool over is a different
+ * fact from an extension registering one for this session.
  */
-
+import type { AgentTool } from "@musepi/pi-agent-core";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import type { ToolSession } from ".";
-
-/**
- * Registration is ownership: when an extension already registers
- * a tool with this name, the core factory must not create a second instance for
- * the session. The extension tool wins in the registry, and skipping the core
- * tool avoids duplicate work and double side effects.
- */
-export function extensionOwnsTool(session: ToolSession, name: string): boolean {
-	return session.extensionRunner?.getAllRegisteredTools().some(tool => tool.definition.name === name) ?? false;
-}
 
 /** Domain/id pair naming the component that owns a tool. */
 export interface ToolOwner {
 	domain: string;
 	id: string;
+}
+
+/** A package-supplied implementation for a built-in tool. */
+export type ToolImplementation = (
+	session: ToolSession,
+) => AgentTool<any, any, any> | null | Promise<AgentTool<any, any, any> | null>;
+
+/** One plugin-layer registration. */
+interface PluginRegistration {
+	implementation: ToolImplementation;
+	/** Component that owns the tool, when the package declares one. */
+	owner?: ToolOwner;
+	/** Package that registered it, for diagnostics. */
+	packageName?: string;
+}
+
+/**
+ * The plugin layer: process-wide, because a mounted package is process-wide.
+ * Session-scoped registrations do not live here — they are read from the
+ * session's own runner, which is what makes them shadow this layer.
+ */
+const pluginLayer = new Map<string, PluginRegistration>();
+
+/** Whether a package currently provides `name` (the plugin layer). */
+export function pluginProvidesTool(name: string): boolean {
+	return pluginLayer.has(name);
+}
+
+/** The package-provided implementation for `name`, when the plugin layer has it. */
+export function toolProviderFor(name: string): ToolImplementation | undefined {
+	return pluginLayer.get(name)?.implementation;
+}
+
+/** Names the plugin layer provides. */
+export function providedToolNames(): string[] {
+	return [...pluginLayer.keys()].sort();
+}
+
+/**
+ * Register a package-provided implementation.
+ *
+ * A duplicate inside the plugin layer throws: two packages claiming one tool is
+ * a composition error, not something to resolve by load order. The returned
+ * disposer removes exactly this registration.
+ */
+export function registerToolProvider(
+	name: string,
+	implementation: ToolImplementation,
+	options: { owner?: ToolOwner; packageName?: string } = {},
+): () => void {
+	if (pluginLayer.has(name)) {
+		throw new Error(
+			`tool "${name}" is already provided by the plugin layer${
+				pluginLayer.get(name)?.packageName === undefined ? "" : ` (${pluginLayer.get(name)!.packageName!})`
+			}`,
+		);
+	}
+	pluginLayer.set(name, { implementation, ...options });
+	return () => {
+		pluginLayer.delete(name);
+	};
+}
+
+/**
+ * Track A owns a tool: a Cordis **plugin package** registered this name for the
+ * session (via `ctx.tools.register`).
+ */
+export function pluginOwnsTool(session: ToolSession, name: string): boolean {
+	return trackOfTool(session, name) === "plugin";
+}
+
+/**
+ * Track B owns a tool: a legacy **extension** (`export default (pi)`) registered
+ * this name. Kept separate from {@link pluginOwnsTool} so a compatibility
+ * extension and a first-party plugin never share an answer.
+ */
+export function extensionOwnsTool(session: ToolSession, name: string): boolean {
+	return trackOfTool(session, name) === "extension";
+}
+
+/** The track whose extension registered `name`, or undefined when nobody did. */
+function trackOfTool(session: ToolSession, name: string): "plugin" | "extension" | undefined {
+	const extension = session.extensionRunner?.getExtensionForTool?.(name);
+	return extension?.track;
+}
+
+/** Whether any track registered `name` for this session. */
+export function toolIsRegistered(session: ToolSession, name: string): boolean {
+	return session.extensionRunner?.getAllRegisteredTools().some(tool => tool.definition.name === name) ?? false;
+}
+
+/**
+ * The nearest layer providing `name`, or undefined when only the core table has
+ * it. Track A plugin registrations and Track B extension registrations are both
+ * the session layer; the process-wide package layer sits below them.
+ */
+export function toolLayerOf(session: ToolSession, name: string): "plugin" | "session" | undefined {
+	if (toolIsRegistered(session, name)) return "session";
+	if (pluginProvidesTool(name)) return "plugin";
+	return undefined;
+}
+
+/**
+ * Resolve the implementation for `name`, nearest layer first.
+ *
+ * `undefined` means "no non-core layer provides it" — the caller falls back to
+ * the core factory table, which is the global layer.
+ */
+export function resolveToolImplementation(session: ToolSession, name: string): ToolImplementation | undefined {
+	return toolLayerOf(session, name) === "plugin" ? toolProviderFor(name) : undefined;
 }
 
 /**
@@ -51,21 +159,21 @@ export const TOOL_OWNERS: Readonly<Record<string, ToolOwner>> = {
 	lsp: { domain: "tool", id: "lsp" },
 };
 
-const overrides = new Map<string, ToolOwner>();
+const ownerOverrides = new Map<string, ToolOwner>();
 
 /** Claim a tool for a component. The returned disposer restores the previous owner. */
 export function registerToolOwner(name: string, owner: ToolOwner): () => void {
-	const previous = overrides.get(name);
-	overrides.set(name, owner);
+	const previous = ownerOverrides.get(name);
+	ownerOverrides.set(name, owner);
 	return () => {
-		if (previous === undefined) overrides.delete(name);
-		else overrides.set(name, previous);
+		if (previous === undefined) ownerOverrides.delete(name);
+		else ownerOverrides.set(name, previous);
 	};
 }
 
-/** The effective owner of a tool: a runtime claim wins over the declared table. */
+/** The effective owner of a tool: the plugin layer's declaration, then the table. */
 export function toolOwnerOf(name: string): ToolOwner | undefined {
-	return overrides.get(name) ?? TOOL_OWNERS[name];
+	return ownerOverrides.get(name) ?? pluginLayer.get(name)?.owner ?? TOOL_OWNERS[name];
 }
 
 /**
@@ -79,7 +187,7 @@ export function isToolOwnerActive(name: string): boolean {
 	return owner === undefined || isCapabilityActive(owner.domain, owner.id);
 }
 
-/** Every tool name that currently has an owner (declared or claimed). */
+/** Every tool name that currently has an owner (declared, claimed, or provided). */
 export function ownedToolNames(): string[] {
-	return [...new Set([...Object.keys(TOOL_OWNERS), ...overrides.keys()])].sort();
+	return [...new Set([...Object.keys(TOOL_OWNERS), ...ownerOverrides.keys(), ...pluginLayer.keys()])].sort();
 }

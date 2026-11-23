@@ -2857,6 +2857,16 @@ export interface ExtensionModeDefinition {
 export interface Extension {
 	path: string;
 	resolvedPath: string;
+	/**
+	 * Which plugin track loaded this entry.
+	 *
+	 * `plugin` is Track A (a Cordis package: named `name`/`inject`/`provide`/
+	 * `apply`, `ctx.*` surfaces). `extension` is Track B (the legacy
+	 * `export default (pi)` shape kept for other agents' formats). The two
+	 * register tools into the same `tools` map, so this is the only reliable
+	 * way to tell whose registration a name is.
+	 */
+	track?: "plugin" | "extension";
 	label?: string;
 	tools: Map<string, RegisteredTool<any, any>>;
 	toolRegistrationListeners?: Set<ToolRegistrationListener>;
