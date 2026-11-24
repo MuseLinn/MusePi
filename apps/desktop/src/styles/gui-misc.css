@@ -501,6 +501,18 @@
 	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 }
+/* The shared device picker (settings → voice) drops into the card's copy
+ * column: device menu, live meter and permission feedback in one control. */
+.gui-obo-voice-device {
+	margin-top: 8px;
+	max-width: 100%;
+}
+.gui-obo-voice-device .gui-voice-device-label {
+	max-width: 180px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .gui-obo-voice-check .gui-obo-voice-model-select {
 	width: 100%;
 	max-width: none;
@@ -1741,81 +1753,38 @@
 	height: 48px;
 }
 
-/* Provider step demo: rows mirroring the real ProviderSetup list; the
- * middle row's login button cycles to "✓ 已登录" (in-place morph). */
+/* Provider step demo: the preview's rows reuse the real row classes from
+ * gui-widgets.css (brand mark, name, status/action), so the right pane shows
+ * the same list the left pane does instead of a wireframe. */
 .gui-obo-providers {
-	gap: 8px;
+	gap: 7px;
 	justify-content: center;
 }
 
-.gui-obo-provider-row {
+/* Non-interactive stand-in for the row's login action: the preview must not
+ * look clickable, so this is a caption-weight pill, not a .gui-btn. */
+.gui-obo-demo-login {
+flex: none;
+padding: 2px 9px;
+border-radius: 999px;
+font-size: 9.5px;
+font-weight: 600;
+color: var(--fg);
+background: color-mix(in oklab, var(--fg) 12%, transparent);
+}
+
+/* Search affordance above the demo rows: the real list has one, and without
+ * it the preview read as a bare three-row table. */
+.gui-obo-demo-search {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-}
-
-.gui-obo-provider-dot {
-	width: 14px;
-	height: 14px;
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--fg) 14%, transparent);
-}
-
-.gui-obo-provider-skel {
-	flex: 1;
-	height: 8px;
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--fg) 16%, transparent);
-}
-
-.gui-obo-provider-ok {
+	gap: 5px;
+	width: 100%;
+	padding: 4px 8px;
+	border: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+	border-radius: var(--radius-md);
 	font-size: 10px;
-	font-weight: 600;
-	color: var(--accent);
-}
-
-.gui-obo-provider-btn {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 52px;
-	padding: 3px 9px;
-	border-radius: 999px;
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--fg);
-	background: color-mix(in oklab, var(--fg) 14%, transparent);
-}
-
-.gui-obo-provider-btn .gui-obo-login-ok {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	opacity: 0;
-	color: #fff;
-	background: color-mix(in oklab, var(--accent) 82%, transparent);
-	animation: gui-obo-login-morph 3.4s var(--spring) infinite;
-}
-
-@keyframes gui-obo-login-morph {
-	0%,
-	42% {
-		opacity: 0;
-		transform: scale(0.9);
-	}
-	52%,
-	84% {
-		opacity: 1;
-		transform: scale(1);
-	}
-	96%,
-	100% {
-		opacity: 0;
-		transform: scale(0.9);
-	}
+	color: var(--fg-faint);
 }
 
 /* Personalize segmented control (pet display mode + language pills):

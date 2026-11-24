@@ -1,13 +1,20 @@
 import { getLocaleSnapshot, t, tLoose, useLocale } from "@musepi/client-core";
 import { isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
-import { Download as DownloadIconData, Mic as MicIconData, TriangleAlert as TriangleAlertIconData } from "lucide";
+import {
+	Check as CheckIconData,
+	Download as DownloadIconData,
+	Mic as MicIconData,
+	TriangleAlert as TriangleAlertIconData,
+	UserRound as UserRoundIconData,
+} from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import "../i18n/voice";
 import { onboardingPending } from "../lib/onboarding";
 import type { RpcClient } from "../lib/rpc";
-import { probeMicrophone } from "../lib/voice";
+import { SpeakerEnrollment } from "./composer/speaker-enrollment";
 import { GuiSelect } from "./GuiSelect";
+import { VoiceInputDevicePicker } from "./VoiceInputDevicePicker";
 
 type MicrophonePhase = "unknown" | "granted" | "checking" | "ready" | "denied" | "unavailable";
 type ModelPhase = "loading" | "missing" | "ready" | "downloading" | "error" | "unavailable";
@@ -40,6 +47,10 @@ export function OnboardingVoiceSetup({
 	const locale = useLocale();
 	const recommendedKey = recommendedSttModelKey(locale);
 	const [microphone, setMicrophone] = useState<MicrophonePhase>("unknown");
+	// Voiceprint: the daemon owns the profile, the step only reads whether one
+	// exists and re-reads it after the enrollment dialog closes.
+	const [enrollmentOpen, setEnrollmentOpen] = useState(false);
+	const [hasVoiceProfile, setHasVoiceProfile] = useState(false);
 	const [model, setModel] = useState<ModelState>(INITIAL_MODEL);
 	const [models, setModels] = useState<ModelRow[]>([]);
 	const modelKey = useRef("");
@@ -75,6 +86,20 @@ export function OnboardingVoiceSetup({
 			permission?.removeEventListener("change", update);
 		};
 	}, []);
+
+	const refreshSpeaker = useCallback(async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const status = await rpc.request<{ hasProfile: boolean }>("voice.speakerStatus", {});
+			setHasVoiceProfile(status.hasProfile);
+		} catch {
+			setHasVoiceProfile(false);
+		}
+	}, [rpc]);
+
+	useEffect(() => {
+		void refreshSpeaker();
+	}, [refreshSpeaker]);
 
 	const refreshModel = useCallback(async (): Promise<void> => {
 		if (!rpc) {
@@ -135,13 +160,6 @@ export function OnboardingVoiceSetup({
 		return off;
 	}, [rpc, refreshModel]);
 
-	const checkMicrophone = async (): Promise<void> => {
-		const generation = ++microphoneGeneration.current;
-		setMicrophone("checking");
-		const result = await probeMicrophone();
-		if (generation === microphoneGeneration.current) setMicrophone(result);
-	};
-
 	const selectModel = async (key: string): Promise<void> => {
 		const row = models.find(item => item.key === key);
 		if (!rpc || !row || model.phase === "downloading") return;
@@ -186,19 +204,13 @@ export function OnboardingVoiceSetup({
 				<div className="gui-obo-voice-check-copy">
 					<div className="gui-obo-voice-check-title">{tLoose("Microphone")}</div>
 					<p role="status">{microphoneCopy}</p>
+					{/* The settings page's own control: device menu + live level meter
+					 * + inline permission error. It opens the selected microphone
+					 * while mounted, so there is no separate detection button. */}
+					<div className="gui-obo-voice-device">
+						<VoiceInputDevicePicker active />
+					</div>
 				</div>
-				<button
-					type="button"
-					className="gui-btn"
-					disabled={microphone === "checking"}
-					onClick={() => void checkMicrophone()}
-				>
-					{microphone === "checking"
-						? tLoose("Checking microphone…")
-						: microphone === "ready" || microphone === "denied" || microphone === "unavailable"
-							? tLoose("Recheck")
-							: tLoose("Check microphone")}
-				</button>
 			</section>
 
 			<section className="gui-obo-voice-check" data-state={model.phase}>
@@ -265,6 +277,36 @@ export function OnboardingVoiceSetup({
 					</button>
 				)}
 			</section>
+
+			<section className="gui-obo-voice-check" data-state={hasVoiceProfile ? "ready" : "unknown"}>
+				<span className="gui-obo-voice-check-icon" aria-hidden="true">
+					<MorphIcon
+						icon={hasVoiceProfile ? CheckIconData : UserRoundIconData}
+						size={16}
+						spring="snappy"
+						reducedMotion="user"
+					/>
+				</span>
+				<div className="gui-obo-voice-check-copy">
+					<div className="gui-obo-voice-check-title">{tLoose("Your voice")}</div>
+					<p role="status">
+						{hasVoiceProfile
+							? tLoose("Voice profile ready")
+							: tLoose("Only your voiceprint is stored on this device.")}
+					</p>
+				</div>
+				<button type="button" className="gui-btn" disabled={!rpc} onClick={() => setEnrollmentOpen(true)}>
+					{hasVoiceProfile ? tLoose("Re-enroll") : tLoose("Enroll voice")}
+				</button>
+			</section>
+
+			<SpeakerEnrollment
+				open={enrollmentOpen}
+				onClose={() => setEnrollmentOpen(false)}
+				rpc={rpc}
+				hasProfile={hasVoiceProfile}
+				onChanged={() => void refreshSpeaker()}
+			/>
 			<p className="gui-obo-voice-note">{tLoose("Voice setup can be finished later")}</p>
 		</div>
 	);

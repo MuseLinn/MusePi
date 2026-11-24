@@ -199,6 +199,44 @@ describe("the voice step reads as icon, copy, action", () => {
 	});
 });
 
+describe("the provider preview mirrors the real list", () => {
+	test("the demo rows reuse the list's own row parts, not skeleton bars", () => {
+		const tsx = read(ONBOARDING_TSX);
+		// The preview used to draw dots + grey bars, which read as a wireframe
+		// rather than the list the left pane shows.
+		expect(tsx).not.toContain("gui-obo-provider-skel");
+		expect(tsx).not.toContain("gui-obo-provider-dot");
+		expect(tsx).toContain("<ModelBrandIcon provider={row.id}");
+		expect(tsx).toContain('className="gui-obo-provider-status"');
+		expect(tsx).toContain('className="gui-obo-demo-search"');
+	});
+});
+
+describe("the voice step reuses the shared voice controls", () => {
+	test("the microphone card is the settings device picker, not a probe button", () => {
+		const tsx = read("apps/desktop/src/components/OnboardingVoiceSetup.tsx");
+		expect(tsx).toContain("<VoiceInputDevicePicker active />");
+		// The picker opens the device and reports permission itself; a manual
+		// "Check microphone" button would be the second detection path §5n bans.
+		expect(tsx).not.toContain("probeMicrophone");
+		expect(tsx).not.toContain("Check microphone");
+	});
+
+	test("the voiceprint card opens the shared enrollment dialog", () => {
+		const tsx = read("apps/desktop/src/components/OnboardingVoiceSetup.tsx");
+		expect(tsx).toContain("<SpeakerEnrollment");
+		expect(tsx).toContain('"voice.speakerStatus"');
+		expect(tsx).toContain('tLoose("Enroll voice")');
+	});
+});
+
+describe("conditional blocks in the primer use the shared Reveal", () => {
+	test("the inline login panel grows instead of jumping", () => {
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain("<Reveal open={Boolean(loginState)}>");
+	});
+});
+
 describe("the announcement keyboard contract lets links open", () => {
 	test("Enter on a focused link does not dismiss the panel", () => {
 		const tsx = read(ANNOUNCEMENT_TSX);

@@ -301,28 +301,36 @@ function DemoContent({
 		);
 	}
 	if (step === 5) {
-		// Provider — provider rows; the middle one cycles 登录 → ✓ 已登录
-		// (the login morph the setup produces).
+		// Provider — the same row shape the step's own list renders: brand mark,
+		// name, then either the configured badge or the login action. Skeleton
+		// bars made the preview read as a wireframe instead of MusePi's list.
+		const demoRows = [
+			{ id: "openai", name: "OpenAI", configured: true },
+			{ id: "anthropic", name: "Claude", configured: false },
+			{ id: "deepseek", name: "DeepSeek", configured: false },
+		];
 		return (
 			<div className="gui-obo-morph-fill gui-obo-providers">
-				<div className="gui-obo-provider-row">
-					<span className="gui-obo-provider-dot" />
-					<span className="gui-obo-provider-skel" />
-					<span className="gui-obo-provider-ok">✓ 已登录</span>
+				<div className="gui-obo-demo-search">
+					<Icon name="search" className="h-3 w-3" />
+					<span>{t("settings.searchProviders2")}</span>
 				</div>
-				<div className="gui-obo-provider-row">
-					<span className="gui-obo-provider-dot" />
-					<span className="gui-obo-provider-skel" />
-					<span className="gui-obo-provider-btn">
-						<span className="gui-obo-login-txt">{t("settings.login")}</span>
-						<span className="gui-obo-login-ok">✓ 已登录</span>
-					</span>
-				</div>
-				<div className="gui-obo-provider-row">
-					<span className="gui-obo-provider-dot" />
-					<span className="gui-obo-provider-skel" />
-					<span className="gui-obo-provider-btn">{t("settings.login")}</span>
-				</div>
+				{demoRows.map(row => (
+					<div key={row.id} className="gui-obo-provider-row">
+						<span className="gui-obo-provider-logo" aria-hidden="true">
+							<ModelBrandIcon provider={row.id} modelId="" size={13} />
+						</span>
+						<span className="gui-obo-provider-name">{row.name}</span>
+						{row.configured ? (
+							<span className="gui-obo-provider-status">
+								<Icon name="check" className="h-3 w-3" />
+								{t("settings.configured")}
+							</span>
+						) : (
+							<span className="gui-obo-demo-login">{t("settings.login")}</span>
+						)}
+					</div>
+				))}
 			</div>
 		);
 	}
@@ -1132,74 +1140,79 @@ function ProviderSetup({
 				/>
 			)}
 
-			{loginState && (
-				<div className="gui-obo-login" role="dialog">
-					<div className="gui-obo-login-title">{t("settings.authorizeBrowser")}</div>
-					{loginState.url && (
-						<div className="gui-obo-login-row">
-							<a href={loginState.url} target="_blank" rel="noreferrer" className="gui-obo-login-url">
-								{loginState.url}
-							</a>
-							<button
-								type="button"
-								className="gui-obo-login-copy"
-								onClick={() => {
-									void navigator.clipboard.writeText(loginState.url ?? "").catch(() => {});
-									setCopied(true);
-									window.setTimeout(() => setCopied(false), 1500);
-								}}
-							>
-								{copied ? t("settings.linkCopied") : t("settings.copyLink")}
-							</button>
-						</div>
-					)}
-					{loginState.instructions && <div className="gui-obo-login-msg">{loginState.instructions}</div>}
-					{loginState.message && <div className="gui-obo-login-msg">{loginState.message}</div>}
-					{loginState.waitingInput ? (
-						<>
-							<input
-								className="gui-input"
-								placeholder={t("settings.pasteVerificationCode")}
-								value={promptValue}
-								onChange={e => setPromptValue(e.target.value)}
-								onKeyDown={e => {
-									if (e.key === "Enter" && promptValue.trim()) void submitLoginInput();
-								}}
-								autoFocus
-							/>
+			{/* Conditional block → Reveal: the inline login panel grows and
+			 * collapses the card instead of jumping, and its inputs keep their
+			 * state while it is closed. */}
+			<Reveal open={Boolean(loginState)}>
+				{loginState && (
+					<div className="gui-obo-login" role="dialog">
+						<div className="gui-obo-login-title">{t("settings.authorizeBrowser")}</div>
+						{loginState.url && (
+							<div className="gui-obo-login-row">
+								<a href={loginState.url} target="_blank" rel="noreferrer" className="gui-obo-login-url">
+									{loginState.url}
+								</a>
+								<button
+									type="button"
+									className="gui-obo-login-copy"
+									onClick={() => {
+										void navigator.clipboard.writeText(loginState.url ?? "").catch(() => {});
+										setCopied(true);
+										window.setTimeout(() => setCopied(false), 1500);
+									}}
+								>
+									{copied ? t("settings.linkCopied") : t("settings.copyLink")}
+								</button>
+							</div>
+						)}
+						{loginState.instructions && <div className="gui-obo-login-msg">{loginState.instructions}</div>}
+						{loginState.message && <div className="gui-obo-login-msg">{loginState.message}</div>}
+						{loginState.waitingInput ? (
+							<>
+								<input
+									className="gui-input"
+									placeholder={t("settings.pasteVerificationCode")}
+									value={promptValue}
+									onChange={e => setPromptValue(e.target.value)}
+									onKeyDown={e => {
+										if (e.key === "Enter" && promptValue.trim()) void submitLoginInput();
+									}}
+									autoFocus
+								/>
+								<div className="flex gap-2">
+									<button
+										type="button"
+										className="gui-btn gui-btn-approve"
+										disabled={!promptValue.trim()}
+										onClick={() => void submitLoginInput()}
+									>
+										{t("settings.confirmLogin")}
+									</button>
+									<button type="button" className="gui-btn gui-btn-ghost" onClick={() => void cancelLogin()}>
+										{t("settings.cancel")}
+									</button>
+								</div>
+							</>
+						) : (
 							<div className="flex gap-2">
 								<button
 									type="button"
 									className="gui-btn gui-btn-approve"
-									disabled={!promptValue.trim()}
-									onClick={() => void submitLoginInput()}
+									onClick={() => {
+										setLoginState(null);
+										void loadProviders();
+									}}
 								>
-									{t("settings.confirmLogin")}
+									{t("settings.authorizationDone")}
 								</button>
 								<button type="button" className="gui-btn gui-btn-ghost" onClick={() => void cancelLogin()}>
 									{t("settings.cancel")}
 								</button>
 							</div>
-						</>
-					) : (
-						<div className="flex gap-2">
-							<button
-								type="button"
-								className="gui-btn gui-btn-approve"
-								onClick={() => {
-									setLoginState(null);
-									void loadProviders();
-								}}
-							>
-								{t("settings.authorizationDone")}
-							</button>
-							<button type="button" className="gui-btn gui-btn-ghost" onClick={() => void cancelLogin()}>
-								{t("settings.cancel")}
-							</button>
-						</div>
-					)}
-				</div>
-			)}
+						)}
+					</div>
+				)}
+			</Reveal>
 		</div>
 	);
 }
