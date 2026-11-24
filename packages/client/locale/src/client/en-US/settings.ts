@@ -2075,6 +2075,7 @@ export const settings = {
 	"settings.onboardingBuiltin": "Built-in providers",
 	"settings.searchProviders2": "Search providers",
 	"settings.onboardingCustom": "Custom compatible",
+	"settings.onboardingProviderTabs": "Provider configuration",
 	"settings.testConnection": "Test connection",
 	"settings.testing": "Testing",
 	"settings.connectionOk": "Connection OK",

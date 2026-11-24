@@ -165,7 +165,7 @@ describe("primer controls answer the pointer and the keyboard", () => {
 
 	test("the close button and the segmented tabs answer the pointer too", () => {
 		const css = read(WIDGETS);
-		for (const selector of [".gui-onboarding-close", ".gui-obo-tab", ".gui-obo-branch-head"]) {
+		for (const selector of [".gui-onboarding-close", ".gui-obo-branch-head"]) {
 			expect(css, `${selector} has no :active state`).toContain(`${selector}:active`);
 		}
 	});
@@ -265,6 +265,21 @@ describe("the primer keeps one vertical rhythm across steps", () => {
 		// than its neighbours — same control, different weight.
 		const tsx = read(ONBOARDING_TSX);
 		expect(tsx).toContain('{ id: "custom", key: "settings.customAccentShort" }');
+	});
+});
+
+describe("the provider switcher is the shared sliding control", () => {
+	test("the primer does not hand-roll a second segmented control", () => {
+		// Settings' two-option rows render the shared Segmented through
+		// GuiSelect: a thumb that tracks the pointer before the click, arrow
+		// keys and Home/End. The primer's own button pair had none of that.
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain("<Segmented");
+		expect(tsx).not.toContain("gui-obo-tab");
+		const css = read(WIDGETS);
+		expect(css).not.toContain(".gui-obo-tab");
+		// The switcher fills the step width like the search row and the list.
+		expect(css).toContain(".gui-obo-provider-form .gui-seg");
 	});
 });
 

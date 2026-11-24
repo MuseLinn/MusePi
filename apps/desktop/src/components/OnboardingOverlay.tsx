@@ -18,6 +18,7 @@
 
 import {
 	isTopModal,
+	Segmented,
 	setLocale,
 	type TranslationKey,
 	t,
@@ -1010,28 +1011,22 @@ function ProviderSetup({
 
 	return (
 		<div className="gui-obo-provider-form">
-			<div className="gui-obo-tabs">
-				<button
-					type="button"
-					className={`gui-obo-tab${tab === "builtin" ? " gui-obo-tab--active" : ""}`}
-					onClick={() => {
-						tapFeedback();
-						setTab("builtin");
-					}}
-				>
-					{t("settings.onboardingBuiltin")}
-				</button>
-				<button
-					type="button"
-					className={`gui-obo-tab${tab === "custom" ? " gui-obo-tab--active" : ""}`}
-					onClick={() => {
-						tapFeedback();
-						setTab("custom");
-					}}
-				>
-					{t("settings.onboardingCustom")}
-				</button>
-			</div>
+			{/* The shared sliding segmented control, not a hand-rolled pair of
+			 * buttons: the thumb tracks the pointer before the click, arrow keys
+			 * and Home/End move it, and it is the same control every binary
+			 * setting in the app uses. */}
+			<Segmented
+				ariaLabel={t("settings.onboardingProviderTabs")}
+				value={tab}
+				options={[
+					{ value: "builtin", label: t("settings.onboardingBuiltin") },
+					{ value: "custom", label: t("settings.onboardingCustom") },
+				]}
+				onChange={next => {
+					tapFeedback();
+					setTab(next);
+				}}
+			/>
 
 			{tab === "builtin" ? (
 				<div className="gui-obo-builtin">

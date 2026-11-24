@@ -1978,6 +1978,7 @@ export const settings = {
 	"settings.onboardingBuiltin": "内置供应商",
 	"settings.searchProviders2": "搜索供应商",
 	"settings.onboardingCustom": "自定义兼容接口",
+	"settings.onboardingProviderTabs": "供应商配置方式",
 	"settings.testConnection": "测试连通",
 	"settings.testing": "测试中",
 	"settings.connectionOk": "连接正常",

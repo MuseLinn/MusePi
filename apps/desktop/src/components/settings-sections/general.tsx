@@ -416,8 +416,11 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="gui-settings-row-label">{t("settings.busyEnterBehavior")}</div>
 					<div className="gui-settings-row-desc">{t("settings.busyEnterBehaviorDescription")}</div>
 				</div>
+				{/* A binary setting renders as the shared sliding Segmented (GuiSelect
+				 * does this itself for two options); the `gui-input` class was what
+				 * kept it a dropdown, which made this row look unlike every other
+				 * two-choice setting in the app. */}
 				<GuiSelect
-					className="gui-input max-w-[200px]"
 					value={busyEnter}
 					onChange={v => setBusyEnter(v === "queue" ? "queue" : "steer")}
 					ariaLabel={t("settings.busyEnterBehavior")}
