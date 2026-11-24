@@ -63,6 +63,8 @@ interface CatalogConnector {
 		}>;
 	};
 	enabled: boolean;
+	/** Mount only the tools the server marks read-only. */
+	readOnly: boolean;
 	status: "connected" | "connecting" | "disconnected";
 }
 
@@ -641,6 +643,27 @@ ${connector.category ?? ""}`.toLowerCase();
 		[load, login, openDetail, rpc, tokenValues],
 	);
 
+	/**
+	 * Flip the read-only switch. The daemon remounts an enabled connector, so
+	 * the tool list a session sees changes on the next turn.
+	 */
+	const setReadOnly = useCallback(
+		async (connector: CatalogConnector, readOnly: boolean): Promise<void> => {
+			if (!rpc) return;
+			tapFeedback();
+			setPending(connector.id);
+			try {
+				await rpc.request("connectors.setReadOnly", { id: connector.id, readOnly });
+				await load();
+			} catch (toggleError) {
+				reportOutcome({ kind: "error", message: connectorError(errorMessage(toggleError)).text }, connector.id);
+			} finally {
+				setPending(null);
+			}
+		},
+		[load, rpc],
+	);
+
 	const disconnect = useCallback(
 		async (connector: CatalogConnector): Promise<void> => {
 			if (!rpc) return;
@@ -836,6 +859,17 @@ ${connector.category ?? ""}`.toLowerCase();
 									onClick={() => void disconnect(connector)}
 								>
 									{t("settings.connectorsDisconnect")}
+								</button>
+								<button
+									type="button"
+									className="gui-btn"
+									aria-pressed={connector.readOnly}
+									disabled={isPending}
+									onClick={() => void setReadOnly(connector, !connector.readOnly)}
+								>
+									{connector.readOnly
+										? t("settings.connectorsReadOnlyOn")
+										: t("settings.connectorsReadOnlyOff")}
 								</button>
 								{probeButton}
 							</>

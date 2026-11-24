@@ -286,4 +286,62 @@ describe("ConnectorCatalogService", () => {
 		await expect(service.setEnabled({ id: "alpha", enabled: "yes" })).rejects.toThrow("enabled must be a boolean");
 		await expect(service.connect({ id: "../escape" })).rejects.toThrow("invalid connector id");
 	});
+
+	it("remounts an enabled connector when read-only is switched on", async () => {
+		let reloads = 0;
+		const service = new ConnectorCatalogService({
+			cwd: () => "/workspace",
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
+			reloadConnectors: async () => {
+				reloads += 1;
+			},
+			authStorage: async () => null,
+		});
+
+		await service.connect({ id: "beta" });
+		expect(reloads).toBe(1);
+		expect((await service.detail({ id: "beta" })).connector.readOnly).toBe(false);
+
+		await service.setReadOnly({ id: "beta", readOnly: true });
+		expect(reloads).toBe(2);
+		expect((await service.detail({ id: "beta" })).connector).toMatchObject({ enabled: true, readOnly: true });
+
+		await service.setReadOnly({ id: "beta", readOnly: false });
+		expect(reloads).toBe(3);
+		expect((await service.detail({ id: "beta" })).connector.readOnly).toBe(false);
+	});
+
+	it("records the switch for a disabled row without reloading", async () => {
+		let reloads = 0;
+		const service = new ConnectorCatalogService({
+			cwd: () => "/workspace",
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
+			reloadConnectors: async () => {
+				reloads += 1;
+			},
+			authStorage: async () => null,
+		});
+
+		// Nothing is mounted, so the switch only has to be remembered.
+		await service.connect({ id: "beta" });
+		await service.disconnect({ id: "beta" });
+		const before = reloads;
+		await service.setReadOnly({ id: "beta", readOnly: true });
+		expect(reloads).toBe(before);
+
+		await service.connect({ id: "beta" });
+		expect((await service.detail({ id: "beta" })).connector).toMatchObject({ enabled: true, readOnly: true });
+	});
+
+	it("refuses a read-only toggle for an unknown connector or a non-boolean", async () => {
+		const service = new ConnectorCatalogService({
+			cwd: () => "/workspace",
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
+			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
+		});
+
+		await expect(service.setReadOnly({ id: "missing", readOnly: true })).rejects.toThrow("unknown connector");
+		await expect(service.setReadOnly({ id: "beta", readOnly: "yes" })).rejects.toThrow("readOnly must be a boolean");
+	});
 });

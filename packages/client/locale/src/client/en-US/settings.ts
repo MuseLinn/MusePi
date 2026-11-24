@@ -1417,6 +1417,10 @@ export const settings = {
 	"settings.connectorsDisconnectFailed": "Disconnect failed: {error}",
 	"settings.connectorsConnect": "Connect",
 	"settings.connectorsDisconnect": "Disconnect",
+	"settings.connectorsReadOnlyOn": "Read-only: on",
+	"settings.connectorsReadOnlyOff": "Make read-only",
+	"settings.connectorsReadOnlyHint":
+		"Read-only mounts only the tools the service marks as reads. Sends, deletes, and edits disappear from this session entirely.",
 	"settings.connectorsManage": "Manage",
 	"settings.connectorsViewAll": "View all {count}",
 	"settings.connectorsAuthOauth": "OAuth",

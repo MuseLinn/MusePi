@@ -2653,6 +2653,9 @@ export class DaemonServer {
 			case "connectors.setEnabled": {
 				return this.#services.get<ConnectorCatalogService>("connectorCatalog").setEnabled(params ?? {});
 			}
+			case "connectors.setReadOnly": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").setReadOnly(params ?? {});
+			}
 			case "connectors.token.save": {
 				return this.#services.get<ConnectorCatalogService>("connectorCatalog").saveToken(params ?? {});
 			}

@@ -113,6 +113,10 @@
           "type": "boolean",
           "description": "Whether MusePi should try to connect this server."
         },
+        "readOnlyTools": {
+          "type": "boolean",
+          "description": "Mount only tools the server marks with annotations.readOnlyHint. Tools without the hint are treated as writes, so a server that annotates nothing mounts no tools while this is on."
+        },
         "timeout": {
           "type": "number",
           "minimum": 0,

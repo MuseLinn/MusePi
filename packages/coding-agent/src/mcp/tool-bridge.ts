@@ -30,6 +30,7 @@ import type {
 	MCPToolCallResult,
 	MCPToolDefinition,
 } from "./types";
+import { filterReadOnlyTools } from "./types";
 
 /** Reconnect callback: tears down a stale connection, optionally authorizing first.
  *  `sessionId` rides along with an auth challenge so a daemon handler can park
@@ -492,7 +493,8 @@ export class MCPTool implements CustomTool<TSchema, MCPToolDetails> {
 
 	/** Create MCPTool instances for all tools from an MCP server connection */
 	static fromTools(connection: MCPServerConnection, tools: MCPToolDefinition[], reconnect?: MCPReconnect): MCPTool[] {
-		return tools.map(tool => new MCPTool(connection, tool, reconnect));
+		const usable = connection.config.readOnlyTools === true ? filterReadOnlyTools(tools) : tools;
+		return usable.map(tool => new MCPTool(connection, tool, reconnect));
 	}
 
 	constructor(
@@ -614,8 +616,10 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 		getConnection: () => Promise<MCPServerConnection>,
 		source?: SourceMeta,
 		reconnect?: MCPReconnect,
+		readOnlyTools?: boolean,
 	): DeferredMCPTool[] {
-		return tools.map(tool => new DeferredMCPTool(serverName, tool, getConnection, source, reconnect));
+		const usable = readOnlyTools === true ? filterReadOnlyTools(tools) : tools;
+		return usable.map(tool => new DeferredMCPTool(serverName, tool, getConnection, source, reconnect));
 	}
 
 	constructor(

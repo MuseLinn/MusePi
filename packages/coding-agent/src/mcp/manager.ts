@@ -727,7 +727,14 @@ export class MCPManager {
 						const source = this.#sources.get(name);
 						const reconnect = () => this.reconnectServer(name);
 						allTools.push(
-							...DeferredMCPTool.fromTools(name, cached, () => this.waitForConnection(name), source, reconnect),
+							...DeferredMCPTool.fromTools(
+								name,
+								cached,
+								() => this.waitForConnection(name),
+								source,
+								reconnect,
+								this.#serverConfigs.get(name)?.readOnlyTools === true,
+							),
 						);
 					}
 				}

@@ -282,4 +282,15 @@ describe("connector runtime projection", () => {
 		};
 		expect(projectConnectorServers([entry], state({ unset: true }))).toHaveLength(0);
 	});
+
+	it("carries the read-only switch onto the projected server", () => {
+		const readOnlyState: ConnectorStateFile = {
+			version: 1,
+			connectors: { alpha: { enabled: true, readOnly: true }, beta: { enabled: true } },
+		};
+		const servers = projectConnectorServers([alpha, beta], readOnlyState);
+		expect(servers.find(server => server.name === "connector:alpha")?.readOnlyTools).toBe(true);
+		// A connector without the switch keeps every tool it offers.
+		expect(servers.find(server => server.name === "connector:beta")?.readOnlyTools).toBeUndefined();
+	});
 });

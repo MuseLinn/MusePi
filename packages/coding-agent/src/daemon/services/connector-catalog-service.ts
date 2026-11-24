@@ -43,7 +43,7 @@ import {
 	mergeConnectorSecrets,
 	readConnectorSecrets,
 } from "../../connectors/secrets";
-import { readConnectorState, setConnectorEnabled } from "../../connectors/state";
+import { readConnectorState, setConnectorEnabled, setConnectorReadOnly } from "../../connectors/state";
 import {
 	CONNECTOR_ID_PATTERN,
 	type ConnectorAuthMode,
@@ -97,6 +97,8 @@ export interface ConnectorCatalogItem {
 	/** Token connectors: every required field already has a stored value. */
 	tokenSet: boolean;
 	enabled: boolean;
+	/** Mount only the tools the server marks read-only. */
+	readOnly: boolean;
 	status: "connected" | "connecting" | "disconnected";
 	sourceKind: ConnectorCatalogEntry["sourceKind"];
 }
@@ -192,6 +194,7 @@ async function toItem(
 	entry: ConnectorCatalogEntry,
 	enabled: boolean,
 	status: ConnectorCatalogItem["status"],
+	readOnly = false,
 ): Promise<ConnectorCatalogItem> {
 	const item: ConnectorCatalogItem = {
 		id: entry.id,
@@ -212,6 +215,7 @@ async function toItem(
 			entry.auth.mode === "oauth" && entry.oauth?.clientId !== undefined && entry.oauth?.clientSecret === undefined,
 		tokenSet: await tokenReady(entry),
 		enabled,
+		readOnly,
 		status,
 		sourceKind: entry.sourceKind,
 	};
@@ -253,6 +257,7 @@ export class ConnectorCatalogService implements DaemonService {
 		"connectors.connect": "connect",
 		"connectors.disconnect": "disconnect",
 		"connectors.setEnabled": "setEnabled",
+		"connectors.setReadOnly": "setReadOnly",
 		"connectors.token.save": "saveToken",
 		"connectors.cli.status": "cliStatus",
 		"connectors.cli.cancel": "cliCancel",
@@ -304,8 +309,16 @@ export class ConnectorCatalogService implements DaemonService {
 				const haystack = `${entry.id}\n${entry.name}\n${entry.description}\n${entry.category ?? ""}`.toLowerCase();
 				if (!haystack.includes(query)) continue;
 			}
-			const enabled = state.connectors[entry.id]?.enabled === true;
-			rows.push(await toItem(entry, enabled, enabled ? this.statusOf(entry.id, statuses) : "disconnected"));
+			const entryState = state.connectors[entry.id];
+			const enabled = entryState?.enabled === true;
+			rows.push(
+				await toItem(
+					entry,
+					enabled,
+					enabled ? this.statusOf(entry.id, statuses) : "disconnected",
+					entryState?.readOnly === true,
+				),
+			);
 		}
 		return { connectors: rows, warnings: catalog.warnings };
 	}
@@ -323,9 +336,15 @@ export class ConnectorCatalogService implements DaemonService {
 		]);
 		const entry = catalog.entries.find(candidate => candidate.id === id);
 		if (!entry) throw new Error(`unknown connector: ${id}`);
-		const enabled = state.connectors[id]?.enabled === true;
+		const entryState = state.connectors[id];
+		const enabled = entryState?.enabled === true;
 		return {
-			connector: await toItem(entry, enabled, enabled ? this.statusOf(id, statuses) : "disconnected"),
+			connector: await toItem(
+				entry,
+				enabled,
+				enabled ? this.statusOf(id, statuses) : "disconnected",
+				entryState?.readOnly === true,
+			),
 			...(entry.oauth ? { oauth: entry.oauth } : {}),
 		};
 	}
@@ -455,6 +474,23 @@ export class ConnectorCatalogService implements DaemonService {
 		if (params.enabled) return this.connect(params);
 		const result = await this.disconnect(params);
 		return { ok: true, id: result.id, enabled: false };
+	}
+
+	/**
+	 * Flip the read-only switch. A row that is off keeps its setting for the
+	 * next connect; an enabled row is remounted so the tool list changes now.
+	 */
+	async setReadOnly(params: {
+		id?: unknown;
+		readOnly?: unknown;
+	}): Promise<{ ok: true; id: string; readOnly: boolean }> {
+		const id = requireId(params);
+		if (typeof params.readOnly !== "boolean") throw new Error("readOnly must be a boolean");
+		const catalog = await loadConnectorCatalog();
+		if (!catalog.entries.some(entry => entry.id === id)) throw new Error(`unknown connector: ${id}`);
+		const state = await setConnectorReadOnly(id, params.readOnly);
+		if (state.connectors[id]?.enabled === true) await this.#reload();
+		return { ok: true, id, readOnly: params.readOnly };
 	}
 
 	/**

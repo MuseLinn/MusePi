@@ -176,10 +176,16 @@ export function projectConnectorServers(
 	const servers: MCPServer[] = [];
 	for (const entry of entries) {
 		if (!entry.server) continue;
-		if (state.connectors[entry.id]?.enabled !== true) continue;
+		const entryState = state.connectors[entry.id];
+		if (entryState?.enabled !== true) continue;
 		if (!isConnectorApproved(entry, state)) continue;
 		const server = connectorToMCPServer(entry, secrets[entry.id]);
-		if (server) servers.push(server);
+		if (server) {
+			// Read-only travels with the server rather than the manager so a
+			// hand-written server can ask for the same filter.
+			if (entryState.readOnly === true) server.readOnlyTools = true;
+			servers.push(server);
+		}
 	}
 	return servers;
 }

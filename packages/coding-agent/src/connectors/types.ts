@@ -220,6 +220,16 @@ export interface ConnectorStateEntry {
 	approvedCommand?: string;
 	/** Exact CLI spec fingerprint the user approved. */
 	approvedCli?: string;
+	/**
+	 * Mount only the tools the server marks `readOnlyHint`.
+	 *
+	 * A connector reaches an account with more power than most sessions need —
+	 * a mail client can send, a repo server can push. Read-only keeps the
+	 * reads and drops the writes before the model ever sees them, so a prompt
+	 * cannot talk a session into sending or deleting anything. Off by default:
+	 * enabling a connector should not silently take away half its tools.
+	 */
+	readOnly?: boolean;
 }
 
 /** Versioned state file, keyed by catalog id. */

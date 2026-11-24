@@ -66,6 +66,14 @@ export type MCPRequestIdFormat = "string" | "number";
 interface MCPServerConfigBase {
 	/** Whether this server is enabled (default: true) */
 	enabled?: boolean;
+	/**
+	 * Mount only tools the server marks `readOnlyHint`.
+	 *
+	 * Set by a connector whose state says read-only; a hand-written server can
+	 * ask for the same thing. Tools without the hint are treated as writes, so
+	 * a server that annotates nothing mounts nothing.
+	 */
+	readOnlyTools?: boolean;
 	/** MCP request timeout in milliseconds (default: 30000, 0 to disable) */
 	timeout?: number;
 	/**
@@ -203,6 +211,18 @@ export interface MCPInitializeResult {
 	instructions?: string;
 }
 
+/** MCP tool annotations (spec 2025-11-25, `tools/list` → `annotations`). */
+export interface MCPToolAnnotations {
+	/** The tool changes nothing; safe to run without asking. */
+	readOnlyHint?: boolean;
+	/** Running it twice is the same as running it once. */
+	idempotentHint?: boolean;
+	/** It can reach beyond the server's own data. */
+	openWorldHint?: boolean;
+	title?: string;
+	[key: string]: unknown;
+}
+
 /** MCP tool definition */
 export interface MCPToolDefinition {
 	name: string;
@@ -213,6 +233,18 @@ export interface MCPToolDefinition {
 		required?: string[];
 		[key: string]: unknown;
 	};
+	/** Hints the server publishes about what calling the tool does. */
+	annotations?: MCPToolAnnotations;
+}
+
+/** Whether a tool may run while the server is mounted read-only. */
+export function isReadOnlyMCPTool(tool: MCPToolDefinition): boolean {
+	return tool.annotations?.readOnlyHint === true;
+}
+
+/** Drop every tool that is not marked read-only. */
+export function filterReadOnlyTools(tools: readonly MCPToolDefinition[]): MCPToolDefinition[] {
+	return tools.filter(isReadOnlyMCPTool);
 }
 
 /** tools/list response */

@@ -135,6 +135,8 @@ marketplace/<dir>/
 
 启用状态是每个连接器一个布尔值，保存在 `<agentDir>/connectors/state.json`，原子写入且仅属主可读。这是本层唯一持有的状态。连接状态不落盘：MCP manager 是唯一能观察活动连接的组件，复制一份会让过期的 `connected` 标记比死掉的 socket 活得更久。
 
+同一条记录还带第二个独立决定：`readOnly`。它不是展示提示——发现 provider 把它写成投影服务器上的 `readOnlyTools`，MCP 工具桥在模型看到工具之前就丢掉所有 `tools/list` 里没有 `readOnlyHint` 的条目。只读模式下，一个什么都没标注的服务器一个工具也不挂，因为未标注的工具可能就是写操作。这个开关刻意跨过禁用与重新启用保留：只读是关于"会话能碰这个服务的多少"的长期决定，不属于某一次连接。对已启用的连接器拨动它会重挂服务器，工具面在同一回合内改变；对未启用的行只记录。
+
 Token 值保存在 `<agentDir>/connectors/secrets.json`：每个连接器一个 AES-256-GCM 信封，密钥由 `<agentDir>/connectors/.master.key` 的 32 字节主密钥经 HKDF-SHA256 派生（托管部署可用 `MUSEPI_CONNECTOR_MASTER_KEY`）。文件不含明文；解密失败时保持文件不变并把连接器视为未配置；`disconnect` 会删除对应条目。
 
 OAuth 授权仍落在 AuthStorage。MCP 客户端拥有的行（`mcp_oauth:` 与旧前缀 `mcp_oauth_`）在 `agent.db` 中加密：`data` 列保留标记与明文哈希供 compare-and-swap 刷新使用，密文放在 `secret` 列，密钥位于数据库旁的 `mcp-oauth.key`（或 `MUSEPI_MCP_OAUTH_KEY`）。其他供应商在各自迁移设计完成前保持原有存储路径。
@@ -159,6 +161,7 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 | `connectors.connect` | 回答这个连接器能否启用。OAuth 条目没有已存授权时返回 `{ needsAuth }`（或 `{ needsDeviceAuth }`）且不改变任何状态；无授权条目直接启用、重载 manager 并返回 `{ serverName, needsAuth: false, status }`；stdio 条目在带 `approve: true` 调用前返回 `{ needsApproval, command, args, envKeys }`。 |
 | `connectors.disconnect` | 禁用一个连接器并重载。 |
 | `connectors.setEnabled` | 对上述两个操作的显式开关。登录成功后客户端用 `enabled: true` 调用它：授权已存在，同一条 `connect` 路径完成启用，所以失败的授权不会留下一个启用态。 |
+| `connectors.setReadOnly` | 记录某个目录行的只读开关。已启用的行会重挂，工具面立刻改变；未启用的行只保留设置，等下次连接生效。 |
 | `connectors.token.save` | 按 schema 校验 Token 表单值，合并进加密库，并要求所有必填字段。空值保留已存值。 |
 | `connectors.cli.status` | 为待授权流程运行 CLI `status` 命令；`success` 时启用连接器。 |
 | `connectors.cli.cancel` | 停止认证进程并忘记该流程。 |

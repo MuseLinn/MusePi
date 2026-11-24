@@ -151,6 +151,8 @@ marketplace/<dir>/
 
 Enablement is one boolean per connector in `<agentDir>/connectors/state.json`, written atomically with owner-only permissions. It is the only state this layer owns. Connect status is never persisted here: the MCP manager is the only component that can observe a live connection, and duplicating it would let a stale `connected` flag outlive a dead socket.
 
+The same entry carries a second, independent decision: `readOnly`. It is not a display hint — the discovery provider turns it into `readOnlyTools` on the projected server, and the MCP tool bridge drops every tool whose `tools/list` entry lacks `readOnlyHint` before the model can see it. A server that annotates nothing mounts nothing while read-only, because an unannotated tool could be a write. The switch outlives a disable and re-enable on purpose: read-only is a standing statement about how much of the service a session may touch, not part of one connection. Flipping it on an enabled connector remounts the server so the tool list changes in the same turn; on a disabled row it is only recorded.
+
 Token values live in `<agentDir>/connectors/secrets.json`: one AES-256-GCM envelope per connector, keyed by HKDF-SHA256 from a 32-byte master key at `<agentDir>/connectors/.master.key` (or `MUSEPI_CONNECTOR_MASTER_KEY` for managed deployments). The file never contains a plaintext value, a decrypt failure leaves it untouched and reports the connector as unconfigured, and `disconnect` deletes the entry.
 
 OAuth grants still land in AuthStorage. Rows owned by the MCP client (`mcp_oauth:` and legacy `mcp_oauth_`) are encrypted at rest in `agent.db`: the `data` column keeps a marker and plaintext hash for compare-and-swap refreshes, the ciphertext lives in `secret`, and the key sits beside the database as `mcp-oauth.key` (or `MUSEPI_MCP_OAUTH_KEY`). Other providers keep their existing storage path until their own migration is designed.
@@ -175,6 +177,7 @@ Sign-in is one action. A row whose catalog entry pins a client id without a clie
 | `connectors.connect` | Answer whether a connector can be enabled. An OAuth row without a stored grant returns `{ needsAuth }` (or `{ needsDeviceAuth }`) and changes nothing; an open row enables, reloads managers, and returns `{ serverName, needsAuth: false, status }`; a stdio entry returns `{ needsApproval, command, args, envKeys }` until called with `approve: true`. |
 | `connectors.disconnect` | Disable one connector and reload. |
 | `connectors.setEnabled` | Explicit toggle over the same two operations. The client calls it with `enabled: true` after a sign-in lands: with the grant stored, the same `connect` path enables the row, so a failed flow never leaves it enabled. |
+| `connectors.setReadOnly` | Record the read-only switch on one catalog row. An enabled row is remounted so the tool list changes at once; a disabled row only keeps the setting for its next connect. |
 | `connectors.token.save` | Validate Token form values against the schema, merge them into the encrypted store, and require every required field. Empty values keep the stored value. |
 | `connectors.cli.status` | Run the CLI `status` command for a pending auth flow; `success` enables the connector. |
 | `connectors.cli.cancel` | Stop the auth process and forget the flow. |

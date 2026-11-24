@@ -54,6 +54,9 @@ function parseState(raw: unknown, filePath: string): ConnectorStateFile {
 		if (typeof value.approvedCli === "string" && value.approvedCli.length > 0) {
 			entry.approvedCli = value.approvedCli;
 		}
+		if (value.readOnly === true) {
+			entry.readOnly = true;
+		}
 		connectors[id] = entry;
 	}
 	return { version: 1, connectors };
@@ -118,12 +121,16 @@ export async function setConnectorEnabled(
 	id: string,
 	enabled: boolean,
 	agentDir: string = getAgentDir(),
-	options: { approvedCommand?: string; approvedCli?: string } = {},
+	options: { approvedCommand?: string; approvedCli?: string; readOnly?: boolean } = {},
 ): Promise<ConnectorStateFile> {
 	const filePath = connectorStatePath(agentDir);
 	return withStateLock(filePath, async () => {
 		const state = await readConnectorState(agentDir);
 		const previous = state.connectors[id];
+		// Read-only outlives a disable: it is a standing decision about how much
+		// of this service a session may touch, and re-enabling should not quietly
+		// hand the writes back.
+		const readOnly = options.readOnly ?? previous?.readOnly;
 		state.connectors[id] = {
 			enabled,
 			...(enabled
@@ -135,7 +142,34 @@ export async function setConnectorEnabled(
 			// connector must ask again, and a changed command invalidates it.
 			...(enabled && options.approvedCommand ? { approvedCommand: options.approvedCommand } : {}),
 			...(enabled && options.approvedCli ? { approvedCli: options.approvedCli } : {}),
+			...(readOnly === true ? { readOnly: true } : {}),
 		};
+		await writeConnectorState(state, agentDir);
+		return state;
+	});
+}
+
+/**
+ * Flip the read-only switch for one connector.
+ *
+ * Kept apart from {@link setConnectorEnabled} because it changes how the
+ * connector is mounted, not whether it is: the daemon has to remount the
+ * server either way, but a row that is off stays off.
+ */
+export async function setConnectorReadOnly(
+	id: string,
+	readOnly: boolean,
+	agentDir: string = getAgentDir(),
+): Promise<ConnectorStateFile> {
+	const filePath = connectorStatePath(agentDir);
+	return withStateLock(filePath, async () => {
+		const state = await readConnectorState(agentDir);
+		const previous = state.connectors[id];
+		if (!previous) return state;
+		const next: ConnectorStateEntry = { ...previous };
+		if (readOnly) next.readOnly = true;
+		else delete next.readOnly;
+		state.connectors[id] = next;
 		await writeConnectorState(state, agentDir);
 		return state;
 	});

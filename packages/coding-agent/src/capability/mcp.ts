@@ -17,6 +17,13 @@ export interface MCPServer {
 	name: string;
 	/** Whether this server is enabled (default: true) */
 	enabled?: boolean;
+	/**
+	 * Mount only tools the server marks `readOnlyHint`.
+	 *
+	 * A connector's read-only switch lands here; a hand-written server can ask
+	 * for the same filter. Tools without the hint count as writes.
+	 */
+	readOnlyTools?: boolean;
 	/** Connection timeout in milliseconds */
 	timeout?: number;
 	/** Encoding for outgoing JSON-RPC request ids (default: `"number"`) */
@@ -73,6 +80,9 @@ export interface MCPServer {
 /** Compare the transport inputs that determine which MCP endpoint gets connected. */
 function isSameMCPConnection(left: MCPServer, right: MCPServer): boolean {
 	if (!Bun.deepEquals(left.auth, right.auth) || !Bun.deepEquals(left.oauth, right.oauth)) return false;
+	// The read-only filter changes which tools get mounted, so flipping it is a
+	// different server as far as the manager is concerned.
+	if ((left.readOnlyTools === true) !== (right.readOnlyTools === true)) return false;
 	// Normalize against the allocator's own default so an explicit "number" is
 	// equivalent to leaving the option unset, not a distinct connection.
 	if ((left.requestIdFormat ?? "number") !== (right.requestIdFormat ?? "number")) return false;
