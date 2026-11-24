@@ -101,6 +101,16 @@ lang: zh-CN
 
 **启动页**（`StartupSplash.tsx` / `useBootStatus`）是参考应用：`probe` / `spawn` / `gate` / `connect` 各有预算（`BOOT_TIMINGS.budgets`：8s / 20s / 15s / 8s），两个阈值在每次阶段切换时重置；某阶段超过 `budget + 15s`，或启动超过 60s，升级为 `stalled`。阶段与提示是两个 `StatusText` 槽，放在固定宽度的居中列里，正常的多秒版本门只显示阶段，稍后显示信息性提示。
 
+## 3b. 转录尾部的在场行
+
+回合在跑、还没有回复时，站在「回复将要落下」那个位置的这一行是 `TailPresence`（`packages/client-core/src/components/transcript/TailPresence.tsx`，样式在 `transcript.css`）：agent 的头像、它此刻在做什么、以及本回合已用的时间。它取代了那个槽位里只有计时的旧行，同一个锚点现在还会说明在做什么。它是唯一实现；再出现第二份这样的行就是缺陷。
+
+- **字形永不动。** 扫光是一个软边遮罩窗口朝一侧扫，窗口里的亮色副本反向补同样多，所以屏幕上只有光在走。只让亮色副本自己动就是走马灯——这正是本设计要避免的失败形态。位移只占周期的前 35%，用 `steps(12, jump-none)` 步进，其余时间静止：跑几分钟的回合不能每帧重绘整页。`background-clip: text` 配动画 `background-position` 同样能让字形不动，但会每帧重绘字形，所以这里不用。
+- **永远单行、省略号截断。** 这是状态提醒而不是正文：`nowrap` + `ellipsis`，绝不换行。完整文案在行的 `title` 与展开卡里；live region 承载未截断的规范句，所以截断不会让读屏丢失语义。
+- **轮换不重复播报。** 同义句每 4–6 秒换一次，按会话种子错开，同屏两行不会齐步换句。可见文案是 `aria-hidden`；只有一个 live region 承载规范句，并以阶段为 key，所以只有「工作内容变了」才会播报。
+- **沉默只陈述，不诊断。** 超过 30 秒没有新输出就加「暂无新输出」，超过 90 秒还会说多少分钟。没有「卡住」、没有重试、没有恢复控件——§3a 的规则原样适用。
+- **身份与详情由宿主注入。** `tailAvatar` 与 `tailDetail` 来自调用方：client-core 不得去取桌面端的 `AgentAvatar`；移动端与子代理面板两个都不传，退化为文案加计时。`approvals` 与 `paused` 同样由宿主提供，因为转录本身不接收它们；不传时那两个阶段就是不可达的。
+
 ## 4. 组件与设置模式
 
 - **设置行**:`gui-settings-row` = label+desc 左、控件右;`PrefToggle`(开关,`storageKey` + 可选 `onClass` 反相挂 documentElement)/`PrefSegmented`(分段选择)是两个标准控件,新设置优先复用。每个设置独占一个兄弟行，不得把一个设置嵌进另一设置的行内。所有数组编辑器(胶囊、优先级、值列表、JSON 列表)按内容定宽且较宽,独占标签下方整行,不再挤压标签列。
