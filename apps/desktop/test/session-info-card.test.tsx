@@ -18,6 +18,7 @@ import { invalidateGitStatus } from "../src/lib/git-status-cache";
 import type { PanelTab } from "../src/lib/panel-tabs";
 import type { RpcClient } from "../src/lib/rpc";
 import { GuiSessionStore } from "../src/lib/session-store";
+
 import { SURFACE_HIDDEN_KEY } from "../src/lib/surfaces/registry";
 
 setLocale("zh-CN");
@@ -116,6 +117,13 @@ const CARD_PROPS = {
 	sessionId: "session-1",
 	cwd: "C:/workspace",
 	title: "修复会话信息卡",
+	contextUsage: {
+		model: "anthropic/claude-x",
+		tokens: 1,
+		contextWindow: 10,
+		percent: 10,
+		usage: { input: 1, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1, cost: 0, cacheHitRate: null },
+	},
 	tabs: [] as PanelTab[],
 	activeTabId: null,
 	top: 54,
@@ -124,6 +132,7 @@ const CARD_PROPS = {
 afterEach(() => {
 	vi.restoreAllMocks();
 	invalidateGitStatus();
+
 	localStorage.clear();
 	document.head.querySelectorAll("style").forEach(node => node.remove());
 });
@@ -260,7 +269,7 @@ describe("SessionInfoCard 数据契约", () => {
 			"session.directories.list": () => primaryList(),
 			"git.status": () => new Promise(() => {}),
 		});
-		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} contextUsage={null} rpc={rpc} />);
 		expect(host.querySelector(".gui-session-info-changes")?.textContent).toContain(t("sessionInfo.loading"));
 		expect(host.querySelector(".gui-session-info-model")?.getAttribute("data-state")).toBe("loading");
 		await unmount();

@@ -142,6 +142,9 @@ async function readBoxes() {
 			status: box(select(".gui-agent-info-status")),
 			title: box(select(".gui-agent-info-title")),
 			firstSection: box(select(".gui-agent-info-section")),
+			row: box(select(".gui-agent-info-row")),
+			rowLabel: box(select(".gui-agent-info-row-label")),
+			rowValue: box(select(".gui-agent-info-row-value")),
 		};
 	});
 }
@@ -204,6 +207,13 @@ describe("agent tab identity head geometry", () => {
 		expect(boxes.status.bottom).toBeLessThanOrEqual(boxes.title.top);
 		// The orb owns the head's top: nothing above it but the band's padding.
 		expect(boxes.avatar.top - boxes.head.top).toBeLessThanOrEqual(20);
+	});
+
+	test("metadata rows read as two ends: label left, value right", async () => {
+		const boxes = await readBoxes();
+		expect(Math.abs(boxes.rowLabel.left - boxes.row.left)).toBeLessThanOrEqual(1);
+		expect(Math.abs(boxes.rowValue.right - boxes.row.right)).toBeLessThanOrEqual(1);
+		expect(boxes.rowValue.left).toBeGreaterThan(boxes.rowLabel.right);
 	});
 
 	test("the band is full-bleed across the pane and has its own surface", async () => {

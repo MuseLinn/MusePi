@@ -30,6 +30,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { requestGracefulQuit, waitForPidsExit } from "./graceful-quit.mjs";
 import { repoElectronPids } from "./repo-electron.mjs";
 
@@ -150,10 +151,23 @@ async function sweepStaleElectron() {
 // ("Unable to find Electron app") — pass the main entry file directly;
 // main.cjs resolves its own __dirname for relative requires either way.
 const ELECTRON_MAIN = "electron/main.cjs";
-const electronBin =
-	process.platform === "win32"
-		? "node_modules/electron/dist/electron.exe"
-		: "node_modules/.bin/electron";
+// Resolved from the SCRIPT's directory, not the caller's cwd: depending on how
+// the run started (repo root, package dir, an editor task), a bare relative
+// path pointed at a directory that does not exist and the spawn failed ENOENT.
+// Resolved through the workspace root (bun hoists electron's binary there) and
+// then the package's own copy, from the SCRIPT's directory rather than the
+// caller's cwd: a bare relative path failed ENOENT depending on how it started.
+function firstExisting(candidates) {
+	for (const candidate of candidates) if (fs.existsSync(candidate)) return candidate;
+	return candidates[0];
+}
+const electronBin = firstExisting(
+	[
+		new URL("../../../node_modules/electron/dist/electron.exe", import.meta.url),
+		new URL("../node_modules/electron/dist/electron.exe", import.meta.url),
+		new URL("../node_modules/.bin/electron", import.meta.url),
+	].map(url => fileURLToPath(url)),
+);
 
 await sweepStaleElectron();
 
@@ -172,7 +186,10 @@ if (await portOpen(VITE_PORT)) {
 	process.exit(1);
 }
 
-const vite = spawn("node_modules/.bin/vite", ["--port", String(VITE_PORT), "--strictPort"], { stdio: "inherit" });
+// `bun run dev` resolves vite through the package manager's bin shim; spawning
+// the `.bin` path directly depended on which directory the script cwd'd from
+// and failed with ENOENT on a clean tree.
+const vite = spawn("bun", ["run", "dev"], { stdio: "inherit" });
 const ok = await waitPort(VITE_PORT, 15000);
 if (!ok) {
 	console.error("vite did not start on", VITE_PORT);

@@ -1613,13 +1613,6 @@ export interface MacOSPowerAssertionOptions {
   user?: boolean
   /** `caffeinate -d`: prevent the display from idle-sleeping. */
   display?: boolean
-  /**
-   * Seconds to hold the assertions after the process exits, for an owner
-   * that outlives the spawning process (a desktop shell restarting its
-   * daemon). Every returned handle keeps renewing the timeout until it
-   * stops, is dropped, or the owner host dies. Omit for a plain handle.
-   */
-  timeoutSeconds?: number
 }
 
 /** A single match in the content. */

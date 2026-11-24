@@ -102,6 +102,7 @@ export function ContextRing({
 	compactFailed = false,
 	snapcompact = null,
 	usage = null,
+	onOpenChange,
 	fetchQuota,
 }: {
 	percent: number | null | undefined;
@@ -129,11 +130,17 @@ export function ContextRing({
 	/** Provider subscription quota (TUI /usage parity) — fetched lazily
 	 *  when the popover opens; null/undefined hides the block. */
 	fetchQuota?: () => Promise<UsageQuotaView | null>;
+	/** Popover open/close: the host loads the full /context facets (thresholds,
+	 *  snapcompact, breakdown) on open. The ring itself stays projection-fed. */
+	onOpenChange?(open: boolean): void;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [quota, setQuota] = useState<UsageQuotaView | null>(null);
 	const [quotaLoading, setQuotaLoading] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
+	useEffect(() => {
+		onOpenChange?.(open);
+	}, [open, onOpenChange]);
 	useEffect(() => {
 		// Close when the data disappears (session gone).
 		if (percent == null) setOpen(false);

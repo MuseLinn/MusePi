@@ -23,8 +23,11 @@ describe("createSurfaceSend", () => {
 		const onSend = vi.fn();
 		const send = createSurfaceSend({ variant: "session", onSubmit, onSend });
 		const images = [{ type: "image" as const, data: "data:,x", mimeType: "image/png" }];
-		void send("hello", { images, deliverAs: "steer", displayContext: { quotes: [] }, videos: [] });
-		expect(onSend).toHaveBeenCalledWith("hello", images, "steer", { quotes: [] }, []);
+		const correlation = { clientId: "c", clientRequestId: "r" };
+		void send("hello", { images, deliverAs: "steer", displayContext: { quotes: [] }, videos: [], correlation });
+		// The send identity rides the same call, so the optimistic row and the
+		// RPC cannot disagree about which row this is.
+		expect(onSend).toHaveBeenCalledWith("hello", images, "steer", { quotes: [] }, [], correlation);
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 });

@@ -12,11 +12,13 @@
  * import is in flight fails it.
  */
 export async function importCompiledModule(artifact: { code?: string; url?: string }): Promise<unknown> {
-	// An HTTP-served shell imports the module URL directly: it shares the
-	// artifact origin, so the browser's own module loader and HTTP cache do the
-	// work. A `file://` document cannot import a cross-origin module, so it
-	// fetches the bytes and evaluates them from a blob instead.
-	if (artifact.url && window.location.protocol !== "file:") {
+	// An HTTP-served shell imports the module URL directly — except while the
+	// document runs from a dev server: a dev page's CSP (`script-src-elem`
+	// without the artifact origin) blocks a fetched module URL, and the whole
+	// surface then fails to mount. The blob below is how a `file://` document
+	// already imports a cross-origin module, and it works under that CSP.
+	const devDocument = window.location.port !== "" && window.location.hostname !== "";
+	if (artifact.url && window.location.protocol !== "file:" && !devDocument) {
 		return (await import(/* @vite-ignore */ artifact.url)) as unknown;
 	}
 	const source = artifact.url ? await fetchSource(artifact.url) : (artifact.code ?? "");

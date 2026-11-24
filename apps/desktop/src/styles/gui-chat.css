@@ -185,6 +185,30 @@
 	background: color-mix(in oklab, var(--border) 60%, transparent);
 }
 
+/* Budgeted tail: the list mounts a window of provider rows and grows on
+ * demand, so a 260-model catalog never pays the whole mount on open. */
+.gui-model-more {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	margin: 4px 0 2px;
+	padding: 7px 8px;
+	border: 1px dashed var(--glass-hairline);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+.gui-model-more:hover,
+.gui-model-more:focus-visible {
+	background: var(--glass-hover);
+	color: var(--color-text);
+}
+
 /* Keyboard-active row (↑↓ navigation): the same accent wash as :hover so
  * a driven highlight reads identically to a pointed one. */
 .gui-model-opt--kbd {
@@ -7015,13 +7039,15 @@ body.gui-resizing .gui-pane-right {
 	transform: var(--gui-capsule-shift) var(--gui-capsule-press);
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	/* Border-box: the hairline border must not grow the pill out of the 52px
 	 * band the scroller reserves (measured by the geometry test). */
 	box-sizing: border-box;
-	height: 30px;
-	padding: 0 10px 0 6px;
-	max-width: min(54%, 330px);
+	/* Two-line hierarchy (bot-capsule reference): a 40px pill still ends
+	 * inside the 52px band at top: 6px, with room for the outer focus ring. */
+	height: 40px;
+	padding: 0 10px 0 7px;
+	max-width: min(58%, 360px);
 	border: 1px solid var(--glass-hairline);
 	border-radius: 999px;
 	background: color-mix(in srgb, var(--color-surface-raised) 76%, transparent);
@@ -7038,10 +7064,65 @@ body.gui-resizing .gui-pane-right {
 /* The orb ships as an inline span around an inline svg; inside the pill it
  * must own exactly its size (a baseline descender would otherwise add ~4px
  * and grow the pill past its height). */
-.gui-agent-capsule > .gui-agent-avatar {
+.gui-agent-capsule > .gui-agent-capsule-avatar > .gui-agent-avatar {
 	display: block;
 	line-height: 0;
 	flex: none;
+}
+/* Avatars off: the empty wrapper must not leave a leading gap. */
+.gui-agent-capsule-avatar:empty {
+	display: none;
+}
+.gui-agent-capsule-avatar {
+	display: flex;
+	align-items: center;
+	flex: none;
+}
+
+/* The copy is the pill's reading column: identity on top, live state below.
+ * min-width:0 on both the column and the name lets long subagent names
+ * truncate instead of squeezing the state out of the pill. */
+.gui-agent-capsule-copy {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	flex: 0 1 auto;
+	gap: 1px;
+	min-width: 0;
+	max-width: 100%;
+}
+.gui-agent-capsule-line,
+.gui-agent-capsule-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	max-width: 100%;
+}
+.gui-agent-capsule-meta {
+	gap: 5px;
+	font-size: 10.5px;
+	line-height: 1.15;
+	color: var(--color-text-faint);
+}
+/* Live-state dot: one 5px marker, colour-coded by the state the pill
+ * already carries in `data-agent-status`. It reads before the text at a
+ * glance without adding a third label. */
+.gui-agent-capsule-dot {
+	flex: none;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.55;
+}
+.gui-agent-capsule[data-agent-status="working"] .gui-agent-capsule-dot {
+	background: var(--color-accent);
+	opacity: 1;
+}
+.gui-agent-capsule[data-agent-status="waiting"] .gui-agent-capsule-dot {
+	background: var(--color-warning);
+	opacity: 1;
 }
 /* A control, and the only opaque hit target in the head row: the row stays
  * hit-transparent so a message underneath keeps its hover and quote pointer,
@@ -7109,7 +7190,9 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
+	line-height: 1.15;
 	color: var(--color-text);
 }
 /* The lane the agent runs in (`编码`/`Coder`, `子代理`, `顾问`) — one chip,
@@ -7121,22 +7204,32 @@ body.gui-resizing .gui-pane-right {
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 	color: var(--color-text-muted);
-	font-size: 10px;
+	font-size: 9.5px;
 	line-height: 1.4;
 	white-space: nowrap;
 }
 .gui-agent-capsule-sep {
 	flex: none;
 	width: 1px;
-	height: 10px;
+	height: 8px;
 	background: var(--border);
 }
 .gui-agent-capsule-status {
 	flex: none;
-	color: var(--color-text-faint);
+	color: var(--color-text-muted);
 }
-.gui-agent-capsule--working .gui-agent-capsule-status {
+.gui-agent-capsule-time {
+	flex: none;
+	overflow: hidden;
+	color: var(--color-text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-agent-capsule[data-agent-status="working"] .gui-agent-capsule-status {
 	color: var(--color-accent);
+}
+.gui-agent-capsule[data-agent-status="waiting"] .gui-agent-capsule-status {
+	color: var(--color-warning);
 }
 /* The sides of the head row (Chat|Canvas, parent-back, tree, info) need the
  * middle band before the pill can show its text; below that it degrades to
@@ -7144,9 +7237,41 @@ body.gui-resizing .gui-pane-right {
  * is the identity the capsule exists to show. */
 @media (max-width: 720px) {
 	.gui-agent-capsule-name,
-	.gui-agent-capsule-sep {
+	.gui-agent-capsule-sep,
+	.gui-agent-capsule-time {
 		display: none;
 	}
+}
+
+/* ── Capsule ⇄ Agent tab: one shared avatar (2026-11-24) ───────────────
+ * The capsule's orb is the old snapshot; the Agent tab's 64px orb carries the
+ * same name in the new snapshot, so the browser morphs one rectangle into the
+ * other instead of cross-fading two different avatars. The name is scoped to
+ * an OPEN, transition-marked panel: while the panel is folded the capsule is
+ * the only named element, and the view-transition helper assigns that name
+ * inline for the old snapshot. The panel's own content slide is suppressed
+ * for the transition window so the new snapshot is measured at its final
+ * position, not 18px into the slide. */
+html.gui-view-transition
+	.gui-pane-right--inner:not(.gui-pane-right--inner--closed)
+	.gui-agent-info-head
+	> .gui-agent-avatar {
+	view-transition-name: agent-identity-avatar;
+}
+html.gui-view-transition .gui-pane-right--inner > :not(.gui-pane-resize-x, .gui-agent-dock) {
+	transition: none;
+}
+::view-transition-group(agent-identity-avatar) {
+	z-index: 2;
+}
+/* Geometry only: the new orb is painted at the old rect and grows into the
+ * panel. Keeping the old snapshot visible would read as two stacked orbs. */
+::view-transition-old(agent-identity-avatar) {
+	display: none;
+}
+::view-transition-new(agent-identity-avatar) {
+	animation: none;
+	mix-blend-mode: normal;
 }
 
 /* ── Agent info tab ────────────────────────────────────────────────────
@@ -7317,7 +7442,10 @@ body.gui-resizing .gui-pane-right {
 .gui-agent-info-row {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	/* Metadata reads as two ends of one line: label left, value right. A
+	 * left-packed pair made every row look like a continuation phrase. */
+	justify-content: space-between;
+	gap: 10px;
 	width: 100%;
 	min-width: 0;
 	padding: 3px 0;
@@ -7345,8 +7473,12 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 }
 .gui-agent-info-row-value {
+	flex: 0 1 auto;
 	min-width: 0;
+	max-width: 68%;
 	overflow: hidden;
+	margin-left: auto;
+	text-align: right;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--color-text);

@@ -19,7 +19,7 @@ import {
 	t,
 } from "@musepi/client-core";
 import { fmtCost } from "@musepi/client-core/src/lib/format";
-import type { AgentSnapshot, PdfQuoteAnchor, WireMessage } from "@musepi/pi-wire";
+import type { AgentSnapshot, ContextUsageProjection, PdfQuoteAnchor, WireMessage } from "@musepi/pi-wire";
 import {
 	Columns2 as Columns2IconData,
 	Maximize2 as Maximize2IconData,
@@ -403,9 +403,14 @@ export function ContextPanel({
 	onOpenSettings,
 	onAddProvider,
 	cwd: cwdOverride,
+	sessionTitle = null,
 }: {
 	/** 无会话时的目录（欢迎页右栏）：会话内仍以 `snap.state.cwd` 为准。 */
 	cwd?: string;
+	/** 活动会话标题（app 的 activeSessionLabel）。Agent 身份头不能从
+	 *  `snap.state.sessionName` 读取——该字段只在 collab 的 state 里出现，
+	 *  daemon 快照没有它，读出来只会是「未命名会话」。 */
+	sessionTitle?: string | null;
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
 	 *  store for four fields — every notify ran two listeners). */
@@ -600,39 +605,10 @@ export function ContextPanel({
 	const hiddenRawMessageCount = Math.max(0, messageCount - rawMessages.length);
 
 	// Tool selection is controlled from ChatView (shared with RightRail).
-	// Context-window usage (session.contextUsage, same RPC as the header
-	// ring): tokens / capacity / percent, polled while the panel lives.
-	const [ctxUsage, setCtxUsage] = useState<{
-		tokens: number;
-		contextWindow: number;
-		percent: number;
-		model?: string | null;
-	} | null>(null);
-	useEffect(() => {
-		if (!rpc || !snap?.sessionId) return;
-		let alive = true;
-		const poll = (): void => {
-			void rpc
-				.request<{ tokens: number; contextWindow: number; percent: number; model?: string | null } | null>(
-					"session.contextUsage",
-					{ sessionId: snap.sessionId },
-				)
-				.then(u => {
-					if (alive && u) setCtxUsage(u);
-				})
-				.catch(() => {});
-		};
-		poll();
-		// Event-driven freshness: poll only while the agent WORKS — the
-		// `snap.working` flip re-runs this effect, so context usage lands
-		// on the transition instead of a timer (idle = zero polling).
-		if (!snap?.working) return;
-		const t = setInterval(poll, 5000);
-		return () => {
-			alive = false;
-			clearInterval(t);
-		};
-	}, [rpc, snap?.sessionId, snap?.working]);
+	// Context-window usage is the host-computed `contextUsage` projection — the
+	// same whole value the composer ring and the Agent tab read, so this tab
+	// cannot show a different number.
+	const ctxUsage = snap?.projections?.get("contextUsage") as ContextUsageProjection | undefined;
 	// Raw-message interactions: one row expands at a time; copy feedback clears
 	// itself after the standard two-second confirmation. Both reset when the
 	// panel switches sessions (ids are only meaningful inside one transcript).
@@ -1589,7 +1565,7 @@ export function ContextPanel({
 						rpc={rpc}
 						sessionId={snap.sessionId}
 						cwd={cwd}
-						title={snap.state?.sessionName ?? null}
+						title={sessionTitle ?? snap.state?.sessionName ?? null}
 						snap={snap}
 						onOpenSurface={onViewChange}
 						onOpenSettings={onOpenSettings}

@@ -12,7 +12,7 @@ import { AVATAR_STORAGE_KEY, avatarPreset, ORB_TO_SIGNALS } from "./avatar-prese
  * declare `renderSignals` (Aora) instead receive the shared `AgentSignals`
  * contract when the call site supplies it; OrbState stays the fallback for
  * previews and legacy call sites.
- * Theme-aware via data-theme. Sizes: 20 (toolbar), 24 (chat capsule),
+ * Theme-aware via data-theme. Sizes: 20 (toolbar), 28 (chat capsule),
  * 32 (surfaces), or 64 (the agent tab's identity head / chat avatar).
  *
  * While idle (`listening`) the orb leisurely cycles through a few pleasant

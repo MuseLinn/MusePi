@@ -4,6 +4,10 @@ export interface QueuedMessageItem {
 	id: string;
 	text: string;
 	imageCount: number;
+	/** The send identity the queued message already carries: a flight that
+	 *  left the composer for this row aims at it, and the row keeps the same
+	 *  identity once the daemon appends it to the transcript. */
+	requestIdentity?: string;
 }
 
 export interface QueueSnapshot {
@@ -33,7 +37,14 @@ function readItems(value: unknown): QueuedMessageItem[] {
 		// show: surfacing it produced a queue chip whose panel was blank and
 		// whose rows could not be told apart from a rendering bug.
 		if (row.text.trim().length === 0 && imageCount === 0) continue;
-		items.push({ id: row.id, text: row.text, imageCount });
+		items.push({
+			id: row.id,
+			text: row.text,
+			imageCount,
+			...(typeof row.requestIdentity === "string" && row.requestIdentity
+				? { requestIdentity: row.requestIdentity }
+				: {}),
+		});
 	}
 	return items;
 }

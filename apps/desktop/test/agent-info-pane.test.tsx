@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
+
 import { AgentInfoPane } from "../src/lib/surfaces/agent-info-pane";
 
 /**
@@ -105,6 +106,26 @@ function snap(overrides: Partial<GuiSessionState> = {}): GuiSessionState {
 		lifecycle: new Map(),
 		unviewedCompleted: [],
 		approvals: [],
+		projections: new Map([
+			[
+				"contextUsage",
+				{
+					model: "prov/m1",
+					tokens: 1000,
+					contextWindow: 10_000,
+					percent: 10,
+					usage: {
+						input: 1000,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 1000,
+						cost: 0.25,
+						cacheHitRate: null,
+					},
+				},
+			],
+		]),
 		recap: null,
 		roundDurations: new Map(),
 		...overrides,

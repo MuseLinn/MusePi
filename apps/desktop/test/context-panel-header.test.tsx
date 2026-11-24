@@ -48,7 +48,11 @@ const snap = {
 	roundDurations: new Map(),
 } as unknown as GuiSessionState;
 
-function mountPanel(tabs: PanelTab[], split: boolean): { host: HTMLElement; ratios: number[] } {
+function mountPanel(
+	tabs: PanelTab[],
+	split: boolean,
+	sessionTitle: string | null = null,
+): { host: HTMLElement; ratios: number[] } {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	hosts.push(host);
@@ -77,6 +81,7 @@ function mountPanel(tabs: PanelTab[], split: boolean): { host: HTMLElement; rati
 			<ContextPanel
 				snap={snap}
 				rpc={rpc}
+				sessionTitle={sessionTitle}
 				open
 				onViewChange={() => {}}
 				panelTabs={panelTabs}
@@ -134,6 +139,20 @@ describe("ContextPanel header row", () => {
 			expect(head.querySelector(".gui-pane-head-strip .gui-surface-tabs")).not.toBeNull();
 			expect(head.querySelector(".gui-pane-head-tools .gui-pane-tool")).not.toBeNull();
 		}
+	});
+
+	it("feeds the app's session title to the Agent identity head", () => {
+		const agentTab: PanelTab = {
+			...tab("session.agent::s1"),
+			surface: "session.agent",
+			target: "s1",
+			dedupeKey: "s1",
+			label: "Agent",
+		};
+		const { host } = mountPanel([agentTab], false, "密钥脱敏方式测试");
+		// The daemon snapshot has no `state.sessionName`; the panel must use the
+		// app's active session title instead of falling back to 未命名会话.
+		expect(host.querySelector(".gui-agent-info-title")?.textContent).toBe("密钥脱敏方式测试");
 	});
 
 	it("keeps the old split-only header classes out of the DOM", () => {

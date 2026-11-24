@@ -19,7 +19,6 @@ import "./components/Composer";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { AppRail, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
-import type { McpAuthRequest } from "./components/McpAuthCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
 import { ChatBootPlaceholder } from "./components/ChatBootPlaceholder";
@@ -36,6 +35,7 @@ import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { InstanceButton } from "./components/InstanceButton";
+import type { McpAuthRequest } from "./components/McpAuthCard";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
 import { ProjectDialog, type ProjectDialogTarget } from "./components/ProjectDialog";
@@ -134,6 +134,7 @@ import { grantRemoteAccessConsent, hasRemoteAccessConsent } from "./lib/remote-a
 import { buildWsUrl, newHostId, type RemoteHost } from "./lib/remote-hosts";
 import { ExpectedDisconnects, RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
+import { guiClientId, sendRequestIdentity } from "./lib/send-identity";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { buildSessionMarkdown, markdownFileName } from "./lib/session-markdown";
 import { isConnectionNotReadyError, type SessionOpenOutcome, SessionOpenScheduler } from "./lib/session-reopen";
@@ -1175,7 +1176,8 @@ function AppInner(): ReactNode {
 	// until the daemon reports a terminal state, so the settling frame carries
 	// the reason the call failed instead of the card vanishing silently.
 	const [pendingMcpAuth, setPendingMcpAuth] = useState<
-		(McpAuthRequest & { sessionId?: string; state?: "pending" | "success" | "error" | "cancelled"; error?: string }) | null
+		| (McpAuthRequest & { sessionId?: string; state?: "pending" | "success" | "error" | "cancelled"; error?: string })
+		| null
 	>(null);
 	// daimon-canvas jump from chat: board id to open after the view swap.
 	const [boardJumpId, setBoardJumpId] = useState<string | null>(null);
@@ -2958,6 +2960,11 @@ function AppInner(): ReactNode {
 								pendingApprovals?: Array<{ requestId: string; tool: string; prompt?: string }>;
 							} | null
 						)?.pendingApprovals,
+						projections: (
+							initial as {
+								projections?: { values: Record<string, unknown>; seq: number };
+							} | null
+						)?.projections,
 					},
 					cwd,
 					{
@@ -3433,18 +3440,26 @@ function AppInner(): ReactNode {
 			displayContext?: MessageDisplayContext,
 			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 			parentId?: string | null,
+			correlation?: { clientId: string; clientRequestId: string },
 		): Promise<void> => {
 			const client = rpcRef.current;
 			const id = sessionId ?? selectedId;
 			if (!client || !id) return;
 			setError(null);
+			// One identity for the optimistic row and the RPC: the daemon stamps
+			// `msg:<clientId>:<clientRequestId>` on the message it persists, and
+			// the row that replaces the echo must keep the SAME virtual key, or
+			// the ack remounts the bubble.
+			const clientId = correlation?.clientId ?? guiClientId();
+			const clientRequestId = correlation?.clientRequestId ?? crypto.randomUUID();
+			const requestIdentity = sendRequestIdentity({ clientId, clientRequestId });
 			// 乐观回显(TUI parity):发送瞬间把用户消息插入本地视图,不等
 			// daemon 事件流回推——否则 reactivate 历史会话 / agent 思考
 			// 准备慢时,输入框已清空但气泡要等 message_start 才出现,用户
 			// 感觉"没发送"。
 			const store = storeRef.current;
 			if (store && store.sessionId === id && !deliverAs) {
-				store.optimisticEcho(text, images, displayContext, parentId);
+				store.optimisticEcho(text, images, displayContext, parentId, requestIdentity);
 			}
 			try {
 				// Refresh the tree/metadata right after the daemon ACCEPTS the
@@ -3452,16 +3467,11 @@ function AppInner(): ReactNode {
 				// must show it immediately (the awaited RPC blocks until the
 				// whole turn completes, so hook the refresh to the send ack
 				// instead of after the await, or the row appears only later).
-				let clientId = localStorage.getItem("musepi-gui-client-id");
-				if (!clientId) {
-					clientId = crypto.randomUUID();
-					localStorage.setItem("musepi-gui-client-id", clientId);
-				}
 				const p = client.request("session.send", {
 					sessionId: id,
 					text,
 					clientId,
-					clientRequestId: crypto.randomUUID(),
+					clientRequestId,
 					...(deliverAs ? { deliverAs } : {}),
 					...(displayContext ? { displayContext } : {}),
 					...(images && images.length > 0 ? { images } : {}),
@@ -3473,7 +3483,7 @@ function AppInner(): ReactNode {
 				// 发送失败:daemon 从未收到这条消息,不会有 message_start 来认领,
 				// 也可能永远没有 agent_end——不等那两个,在这里清掉乐观回显,
 				// 不留幽灵气泡(签名对不上说明用户已发出下一条,不误伤)。
-				store?.discardOptimisticEcho(text, images);
+				store?.discardOptimisticEcho(text, images, requestIdentity);
 				setError(fmtError("session.send", err));
 			}
 		},
@@ -5020,8 +5030,17 @@ function AppInner(): ReactNode {
 							mini: true,
 							onAddProvider: () => openSettings("providers"),
 							onOpenSettings: openSettings,
-							onSend: (text, images, deliverAs, displayContext, videos, parentId) =>
-								void sendPrompt(text, images, undefined, deliverAs, displayContext, videos, parentId),
+							onSend: (text, images, deliverAs, displayContext, videos, parentId, correlation) =>
+								void sendPrompt(
+									text,
+									images,
+									undefined,
+									deliverAs,
+									displayContext,
+									videos,
+									parentId,
+									correlation,
+								),
 							onStop: stop,
 							onDecideApproval: decideApproval,
 							onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
@@ -5492,7 +5511,7 @@ function AppInner(): ReactNode {
 												parentSession: activeParentSession,
 												onOpenParentSession: id => void openSession(id),
 												onOpenSession: id => void openSession(id),
-												onSend: (text, images, deliverAs, displayContext, videos, parentId) =>
+												onSend: (text, images, deliverAs, displayContext, videos, parentId, correlation) =>
 													void sendPrompt(
 														text,
 														images,
@@ -5501,6 +5520,7 @@ function AppInner(): ReactNode {
 														displayContext,
 														videos,
 														parentId,
+														correlation,
 													),
 												onStop: stop,
 												onDecideApproval: decideApproval,

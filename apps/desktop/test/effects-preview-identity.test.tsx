@@ -63,18 +63,20 @@ describe("effects preview identity", () => {
 		// Workbench lane: the name is the assistant, the tag names the lane.
 		expect(capsule?.getAttribute("data-agent-role")).toBe("coder");
 		expect(capsule?.querySelector(".gui-agent-role-tag")?.textContent).toBe("编码");
-		// The role tag sits between the name and the state, as in the chat.
-		const order = Array.from(capsule?.children ?? []).map(child => child.className);
-		expect(order.indexOf("gui-agent-role-tag")).toBe(order.indexOf("gui-agent-capsule-name") + 1);
-		expect(order.indexOf("gui-agent-capsule-status")).toBeGreaterThan(order.indexOf("gui-agent-role-tag"));
+		// The role tag sits beside the name on the first line, and the state on
+		// the second — the same hierarchy as the chat capsule.
+		const line = capsule?.querySelector(".gui-agent-capsule-line");
+		const lineOrder = Array.from(line?.children ?? []).map(child => child.className);
+		expect(lineOrder.indexOf("gui-agent-role-tag")).toBe(lineOrder.indexOf("gui-agent-capsule-name") + 1);
+		expect(capsule?.querySelector(".gui-agent-capsule-meta .gui-agent-capsule-status")).not.toBeNull();
 		await unmount();
 	});
 
-	it("draws the capsule orb at the real capsule's 24px", async () => {
+	it("draws the capsule orb at the real capsule's 28px", async () => {
 		const { host, unmount } = await mount(true);
 		const orb = host.querySelector<HTMLCanvasElement>(".gui-agent-capsule .gui-agent-avatar canvas");
-		expect(orb?.style.width).toBe("24px");
-		expect(orb?.style.height).toBe("24px");
+		expect(orb?.style.width).toBe("28px");
+		expect(orb?.style.height).toBe("28px");
 		await unmount();
 	});
 

@@ -60,8 +60,8 @@ export function Composer(props: ComposerProps): ReactNode {
 			? createSurfaceSend({ variant: "hero", onSubmit: (text, payload) => props.onSubmit(text, payload as never) })
 			: createSurfaceSend({
 					variant: "session",
-					onSend: (text, images, deliverAs, displayContext, videos) =>
-						props.onSend(text, images, deliverAs, displayContext as never, videos),
+					onSend: (text, images, deliverAs, displayContext, videos, correlation) =>
+						props.onSend(text, images, deliverAs, displayContext as never, videos, correlation),
 				});
 	const surface: ComposerSurface = {
 		variant: hero ? "hero" : "session",

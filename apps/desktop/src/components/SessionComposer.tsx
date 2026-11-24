@@ -25,6 +25,7 @@ import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
+import { createSendCorrelation } from "../lib/send-identity";
 import { onSettingsChanged } from "../lib/settings-events";
 import { sfxFor } from "../lib/sfx";
 import { eventMatches } from "../lib/shortcut-registry";
@@ -159,6 +160,9 @@ export interface SessionComposerProps {
 		deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 		displayContext?: MessageDisplayContext,
 		videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
+		/** Send identity minted by the host before the send (see
+		 *  `ComposerSendPayload.correlation`). */
+		correlation?: { clientId: string; clientRequestId: string },
 	): void;
 	onStop(): void;
 	/** Open the right-panel background-jobs surface (host-owned tab). */
@@ -349,7 +353,14 @@ export function SessionComposer({
 	const dispatchSend = (value: string, payload: ComposerSendPayload = {}) =>
 		surface?.send
 			? surface.send(value, payload)
-			: onSend(value, payload.images, payload.deliverAs, payload.displayContext as never, payload.videos);
+			: onSend(
+					value,
+					payload.images,
+					payload.deliverAs,
+					payload.displayContext as never,
+					payload.videos,
+					payload.correlation,
+				);
 	const localIntake = useAttachments(rpc);
 	const { attachments, setAttachments, addFiles, onPaste } = surface?.intake ?? attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
@@ -363,7 +374,9 @@ export function SessionComposer({
 	// stable for the mount and always calls this composer's latest `addFiles`.
 	useEffect(() => {
 		if (!attachApiRef) return;
-		const api = { addFiles: (files: File[]) => addFilesRef.current(files) };
+		const api = {
+			addFiles: (files: File[]) => addFilesRef.current(files),
+		};
 		attachApiRef.current = api;
 		return () => {
 			if (attachApiRef.current === api) attachApiRef.current = null;
@@ -1567,6 +1580,12 @@ export function SessionComposer({
 		(accelerated = false, forceQueue = false): void => {
 			const trimmed = text.trim();
 			if (!trimmed && quotes.length === 0 && attachments.length === 0) return;
+			// One send identity per send, minted HERE — before anything in the
+			// send path changes the DOM. The host threads it to the optimistic
+			// row and the RPC alike, so the daemon echoes the same identity the
+			// row is already keyed by (see `entryViewKey`), and a send flight
+			// can aim at a row that survives the ack.
+			const sendCorrelation = createSendCorrelation();
 			// GUI-native /usage: show the structured quota panel instead of
 			// sending the command to the agent (whose reply is TUI panel
 			// ANSI text that never parses cleanly).
@@ -1789,6 +1808,7 @@ export function SessionComposer({
 						deliverAs: delivery,
 						displayContext: messageDisplayContext(quotes),
 						videos: videos.parts,
+						correlation: sendCorrelation,
 					});
 					finishSend();
 				})();
@@ -1803,6 +1823,7 @@ export function SessionComposer({
 				deliverAs: isContinueShortcut ? "continue" : delivery,
 				displayContext: messageDisplayContext(quotes),
 				videos: videos.parts,
+				correlation: sendCorrelation,
 			});
 			finishSend();
 		},

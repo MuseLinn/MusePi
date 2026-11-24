@@ -839,6 +839,55 @@ export interface ContextUsage {
 	percent: number | null;
 }
 
+/**
+ * One host-computed projection value (session-projection seam).
+ *
+ * `values` is keyed by projection name; each value is a complete current read
+ * model derived from committed session events. Clients never fold domain
+ * events themselves: the daemon publishes a baseline on open/subscribe and a
+ * change list whenever a unit's view changes.
+ */
+export interface SessionProjectionValues {
+	readonly [key: string]: unknown;
+}
+
+/** One changed projection key in a live push frame. */
+export interface SessionProjectionChange {
+	key: string;
+	value: unknown;
+}
+
+/** Baseline projection state attached to a session snapshot / subscribe. */
+export interface SessionProjectionSnapshot {
+	values: SessionProjectionValues;
+	/** Highest journal seq the values reflect; 0 when all values are sampled
+	 *  outside the journal (model/route metadata). */
+	seq: number;
+}
+
+/**
+ * Live context occupancy and whole-session usage — the `contextUsage`
+ * projection. It replaces the GUI's per-surface `session.contextUsage` polls:
+ * one host unit folds committed messages, samples the live stats at turn
+ * boundaries, and pushes whole values to every subscriber.
+ */
+export interface ContextUsageProjection {
+	/** `provider/id` when known, never a bare id. */
+	model: string | null;
+	tokens: number;
+	contextWindow: number;
+	percent: number;
+	usage: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		totalTokens: number;
+		cost: number;
+		cacheHitRate: number | null;
+	};
+}
+
 export interface Participant {
 	name: string;
 	role: "host" | "guest";
@@ -1046,6 +1095,8 @@ export type HostFrame =
 			header: SessionHeader;
 			state: SessionState;
 			agents: AgentSnapshot[];
+			/** Baseline projection values (the session-projection seam). */
+			projections?: SessionProjectionSnapshot;
 			/**
 			 * Total number of `SessionEntry` items the host will deliver in the
 			 * `snapshot-chunk` frames that follow. Guests stay in the loading
@@ -1066,6 +1117,9 @@ export type HostFrame =
 	| { t: "entry"; entry: SessionEntry }
 	| { t: "event"; event: AgentEvent }
 	| { t: "state"; state: SessionState }
+	/** Host-computed projection changes (one frame per committed event that
+	 *  changed at least one unit view). */
+	| { t: "projection"; changes: SessionProjectionChange[] }
 	/** Mirrored EventBus traffic (task subagent lifecycle/progress channels only). */
 	| { t: "bus"; channel: BusChannel; data: unknown }
 	| { t: "agents"; agents: AgentSnapshot[] }

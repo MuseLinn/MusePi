@@ -10,13 +10,18 @@ function store(): GuiSessionStore {
 	return new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
 }
 
-function userMessageStart(text: string): StreamEventShape {
+function userMessageStart(text: string, requestIdentity?: string): StreamEventShape {
 	return {
 		kind: "event",
 		seq: 1,
 		payload: {
 			type: "message_start",
-			message: { role: "user", timestamp: Date.now(), content: [{ type: "text", text }] },
+			message: {
+				role: "user",
+				timestamp: Date.now(),
+				content: [{ type: "text", text }],
+				...(requestIdentity ? { requestIdentity } : {}),
+			},
 		},
 	};
 }
@@ -68,6 +73,27 @@ describe("乐观回显", () => {
 		expect(snap.entries).toHaveLength(1);
 		const entry = snap.entries[0] as { id?: string; message?: { content?: unknown } };
 		expect(entry.id).not.toContain("optimistic");
+	});
+
+	it("ack 带回同一身份时,乐观条目在 message_start 当场移除(行不重复一整轮)", async () => {
+		const s = store();
+		const identity = "msg:client-1:req-1";
+		s.optimisticEcho("hello", undefined, undefined, null, identity);
+		expect(s.getSnapshot().entries).toHaveLength(1);
+		s.apply(userMessageStart("hello", identity));
+		// No settle window: the echo is gone the moment the authoritative row lands.
+		expect(s.getSnapshot().entries).toHaveLength(1);
+		await settle();
+		expect(s.getSnapshot().entries).toHaveLength(1);
+	});
+
+	it("ack 带回别的身份时不误删(他处消息)", async () => {
+		const s = store();
+		s.optimisticEcho("hello", undefined, undefined, null, "msg:client-1:req-1");
+		s.apply(userMessageStart("hello", "msg:client-1:req-2"));
+		await settle();
+		const snap = s.getSnapshot();
+		expect(snap.entries.filter(e => (e as { id?: string }).id?.includes("optimistic"))).toHaveLength(1);
 	});
 
 	it("不同签名 message_start 不误删乐观条目", async () => {

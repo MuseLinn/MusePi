@@ -1,3 +1,4 @@
+import type { SessionProjectionSnapshot } from "@musepi/pi-wire";
 import type { DaemonService } from "./types";
 import { type DeletedWorkspaces, sessionHiddenByWorkspace } from "./workspace-registry";
 
@@ -57,6 +58,11 @@ export interface ResumeLiveHandle {
 	subagentProgress?: Map<string, unknown>;
 }
 
+/** Host projection baseline for the live session (session-projection seam). */
+export interface ProjectionSnapshotSource {
+	projectionsSnapshot(sessionId: string): SessionProjectionSnapshot | undefined;
+}
+
 /** live 会话的工具开关面（session.toolGates 的结构子集）。 */
 export interface ToolGateSession {
 	readonly agentSession: {
@@ -85,6 +91,10 @@ export interface SessionServiceDeps {
 	 *  pauseStatus）都以激活为前提；不激活则打开即有快照、无 live，聊天面
 	 *  只能显示空壳。失败（转录缺失的孤儿行）保持快照可用，live 为 null。 */
 	activateLive?(sessionId: string): Promise<ResumeLiveHandle>;
+	/** Projection baseline for the just-activated live session. The snapshot
+	 *  above may have been built before activation; this replaces the
+	 *  transcript-folded archived baseline with the live unit values. */
+	projectionsSnapshot?(sessionId: string): SessionProjectionSnapshot | undefined;
 	/** cron 会话 id 集合（ScheduleService.sessionIds——树节点 source 标注）。 */
 	cronSessionIds(): Set<string>;
 	/** 标题兜底（ViewStoreService.firstUserMessage——autoTitle 会话）。 */
@@ -199,6 +209,7 @@ export class SessionService implements DaemonService {
 			entries?: readonly unknown[];
 			activeTools?: unknown[];
 			agentsProgress?: unknown[];
+			projections?: SessionProjectionSnapshot;
 		};
 		compactedThrough: boolean;
 	}> {
@@ -217,12 +228,14 @@ export class SessionService implements DaemonService {
 		this.#deps.setResumeLive(conn, live);
 		const checkpointSeq = await this.#deps.checkpointSeq(params.sessionId);
 		const compacted = typeof params.cursor === "number" && checkpointSeq > params.cursor;
+		const projections = live ? this.#deps.projectionsSnapshot?.(params.sessionId) : undefined;
 		return {
 			stream: live ? conn.id : null,
 			snapshot: {
 				...snapshot,
 				...(live?.activeToolCalls ? { activeTools: [...live.activeToolCalls.values()] } : {}),
 				...(live?.subagentProgress ? { agentsProgress: [...live.subagentProgress.values()] } : {}),
+				...(projections ? { projections } : {}),
 			},
 			compactedThrough: compacted,
 		};

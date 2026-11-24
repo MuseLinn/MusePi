@@ -32,7 +32,7 @@
 import { fractionPercent, ProgressMeter, type TranslationKey, t, useLocale } from "@musepi/client-core";
 import { fmtCost, fmtDuration } from "@musepi/client-core/src/lib/format";
 import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
-import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
+import type { ContextUsageProjection, SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copyToClipboard, openExternalUrl } from "../lib/electron";
@@ -94,11 +94,6 @@ export const SESSION_INFO_DOCK_MIN_ROW_PX =
 
 /** Same cadence as the other working-tree readouts — they describe one tree. */
 const POLL_MS = 15_000;
-
-/** Wire shape of `session.contextUsage` (only the model field is read here). */
-interface UsageView {
-	model?: string | null;
-}
 
 /** One root from `session.directories.list` (primary first). */
 interface SessionDirectoryView {
@@ -355,6 +350,8 @@ interface SessionInfoCardProps {
 	cwd?: string | null;
 	/** Session title; falls back to the untitled-session copy. */
 	title?: string | null;
+	/** Host-computed `contextUsage` projection (the model readout). */
+	contextUsage?: ContextUsageProjection | null;
 	/** Open panel tabs, in strip order. */
 	tabs: readonly PanelTab[];
 	activeTabId?: string | null;
@@ -402,6 +399,7 @@ export function SessionInfoCard({
 	rpc,
 	cwd,
 	title,
+	contextUsage = null,
 	tabs,
 	activeTabId = null,
 	progress = null,
@@ -417,8 +415,10 @@ export function SessionInfoCard({
 	onSessionRewritten,
 	onOpenArtifact,
 }: SessionInfoCardProps): ReactNode {
-	const [usage, setUsage] = useState<UsageView | null>(null);
-	const [usageState, setUsageState] = useState<UsageState>("loading");
+	// The model readout comes from the same host projection as the composer
+	// ring, the Context tab and the Agent tab; this card keeps no usage RPC.
+	const model = contextUsage?.model ?? null;
+	const usageState: UsageState = contextUsage ? "ready" : "loading";
 	const [pr, setPr] = useState<PrView | null>(null);
 	const [directories, setDirectories] = useState<DirectoryRow[]>([]);
 	// Per-root disclosure. The primary root starts open (it is the session's
@@ -439,23 +439,13 @@ export function SessionInfoCard({
 		if (!rpc || !sessionId) return;
 		let alive = true;
 		const load = async (): Promise<void> => {
-			const [usageResult, prResult] = await Promise.allSettled([
-				rpc.request<UsageView | null>("session.contextUsage", { sessionId }),
-				cwd ? rpc.request<{ pr?: PrView | null }>("github.prStatus", { cwd }) : Promise.resolve(null),
-			]);
-			if (!alive) return;
-
-			if (prResult.status === "fulfilled") setPr(prResult.value?.pr ?? null);
-			else setPr(null);
-
-			if (usageResult.status === "fulfilled") {
-				setUsage({ model: usageResult.value?.model ?? null });
-				setUsageState("ready");
-			} else {
-				setUsageState("error");
+			try {
+				const result = cwd ? await rpc.request<{ pr?: PrView | null }>("github.prStatus", { cwd }) : null;
+				if (alive) setPr(result?.pr ?? null);
+			} catch {
+				if (alive) setPr(null);
 			}
 		};
-		setUsageState("loading");
 		void load();
 		// The same rule the directory readouts and the resource section follow: a
 		// hidden window has no pixel to update, so the tick is skipped; coming
@@ -694,7 +684,7 @@ export function SessionInfoCard({
 	}, [rpc, sessionId, cwd, openSurfaces, hiddenSurfaces]);
 
 	const sessionTitle = title?.trim() || t("general.sessionInfoUntitled");
-	const model = usage?.model ?? null;
+
 	const retry = useCallback((): void => setReloadToken(token => token + 1), []);
 
 	// ── Header overflow menu: copy workspace path + session maintenance ─────

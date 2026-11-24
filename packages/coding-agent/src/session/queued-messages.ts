@@ -99,5 +99,6 @@ export function toRestoredQueuedMessage(message: AgentMessage): RestoredQueuedMe
 		text: queueChipText(message),
 		images: queuedImageContent(message),
 		...(message.role === "user" && message.displayContext ? { displayContext: message.displayContext } : {}),
+		...(message.role === "user" && message.requestIdentity ? { requestIdentity: message.requestIdentity } : {}),
 	};
 }

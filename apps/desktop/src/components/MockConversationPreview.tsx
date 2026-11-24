@@ -44,10 +44,11 @@ import { AgentAvatar } from "./AgentAvatar";
 /**
  * Agent identity capsule for the mock — the real `.gui-agent-capsule` pill,
  * centered in its own band because the chat's absolutely-positioned head row
- * has no counterpart here. Same reading as the chat's, in the same order: the
- * orb at the capsule's 24px, the agent name, the workbench lane's role tag,
- * then the live state. `showAvatar` is the 显示头像 toggle: it drops the orb
- * and keeps the rest, exactly as the real capsule behaves.
+ * has no counterpart here. Same two-line reading as the chat's: the 28px orb
+ * beside a copy column whose first line is the agent name + lane tag and whose
+ * second line is the state dot, live state and recency. `showAvatar` is the
+ * 显示头像 toggle: it drops the orb and keeps the copy, exactly as the real
+ * capsule behaves.
  */
 function MockAgentCapsule({ showAvatar = true }: { showAvatar?: boolean }): ReactNode {
 	const role = DEFAULT_AGENT_ROLE;
@@ -56,11 +57,21 @@ function MockAgentCapsule({ showAvatar = true }: { showAvatar?: boolean }): Reac
 	return (
 		<div className="gui-effect-preview-identity">
 			<div className="gui-agent-capsule" data-agent-status="idle" data-agent-role={role.id} title={displayName}>
-				{showAvatar && <AgentAvatar state="listening" size={24} />}
-				<span className="gui-agent-capsule-name">{displayName}</span>
-				{roleLabel !== displayName && <span className="gui-agent-role-tag">{roleLabel}</span>}
-				<span className="gui-agent-capsule-sep" aria-hidden="true" />
-				<span className="gui-agent-capsule-status">{t("general.agentCapsuleIdle")}</span>
+				<span className="gui-agent-capsule-avatar">
+					{showAvatar && <AgentAvatar state="listening" size={28} />}
+				</span>
+				<span className="gui-agent-capsule-copy">
+					<span className="gui-agent-capsule-line">
+						<span className="gui-agent-capsule-name">{displayName}</span>
+						{roleLabel !== displayName && <span className="gui-agent-role-tag">{roleLabel}</span>}
+					</span>
+					<span className="gui-agent-capsule-meta">
+						<span className="gui-agent-capsule-dot" aria-hidden="true" />
+						<span className="gui-agent-capsule-status">{t("general.agentCapsuleIdle")}</span>
+						<span className="gui-agent-capsule-sep" aria-hidden="true" />
+						<span className="gui-agent-capsule-time">{t("transcript.justNow")}</span>
+					</span>
+				</span>
 			</div>
 		</div>
 	);

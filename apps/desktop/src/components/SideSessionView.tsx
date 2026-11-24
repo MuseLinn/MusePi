@@ -243,15 +243,20 @@ function SideSessionBody({
 		_deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 		displayContext?: MessageDisplayContext,
 		videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
+		correlation?: { clientId: string; clientRequestId: string },
 	): void => {
 		if (!text.trim() || !rpc) return;
-		store.optimisticEcho(text, images, displayContext);
+		// The side session does not fly, but its row is keyed by the same
+		// identity, so the ack must not remount that row either.
+		const clientRequestId = correlation?.clientRequestId ?? crypto.randomUUID();
+		const resolvedClientId = correlation?.clientId ?? clientId();
+		store.optimisticEcho(text, images, displayContext, null, `msg:${resolvedClientId}:${clientRequestId}`);
 		void rpc
 			.request("session.send", {
 				sessionId,
 				text,
-				clientId: clientId(),
-				clientRequestId: crypto.randomUUID(),
+				clientId: resolvedClientId,
+				clientRequestId,
 				...(displayContext ? { displayContext } : {}),
 				...(images && images.length > 0 ? { images } : {}),
 				...(videos && videos.length > 0 ? { videos } : {}),

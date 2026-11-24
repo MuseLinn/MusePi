@@ -29,7 +29,13 @@ import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
 import { DesktopSession } from "@musepi/pi-natives";
 import { getAgentDir, getSessionsDir, logger, removeWithRetries } from "@musepi/pi-utils";
-import { advisorNoteText, isTurnStartEntry, type SessionEntry, type WireMessage } from "@musepi/pi-wire";
+import {
+	advisorNoteText,
+	isTurnStartEntry,
+	type SessionEntry,
+	type SessionProjectionSnapshot,
+	type WireMessage,
+} from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
@@ -51,6 +57,12 @@ import { previewLine, TRUNCATE_LENGTHS } from "../render/render-utils";
 import type { AuthStorage } from "../session/auth-storage";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
+import {
+	contextUsageProjectionDefinition,
+	type ProjectionEvent,
+	type ProjectionSampleSource,
+	SessionProjectionRegistry,
+} from "../session/session-projections";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
 import { resolvePromptInput } from "../system-prompt";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -1091,6 +1103,8 @@ export class DaemonSessionHost {
 	readonly #extensionSettings = new Map<string, { setting: ExtensionSetting; extensionPath: string }>();
 	readonly #options: DaemonOptions;
 	readonly #store: ViewStore;
+	/** Host-computed per-session projections (the client reads whole values). */
+	readonly #projections = new SessionProjectionRegistry();
 	/** Daemon collab share provider (set by DaemonServer on construction) —
 	 *  lets session.create/activate inject the `collab` tool handle into
 	 *  agent sessions. Absent in host-only tests. */
@@ -1153,6 +1167,7 @@ export class DaemonSessionHost {
 	constructor(options: DaemonOptions = {}) {
 		this.#options = options;
 		this.#store = new ViewStore(viewStorePath(JOURNAL_DIR));
+		this.#projections.register(contextUsageProjectionDefinition);
 		this.#idleScanner = setInterval(() => this.#scanIdle(), IDLE_SCAN_INTERVAL_MS);
 		this.#idleScanner.unref?.();
 		sweepEmptySessionDirs();
@@ -1917,6 +1932,28 @@ export class DaemonSessionHost {
 		// new session, not a missing one.
 		view ??= MaterializedView.replay(sessionId, cwd, []);
 		const viewFinal = view;
+		// Seed the projection units from the full snapshot, then keep them warm
+		// from committed events. The live source makes usage/context exact
+		// without replaying the transcript.
+		let cachedStats: { revision: number; stats: ReturnType<AgentSession["getSessionStats"]> } | null = null;
+		this.#projections.seed(sessionId, {
+			entries: viewFinal.snapshot().entries,
+			source: {
+				model: () => {
+					const model = agentSession.model;
+					return model ? { provider: model.provider, id: model.id, contextWindow: model.contextWindow } : null;
+				},
+				// turn_end and agent_end usually arrive back to back; the stats
+				// revision makes the second boundary reuse the first scan.
+				sessionStats: () => {
+					const revision = agentSession.contextUsageRevision;
+					if (cachedStats?.revision === revision) return cachedStats.stats;
+					const stats = agentSession.getSessionStats();
+					cachedStats = { revision, stats };
+					return stats;
+				},
+			} satisfies ProjectionSampleSource,
+		});
 		let persistTimer: ReturnType<typeof setTimeout> | undefined;
 		let eventsSinceCompactionCheck = 0;
 		const schedulePersist = (): void => {
@@ -2014,6 +2051,7 @@ export class DaemonSessionHost {
 						// subscriber socket died; removed on close
 					}
 				}
+				this.#publishProjectionChanges(live, wireEvent, seq);
 			},
 			dispose: () => {
 				void live.ownerLock?.release();
@@ -2188,6 +2226,9 @@ export class DaemonSessionHost {
 			// wire guard drops. It must run before journal/stream handling so the
 			// continuation is admitted before settlement is evaluated.
 			goalController.observe(event);
+			// A route switch changes the context window without a wire event of its
+			// own; sample the live model before the wire guard drops it.
+			if (event.type === "model_changed") this.#publishProjectionChanges(live, { type: "model_changed" }, 0);
 			// Only wire-compatible events cross the daemon boundary — the
 			// journal, the live stream and the SDK contract share one format.
 			if (!isWireAgentEvent(event)) return;
@@ -2255,6 +2296,7 @@ export class DaemonSessionHost {
 					// subscriber socket died; removed on close
 				}
 			}
+			this.#publishProjectionChanges(live, wireEvent, seq);
 		});
 		const unsubscribePauseGate = pauseGate.onChange(paused => {
 			const seq = 0;
@@ -2766,6 +2808,7 @@ export class DaemonSessionHost {
 		}
 		this.#sessions.delete(sessionId);
 		this.#dynamicRegistries.delete(sessionId);
+		this.#projections.clear(sessionId);
 		// A tool call parked on a browser grant must not outlive its session: the
 		// flow's callback listener would keep a dead conversation waiting.
 		for (const record of live.pendingMcpAuth.values()) {
@@ -2780,6 +2823,43 @@ export class DaemonSessionHost {
 		// Policy lives in `idleDisposePlan` (pure, clock injected) — a working
 		// session is never reaped here (issue #16).
 		for (const id of idleDisposePlan(this.#sessions, now)) this.close(id);
+	}
+
+	/** Baseline projection values for a snapshot/subscribe consumer. */
+	projectionsSnapshot(sessionId: string): SessionProjectionSnapshot | undefined {
+		return this.#projections.snapshot(sessionId);
+	}
+
+	/** Push every current projection value to one connection. Used after a
+	 *  gap-recovery replay: replayed journal events carry no projection frames,
+	 *  so the baseline reconciles anything missed while disconnected. */
+	#emitProjectionBaseline(sessionId: string, conn: DaemonConnection): void {
+		const baseline = this.#projections.snapshot(sessionId);
+		if (!baseline) return;
+		this.emitEvent(conn, {
+			kind: "projection",
+			seq: 0,
+			sessionId,
+			payload: {
+				changes: Object.entries(baseline.values).map(([key, value]) => ({ key, value })),
+			},
+		});
+	}
+
+	/** Drive every projection unit for one committed event and push only the
+	 *  views that moved. Non-streaming display state; carries the journal seq
+	 *  for diagnostics but clients apply it ungated (projection rows have
+	 *  their own last-write semantics). */
+	#publishProjectionChanges(live: LiveSession, event: ProjectionEvent, seq: number): void {
+		const changes = this.#projections.applyEvent(live.sessionId, event);
+		if (changes.length === 0) return;
+		for (const send of live.subscribers.values()) {
+			try {
+				send({ kind: "projection", seq, payload: { changes } });
+			} catch {
+				// subscriber socket died; removed on close
+			}
+		}
 	}
 
 	async snapshot(sessionId: string): Promise<Static<typeof sessionSnapshot>> {
@@ -2838,6 +2918,7 @@ export class DaemonSessionHost {
 			snap.pendingAsks = [...live.approvals.pendingAsks.values()].map(askRequestPayload);
 			snap.pendingSecrets = [...live.approvals.pendingSecrets.values()].map(secretRequestPayload);
 			snap.pendingMcpAuth = [...live.pendingMcpAuth.values()];
+			snap.projections = this.#projections.snapshot(sessionId);
 			return snap;
 		}
 		// History path: no running session — serve the persisted materialized
@@ -2861,6 +2942,11 @@ export class DaemonSessionHost {
 			// keep showing the paused badge on archived sessions.
 			snap.state.paused = archivedPause.paused;
 			snap.state.pausedAt = archivedPause.pausedAt;
+			// Archived open: fold the persisted transcript once so the client
+			// still gets a baseline before the session activates. Capacity is
+			// unknown without a live model, so the first live sample corrects it.
+			this.#projections.seedIfAbsent(sessionId, { entries: snap.entries });
+			snap.projections = this.#projections.snapshot(sessionId);
 			return snap;
 		};
 		const persisted = this.#store.load(sessionId);
@@ -3014,6 +3100,8 @@ export class DaemonSessionHost {
 				}
 			}
 			batcher.flushNow();
+			// Replayed events carry no projection frames; reconcile the values.
+			this.#emitProjectionBaseline(sessionId, conn);
 		} finally {
 			void journal.close();
 		}
@@ -3086,6 +3174,7 @@ export class DaemonSessionHost {
 			}
 		}
 		batcher.flushNow();
+		this.#emitProjectionBaseline(sessionId, conn);
 		return { ok: true };
 	}
 
@@ -3442,6 +3531,9 @@ export class DaemonSessionHost {
 		// subscription contract (one current store, daemon pushes only the
 		// selected session) is replaced by per-session routing on the client.
 		live.subscribers.set(conn.id, event => this.emitEvent(conn, { ...event, sessionId }));
+		// Projection baseline for a subscribe that did not come through a
+		// session.resume snapshot (send/reactivation paths): every key at once.
+		this.#emitProjectionBaseline(sessionId, conn);
 		// Replay still-unanswered approvals and ask questions to THIS
 		// connection: both live in app-level state (not the per-session
 		// journal), so a request raised while another session was displayed

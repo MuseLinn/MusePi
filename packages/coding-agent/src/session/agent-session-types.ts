@@ -484,4 +484,8 @@ export type RestoredQueuedMessage = {
 	text: string;
 	images?: ImageContent[];
 	displayContext?: MessageDisplayContext;
+	/** The send identity the queued message already carries, so a flight that
+	 *  leaves the composer for a queued row can aim at that row before the
+	 *  daemon ever appends it (the row keeps the same identity once it lands). */
+	requestIdentity?: string;
 };

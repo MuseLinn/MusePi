@@ -32,7 +32,9 @@ export async function loadExtensionWidgets(items: readonly ExtensionWidgetArtifa
 		if (item.error || !item.code) continue;
 		const url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
 		try {
-			const mod = (await import(url)) as { default?: unknown };
+			// A runtime blob URL, never a build input: Vite cannot analyze it, and
+			// must not try (its dev pre-bundler otherwise warns on every start).
+			const mod = (await import(/* @vite-ignore */ url)) as { default?: unknown };
 			const exported = mod.default;
 			const Component =
 				typeof exported === "function"

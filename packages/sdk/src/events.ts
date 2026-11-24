@@ -23,6 +23,8 @@ import type {
 	SecretRequestPayload,
 	SessionEntry,
 	SessionHeader,
+	SessionProjectionChange,
+	SessionProjectionSnapshot,
 	SessionState,
 	SubagentLifecyclePayload,
 	SubagentProgressPayload,
@@ -76,6 +78,7 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("recap"),
 		Type.Literal("title"),
 		Type.Literal("suggestion"),
+		Type.Literal("projection"),
 	]),
 	seq: Type.Integer({ minimum: 0 }),
 	payload: Type.Unknown(),
@@ -162,7 +165,10 @@ export type SessionStreamEvent =
 	// Next-input candidate for an empty composer, predicted from the turn that
 	// just completed. Session state only, never a transcript entry: the client
 	// offers it in the input box and discards it when the user moves on.
-	| { kind: "suggestion"; seq: number; payload: { suggestion: string } };
+	| { kind: "suggestion"; seq: number; payload: { suggestion: string } }
+	/** Host-computed projection changes: one frame per committed event that
+	 *  changed at least one unit's client view (session-projection seam). */
+	| { kind: "projection"; seq: number; payload: { changes: SessionProjectionChange[] } };
 
 export type { SessionStreamEnvelope } from "./events-types";
 
@@ -182,6 +188,9 @@ export const sessionSnapshot = Type.Object({
 	 *  this so streaming token frames skip O(n) rebuilds. Absent on
 	 *  snapshots persisted by older builds — treat as undefined-safe. */
 	structureRev: Type.Optional(Type.Integer({ minimum: 0 })),
+	/** Baseline projection values (the session-projection seam): every
+	 *  registered client-visible unit, at the snapshot's committed cut. */
+	projections: Type.Optional(Type.Unknown()),
 });
 
 export type SessionSnapshot = {
@@ -194,4 +203,6 @@ export type SessionSnapshot = {
 	/** See the schema field above. Optional: older persisted snapshots
 	 *  predate the counter. */
 	structureRev?: number;
+	/** Host-computed projection values by key (see `SessionProjectionSnapshot`). */
+	projections?: SessionProjectionSnapshot;
 };

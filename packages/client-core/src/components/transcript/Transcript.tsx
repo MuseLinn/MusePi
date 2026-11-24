@@ -121,6 +121,27 @@ import "./transcript.css";
 // turn-derive.ts' incremental per-round cache — completed rounds are never
 // re-classified while streaming.
 
+/**
+ * The virtual row key of one entry.
+ *
+ * A user message keys by the request that produced it, not by the entry id the
+ * daemon later assigns. The send path inserts an optimistic row whose id is
+ * local (`user:optimistic-N`); the authoritative row that takes its place is a
+ * different entry with a different id. Keyed by identity, both are the SAME
+ * row: React keeps its node and the virtualizer keeps its measurement, so
+ * scroll anchoring does not wobble when the ack lands.
+ */
+export function entryViewKey(entry: SessionEntry, index: number): string {
+	// The identity is written by the daemon and re-serialized from its schema
+	// (`requestIdentity` is not on the wire type yet), so it is read as a
+	// widened field: a snapshot round-trip must not be what drops the key.
+	if (entry.type === "message" && entry.message.role === "user") {
+		const identity = (entry.message as { requestIdentity?: unknown }).requestIdentity;
+		if (typeof identity === "string" && identity !== "") return identity;
+	}
+	return entry.id ?? `pos:${index}`;
+}
+
 /** Per-kind initial row-height estimates — the virtualizer's pre-measure
  *  guess. Refined per row by measureElement; kept close to reality so the
  *  scrollbar doesn't visibly breathe while scrolling. */
@@ -186,7 +207,8 @@ function jumpFlashRow(root: HTMLElement | null, entryId: string): void {
 }
 
 export interface TranscriptAnchor {
-	/** Entry id of the first visible row at capture time. */
+	/** Key of the first visible row at capture time — see `entryViewKey`:
+	 *  user rows key by request identity, others by entry id. */
 	key: string;
 	/** The row's distance below the viewport top, px (negative = scrolled
 	 *  partially past it). Restored verbatim after the prepend. */
@@ -2114,10 +2136,30 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				const callId = (entry.message as { toolCallId?: string }).toolCallId;
 				if (callId !== undefined && callIds.has(callId)) return;
 			}
-			rows.push({ kind: "entry", entryIdx: index, key: entry.id ?? `pos:${index}` });
+			rows.push({ kind: "entry", entryIdx: index, key: entryViewKey(entry, index) });
 		});
 		return rows;
 	}, [entries, foldOpenOf, folds, runsExpanded, toolRuns]);
+	// A row that appears after the first paint rises in once; rows that scroll
+	// into the virtual window were already known and stay still. The session
+	// switch re-primes without animating the whole history.
+	const [enteringKeys, setEnteringKeys] = useState<ReadonlySet<string>>(() => new Set());
+	const knownRowKeysRef = useRef<Set<string> | null>(null);
+	const knownSessionRef = useRef(sessionKey);
+	useEffect(() => {
+		const keys = new Set(renderRows.map(row => row.key));
+		const sessionChanged = knownSessionRef.current !== sessionKey;
+		const previous = sessionChanged ? null : knownRowKeysRef.current;
+		knownSessionRef.current = sessionKey;
+		knownRowKeysRef.current = keys;
+		if (previous === null) return;
+		const fresh = new Set<string>();
+		for (const key of keys) if (!previous.has(key)) fresh.add(key);
+		if (fresh.size === 0) return;
+		setEnteringKeys(fresh);
+		const timer = window.setTimeout(() => setEnteringKeys(current => (current === fresh ? new Set() : current)), 320);
+		return () => window.clearTimeout(timer);
+	}, [renderRows, sessionKey]);
 	const renderPos = useMemo(() => {
 		const map = new Map<number, number>();
 		renderRows.forEach((row, pos) => {
@@ -2337,9 +2379,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			restore: anchor => {
 				const scroller = scrollerRef.current;
 				if (!scroller) return;
-				const idx = entries.findIndex(e => e.id === anchor.key);
-				const pos = idx < 0 ? undefined : rowPosForEntry(idx);
-				if (pos === undefined) return;
+				// The captured key is a ROW key (a user row keys by request
+				// identity, not by entry id), so the row is found by that key
+				// rather than by an entry-id lookup that would miss it.
+				const pos = renderRows.findIndex(row => row.kind === "entry" && row.key === anchor.key);
+				if (pos < 0) return;
 				programmaticScrollRef.current = true;
 				virtualizer.scrollToIndex(pos, { align: "start" });
 				// scrollToIndex lands the row top at the viewport top; shift by
@@ -2351,7 +2395,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				});
 			},
 		}),
-		[virtualItems, entries, rowPosForEntry, virtualizer],
+		[virtualItems, renderRows, virtualizer],
 	);
 	useEffect(() => {
 		if (anchorCtlRef) anchorCtlRef.current = anchorCtl;
@@ -3017,7 +3061,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 								key={row.key}
 								ref={measureVirtualRow}
 								data-index={vi.index}
+								data-entry-key={row.key}
 								data-entry-ts={row.kind === "entry" ? entries[row.entryIdx]?.timestamp : undefined}
+								data-enter={row.kind === "entry" && enteringKeys.has(row.key) ? "true" : undefined}
 								className="tr-vrow"
 								aria-hidden={
 									row.kind === "entry" && folding && row.entryIdx < firstCompactionIdx ? true : undefined
@@ -3030,7 +3076,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				: renderRows.map(row => (
 						<div
 							key={row.key}
+							data-entry-key={row.key}
 							data-entry-ts={row.kind === "entry" ? entries[row.entryIdx]?.timestamp : undefined}
+							data-enter={row.kind === "entry" && enteringKeys.has(row.key) ? "true" : undefined}
 							className="tr-vrow"
 							aria-hidden={
 								row.kind === "entry" && folding && row.entryIdx < firstCompactionIdx ? true : undefined

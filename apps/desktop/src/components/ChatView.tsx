@@ -24,15 +24,22 @@ import {
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
 import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
-import type { ChatQuoteAnchor, OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
+import {
+	type ChatQuoteAnchor,
+	entryStartMs,
+	type OfficeQuoteAnchor,
+	type PdfQuoteAnchor,
+	type SessionEntry,
+} from "@musepi/pi-wire";
 import { Info as InfoIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import { AGENT_AVATAR_TRANSITION, useAgentIdentity } from "../lib/agent-identity";
 import { type AgentOutcome, agentSignalsFromSnapshot } from "../lib/agent-signals";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
-import { companionMoodFromSession, companionStateFromSignals, thinkingOrbStateFromSession } from "../lib/companion";
+import { companionMoodFromSession, companionStateFromSignals } from "../lib/companion";
 import type { ComposerAttachApi } from "../lib/composer-attach";
 import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import {
@@ -60,6 +67,7 @@ import { type PendingToolCallWire, pendingToolCallsNotice } from "../lib/pending
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
+import type { SendCorrelation } from "../lib/send-identity";
 import type { GuiSessionStore } from "../lib/session-store";
 import { onSettingsChanged } from "../lib/settings-events";
 import {
@@ -79,13 +87,7 @@ import {
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
-import {
-	ADVISOR_AGENT_ROLE,
-	agentDisplayName,
-	agentRoleLabel,
-	DEFAULT_AGENT_ROLE,
-	useAgentRole,
-} from "../lib/surfaces/agent-role";
+import { ADVISOR_AGENT_ROLE, DEFAULT_AGENT_ROLE } from "../lib/surfaces/agent-role";
 import {
 	AGENT_INFO_SURFACE,
 	COMPACTION_PANEL_SURFACE,
@@ -100,12 +102,12 @@ import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
+import { morphSurfaceBack, morphSurfaceFrom } from "../lib/view-transition";
 import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
-import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
 import { AskPopover } from "./AskPopover";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatDropAnchor } from "./ChatDropAnchor";
@@ -113,6 +115,7 @@ import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer, type HeroComposerProps } from "./Composer";
 import type { CreationMessage } from "./CreationModeRow";
 import { flushPendingConnectorSelection } from "./composer/connector-panel";
+import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
@@ -341,6 +344,9 @@ export function ChatView({
 		/** Branch parent the prompt attaches under; the optimistic echo needs
 		 *  it so the transcript keeps one active path after a rewind. */
 		parentId?: string | null,
+		/** Send identity minted by the composer before the DOM changed; the
+		 *  optimistic row and the RPC share it. */
+		correlation?: SendCorrelation,
 	): void;
 	onStop(): void;
 	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
@@ -858,12 +864,6 @@ export function ChatView({
 	}, [store]);
 	// Desktop-only tree-sitter highlighting for transcript code blocks.
 	const chatHighlight = useChatHighlight();
-	// Agent status via the thinking-orb state (avatar, not labels).
-	// streaming = the assistant message has started streaming (view folds it
-	// into entries at message_start — no separate ghost is kept). Pending
-	// tool approvals pin `waiting` (the "paused for you" wave) — shared
-	// helper with the header so both avatars tell the same story.
-	const orb = thinkingOrbStateFromSession(snap);
 	// Idle lifecycle clock: the avatar's drowsy/bored/sleeping ladder is measured
 	// in tens of seconds, so one 15s tick is enough — a 1s timer would re-render
 	// the transcript for nothing.
@@ -910,19 +910,39 @@ export function ChatView({
 	// The per-row avatars are gone (one identity per conversation), so this now
 	// decides whether the agent capsule carries the orb or the text alone.
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
-	// The agent's role: the daemon's `session.list` row is the source, with a
+	// The agent's identity (role/name/live state/orb) is the same contract the
+	// Agent tab consumes. The daemon's `session.list` row is the source, with a
 	// synchronous fallback so the capsule never waits to show an identity — the
 	// workbench lane's `coder`, or `advisor` for the read-only transcript the app
 	// already identified. A subagent session reads back as its own agent; it is
 	// never relabeled as the session's coder.
-	const agentRole = useAgentRole(rpc, store?.sessionId ?? null, readOnly ? ADVISOR_AGENT_ROLE : DEFAULT_AGENT_ROLE);
-	// The capsule's status line. Approvals lead: the agent is parked on a
-	// decision, which is the one state the human can act on.
-	const agentCapsuleStatus = snap?.approvals.length
-		? t("general.agentCapsuleWaiting")
-		: snap?.working
-			? t("general.agentCapsuleWorking")
-			: t("general.agentCapsuleIdle");
+	const agentIdentity = useAgentIdentity(
+		rpc,
+		store?.sessionId ?? null,
+		snap,
+		readOnly ? ADVISOR_AGENT_ROLE : DEFAULT_AGENT_ROLE,
+	);
+	const { role: agentRole, orb } = agentIdentity;
+	// The capsule's second line pairs the live state with how long ago the last
+	// activity landed (the reference bot capsule's hierarchy). The 15s clock
+	// above keeps it current without a per-frame timer.
+	const agentLastActivity = useMemo(() => {
+		const last = snap?.entries[snap.entries.length - 1];
+		if (!last) return null;
+		let at = 0;
+		try {
+			at = entryStartMs(last);
+		} catch {
+			return null;
+		}
+		if (!Number.isFinite(at) || at <= 0) return null;
+		const diff = Math.max(0, nowMs - at);
+		if (diff < 60_000) return t("transcript.justNow");
+		if (diff < 3_600_000) return t("transcript.minAgoWithCount", { count: String(Math.floor(diff / 60_000)) });
+		if (diff < 86_400_000) return t("transcript.hAgoWithCount", { count: String(Math.floor(diff / 3_600_000)) });
+		const date = new Date(at);
+		return Number.isNaN(date.getTime()) ? null : `${date.getMonth() + 1}/${date.getDate()}`;
+	}, [snap?.entries, nowMs]);
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
 	// Dock side (bottom vs right). The TerminalPanel stays mounted across
@@ -1305,15 +1325,33 @@ export function ChatView({
 	const agentInfoTabOpen =
 		activePanelTab?.surface === AGENT_INFO_SURFACE && activePanelTab.target === (store?.sessionId ?? null);
 	const agentInfoExpanded = agentInfoTabOpen && rightPanelOpen && !focusMode;
+	const capsuleAvatarRef = useRef<HTMLSpanElement | null>(null);
 	const toggleAgentInfo = useCallback((): void => {
 		const sessionId = store?.sessionId;
 		if (!sessionId) return;
+		const capsuleAvatar = capsuleAvatarRef.current?.querySelector<HTMLElement>(".gui-agent-avatar") ?? null;
 		if (agentInfoExpanded && onToggleRightPanel) {
-			onToggleRightPanel();
+			const panelAvatar = document.querySelector<HTMLElement>(".gui-agent-info-head > .gui-agent-avatar");
+			// Reverse one-take: the panel avatar is the old snapshot and the
+			// capsule avatar is the destination the browser morphs back into.
+			if (capsuleAvatar && panelAvatar) {
+				morphSurfaceBack(panelAvatar, capsuleAvatar, AGENT_AVATAR_TRANSITION, onToggleRightPanel, {
+					surfaceOnly: true,
+				});
+			} else {
+				onToggleRightPanel();
+			}
 			return;
 		}
-		panelTabs.open(sessionAgentTabDescriptor(sessionId, tabLabelFor(AGENT_INFO_SURFACE)));
-		if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		const open = (): void => {
+			panelTabs.open(sessionAgentTabDescriptor(sessionId, tabLabelFor(AGENT_INFO_SURFACE)));
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		};
+		// The capsule's orb is the old snapshot; the Agent tab's avatar carries
+		// the same name in CSS. Without an avatar (settings toggle off) the
+		// click is a plain state change.
+		if (capsuleAvatar) morphSurfaceFrom(capsuleAvatar, AGENT_AVATAR_TRANSITION, open, { surfaceOnly: true });
+		else open();
 	}, [
 		agentInfoExpanded,
 		store?.sessionId,
@@ -1525,6 +1563,7 @@ export function ChatView({
 			deliverAs?: "prompt" | "steer" | "followUp",
 			displayContext?: MessageDisplayContext,
 			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
+			correlation?: SendCorrelation,
 		): void => {
 			// Branch parent BEFORE the leaf is dropped: the optimistic echo is
 			// otherwise parentless, `walkLeafPath` treats the tail as a cut chain
@@ -1549,10 +1588,11 @@ export function ChatView({
 			// parented to `parentId` for exactly this reason).
 			setCurrentLeafKey(null);
 			setPinnedPathIds(null);
-			onSend(text, images, deliverAs, displayContext, videos, parentId);
+			onSend(text, images, deliverAs, displayContext, videos, parentId, correlation);
 		},
 		[onSend, snap?.entries, currentLeafKey],
 	);
+
 	// 保存为图片 → the export dialog (options + live preview) owns the
 	// rasterization; the transcript row's save button just opens it.
 	const [saveImageText, setSaveImageText] = useState<string | null>(null);
@@ -3328,12 +3368,14 @@ export function ChatView({
 											 * head row, so it covers no message, none of the sticky
 											 * prompt and none of the composer; scrolling moves only
 											 * the rows beneath it (pinned chrome, never faded).
-											 * Horizontal: the orb, the assistant name, a compact role
-											 * tag (the lane the agent runs in), then the live state.
-											 * Chat only: the canvas has its own top controls and no
-											 * reserved band. `data-agent-status` / `data-agent-role`
-											 * are the stable hooks the geometry and role tests assert
-											 * on. */}
+											 * Two-line hierarchy: the orb beside a stacked copy —
+											 * name plus lane tag on the first line, live state plus
+											 * last-activity recency on the second. The taller pill
+											 * still fits the reserved band; the Agent tab keeps the
+											 * large vertical identity. Chat only: the canvas has its
+											 * own top controls and no reserved band.
+											 * `data-agent-status` / `data-agent-role` are the stable
+											 * hooks the geometry and role tests assert on. */}
 											{viewMode === "chat" && (
 												<button
 													type="button"
@@ -3346,20 +3388,36 @@ export function ChatView({
 													title={t(agentInfoExpanded ? "general.agentInfoHide" : "general.agentInfoShow")}
 													onClick={toggleAgentInfo}
 												>
-													{showAvatars && (
-														<AgentAvatar
-															state={orb}
-															size={24}
-															signals={agentSignals}
-															seed={store.sessionId}
-														/>
-													)}
-													<span className="gui-agent-capsule-name">{agentDisplayName(agentRole)}</span>
-													{agentRoleLabel(agentRole) !== agentDisplayName(agentRole) && (
-														<span className="gui-agent-role-tag">{agentRoleLabel(agentRole)}</span>
-													)}
-													<span className="gui-agent-capsule-sep" aria-hidden="true" />
-													<span className="gui-agent-capsule-status">{agentCapsuleStatus}</span>
+													<span className="gui-agent-capsule-avatar" ref={capsuleAvatarRef}>
+														{showAvatars && (
+															<AgentAvatar
+																state={orb}
+																size={28}
+																signals={agentSignals}
+																seed={store.sessionId}
+															/>
+														)}
+													</span>
+													<span className="gui-agent-capsule-copy">
+														<span className="gui-agent-capsule-line">
+															<span className="gui-agent-capsule-name">{agentIdentity.displayName}</span>
+															{agentIdentity.roleLabel !== agentIdentity.displayName && (
+																<span className="gui-agent-role-tag">{agentIdentity.roleLabel}</span>
+															)}
+														</span>
+														<span className="gui-agent-capsule-meta">
+															<span className="gui-agent-capsule-dot" aria-hidden="true" />
+															<span className="gui-agent-capsule-status">
+																{agentIdentity.status.label}
+															</span>
+															{agentLastActivity && (
+																<>
+																	<span className="gui-agent-capsule-sep" aria-hidden="true" />
+																	<span className="gui-agent-capsule-time">{agentLastActivity}</span>
+																</>
+															)}
+														</span>
+													</span>
 													<span className="gui-agent-capsule-go" aria-hidden="true">
 														<Icon name="arrow-right-s" className="h-3 w-3" />
 													</span>
@@ -4119,6 +4177,7 @@ export function ChatView({
 								snap,
 								rpc,
 								cwd: store?.cwd ?? project ?? "",
+								sessionTitle: sessionTitle ?? null,
 								open: rightPanelOpen && !focusMode,
 								openRequest: openFileReq,
 								browserOpenRequest: openBrowserReq,

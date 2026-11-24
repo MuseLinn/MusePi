@@ -111,6 +111,24 @@ describe("live-session read RPCs", () => {
 		});
 	});
 
+	test("session.resume carries the contextUsage projection baseline", async () => {
+		await withDaemon(async rpc => {
+			const created = await rpc("session.create", {});
+			const sessionId = created.result.sessionId as string;
+			const res = await rpc("session.resume", { sessionId, cursor: 0 });
+			const projection = res.result.snapshot.projections as
+				| { values?: { contextUsage?: { tokens?: number; percent?: number } } }
+				| undefined;
+			// The host-computed projection rides the snapshot, so the first frame
+			// already has a whole value instead of waiting for contextUsage RPC.
+			// A fresh session already carries the system prompt + tool schema, so the
+			// token count is non-zero; the contract is that the whole value exists.
+			expect(typeof projection?.values?.contextUsage?.tokens).toBe("number");
+			expect(projection?.values?.contextUsage?.tokens).toBeGreaterThanOrEqual(0);
+			expect(typeof projection?.values?.contextUsage?.percent).toBe("number");
+		});
+	});
+
 	test("the three routes require a sessionId where one is expected", async () => {
 		await withDaemon(async rpc => {
 			for (const method of ["workflows.list", "subagents.live", "changes.ops"]) {

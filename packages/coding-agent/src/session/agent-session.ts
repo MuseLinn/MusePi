@@ -7735,7 +7735,14 @@ export class AgentSession {
 				// gave the queue chip a blank line, and the client could not tell
 				// it apart from a rendering failure.
 				if (restored.text.trim().length === 0 && imageCount === 0) return [];
-				return [{ id: this.#queuedMessageId(message), text: restored.text, imageCount }];
+				return [
+					{
+						id: this.#queuedMessageId(message),
+						text: restored.text,
+						imageCount,
+						...(restored.requestIdentity ? { requestIdentity: restored.requestIdentity } : {}),
+					},
+				];
 			});
 		return {
 			paused: this.queuedMessagesPaused,

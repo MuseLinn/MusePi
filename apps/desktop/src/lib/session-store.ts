@@ -262,6 +262,13 @@ export class GuiSessionStore {
 		 *  rewind, instead of treating the parentless tail as a cut chain and
 		 *  re-showing the branch the user just left. */
 		parentId?: string | null;
+		/** Idempotency identity of the send that produced this row — the same
+		 *  `msg:<clientId>:<clientRequestId>` the daemon stamps on the
+		 *  authoritative message. Carried here so the row keeps one virtual key
+		 *  and one DOM node across the ack (see `entryViewKey` in the
+		 *  transcript): keyed by content instead, the ack would remount the
+		 *  bubble a send flight is aiming at. */
+		requestIdentity?: string;
 	} | null = null;
 	#optimisticSeq = 0;
 	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
@@ -639,8 +646,9 @@ export class GuiSessionStore {
 		images?: { type: "image"; data: string; mimeType: string }[],
 		displayContext?: MessageDisplayContext,
 		parentId?: string | null,
+		requestIdentity?: string,
 	): void {
-		this.#optimisticUser = { text, images, displayContext, parentId };
+		this.#optimisticUser = { text, images, displayContext, parentId, requestIdentity };
 		this.#optimisticSeq += 1;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
@@ -652,12 +660,35 @@ export class GuiSessionStore {
 	 * 立刻清掉,不留幽灵气泡。只清签名一致的那条:失败回调到达时用户
 	 * 可能已经发出了下一条,不能误伤。
 	 */
-	discardOptimisticEcho(text: string, images?: { type: "image"; data: string; mimeType: string }[]): void {
+	discardOptimisticEcho(
+		text: string,
+		images?: { type: "image"; data: string; mimeType: string }[],
+		requestIdentity?: string,
+	): void {
 		const o = this.#optimisticUser;
 		if (!o) return;
+		if (requestIdentity !== undefined && o.requestIdentity !== undefined) {
+			if (o.requestIdentity !== requestIdentity) return;
+			this.#clearOptimisticUser();
+			return;
+		}
 		const want = `${text}\u0000${images?.length ?? 0}`;
 		if (`${o.text}\u0000${o.images?.length ?? 0}` !== want) return;
 		this.#clearOptimisticUser();
+	}
+
+	/** 内容签名(文本 + 图片数),与 {@link #optimisticSignature} 同一格式。 */
+	#signatureOf(message: { content?: unknown }): string {
+		const content = message.content;
+		const text =
+			typeof content === "string"
+				? content
+				: ((content as readonly { type?: string; text?: string }[] | undefined)
+						?.filter(c => c.type === "text")
+						.map(c => c.text ?? "")
+						.join("") ?? "");
+		const imageCount = Array.isArray(content) ? content.filter(c => c.type === "image").length : 0;
+		return `${text}\u0000${imageCount}`;
 	}
 
 	/** 乐观条目内容签名(与 daemon message_start 比对)。 */
@@ -717,6 +748,7 @@ export class GuiSessionStore {
 					timestamp: Date.now(),
 					content: [...(o.text ? [{ type: "text" as const, text: o.text }] : []), ...(o.images ?? [])],
 					...(o.displayContext ? { displayContext: o.displayContext } : {}),
+					...(o.requestIdentity ? { requestIdentity: o.requestIdentity } : {}),
 				},
 			};
 			entries = [...entries, optimisticEntry];
@@ -1118,6 +1150,23 @@ export class GuiSessionStore {
 			return true;
 		}
 		const ev = payload as AgentEvent;
+		// The daemon echoed the send identity it stored (idempotency): the
+		// optimistic row is keyed by the SAME identity, so once the authoritative
+		// entry carries it both are one virtual row. Clearing the echo here (not
+		// later) keeps that true for the whole ack — including the turn's own
+		// streaming updates — instead of listing the row twice until turn end.
+		if (ev.type === "message_start" && ev.message.role === "user") {
+			const echoed = (ev.message as { requestIdentity?: unknown }).requestIdentity;
+			// Any identity on the ack means the daemon knows identities: it is
+			// the exact answer, and a different one belongs to another send (a
+			// content signature must not claim it). Without one, the daemon is
+			// older and the signature below is the only answer available.
+			if (typeof echoed === "string") {
+				if (echoed === this.#optimisticUser?.requestIdentity) this.#clearOptimisticUser();
+			} else if (this.#optimisticSignature() === this.#signatureOf(ev.message)) {
+				this.#clearOptimisticUser();
+			}
+		}
 		switch (ev.type) {
 			case "message_start": {
 				// The view folds the assistant message into entries right here
@@ -1143,10 +1192,6 @@ export class GuiSessionStore {
 									.filter(c => c.type === "text")
 									.map(c => (c.type === "text" ? c.text : ""))
 									.join("");
-					const imageCount = Array.isArray(m.content) ? m.content.filter(c => c.type === "image").length : 0;
-					if (this.#optimisticUser && this.#optimisticSignature() === `${text}\u0000${imageCount}`) {
-						this.#clearOptimisticUser();
-					}
 				}
 				break;
 			}

@@ -12,6 +12,7 @@
  */
 import { t } from "@musepi/client-core";
 import { fmtCost } from "@musepi/client-core/src/lib/format";
+import type { ContextUsageProjection } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AgentAvatar } from "../../components/AgentAvatar";
@@ -21,12 +22,11 @@ import { ModelBrandIcon } from "../../components/model-brand-icon";
 import { Reveal } from "../../components/Reveal";
 import { thinkingLabel } from "../../components/thinking-selector-shared";
 import { Icon, type IconName } from "../../vendor/oc-icons";
+import { useAgentIdentity } from "../agent-identity";
 import { agentSignalsFromSnapshot } from "../agent-signals";
-import { thinkingOrbStateFromSession } from "../companion";
 import { pathBaseName } from "../project-label";
 import type { RpcClient } from "../rpc";
 import type { GuiSessionState } from "../session-store";
-import { agentDisplayName, agentRoleLabel, useAgentRole } from "./agent-role";
 
 interface ThinkingInfo {
 	ceiling?: string | null;
@@ -35,14 +35,6 @@ interface ThinkingInfo {
 	auto?: boolean;
 	resolved?: string | null;
 	model?: { id: string; name?: string; provider?: string } | null;
-}
-
-interface SessionUsage {
-	model?: string | null;
-	tokens?: number | null;
-	contextWindow?: number | null;
-	percent?: number | null;
-	usage?: { cost?: number } | null;
 }
 
 interface AgentInfoPaneProps {
@@ -129,9 +121,7 @@ export function AgentInfoPane({
 	onAddProvider,
 }: AgentInfoPaneProps): ReactNode {
 	const [info, setInfo] = useState<ThinkingInfo | null>(null);
-	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const [infoError, setInfoError] = useState<string | null>(null);
-	const [usageError, setUsageError] = useState<string | null>(null);
 	const [failed, setFailed] = useState<string | null>(null);
 	const [retrying, setRetrying] = useState(false);
 	const aliveRef = useRef(true);
@@ -142,29 +132,32 @@ export function AgentInfoPane({
 		};
 	}, []);
 
-	/** Read both session views. Returns the first failure message (null when
-	 *  both settled) so a write followed by a failed re-read can say so —
-	 *  the pane must never look merely "slow" after a hard failure. */
+	// Context usage/cost is the host-computed `contextUsage` projection — the
+	// same whole value the composer ring and the Context tab read, pushed per
+	// committed event. The pane never polls.
+	const usage = snap?.projections?.get("contextUsage") as ContextUsageProjection | undefined;
+
+	/** Read the thinking ladder. The returned message is the thinking failure
+	 *  so a write followed by a failed re-read can say so — the pane must never
+	 *  look merely "slow" after a hard failure. */
 	const refresh = useCallback(async (): Promise<string | null> => {
-		const [thinking, context] = await Promise.allSettled([
-			rpc.request<ThinkingInfo>("session.thinkingInfo", { sessionId }),
-			rpc.request<SessionUsage | null>("session.contextUsage", { sessionId }),
-		]);
-		if (!aliveRef.current) return null;
-		const thinkingFailure = thinking.status === "rejected" ? errorText(thinking.reason) : null;
-		const usageFailure = context.status === "rejected" ? errorText(context.reason) : null;
-		if (thinking.status === "fulfilled") setInfo(thinking.value ?? null);
-		if (context.status === "fulfilled") setUsage(context.value ?? null);
-		setInfoError(thinkingFailure);
-		setUsageError(usageFailure);
-		return thinkingFailure ?? usageFailure;
+		try {
+			const thinking = await rpc.request<ThinkingInfo>("session.thinkingInfo", { sessionId });
+			if (!aliveRef.current) return null;
+			setInfo(thinking ?? null);
+			setInfoError(null);
+			return null;
+		} catch (error) {
+			if (!aliveRef.current) return null;
+			const failure = errorText(error);
+			setInfoError(failure);
+			return failure;
+		}
 	}, [rpc, sessionId]);
 
 	useEffect(() => {
 		setInfo(null);
-		setUsage(null);
 		setInfoError(null);
-		setUsageError(null);
 		void refresh();
 	}, [refresh]);
 
@@ -175,14 +168,6 @@ export function AgentInfoPane({
 			if (aliveRef.current) setRetrying(false);
 		});
 	}, [refresh]);
-
-	// A finished turn is the natural refresh point for the usage readout.
-	const previousWorking = useRef(snap?.working === true);
-	useEffect(() => {
-		const working = snap?.working === true;
-		if (previousWorking.current && !working) void refresh();
-		previousWorking.current = working;
-	}, [snap?.working, refresh]);
 
 	const efforts = useMemo(() => info?.efforts ?? [], [info]);
 	const ceiling = info?.ceiling ?? null;
@@ -272,21 +257,11 @@ export function AgentInfoPane({
 	);
 
 	const pendingApprovals = snap?.approvals.length ?? 0;
-	const status =
-		pendingApprovals > 0
-			? t("general.agentCapsuleWaiting")
-			: snap?.working
-				? t("general.agentCapsuleWorking")
-				: t("general.agentCapsuleIdle");
-	const statusKey = pendingApprovals > 0 ? "waiting" : snap?.working ? "working" : "idle";
-	const orb = thinkingOrbStateFromSession(snap);
+	// One identity contract with the chat capsule: role, name, lane, live
+	// state and the avatar animation all come from the same hook.
+	const identity = useAgentIdentity(rpc, sessionId, snap);
+	const { role, displayName, roleLabel, status, orb } = identity;
 	const signals = useMemo(() => agentSignalsFromSnapshot(snap, { now: Date.now() }), [snap]);
-	// Same role contract as the chat capsule: the daemon's `session.list` row,
-	// falling back to the workbench lane's `coder`. The id drives the
-	// `data-agent-role` hook; the head shows the agent's name plus the lane tag.
-	const role = useAgentRole(rpc, sessionId);
-	const roleName = agentRoleLabel(role);
-	const displayName = agentDisplayName(role);
 	const sessionTitle = title?.trim() || t("general.sessionInfoUntitled");
 
 	const contextWindow = usage?.contextWindow ?? null;
@@ -303,17 +278,17 @@ export function AgentInfoPane({
 		<div className="gui-agent-info">
 			{/* Identity head: the agent's avatar, name, lane and live state, stacked
 			 * and pinned to the scroller's top so the sections below scroll beneath
-			 * it. The chat capsule carries the same facts in one line; this is the
-			 * full reading, with the session title. */}
+			 * it. The chat capsule carries the same facts in a compact two-line
+			 * strip; this is the full reading, with the session title. */}
 			<header className="gui-agent-info-head" data-agent-role={role.id}>
 				<AgentAvatar state={orb} size={64} seed={sessionId} signals={signals} />
 				<div className="gui-agent-info-identity">
 					<span className="gui-agent-info-name" title={displayName}>
 						{displayName}
 					</span>
-					{roleName !== displayName ? <span className="gui-agent-role-tag">{roleName}</span> : null}
-					<span className="gui-agent-info-status" data-state={statusKey}>
-						{status}
+					{roleLabel !== displayName ? <span className="gui-agent-role-tag">{roleLabel}</span> : null}
+					<span className="gui-agent-info-status" data-state={status.key}>
+						{status.label}
 					</span>
 					<span className="gui-agent-info-title" title={sessionTitle}>
 						{sessionTitle}
@@ -321,7 +296,7 @@ export function AgentInfoPane({
 				</div>
 			</header>
 
-			{(infoError || usageError) && (
+			{infoError && (
 				<p className="gui-agent-info-note gui-agent-info-error">
 					<span role="alert">{t("general.agentInfoUnavailable")}</span>
 					<button type="button" className="gui-agent-info-link" onClick={retry} disabled={retrying}>
@@ -442,7 +417,7 @@ export function AgentInfoPane({
 						tokens != null
 							? `${formatTokens(tokens) ?? "0"}${
 									contextWindow ? ` / ${formatTokens(contextWindow)}` : ""
-								}${percent != null ? ` · ${percent}%` : ""}`
+								}${percent != null ? ` · ${Math.round(percent)}%` : ""}`
 							: t("sessionInfo.unavailable")
 					}
 				/>

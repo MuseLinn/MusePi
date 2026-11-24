@@ -51,6 +51,15 @@ function formatContextWindow(n?: number | null): string | null {
 	return String(n);
 }
 
+// ── Progressive rows ─────────────────────────────────────────────────────
+// A real catalog is hundreds of two-line rows. Mounting all of them is the
+// measured open-cost stall (~316ms on 260 models), so the list renders a
+// budgeted window and grows on demand. Favorites and recents are always full:
+// they are user-pinned, usually few, and the favorites section owns drag
+// ordering that must see its whole set.
+export const MODEL_LIST_INITIAL_ROWS = 30;
+const MODEL_LIST_MORE_ROWS = 40;
+
 // ── Favorite models (GUI-local pins) ──────────────────────────────────────
 // Stored per model id in localStorage; every ModelSelector instance shares
 // the same set via useSyncExternalStore, so pinning in the composer is
@@ -300,6 +309,12 @@ export function ModelSelector({
 	const [modelId, setModelId] = useState<string>("");
 	// Searchable list: filter by id/name/provider.
 	const [query, setQuery] = useState("");
+	// The provider rows the list has mounted so far. A new query starts a new
+	// result set at the initial budget; folding a section gives its rows back.
+	const [rowBudget, setRowBudget] = useState(MODEL_LIST_INITIAL_ROWS);
+	useEffect(() => {
+		setRowBudget(MODEL_LIST_INITIAL_ROWS);
+	}, [query]);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	// Content-boundary feather on the scrolling list (sessions-list parity).
 	const listRef = useRef<HTMLDivElement | null>(null);
@@ -557,6 +572,28 @@ export function ModelSelector({
 			filtered,
 		};
 	}, [models, query, favs, recents, secClosed]);
+	// Per-section row cap for the current budget. Only provider sections spend
+	// the budget; favorites/recents render in full (see the constants above).
+	const { rowCaps, hiddenRows } = useMemo(() => {
+		let remaining = rowBudget;
+		let hidden = 0;
+		const caps = new Map<string, number>();
+		for (const sec of sections) {
+			if (secClosed[sec.key] === true) {
+				caps.set(sec.key, 0);
+				continue;
+			}
+			if (sec.key === "fav" || sec.key === "settings.recent") {
+				caps.set(sec.key, sec.rows.length);
+				continue;
+			}
+			const shown = Math.min(sec.rows.length, Math.max(0, remaining));
+			caps.set(sec.key, shown);
+			remaining -= shown;
+			hidden += sec.rows.length - shown;
+		}
+		return { rowCaps: caps, hiddenRows: hidden };
+	}, [sections, secClosed, rowBudget]);
 	const searching = query.trim().length > 0;
 	// Favorite grip-drag (openchamber parity, @dnd-kit — same library every
 	// openchamber drag site uses): drag from a small grip handle; the
@@ -763,6 +800,7 @@ export function ModelSelector({
 				{filtered.length === 0 && <div className="gui-model-empty">{t("settings.noMatchingModels")}</div>}
 				{sections.map(sec => {
 					const closed = secClosed[sec.key] === true;
+					const visibleRows = sec.rows.slice(0, rowCaps.get(sec.key) ?? 0);
 					return (
 						<div key={sec.key} className="gui-model-sec">
 							{sec.label && (
@@ -789,10 +827,10 @@ export function ModelSelector({
 								{favDragEnabled && sec.key === "fav" ? (
 									<DndContext sensors={favSensors} collisionDetection={closestCenter} onDragEnd={onFavDragEnd}>
 										<SortableContext
-											items={sec.rows.map(m => favKeyOf(m))}
+											items={visibleRows.map(m => favKeyOf(m))}
 											strategy={verticalListSortingStrategy}
 										>
-											{sec.rows.map(m => (
+											{visibleRows.map(m => (
 												<SortableModelRow
 													key={`${m.provider}/${m.id}`}
 													m={m}
@@ -812,7 +850,7 @@ export function ModelSelector({
 										</SortableContext>
 									</DndContext>
 								) : (
-									sec.rows.map(m => (
+									visibleRows.map(m => (
 										<ModelRow
 											key={`${m.provider}/${m.id}`}
 											m={m}
@@ -833,6 +871,16 @@ export function ModelSelector({
 						</div>
 					);
 				})}
+				{hiddenRows > 0 && (
+					<button
+						type="button"
+						className="gui-model-more"
+						onClick={() => setRowBudget(budget => budget + MODEL_LIST_MORE_ROWS)}
+					>
+						<Icon name="arrow-down-s" className="h-3 w-3" />
+						<span>{t("settings.showMoreModels", { count: String(hiddenRows) })}</span>
+					</button>
+				)}
 			</div>
 			<div className="gui-model-menu-foot">{t("settings.modelMenuHint")}</div>
 		</div>

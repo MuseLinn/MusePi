@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { setLocale } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ModelSelector } from "../src/components/ModelSelector";
+import { MODEL_LIST_INITIAL_ROWS, ModelSelector } from "../src/components/ModelSelector";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
 import { AgentInfoPane } from "../src/lib/surfaces/agent-info-pane";
@@ -25,6 +25,8 @@ import { AgentInfoPane } from "../src/lib/surfaces/agent-info-pane";
  */
 
 const CATALOG_SIZE = 260;
+/** The first frame of an opened list mounts only this window of provider rows. */
+const INITIAL_ROWS = Math.min(CATALOG_SIZE, MODEL_LIST_INITIAL_ROWS);
 
 const models = Array.from({ length: CATALOG_SIZE }, (_, i) => ({
 	id: `m${i}`,
@@ -78,6 +80,26 @@ const snap = {
 	lifecycle: new Map(),
 	unviewedCompleted: [],
 	approvals: [],
+	projections: new Map([
+		[
+			"contextUsage",
+			{
+				model: "prov/m1",
+				tokens: 1000,
+				contextWindow: 10_000,
+				percent: 10,
+				usage: {
+					input: 1000,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 1000,
+					cost: 0.25,
+					cacheHitRate: null,
+				},
+			},
+		],
+	]),
 	recap: null,
 	roundDurations: new Map(),
 } as unknown as GuiSessionState;
@@ -169,7 +191,14 @@ describe("agent tab open cost", () => {
 		});
 		expect(card.getAttribute("aria-expanded")).toBe("true");
 		expect(calls).toContain("models.list");
-		expect(host.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		// A 260-model catalog mounts a budgeted window, not every row.
+		expect(host.querySelectorAll(".gui-model-opt").length).toBe(INITIAL_ROWS);
+		expect(host.querySelector(".gui-model-more")).not.toBeNull();
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>(".gui-model-more")!.click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
+		expect(host.querySelectorAll(".gui-model-opt").length).toBeGreaterThan(INITIAL_ROWS);
 
 		// Folding and re-opening does not rebuild it: one read, rows still there.
 		await act(async () => {
@@ -181,7 +210,7 @@ describe("agent tab open cost", () => {
 			card.click();
 			await new Promise(resolve => setTimeout(resolve, 5));
 		});
-		expect(host.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		expect(host.querySelectorAll(".gui-model-opt").length).toBeGreaterThan(INITIAL_ROWS);
 		expect(calls.filter(method => method === "models.list").length).toBe(1);
 	});
 
@@ -194,7 +223,7 @@ describe("agent tab open cost", () => {
 			card.click();
 			await new Promise(resolve => setTimeout(resolve, 5));
 		});
-		expect(host.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		expect(host.querySelectorAll(".gui-model-opt").length).toBe(INITIAL_ROWS);
 		for (const root of roots) await act(async () => root.unmount());
 		roots.clear();
 
@@ -206,7 +235,7 @@ describe("agent tab open cost", () => {
 		await act(async () => {
 			reopened.querySelector<HTMLButtonElement>(".gui-agent-model-card")!.click();
 		});
-		expect(reopened.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		expect(reopened.querySelectorAll(".gui-model-opt").length).toBe(INITIAL_ROWS);
 		// The mount still re-reads — the cache is a seed, not a replacement.
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 5));
@@ -225,7 +254,7 @@ describe("agent tab open cost", () => {
 			host.querySelector<HTMLButtonElement>(".gui-agent-model-card")!.click();
 			await new Promise(resolve => setTimeout(resolve, 5));
 		});
-		expect(host.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		expect(host.querySelectorAll(".gui-model-opt").length).toBe(INITIAL_ROWS);
 		for (const root of roots) await act(async () => root.unmount());
 		roots.clear();
 
@@ -243,7 +272,7 @@ describe("agent tab open cost", () => {
 		});
 		expect(second.calls).toContain("models.list");
 		// The seed painted on the open frame (the cache doing its job)…
-		expect(reopened.querySelectorAll(".gui-model-opt").length).toBe(CATALOG_SIZE);
+		expect(reopened.querySelectorAll(".gui-model-opt").length).toBe(INITIAL_ROWS);
 		// …and the rejection cleared it.
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 60));
@@ -328,11 +357,11 @@ describe("agent tab open cost", () => {
 		// Touch s1 by READING its seed (not by writing it again): only
 		// `readCachedCatalog` moves a key to the recent end, and a write would
 		// refresh the order on its own and hide a missing recency refresh.
-		expect(await seedRows("s1")).toBe(CATALOG_SIZE);
+		expect(await seedRows("s1")).toBe(INITIAL_ROWS);
 		for (const sessionId of ["s3", "s4", "s5", "s6", "s7", "s8", "s9"]) await warm(sessionId);
 
 		// s1 was touched after s2, so the just-used key must survive…
-		expect(await seedRows("s1")).toBe(CATALOG_SIZE);
+		expect(await seedRows("s1")).toBe(INITIAL_ROWS);
 		// …and the oldest untouched key, s2, is the one that was dropped. Its own
 		// read is still in flight here, so an evicted key shows no seed at all.
 		expect(await seedRows("s2")).toBe(0);

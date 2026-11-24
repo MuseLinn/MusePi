@@ -158,6 +158,39 @@ describe("agent capsule control", () => {
 		await unmount();
 	});
 
+	it("morphs the capsule avatar into the Agent tab's avatar", async () => {
+		// The shared-element transition is the browser's; assert the primitive
+		// is driven with the capsule orb as the old named snapshot.
+		localStorage.setItem("musepi-gui-avatars", "1");
+		const doc = document as Document & { startViewTransition?: (update: () => void) => { finished: Promise<void> } };
+		const original = doc.startViewTransition;
+		let calls = 0;
+		let oldName: string | null = null;
+		doc.startViewTransition = update => {
+			calls += 1;
+			oldName =
+				document.querySelector<HTMLElement>(".gui-agent-capsule .gui-agent-avatar")?.style.viewTransitionName ??
+				null;
+			update();
+			return { finished: Promise.resolve() };
+		};
+		try {
+			const { host, unmount } = await mount({
+				rightPanelOpen: false,
+				onExpandRightPanel: () => {},
+				onToggleRightPanel: () => {},
+			});
+			const capsule = host.querySelector<HTMLButtonElement>(".gui-agent-capsule")!;
+			expect(capsule.querySelector(".gui-agent-avatar")).not.toBeNull();
+			await act(async () => capsule.click());
+			expect(calls).toBe(1);
+			expect(oldName).toBe("agent-identity-avatar");
+			await unmount();
+		} finally {
+			doc.startViewTransition = original;
+		}
+	});
+
 	it("opens one session.agent tab for the session and expands a folded panel", async () => {
 		let expanded = 0;
 		const { host, unmount } = await mount({

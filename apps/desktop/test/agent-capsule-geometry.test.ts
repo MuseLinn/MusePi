@@ -13,8 +13,9 @@ import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/too
  *     and rail all move its center with the column, never the window), and it
  *     sits inside the 52px band the transcript reserves — no message row is
  *     covered at rest;
- *  2. it stays HORIZONTAL: the orb (enlarged to 24px), the assistant name, the
- *     role tag and the live state read left to right in one pill;
+ *  2. it keeps a two-line hierarchy: the 28px orb leads a copy column whose
+ *     first line is the assistant name + role tag and whose second line is
+ *     the live state + last-activity recency;
  *  3. it is pinned, not faded: scrolling the transcript moves the rows and
  *     leaves the pill's box and opacity untouched;
  *  4. at a narrow WINDOW the name folds first, keeping the orb, the role tag
@@ -79,13 +80,23 @@ const FIXTURE = `
 				<div class="gui-chat-head">
 					<div class="gui-chat-head-left"><div class="gui-surface-mode"><button type="button">对话</button></div></div>
 					<button type="button" class="gui-agent-capsule" aria-expanded="false" data-agent-status="idle" data-agent-role="coder">
-						<span class="gui-agent-avatar" role="img" aria-label="agent listening">
-							<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/></svg>
+						<span class="gui-agent-capsule-avatar">
+							<span class="gui-agent-avatar" role="img" aria-label="agent listening">
+								<svg width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="none" stroke="currentColor"/></svg>
+							</span>
 						</span>
-						<span class="gui-agent-capsule-name">助手</span>
-						<span class="gui-agent-role-tag">编码</span>
-						<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
-						<span class="gui-agent-capsule-status">空闲</span>
+						<span class="gui-agent-capsule-copy">
+							<span class="gui-agent-capsule-line">
+								<span class="gui-agent-capsule-name">助手</span>
+								<span class="gui-agent-role-tag">编码</span>
+							</span>
+							<span class="gui-agent-capsule-meta">
+								<span class="gui-agent-capsule-dot" aria-hidden="true"></span>
+								<span class="gui-agent-capsule-status">空闲</span>
+								<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
+								<span class="gui-agent-capsule-time">2 小时前</span>
+							</span>
+						</span>
 						<span class="gui-agent-capsule-go" aria-hidden="true">
 							<svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor"/></svg>
 						</span>
@@ -113,13 +124,23 @@ const FIXTURE = `
 	<div class="gui-effect-preview" id="preview" style="width: 420px; margin-top: 24px">
 		<div class="gui-effect-preview-identity">
 			<button type="button" class="gui-agent-capsule" aria-expanded="false" data-agent-status="idle" data-agent-role="coder">
-				<span class="gui-agent-avatar" role="img" aria-label="agent listening">
-					<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/></svg>
+				<span class="gui-agent-capsule-avatar">
+					<span class="gui-agent-avatar" role="img" aria-label="agent listening">
+						<svg width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="none" stroke="currentColor"/></svg>
+					</span>
 				</span>
-				<span class="gui-agent-capsule-name">助手</span>
-				<span class="gui-agent-role-tag">编码</span>
-				<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
-				<span class="gui-agent-capsule-status">空闲</span>
+				<span class="gui-agent-capsule-copy">
+					<span class="gui-agent-capsule-line">
+						<span class="gui-agent-capsule-name">助手</span>
+						<span class="gui-agent-role-tag">编码</span>
+					</span>
+					<span class="gui-agent-capsule-meta">
+						<span class="gui-agent-capsule-dot" aria-hidden="true"></span>
+						<span class="gui-agent-capsule-status">空闲</span>
+						<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
+						<span class="gui-agent-capsule-time">2 小时前</span>
+					</span>
+				</span>
 			</button>
 		</div>
 	</div>`;
@@ -220,6 +241,8 @@ async function readBoxes() {
 			capsuleSep: box(select(".gui-agent-capsule-sep")),
 			capsuleSepDisplay: getComputedStyle(select(".gui-agent-capsule-sep")).display,
 			capsuleStatus: box(select(".gui-agent-capsule-status")),
+			capsuleTime: box(select(".gui-agent-capsule-time")),
+			capsuleTimeDisplay: getComputedStyle(select(".gui-agent-capsule-time")).display,
 			avatar: box(select(".gui-agent-capsule .gui-agent-avatar")),
 			headMode: box(select(".gui-surface-mode")),
 			infoToggle: box(select(".gui-chat-info-toggle")),
@@ -252,26 +275,29 @@ describe("agent capsule geometry", () => {
 		// so the first message row is never covered at rest.
 		const band = before.firstRow.top - before.column.top;
 		expect(before.capsule.bottom - before.column.top).toBeLessThanOrEqual(band);
-		// Still the one-line chrome strip (30px with the enlarged orb), never the
-		// Agent tab's tall identity head.
-		expect(before.capsule.height).toBe(30);
+		// Two-line chrome strip (40px with the enlarged orb), never the Agent
+		// tab's tall identity head.
+		expect(before.capsule.height).toBe(40);
 	});
 
-	test("stays horizontal: enlarged orb, name, role tag, state, arrow in one line", async () => {
+	test("two-line hierarchy: identity over live state, orb leading both", async () => {
 		const boxes = await readBoxes();
-		// The orb grew from 20 to 24 but stays a single-row leading glyph.
-		expect(boxes.avatar.width).toBe(24);
-		expect(boxes.avatar.height).toBe(24);
+		// The orb grew from 24 to 28 and still leads the copy column.
+		expect(boxes.avatar.width).toBe(28);
+		expect(boxes.avatar.height).toBe(28);
 		// The orb is vertically centered in the pill.
 		const pillCenter = boxes.capsule.top + boxes.capsule.height / 2;
 		expect(Math.abs(boxes.avatar.top + boxes.avatar.height / 2 - pillCenter)).toBeLessThanOrEqual(1);
-		// Reading order: orb → name → role tag → separator → state.
+		// Reading order: orb → copy; name and role share the first line…
 		expect(boxes.avatar.right).toBeLessThanOrEqual(boxes.capsuleName.left);
 		expect(boxes.capsuleName.right).toBeLessThanOrEqual(boxes.roleTag.left);
-		expect(boxes.roleTag.right).toBeLessThanOrEqual(boxes.capsuleSep.left);
-		expect(boxes.capsuleSep.right).toBeLessThanOrEqual(boxes.capsuleStatus.left);
+		expect(Math.abs(boxes.capsuleName.top - boxes.roleTag.top)).toBeLessThanOrEqual(2);
+		// …and the live state, separator and recency sit on the second.
+		expect(boxes.capsuleName.bottom).toBeLessThanOrEqual(boxes.capsuleStatus.top);
+		expect(boxes.capsuleStatus.right).toBeLessThanOrEqual(boxes.capsuleSep.left);
+		expect(boxes.capsuleSep.right).toBeLessThanOrEqual(boxes.capsuleTime.left);
 		// Every part stays inside the pill.
-		for (const part of [boxes.avatar, boxes.capsuleName, boxes.roleTag, boxes.capsuleStatus]) {
+		for (const part of [boxes.avatar, boxes.capsuleName, boxes.roleTag, boxes.capsuleStatus, boxes.capsuleTime]) {
 			expect(part.top).toBeGreaterThanOrEqual(boxes.capsule.top);
 			expect(part.bottom).toBeLessThanOrEqual(boxes.capsule.bottom);
 		}
@@ -524,6 +550,7 @@ describe("agent capsule geometry", () => {
 		// to show — and the live state stay.
 		expect(narrow.capsuleNameDisplay).toBe("none");
 		expect(narrow.capsuleSepDisplay).toBe("none");
+		expect(narrow.capsuleTimeDisplay).toBe("none");
 		expect(narrow.roleTagDisplay).not.toBe("none");
 		expect(narrow.roleTag.width).toBeGreaterThan(0);
 		// Still centered, still inside the band, clear of the head's own controls.
@@ -536,10 +563,10 @@ describe("agent capsule geometry", () => {
 		await page.setViewport({ width: 1100, height: 800 });
 	});
 
-	test("stays on one line when the column is widened or narrowed", async () => {
+	test("keeps the two-line height when the column is widened or narrowed", async () => {
 		await setColumnWidth(620);
 		const narrowColumn = await readBoxes();
-		expect(narrowColumn.capsule.height).toBe(30);
+		expect(narrowColumn.capsule.height).toBe(40);
 		expect(
 			Math.abs(
 				narrowColumn.capsule.left +
@@ -549,7 +576,7 @@ describe("agent capsule geometry", () => {
 		).toBeLessThanOrEqual(1);
 		await setColumnWidth(900);
 		const wideColumn = await readBoxes();
-		expect(wideColumn.capsule.height).toBe(30);
+		expect(wideColumn.capsule.height).toBe(40);
 		await setColumnWidth(760);
 	});
 

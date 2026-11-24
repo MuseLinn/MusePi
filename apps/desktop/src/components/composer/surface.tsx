@@ -19,6 +19,11 @@ export interface ComposerSendPayload {
 	goalMode?: boolean;
 	guidedGoal?: boolean;
 	deliverAs?: "prompt" | "steer" | "followUp" | "continue";
+	/** Send identity minted by the host BEFORE the DOM changes (a send flight
+	 *  has to know which row it is aiming at before the echo exists). Threaded
+	 *  through to the RPC so the daemon stamps the same identity on the
+	 *  message it persists. */
+	correlation?: { clientId: string; clientRequestId: string };
 }
 
 export interface ComposerSurface {
@@ -54,12 +59,20 @@ export function createSurfaceSend(handlers: {
 		deliverAs?: ComposerSendPayload["deliverAs"],
 		displayContext?: ComposerSendPayload["displayContext"],
 		videos?: ComposerSendPayload["videos"],
+		correlation?: ComposerSendPayload["correlation"],
 	) => void;
 }): (text: string, payload?: ComposerSendPayload) => void | Promise<void> {
 	return (text, payload = {}) => {
 		if (handlers.variant === "hero") {
 			return handlers.onSubmit?.(text, payload);
 		}
-		return handlers.onSend?.(text, payload.images, payload.deliverAs, payload.displayContext, payload.videos);
+		return handlers.onSend?.(
+			text,
+			payload.images,
+			payload.deliverAs,
+			payload.displayContext,
+			payload.videos,
+			payload.correlation,
+		);
 	};
 }

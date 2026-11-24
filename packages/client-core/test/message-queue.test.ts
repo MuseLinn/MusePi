@@ -75,3 +75,19 @@ describe("normalizeQueueSnapshot", () => {
 		});
 	});
 });
+
+describe("normalizeQueueSnapshot: the send identity of a queued row", () => {
+	it("carries requestIdentity through, so a flight can aim at the queued row", () => {
+		const snapshot = normalizeQueueSnapshot({
+			steering: [{ id: "s1", text: "queued", imageCount: 0, requestIdentity: "msg:c:r1" }],
+			followUp: [],
+		});
+		expect(snapshot.steering[0]).toEqual({ id: "s1", text: "queued", imageCount: 0, requestIdentity: "msg:c:r1" });
+	});
+
+	it("an older daemon without the field still yields the row (no identity)", () => {
+		const snapshot = normalizeQueueSnapshot({ steering: [{ id: "s1", text: "old", imageCount: 0 }], followUp: [] });
+		expect(snapshot.steering[0]!.requestIdentity).toBeUndefined();
+		expect(snapshot.count).toBe(1);
+	});
+});
