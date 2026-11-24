@@ -77,37 +77,26 @@ describe("shared plugin horizontal card", () => {
 		host.remove();
 	});
 
-	it("renders the removal affordance only for a Host-marked removable module", async () => {
+	it("never renders an extension-removal affordance in the plugin lane", async () => {
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		const root = createRoot(host);
-		let removed = 0;
 		let opened = 0;
-		const render = (removable: boolean | undefined): void => {
-			act(() =>
-				root.render(
-					createElement(ModuleRow, {
-						e: { ...plugin(), removable },
-						rpc: {} as never,
-						busy: false,
-						onOpen: () => opened++,
-						onToggle: () => {},
-						onRemove: () => removed++,
-					}),
-				),
-			);
-		};
-
-		render(false);
+		act(() =>
+			root.render(
+				createElement(ModuleRow, {
+					e: { ...plugin(), removable: true },
+					rpc: {} as never,
+					busy: false,
+					onOpen: () => opened++,
+					onToggle: () => {},
+				}),
+			),
+		);
+		// Track A plugin rows are managed as packages/built-ins; deleting a
+		// legacy extension is the extension inventory's job, so this row has no
+		// trash button even when the Host marked the underlying module removable.
 		expect(host.querySelector(".gui-plugin-card-actions .gui-icon-btn")).toBeNull();
-
-		render(true);
-		const remove = host.querySelector<HTMLElement>(".gui-plugin-card-actions .gui-icon-btn")!;
-		expect(remove).not.toBeNull();
-		act(() => remove.click());
-		expect(removed).toBe(1);
-		expect(opened).toBe(0);
-
 		await act(async () => root.unmount());
 		host.remove();
 	});

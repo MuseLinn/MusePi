@@ -16,9 +16,10 @@ import { PluginPackageDialog } from "./PluginPackageDialog";
 
 /**
  * 插件 tab 的统一清单（ExtensionsCenter 与 CapabilityCenterPage 共用）：
- * 插件包（plugins.packages，marketplace/npm 安装）与热加载的插件模块
- * （extensions.list 的 kind=plugin-module / extension-module）同屏汇总，
- * 布局对齐 dsh 插件列表面板。两个入口按 dsh 的层级分开：
+ * 插件包（plugins.packages，marketplace/npm 安装）与 Track A 的 Cordis
+ * 插件模块（extensions.list 的 kind=plugin-module）同屏汇总；
+ * Track B 的旧 Pi/omp 扩展（kind=extension-module）属于扩展清单/兼容面，
+ * 不在这里冒充插件。布局对齐 dsh 插件列表面板。两个入口按 dsh 的层级分开：
  * - 能力中心（variant="list"）：manage 层——可启停或可配置的官方插件 +
  *   已安装/自建插件，紧凑行，只留实验性/状态/版本；
  * - 设置 → 扩展与插件（variant="cards"）：完整库存——含只读提示词/渲染
@@ -79,18 +80,15 @@ export function sourceLevelLabel(provider: string, level: string): string {
 }
 
 /**
- * 插件 lane 判定（统一清单的「模块侧」口径，ExtensionsCenter 的 tab 计数
+ * 插件 lane 判定（统一清单的「插件侧」口径，ExtensionsCenter 的 tab 计数
  * 与本视图共用此单一权威，防双口径漂移）：
- * - kind=extension-module：真实插件模块（native / musepi-extensions provider）；
- * - builtin-registry 条目（musepi-extensions provider + native level，即
- *   task-card 风格 / 桌壳 / 魔术关键词 / 主题 / 工具卡片渲染等内置插件单元）。
- *   排除 kind=skill —— 捆绑技能是技能清单的管理对象，不进插件 lane，
- *   避免与能力清单 tab 整屏重复。
+ * - 只收 `kind=plugin-module`（Track A，cordis 插件轨）；
+ * - `extension-module` 是 Track B 的旧 Pi/omp 扩展，属于扩展清单/兼容面，
+ *   不是「插件」——把它放进插件列表会让一条扩展看起来像 MusePi 插件，
+ *   并让用户误以为 Cordis 插件也存在 `agent/extensions`。
  */
 export function isPluginLaneEntry(e: ExtensionItem): boolean {
-	// 两条轨道都算插件模块行（kind 拆分见 capability/module-entry.ts）。
-	if (e.kind === "plugin-module" || e.kind === "extension-module") return true;
-	return e.source.provider === "musepi-extensions" && e.source.level === "native" && e.kind !== "skill";
+	return e.kind === "plugin-module";
 }
 
 /**
@@ -362,14 +360,12 @@ interface ModuleCardProps {
 	busy: boolean;
 	onOpen(item: ExtensionItem): void;
 	onToggle(item: ExtensionItem): void;
-	/** 宿主判定可删的用户模块：渲染卸载入口（`removable` parity）。 */
-	onRemove?(item: ExtensionItem): void;
 	/** 设置里的完整库存：带上技术身份（id、只读/预设专用、配置/组件数）。
 	 *  能力中心只留用户能判断的状态与版本。 */
 	detail?: boolean;
 }
 
-function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, onRemove, detail = false }: ModuleCardProps): ReactNode {
+function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, detail = false }: ModuleCardProps): ReactNode {
 	const name = builtinDisplayName(e);
 	const configCount = e.config?.length ?? 0;
 	const componentCount = e.components?.length ?? 0;
@@ -411,39 +407,22 @@ function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, onRemove, detail = f
 				</>
 			}
 			actions={
-				<>
-					{e.removable === true && onRemove && (
-						<button
-							type="button"
-							className="gui-icon-btn"
-							disabled={!rpc || busy}
-							title={t("tools.extRemoveModule")}
-							aria-label={`${t("tools.extRemoveModule")} ${name}`}
-							onClick={event => {
-								event.stopPropagation();
-								onRemove(e);
-							}}
-						>
-							<Icon name="delete-bin" className="h-3.5 w-3.5" />
-						</button>
-					)}
-					{!e.readonly ? (
-						<button
-							type="button"
-							role="switch"
-							aria-checked={e.state === "active"}
-							aria-label={`${e.state === "active" ? t("tools.disableSkill") : t("tools.enableSkill")} ${e.name}`}
-							className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
-							disabled={!rpc || busy}
-							onClick={event => {
-								event.stopPropagation();
-								onToggle(e);
-							}}
-						>
-							<span className="gui-toggle-knob" />
-						</button>
-					) : null}
-				</>
+				!e.readonly ? (
+					<button
+						type="button"
+						role="switch"
+						aria-checked={e.state === "active"}
+						aria-label={`${e.state === "active" ? t("tools.disableSkill") : t("tools.enableSkill")} ${e.name}`}
+						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+						disabled={!rpc || busy}
+						onClick={event => {
+							event.stopPropagation();
+							onToggle(e);
+						}}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				) : undefined
 			}
 			onOpen={() => onOpen(e)}
 		/>
@@ -595,8 +574,6 @@ export function UnifiedPluginsView({
 	];
 	// 卸载在途标记（卡片直卸 + 详情弹层卸载共用,一次一个）。
 	const [uninstallBusy, setUninstallBusy] = useState(false);
-	// 模块删除在途标记（用户自建扩展，extensions.remove）。
-	const [removeBusyId, setRemoveBusyId] = useState<string | null>(null);
 	const { confirm } = useConfirm();
 	/**
 	 * Re-read the installed packages after a spec install or uninstall.
@@ -652,33 +629,6 @@ export function UnifiedPluginsView({
 		},
 		[confirm, uninstallPackage],
 	);
-
-	/**
-	 * Remove a user-owned extension module (extensions.remove).
-	 *
-	 * The row only offers this when the Host marked it `removable`; the Host
-	 * re-checks the same fact, so a stale list cannot delete a bundled unit.
-	 */
-	const removeModule = useCallback(
-		(e: ExtensionItem): void => {
-			if (!rpc) return;
-			void confirm(t("tools.extRemoveConfirm", { name: builtinDisplayName(e) }), t("tools.extRemoveModule"), {
-				destructive: true,
-			}).then(ok => {
-				if (!ok) return;
-				setRemoveBusyId(e.id);
-				void rpc
-					.request("extensions.remove", { id: e.id, path: e.path })
-					.then(() => {
-						onError(null);
-						if (detailId === e.id) setDetailId(null);
-					})
-					.catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)))
-					.finally(() => setRemoveBusyId(null));
-			});
-		},
-		[rpc, confirm, onError, detailId],
-	);
 	/**
 	 * Re-read the installed packages after a spec install.
 	 *
@@ -724,6 +674,12 @@ export function UnifiedPluginsView({
 		() => manageablePluginCount(modules, plugins, variant),
 		[modules, plugins, variant],
 	);
+	// Track B rows are not plugins; say where their removal still lives instead
+	// of silently dropping them from this list.
+	const legacyExtensionCount = useMemo(
+		() => (data?.extensions ?? []).filter(e => e.kind === "extension-module" && e.removable === true).length,
+		[data],
+	);
 	useEffect(() => {
 		onCountChange?.(totalPluginCount);
 	}, [onCountChange, totalPluginCount]);
@@ -741,10 +697,10 @@ export function UnifiedPluginsView({
 	const sessionNames = useMemo(() => new Set((sessionPreset?.rows ?? []).map(row => row.name)), [sessionPreset]);
 	const sessionPlugins = useMemo(() => official.filter(e => sessionNames.has(e.name)), [official, sessionNames]);
 	const globalPlugins = useMemo(() => official.filter(e => !sessionNames.has(e.name)), [official, sessionNames]);
-	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
+	// 一个插件包 + 它目录下的 Track A 模块是同一个插件的两条链路 —— 包是列表的
 	// 唯一条目，模块收进包详情弹层的「包含的组件」。模块路径在包目录下即归
-	// 该包（module path = <pkg>/index.ts）。未归属任何已安装包的用户级模块
-	// 保留自己的行（裸加载的 extension 不经 node_modules）。
+	// 该包（module path = <pkg>/index.ts）。未归属任何已安装包的插件模块
+	// 保留自己的行（裸加载的 plugin 不经 node_modules）。
 	const packagedModules = useMemo(
 		() => installedModules.filter(e => filteredPackages.some(p => isPathInside(e.path, p.path))),
 		[installedModules, filteredPackages],
@@ -892,6 +848,11 @@ export function UnifiedPluginsView({
 			<div className="gui-ext-plugins-scope">
 				{variant === "cards" ? t("tools.pluginsInventoryScopeHint") : t("tools.pluginsListScopeHint")}
 			</div>
+			{legacyExtensionCount > 0 && (
+				<div className="gui-ext-plugins-scope">
+					{t("tools.legacyExtensionsHint", { count: legacyExtensionCount })}
+				</div>
+			)}
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
 			{normalizedQuery.length > 0 &&
 				official.length === 0 &&
@@ -942,11 +903,10 @@ export function UnifiedPluginsView({
 										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
-										busy={busyId !== null || removeBusyId !== null}
+										busy={busyId !== null}
 										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
-										onRemove={removeModule}
 									/>
 								))}
 							</div>
@@ -963,11 +923,10 @@ export function UnifiedPluginsView({
 										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
-										busy={busyId !== null || removeBusyId !== null}
+										busy={busyId !== null}
 										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
-										onRemove={removeModule}
 									/>
 								))}
 							</div>
@@ -999,11 +958,10 @@ export function UnifiedPluginsView({
 										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
-										busy={busyId !== null || removeBusyId !== null}
+										busy={busyId !== null}
 										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
-										onRemove={removeModule}
 									/>
 								))}
 							</div>
@@ -1025,10 +983,9 @@ export function UnifiedPluginsView({
 									key={e.id}
 									e={e}
 									rpc={rpc}
-									busy={busyId !== null || removeBusyId !== null}
+									busy={busyId !== null}
 									onToggle={toggleModule}
 									onOpen={item => setDetailId(item.id)}
-									onRemove={removeModule}
 								/>
 							))}
 						</div>
@@ -1043,10 +1000,9 @@ export function UnifiedPluginsView({
 									key={e.id}
 									e={e}
 									rpc={rpc}
-									busy={busyId !== null || removeBusyId !== null}
+									busy={busyId !== null}
 									onToggle={toggleModule}
 									onOpen={item => setDetailId(item.id)}
-									onRemove={removeModule}
 								/>
 							))}
 						</div>
@@ -1073,10 +1029,9 @@ export function UnifiedPluginsView({
 									key={e.id}
 									e={e}
 									rpc={rpc}
-									busy={busyId !== null || removeBusyId !== null}
+									busy={busyId !== null}
 									onToggle={toggleModule}
 									onOpen={item => setDetailId(item.id)}
-									onRemove={removeModule}
 								/>
 							))}
 						</div>
@@ -1090,8 +1045,7 @@ export function UnifiedPluginsView({
 				rpc={rpc}
 				onError={onError}
 				onToggle={toggleModule}
-				onRemove={removeModule}
-				toggleBusy={busyId !== null || removeBusyId !== null}
+				toggleBusy={busyId !== null}
 			/>
 			<PluginInstallDialog
 				rpc={rpc}

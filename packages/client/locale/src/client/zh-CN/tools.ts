@@ -226,6 +226,7 @@ export const tools = {
 	"tools.uninstall": "卸载",
 	"tools.extRemoveModule": "移除扩展",
 	"tools.extRemoveConfirm": "确定移除扩展「{name}」？将删除其目录及其中的文件，且不可撤销。",
+	"tools.legacyExtensionsHint": "另有 {count} 个旧扩展（Track B）在「扩展与插件 → 能力清单」中管理，不在插件列表。",
 	"tools.sharedBrowser": "共享浏览器",
 	"tools.sharedBrowserRunningTabsWithTabs": "运行中 · {tabs} 个标签页",
 	"tools.sharedBrowserIdle": "未启动（agent 首次使用浏览器时自动启动）",

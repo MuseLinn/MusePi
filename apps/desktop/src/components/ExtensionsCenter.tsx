@@ -84,8 +84,8 @@ function isDeletable(e: ExtensionItem): boolean {
 	);
 }
 
-/** User-owned extension module: the daemon's `removable` fact is the single
- *  authority (same one `extensions.remove` re-checks). */
+/** Track B legacy extension module: the daemon's `removable` fact is the
+ *  single authority (same one `extensions.remove` re-checks). */
 function isRemovableModule(e: ExtensionItem): boolean {
 	return (e.kind === "plugin-module" || e.kind === "extension-module") && e.removable === true;
 }

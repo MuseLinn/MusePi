@@ -234,6 +234,8 @@ export const tools = {
 	"tools.extRemoveModule": "Remove extension",
 	"tools.extRemoveConfirm":
 		'Remove extension "{name}"? Its directory and every file in it will be deleted; this cannot be undone.',
+	"tools.legacyExtensionsHint":
+		"{count} legacy Track B extension(s) are managed under Extensions → Inventory, not in this plugin list.",
 	"tools.sharedBrowser": "Shared browser",
 	"tools.sharedBrowserRunningTabsWithTabs": "Running · {tabs} tabs",
 	"tools.sharedBrowserIdle": "Not started (auto-starts the first time the agent uses the browser)",

@@ -1,6 +1,7 @@
 import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
 import {
+	isPluginLaneEntry,
 	manageablePluginCount,
 	officialPluginsFor,
 	type PluginPackageEntry,
@@ -40,6 +41,20 @@ describe("plugin surface layering", () => {
 		builtin: false,
 		source: { provider: "musepi-plugins", providerName: "Plugins", level: "user" as const },
 	};
+
+	it("keeps Track B extension-module rows out of the Cordis plugin lane", () => {
+		const cordis = builtin({ id: "cordis-plugin", name: "cordis-plugin" });
+		const legacy = {
+			...cordis,
+			id: "legacy-extension",
+			name: "legacy-extension",
+			kind: "extension-module" as const,
+			builtin: false,
+			source: { provider: "musepi-extensions", providerName: "MusePi Plugins", level: "user" as const },
+		};
+		expect(isPluginLaneEntry(cordis)).toBe(true);
+		expect(isPluginLaneEntry(legacy)).toBe(false);
+	});
 
 	it("keeps read-only packs and preset-only personas out of the capability center", () => {
 		expect(pluginSurface(manageable)).toBe("manage");

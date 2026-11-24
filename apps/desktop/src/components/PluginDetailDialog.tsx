@@ -289,7 +289,6 @@ export function PluginDetailDialog({
 	rpc,
 	onError,
 	onToggle,
-	onRemove,
 	toggleBusy,
 }: {
 	open: boolean;
@@ -301,8 +300,6 @@ export function PluginDetailDialog({
 	/** 条目整体启停（与插件包开关同一 RPC：extensions.setEnabled）。
 	 *  缺省 = 只读条目（无禁用语义），不渲染总开关。 */
 	onToggle?(item: ExtensionItem): void;
-	/** 宿主判定可删的用户模块（extensions.remove）。缺省 = 不渲染删除。 */
-	onRemove?(item: ExtensionItem): void;
 	/** 总开关忙碌中（父级同一把锁，防连点）。 */
 	toggleBusy?: boolean;
 }): ReactNode {
@@ -354,18 +351,6 @@ export function PluginDetailDialog({
 								onClick={() => onToggle?.(item)}
 							>
 								<span className="gui-toggle-knob" />
-							</button>
-						)}
-						{item.removable === true && onRemove && (
-							<button
-								type="button"
-								className="gui-icon-btn"
-								title={t("tools.extRemoveModule")}
-								aria-label={`${t("tools.extRemoveModule")} ${builtinDisplayName(item)}`}
-								disabled={!rpc || toggleBusy === true}
-								onClick={() => onRemove(item)}
-							>
-								<Icon name="delete-bin" className="h-4 w-4" />
 							</button>
 						)}
 						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
