@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type ApprovalBridge, createApprovalBridge, secretRequestPayload } from "../../src/daemon/approval-bridge";
 import { SecretService } from "../../src/daemon/services/secret-service";
+import { redactMemorySecrets } from "../../src/memory-backend/redact";
 import type { AgentSecretUIContext } from "../../src/secrets/agent-store";
 import { AgentSecretStore } from "../../src/secrets/agent-store";
+import { clearUnlockedMasterKeysForTests } from "../../src/secrets/encrypted-store";
 
 const VALUE = "sk-super-secret-123";
 const noop = (): void => {};
@@ -49,7 +51,12 @@ async function startRequest(
 describe("SecretService RPC", () => {
 	it("status and list stay empty until a set", async () => {
 		const { service } = setup();
-		expect(await service.status()).toEqual({ mode: "encrypted", count: 0 });
+		expect(await service.status()).toEqual({
+			mode: "encrypted",
+			count: 0,
+			protectedBy: "key-file",
+			locked: false,
+		});
 		expect(await service.list()).toEqual({ entries: [], count: 0 });
 	});
 
@@ -64,7 +71,12 @@ describe("SecretService RPC", () => {
 		const list = await service.list();
 		expect(list.count).toBe(1);
 		expect(JSON.stringify(list)).not.toContain(VALUE);
-		expect(await service.status()).toEqual({ mode: "encrypted", count: 1 });
+		expect(await service.status()).toEqual({
+			mode: "encrypted",
+			count: 1,
+			protectedBy: "key-file",
+			locked: false,
+		});
 	});
 
 	it("replays a pending secret card to a new subscriber", async () => {
@@ -208,6 +220,35 @@ describe("SecretService RPC", () => {
 		expect(await service.delete({ name: "API_TOKEN" })).toEqual({ ok: true });
 		expect(await service.delete({ name: "API_TOKEN" })).toEqual({ ok: true });
 		expect(await service.list()).toEqual({ entries: [], count: 0 });
+	});
+
+	it("protects, locks and unlocks the store over RPC", async () => {
+		const { service } = setup();
+		await service.set({ name: "API_TOKEN", value: VALUE });
+
+		expect(await service.encrypt({ passphrase: "correct horse battery" })).toMatchObject({
+			protectedBy: "passphrase",
+			locked: false,
+		});
+
+		clearUnlockedMasterKeysForTests();
+		expect(await service.status()).toEqual({
+			mode: "encrypted",
+			count: 1,
+			protectedBy: "passphrase",
+			locked: true,
+			reason: "missing-passphrase",
+		});
+		await expect(service.unlock({ passphrase: "not the passphrase" })).rejects.toThrow(/did not unlock/u);
+		expect(await service.unlock({ passphrase: "correct horse battery" })).toMatchObject({ locked: false });
+		// A session that started while locked had no boundary coverage; the
+		// unlock registers every value it just made readable.
+		expect(redactMemorySecrets(`token ${VALUE}`)).toContain("[REDACTED]");
+
+		expect(await service.decrypt({ passphrase: "correct horse battery" })).toMatchObject({
+			protectedBy: "key-file",
+			locked: false,
+		});
 	});
 
 	it("unknown request ids and invalid names are refused", async () => {

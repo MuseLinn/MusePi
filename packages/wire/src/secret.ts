@@ -36,6 +36,16 @@ export interface SecretEntryView {
 export interface SecretStatus {
 	mode: "encrypted";
 	count: number;
+	/** How the master key is stored: a plain key file, or wrapped by a passphrase. */
+	protectedBy?: "key-file" | "passphrase";
+	/** True when a passphrase is required and this process has not unlocked the store. */
+	locked?: boolean;
+	reason?: "missing-passphrase" | "wrong-passphrase" | "passphrase-source";
+}
+
+/** Set, unlock, or remove the optional passphrase protection. */
+export interface SecretPassphraseParams {
+	passphrase: string;
 }
 
 export interface SecretListResult {

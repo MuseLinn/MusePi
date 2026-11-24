@@ -17,7 +17,16 @@ import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
 import type { SecretDelivery, SecretEntryView, SecretScope, SecretStatus } from "@musepi/pi-wire";
 import { writeFileAtomically } from "../utils/atomic-file";
-import { deleteSecret as deleteEnvelope, encryptedStore, mergeSecret, readSecret } from "./encrypted-store";
+import {
+	decryptMasterKey,
+	deleteSecret as deleteEnvelope,
+	encryptedStore,
+	encryptMasterKey,
+	masterKeyState,
+	mergeSecret,
+	readSecret,
+	unlockMasterKey,
+} from "./encrypted-store";
 
 export type { SecretDelivery, SecretEntryView, SecretScope, SecretStatus };
 
@@ -241,7 +250,29 @@ export class AgentSecretStore {
 	}
 
 	async status(): Promise<SecretStatus> {
-		return { mode: "encrypted", count: Object.keys((await this.#readMetadata()).entries).length };
+		const state = await masterKeyState(this.#values);
+		return {
+			mode: "encrypted",
+			count: Object.keys((await this.#readMetadata()).entries).length,
+			protectedBy: state.protectedBy,
+			locked: state.mode === "passphrase" ? state.locked : false,
+			...(state.mode === "passphrase" && state.reason ? { reason: state.reason } : {}),
+		};
+	}
+
+	/** Unlock a passphrase-protected store for this process; nothing is written to disk. */
+	async unlock(passphrase: string): Promise<void> {
+		await unlockMasterKey(this.#values, passphrase);
+	}
+
+	/** Protect the current key with a passphrase and remove the plain key file. */
+	async encrypt(passphrase: string): Promise<void> {
+		await encryptMasterKey(this.#values, passphrase);
+	}
+
+	/** Remove passphrase protection after proving it; the plain key file returns. */
+	async decrypt(passphrase: string): Promise<void> {
+		await decryptMasterKey(this.#values, passphrase);
 	}
 
 	async getEntry(name: string): Promise<SecretEntryView | undefined> {

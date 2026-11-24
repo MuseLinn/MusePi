@@ -9224,8 +9224,62 @@ body.gui-resizing {
 	overflow-wrap: anywhere;
 }
 
+/* 静态加密：一行状态 + 一个动作；动作展开的字段留在同一张卡里，不再叠第二张
+ * 面。锁定态只换标题与说明，几何不变；口令字段与仓库表单共享字段行语法。 */
+.gui-secret-protection {
+	align-items: stretch;
+	flex-direction: column;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+	padding: 10px var(--space-4);
+}
+
+.gui-secret-protection-main {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.gui-secret-protection-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.gui-secret-protection-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+/* 说明句就是用户判断状态的全部依据，锁定时提到正文色，不靠图标颜色传达。 */
+.gui-secret-protection-meta {
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--color-text-muted);
+	overflow-wrap: anywhere;
+}
+
+.gui-secret-protection--locked .gui-secret-protection-meta {
+	color: var(--color-text);
+}
+
+.gui-secret-protection-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+/* 与添加/替换表单同理：清掉共享字段行自带的行距，由卡片 gap 统一。 */
+.gui-secret-protection .gui-settings-field {
+	padding: 0;
+}
+
 @media (max-width: 760px) {
-	.gui-secret-form .gui-settings-field {
+	.gui-secret-form .gui-settings-field,
+	.gui-secret-protection .gui-settings-field {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-areas: "label" "control" "hint";
 		align-items: start;

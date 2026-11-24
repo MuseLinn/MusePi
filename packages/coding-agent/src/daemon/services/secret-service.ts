@@ -5,6 +5,7 @@ import type {
 	SecretDeleteParams,
 	SecretDeleteResult,
 	SecretListResult,
+	SecretPassphraseParams,
 	SecretScope,
 	SecretScopeChoice,
 	SecretSetParams,
@@ -60,6 +61,9 @@ export class SecretService implements DaemonService {
 		"secret.update": "update",
 		"secret.delete": "delete",
 		"secret.answer": "answer",
+		"secret.unlock": "unlock",
+		"secret.encrypt": "encrypt",
+		"secret.decrypt": "decrypt",
 	} as const;
 
 	readonly #deps: SecretServiceHostAccess;
@@ -146,6 +150,33 @@ export class SecretService implements DaemonService {
 			throw new Error(`Unknown secret request: ${pending.requestId}`);
 		}
 		return { ok: true };
+	}
+
+	/** Unlock a passphrase-protected store for this process; nothing is written. */
+	async unlock(params: SecretPassphraseParams): Promise<SecretStatus> {
+		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
+		const store = getAgentSecretStore(this.#deps.agentDir());
+		await store.unlock(String(p.passphrase ?? ""));
+		// A session that started while the store was locked registered no value,
+		// so register what just became readable before a tool call can show it.
+		for (const entry of await store.values()) {
+			notifyAgentSecretSaved(this.#deps.agentDir(), entry.name, entry.value);
+		}
+		return await this.status();
+	}
+
+	/** Wrap the master key under a passphrase and delete the plain key file. */
+	async encrypt(params: SecretPassphraseParams): Promise<SecretStatus> {
+		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
+		await getAgentSecretStore(this.#deps.agentDir()).encrypt(String(p.passphrase ?? ""));
+		return await this.status();
+	}
+
+	/** Prove the passphrase and restore the plain key file. */
+	async decrypt(params: SecretPassphraseParams): Promise<SecretStatus> {
+		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
+		await getAgentSecretStore(this.#deps.agentDir()).decrypt(String(p.passphrase ?? ""));
+		return await this.status();
 	}
 
 	#findPending(

@@ -12,7 +12,7 @@
  * silent wipe of every credential.
  */
 
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, scryptSync } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
@@ -20,6 +20,7 @@ import { writeFileAtomically } from "../utils/atomic-file";
 
 const DEFAULT_STORE_FILE = "secrets.json";
 const DEFAULT_MASTER_KEY_FILE = ".master.key";
+const DEFAULT_WRAPPED_KEY_FILE = ".master.key.wrapped";
 const ENVELOPE_VERSION = 1;
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
@@ -50,18 +51,21 @@ export interface EncryptedStore {
 	dir: string;
 	file: string;
 	masterKeyFile: string;
+	/** Passphrase-wrapped master key; present means the store is protected by a passphrase. */
+	wrappedKeyFile: string;
 	/** Optional environment override for the master key (hex or base64, 32 bytes). */
 	masterKeyEnv?: string;
 }
 
 export function encryptedStore(
 	dir: string,
-	options: { file?: string; masterKeyFile?: string; masterKeyEnv?: string } = {},
+	options: { file?: string; masterKeyFile?: string; wrappedKeyFile?: string; masterKeyEnv?: string } = {},
 ): EncryptedStore {
 	return {
 		dir,
 		file: path.join(dir, options.file ?? DEFAULT_STORE_FILE),
 		masterKeyFile: path.join(dir, options.masterKeyFile ?? DEFAULT_MASTER_KEY_FILE),
+		wrappedKeyFile: path.join(dir, options.wrappedKeyFile ?? DEFAULT_WRAPPED_KEY_FILE),
 		...(options.masterKeyEnv ? { masterKeyEnv: options.masterKeyEnv } : {}),
 	};
 }
@@ -83,9 +87,303 @@ function parseEnvKey(store: EncryptedStore): Buffer | undefined {
 	return decoded;
 }
 
+const WRAPPED_KEY_VERSION = 1;
+const KDF = { name: "scrypt", N: 1 << 15, r: 8, p: 1 } as const;
+const SALT_BYTES = 16;
+const WRAPPED_KEY_AAD = Buffer.from("musepi-agent-master-key v1", "utf8");
+export const MASTER_KEY_PASSPHRASE_ENV = "MUSEPI_AGENT_SECRET_PASSPHRASE";
+export const MASTER_KEY_PASSPHRASE_FILE_ENV = "MUSEPI_AGENT_SECRET_PASSPHRASE_FILE";
+export const MIN_MASTER_KEY_PASSPHRASE = 8;
+export const MAX_MASTER_KEY_PASSPHRASE = 1024;
+
+export type MasterKeyLockReason = "missing-passphrase" | "wrong-passphrase" | "passphrase-source";
+
+/** The store's key exists but the passphrase that unlocks it is missing or wrong. */
+export class SecretStoreLockedError extends Error {
+	readonly code = "secrets/locked";
+
+	constructor(
+		readonly reason: MasterKeyLockReason,
+		message: string,
+	) {
+		super(message);
+		this.name = "SecretStoreLockedError";
+	}
+}
+
+interface WrappedMasterKey {
+	version: 1;
+	encrypted: true;
+	kdf: { name: string; N: number; r: number; p: number };
+	salt: string;
+	iv: string;
+	tag: string;
+	ciphertext: string;
+}
+
+export type MasterKeyState =
+	| { mode: "plain"; protectedBy: "key-file"; locked: false }
+	| {
+			mode: "passphrase";
+			protectedBy: "passphrase";
+			locked: boolean;
+			unlocked: boolean;
+			reason?: MasterKeyLockReason;
+	  };
+
+/** Master keys unlocked by a passphrase in this process, keyed by wrapped-key path. */
+const unlockedKeys = new Map<string, Buffer>();
+
+/** Test-only: forget every passphrase-unlocked key. */
+export function clearUnlockedMasterKeysForTests(): void {
+	unlockedKeys.clear();
+}
+
+export function cleanMasterKeyPassphrase(value: unknown): string {
+	if (typeof value !== "string") throw new Error("Type the passphrase first");
+	if (value.length < MIN_MASTER_KEY_PASSPHRASE) {
+		throw new Error(`A passphrase has at least ${MIN_MASTER_KEY_PASSPHRASE} characters`);
+	}
+	if (value.length > MAX_MASTER_KEY_PASSPHRASE) {
+		throw new Error(`A passphrase has at most ${MAX_MASTER_KEY_PASSPHRASE} characters`);
+	}
+	return value;
+}
+
+/** Unattended starts may carry the passphrase in an environment variable or a file. */
+function passphraseFromEnvironment(): { passphrase?: string; error?: string } {
+	const direct = process.env[MASTER_KEY_PASSPHRASE_ENV]?.trim();
+	if (direct) return { passphrase: direct };
+	const file = process.env[MASTER_KEY_PASSPHRASE_FILE_ENV]?.trim();
+	if (!file) return {};
+	try {
+		// A trailing newline from an editor is not part of the passphrase.
+		const passphrase = fs.readFileSync(file, "utf8").replace(/\r?\n$/, "");
+		if (passphrase === "") return { error: `${MASTER_KEY_PASSPHRASE_FILE_ENV} names a file with no passphrase` };
+		return { passphrase };
+	} catch (error) {
+		return {
+			error: `${MASTER_KEY_PASSPHRASE_FILE_ENV} could not be read: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		};
+	}
+}
+
+function deriveKek(passphrase: string, salt: Buffer): Buffer {
+	return scryptSync(Buffer.from(passphrase, "utf8"), salt, KEY_BYTES, {
+		N: KDF.N,
+		r: KDF.r,
+		p: KDF.p,
+		maxmem: 256 * 1024 * 1024,
+	});
+}
+
+function wrapMasterKey(key: Buffer, passphrase: string): WrappedMasterKey {
+	const salt = randomBytes(SALT_BYTES);
+	const iv = randomBytes(IV_BYTES);
+	const cipher = createCipheriv("aes-256-gcm", deriveKek(passphrase, salt), iv);
+	cipher.setAAD(WRAPPED_KEY_AAD);
+	const ciphertext = Buffer.concat([cipher.update(key), cipher.final()]);
+	return {
+		version: WRAPPED_KEY_VERSION,
+		encrypted: true,
+		kdf: { name: KDF.name, N: KDF.N, r: KDF.r, p: KDF.p },
+		salt: salt.toString("base64"),
+		iv: iv.toString("base64"),
+		tag: cipher.getAuthTag().toString("base64"),
+		ciphertext: ciphertext.toString("base64"),
+	};
+}
+
+function unwrapMasterKey(envelope: WrappedMasterKey, passphrase: string): Buffer {
+	if (
+		envelope.version !== WRAPPED_KEY_VERSION ||
+		envelope.encrypted !== true ||
+		envelope.kdf?.name !== KDF.name ||
+		envelope.kdf.r !== KDF.r ||
+		envelope.kdf.p !== KDF.p ||
+		!Number.isInteger(envelope.kdf.N) ||
+		envelope.kdf.N < 1 << 14 ||
+		envelope.kdf.N > 1 << 17 ||
+		(envelope.kdf.N & (envelope.kdf.N - 1)) !== 0
+	) {
+		throw new Error("The wrapped master key uses key settings this build does not accept");
+	}
+	let key: Buffer;
+	try {
+		const salt = Buffer.from(envelope.salt, "base64");
+		const iv = Buffer.from(envelope.iv, "base64");
+		const tag = Buffer.from(envelope.tag, "base64");
+		const ciphertext = Buffer.from(envelope.ciphertext, "base64");
+		if (
+			salt.length !== SALT_BYTES ||
+			iv.length !== IV_BYTES ||
+			tag.length !== TAG_BYTES ||
+			ciphertext.length !== KEY_BYTES
+		) {
+			throw new Error("invalid wrapped key");
+		}
+		const decipher = createDecipheriv("aes-256-gcm", deriveKek(passphrase, salt), iv);
+		decipher.setAAD(WRAPPED_KEY_AAD);
+		decipher.setAuthTag(tag);
+		key = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+	} catch {
+		throw new SecretStoreLockedError(
+			"wrong-passphrase",
+			"The passphrase did not unlock the secret store, or its key file is damaged.",
+		);
+	}
+	if (key.length !== KEY_BYTES) {
+		throw new SecretStoreLockedError("wrong-passphrase", "The wrapped master key has the wrong length.");
+	}
+	return key;
+}
+
+async function readWrappedKey(store: EncryptedStore): Promise<WrappedMasterKey | "malformed" | undefined> {
+	let text: string;
+	try {
+		text = await fs.promises.readFile(store.wrappedKeyFile, "utf8");
+	} catch (error) {
+		if (isEnoent(error)) return undefined;
+		logger.warn("Wrapped secret master key could not be read", { path: store.wrappedKeyFile });
+		return "malformed";
+	}
+	try {
+		const raw: unknown = JSON.parse(text);
+		if (!isRecord(raw) || raw.version !== WRAPPED_KEY_VERSION || raw.encrypted !== true) return "malformed";
+		return raw as unknown as WrappedMasterKey;
+	} catch {
+		return "malformed";
+	}
+}
+
+/** Whether the store is protected by a passphrase, and whether this process can read it. */
+export async function masterKeyState(store: EncryptedStore): Promise<MasterKeyState> {
+	const wrapped = await readWrappedKey(store);
+	if (wrapped === undefined) return { mode: "plain", protectedBy: "key-file", locked: false };
+	if (unlockedKeys.has(store.wrappedKeyFile)) {
+		return { mode: "passphrase", protectedBy: "passphrase", locked: false, unlocked: true };
+	}
+	const fromEnv = passphraseFromEnvironment();
+	if (fromEnv.error) {
+		return {
+			mode: "passphrase",
+			protectedBy: "passphrase",
+			locked: true,
+			unlocked: false,
+			reason: "passphrase-source",
+		};
+	}
+	if (!fromEnv.passphrase) {
+		return {
+			mode: "passphrase",
+			protectedBy: "passphrase",
+			locked: true,
+			unlocked: false,
+			reason: "missing-passphrase",
+		};
+	}
+	if (wrapped === "malformed") {
+		return {
+			mode: "passphrase",
+			protectedBy: "passphrase",
+			locked: true,
+			unlocked: false,
+			reason: "wrong-passphrase",
+		};
+	}
+	try {
+		unlockedKeys.set(store.wrappedKeyFile, unwrapMasterKey(wrapped, fromEnv.passphrase));
+		return { mode: "passphrase", protectedBy: "passphrase", locked: false, unlocked: true };
+	} catch {
+		return {
+			mode: "passphrase",
+			protectedBy: "passphrase",
+			locked: true,
+			unlocked: false,
+			reason: "wrong-passphrase",
+		};
+	}
+}
+
+/** Unlock a passphrase-protected store for this process; the plain key is not written. */
+export async function unlockMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
+	const secret = cleanMasterKeyPassphrase(passphrase);
+	const wrapped = await readWrappedKey(store);
+	if (wrapped === undefined) throw new Error("The secret store is not protected by a passphrase.");
+	if (wrapped === "malformed") throw new Error("The wrapped master key is damaged.");
+	unlockedKeys.set(store.wrappedKeyFile, unwrapMasterKey(wrapped, secret));
+}
+
+/** Wrap the current plain master key under a passphrase, then remove the plain key file. */
+export async function encryptMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
+	if ((await readWrappedKey(store)) !== undefined)
+		throw new Error("The secret store is already protected by a passphrase.");
+	const secret = cleanMasterKeyPassphrase(passphrase);
+	const key = await readOrCreateMasterKey(store);
+	await fs.promises.mkdir(store.dir, { recursive: true });
+	await writeFileAtomically(store.wrappedKeyFile, `${JSON.stringify(wrapMasterKey(key, secret), null, 2)}\n`, 0o600);
+	await fs.promises.rm(store.masterKeyFile, { force: true });
+	unlockedKeys.set(store.wrappedKeyFile, key);
+}
+
+/** Remove the passphrase protection after proving it; the plain key file returns. */
+export async function decryptMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
+	const secret = cleanMasterKeyPassphrase(passphrase);
+	const wrapped = await readWrappedKey(store);
+	if (wrapped === undefined) throw new Error("The secret store is not protected by a passphrase.");
+	if (wrapped === "malformed") throw new Error("The wrapped master key is damaged.");
+	const key = unwrapMasterKey(wrapped, secret);
+	await writeMasterKeyFile(store, key);
+	await fs.promises.rm(store.wrappedKeyFile, { force: true });
+	unlockedKeys.delete(store.wrappedKeyFile);
+}
+
+async function writeMasterKeyFile(store: EncryptedStore, key: Buffer): Promise<void> {
+	await fs.promises.mkdir(path.dirname(store.masterKeyFile), { recursive: true });
+	const temp = `${store.masterKeyFile}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+	try {
+		const handle = await fs.promises.open(temp, "wx", 0o600);
+		try {
+			await handle.writeFile(key);
+			await handle.sync();
+		} finally {
+			await handle.close();
+		}
+		await fs.promises.chmod(temp, 0o600).catch(() => {});
+		await fs.promises.rename(temp, store.masterKeyFile);
+	} catch (error) {
+		await fs.promises.rm(temp, { force: true }).catch(() => {});
+		throw error;
+	}
+}
+
 async function readOrCreateMasterKey(store: EncryptedStore): Promise<Buffer> {
+	const unlocked = unlockedKeys.get(store.wrappedKeyFile);
+	if (unlocked) return unlocked;
 	const override = parseEnvKey(store);
 	if (override) return override;
+	const wrapped = await readWrappedKey(store);
+	if (wrapped !== undefined) {
+		if (wrapped === "malformed") {
+			throw new SecretStoreLockedError(
+				"wrong-passphrase",
+				"The wrapped master key is damaged. Repair it in Settings → Vault.",
+			);
+		}
+		const fromEnv = passphraseFromEnvironment();
+		if (fromEnv.error) throw new SecretStoreLockedError("passphrase-source", fromEnv.error);
+		if (!fromEnv.passphrase) {
+			throw new SecretStoreLockedError(
+				"missing-passphrase",
+				"The secret store is locked. Unlock it in Settings → Vault, or set MUSEPI_AGENT_SECRET_PASSPHRASE_FILE.",
+			);
+		}
+		const key = unwrapMasterKey(wrapped, fromEnv.passphrase);
+		unlockedKeys.set(store.wrappedKeyFile, key);
+		return key;
+	}
 	try {
 		const existing = await fs.promises.readFile(store.masterKeyFile);
 		if (existing.length === KEY_BYTES) return existing;

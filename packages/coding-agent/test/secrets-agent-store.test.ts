@@ -58,7 +58,12 @@ describe("agent secret store", () => {
 		expect(list.map(entry => entry.name)).toEqual(["A_TOKEN", "B_TOKEN"]);
 		expect(JSON.stringify(list)).not.toContain("value-a-12345");
 		expect(JSON.stringify(list)).not.toContain("value-b-12345");
-		expect(await store.status()).toEqual({ mode: "encrypted", count: 2 });
+		expect(await store.status()).toEqual({
+			mode: "encrypted",
+			count: 2,
+			protectedBy: "key-file",
+			locked: false,
+		});
 		expect(await store.available("A_TOKEN")).toBe(true);
 		expect(await store.available("MISSING")).toBe(false);
 	});
@@ -100,12 +105,12 @@ describe("agent secret store", () => {
 		expect(AGENT_SECRET_NAME_RE.test("TOKEN-LOWER")).toBe(false);
 		expect(() => validateSecretName("lower_case")).toThrow(/Invalid secret name/u);
 		expect(() => validateSecretValue("")).toThrow(/must not be empty/u);
-		expect(() => validateSecretValue("short")).toThrow(/at least 8/u);
+		expect(() => validateSecretValue("abc")).toThrow(/at least 4/u);
 		expect(normalizeSecretScope(undefined)).toBe("all");
 		expect(normalizeSecretScope("all")).toBe("all");
 
 		const { store } = makeStore();
 		await expect(store.set("bad-name", VALUE)).rejects.toThrow(/Invalid secret name/u);
-		await expect(store.set("TOKEN", "short")).rejects.toThrow(/at least 8/u);
+		await expect(store.set("TOKEN", "abc")).rejects.toThrow(/at least 4/u);
 	});
 });

@@ -8,8 +8,10 @@
  * entry per `NAME=value`; its text is dropped when the form closes.
  *
  * The store is always encrypted with a local per-profile master key, so the
- * page states the fact once in its footnote — there is no plaintext mode and
- * no unlock step. `packages/coding-agent/src/secrets/agent-store.ts` writes one
+ * page states the fact once in its footnote. The master key itself is either a
+ * plain 0600 file or wrapped by a user passphrase; the protection row at the
+ * top switches between the two and unlocks a locked store for this process
+ * only. `packages/coding-agent/src/secrets/agent-store.ts` writes one
  * AES-256-GCM envelope per name and a metadata sidecar at 0600; a value reaches
  * a bash child as `$MUSEPI_SECRET_<NAME>`, tool output shows `[secret:NAME]`,
  * and the provider boundary carries a keyed placeholder instead of the value.
@@ -17,7 +19,7 @@
 
 import { t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
-import { KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { KeyRound, Lock, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
@@ -41,6 +43,11 @@ interface SecretEntryView {
 interface SecretStatusResult {
 	mode: "encrypted";
 	count: number;
+	/** How the master key is stored: a plain key file, or wrapped by a passphrase. */
+	protectedBy?: "key-file" | "passphrase";
+	/** A passphrase is required and this daemon process has not unlocked the store. */
+	locked?: boolean;
+	reason?: "missing-passphrase" | "wrong-passphrase" | "passphrase-source";
 }
 
 interface SecretListResult {
@@ -50,6 +57,7 @@ interface SecretListResult {
 
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const MIN_SECRET_VALUE_LENGTH = 4;
+const MIN_PASSPHRASE_LENGTH = 8;
 
 interface SecretFormState {
 	mode: "add" | "replace";
@@ -57,6 +65,15 @@ interface SecretFormState {
 	purpose: string;
 	value: string;
 	delivery: SecretDelivery;
+}
+
+/** `unlock` opens a locked store; `protect` and `remove` change how the key is stored. */
+type ProtectionMode = "unlock" | "protect" | "remove";
+
+interface ProtectionState {
+	mode: ProtectionMode;
+	passphrase: string;
+	confirm: string;
 }
 
 function errorText(error: unknown): string {
@@ -73,6 +90,17 @@ function scopeLabel(scope: SecretScope): string {
 	return scope === "all"
 		? t("settings.secretsScopeAll")
 		: t("settings.secretsScopeWorkspaces", { count: scope.length });
+}
+
+function lockedReasonText(reason: SecretStatusResult["reason"]): string {
+	switch (reason) {
+		case "wrong-passphrase":
+			return t("settings.secretsLockedWrong");
+		case "passphrase-source":
+			return t("settings.secretsLockedSource");
+		default:
+			return t("settings.secretsLockedMissing");
+	}
 }
 
 function WarningLine({ message, onRetry }: { message: string; onRetry?: () => void }): ReactNode {
@@ -209,10 +237,14 @@ function SecretForm({
 export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const { confirm } = useConfirm();
 	const [entries, setEntries] = useState<SecretEntryView[]>([]);
+	const [status, setStatus] = useState<SecretStatusResult | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [statusError, setStatusError] = useState<string | null>(null);
 	const [listError, setListError] = useState<string | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
+	const [protection, setProtection] = useState<ProtectionState | null>(null);
+	const [protectionBusy, setProtectionBusy] = useState(false);
+	const [protectionError, setProtectionError] = useState<string | null>(null);
 	const [form, setForm] = useState<SecretFormState | null>(null);
 	const [formError, setFormError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -232,6 +264,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	useEffect(() => {
 		if (!rpc) {
 			setEntries([]);
+			setStatus(null);
 			setLoading(false);
 			setStatusError(null);
 			setListError(null);
@@ -246,7 +279,11 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			rpc.request<SecretListResult>("secret.list", {}),
 		]).then(([statusResult, listResult]) => {
 			if (!alive) return;
-			if (statusResult.status === "rejected") {
+			if (statusResult.status === "fulfilled") {
+				setStatus(statusResult.value ?? null);
+			} else {
+				// Without a readable status the protection row would guess wrong.
+				setStatus(null);
 				setStatusError(errorText(statusResult.reason));
 			}
 			if (listResult.status === "fulfilled") {
@@ -260,6 +297,57 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			alive = false;
 		};
 	}, [rpc, reloadToken]);
+
+	const openProtection = (mode: ProtectionMode): void => {
+		tapFeedback();
+		setProtectionError(null);
+		setProtection({ mode, passphrase: "", confirm: "" });
+	};
+
+	const closeProtection = (): void => {
+		setProtection(null);
+		setProtectionError(null);
+	};
+
+	/**
+	 * The passphrase never leaves this component for anywhere but the daemon's
+	 * one request; it is dropped with the form as soon as the call settles.
+	 */
+	const submitProtection = async (): Promise<void> => {
+		if (!rpc || !protection || protectionBusy) return;
+		const passphrase = protection.passphrase;
+		if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
+			setProtectionError(t("settings.secretsPassphraseTooShort"));
+			return;
+		}
+		if (protection.mode === "protect" && passphrase !== protection.confirm) {
+			setProtectionError(t("settings.secretsPassphraseMismatch"));
+			return;
+		}
+		const method =
+			protection.mode === "protect"
+				? "secret.encrypt"
+				: protection.mode === "remove"
+					? "secret.decrypt"
+					: "secret.unlock";
+		setProtectionBusy(true);
+		setProtectionError(null);
+		try {
+			const next = await rpc.request<SecretStatusResult>(method, { passphrase });
+			setStatus(next ?? null);
+			// Drop the typed passphrase on success; keep the form on failure so the
+			// user can correct a typo instead of retyping from scratch.
+			setProtection(null);
+		} catch (error) {
+			setProtectionError(
+				t(protection.mode === "unlock" ? "settings.secretsUnlockFailed" : "settings.secretsProtectionFailed", {
+					error: errorText(error),
+				}),
+			);
+		} finally {
+			setProtectionBusy(false);
+		}
+	};
 
 	const openAdd = (): void => {
 		tapFeedback();
@@ -439,6 +527,12 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		? entries.filter(entry => `${entry.name} ${entry.purpose}`.toLowerCase().includes(normalizedQuery))
 		: entries;
 	const bodyOpen = form !== null || importing;
+	const locked = status?.locked === true;
+	const protectionAction = locked
+		? t("settings.secretsUnlock")
+		: status?.protectedBy === "passphrase"
+			? t("settings.secretsRemovePassphrase")
+			: t("settings.secretsProtectWithPassphrase");
 
 	return (
 		<div className="gui-settings-section gui-secret-section">
@@ -451,6 +545,140 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			)}
 			{listError && <WarningLine message={t("settings.secretsListFailed", { error: listError })} onRetry={reload} />}
 			{actionError && <WarningLine message={actionError} />}
+
+			{/* How the master key is stored, and the one action that changes it. A
+			 * locked store keeps this row as the only way back in, so it is not
+			 * hidden behind the list. */}
+			{status && (
+				<div
+					className={`gui-agent-card gui-secret-protection${locked ? " gui-secret-protection--locked" : ""}`}
+					data-secret-protection={status.protectedBy ?? "key-file"}
+					data-secret-locked={locked ? "true" : "false"}
+				>
+					<div className="gui-secret-protection-main">
+						<span className="gui-secret-row-icon">
+							{locked || status.protectedBy === "passphrase" ? (
+								<Lock size={13} aria-hidden="true" />
+							) : (
+								<KeyRound size={13} aria-hidden="true" />
+							)}
+						</span>
+						<div className="gui-secret-protection-text">
+							<span className="gui-secret-protection-title">
+								{locked ? t("settings.secretsLockedTitle") : t("settings.secretsProtection")}
+							</span>
+							<span className="gui-secret-protection-meta">
+								{locked
+									? lockedReasonText(status.reason)
+									: status.protectedBy === "passphrase"
+										? t("settings.secretsProtectionPassphrase")
+										: t("settings.secretsProtectionKeyFile")}
+							</span>
+						</div>
+						{!protection && (
+							<button
+								type="button"
+								className="gui-btn"
+								data-secret-action="protection"
+								onClick={() =>
+									openProtection(
+										locked ? "unlock" : status.protectedBy === "passphrase" ? "remove" : "protect",
+									)
+								}
+							>
+								{protectionAction}
+							</button>
+						)}
+					</div>
+					{protection && (
+						<form
+							className="gui-secret-protection-form"
+							data-secret-protection-form={protection.mode}
+							aria-busy={protectionBusy}
+							onSubmit={event => {
+								event.preventDefault();
+								void submitProtection();
+							}}
+							onKeyDown={event => {
+								if (event.key !== "Escape" || protectionBusy) return;
+								event.preventDefault();
+								event.stopPropagation();
+								closeProtection();
+							}}
+						>
+							<label className="gui-settings-field">
+								<span className="gui-settings-field-label">{t("settings.secretsPassphrase")}</span>
+								{protection.mode !== "unlock" && (
+									<span className="gui-settings-field-hint">
+										{protection.mode === "protect"
+											? t("settings.secretsPassphraseHint")
+											: t("settings.secretsPassphraseRemoveHint")}
+									</span>
+								)}
+								<span className="gui-settings-field-control">
+									<input
+										type="password"
+										className="gui-secret-input"
+										data-secret-field="passphrase"
+										value={protection.passphrase}
+										autoComplete={protection.mode === "unlock" ? "current-password" : "new-password"}
+										autoFocus
+										disabled={protectionBusy}
+										onChange={event => {
+											setProtectionError(null);
+											setProtection(current =>
+												current ? { ...current, passphrase: event.target.value } : current,
+											);
+										}}
+									/>
+								</span>
+							</label>
+							{protection.mode === "protect" && (
+								<label className="gui-settings-field">
+									<span className="gui-settings-field-label">{t("settings.secretsPassphraseConfirm")}</span>
+									<span className="gui-settings-field-control">
+										<input
+											type="password"
+											className="gui-secret-input"
+											data-secret-field="confirm"
+											value={protection.confirm}
+											autoComplete="new-password"
+											disabled={protectionBusy}
+											onChange={event => {
+												setProtectionError(null);
+												setProtection(current =>
+													current ? { ...current, confirm: event.target.value } : current,
+												);
+											}}
+										/>
+									</span>
+								</label>
+							)}
+							<div className="gui-secret-form-foot">
+								<span className="gui-settings-field-hint">{t("settings.secretsPassphraseNote")}</span>
+								<div className="gui-secret-form-actions">
+									<button
+										type="button"
+										className="gui-btn"
+										onClick={closeProtection}
+										disabled={protectionBusy}
+									>
+										{t("settings.cancel")}
+									</button>
+									<button type="submit" className="gui-btn gui-btn-primary" disabled={protectionBusy}>
+										{protectionBusy ? t("settings.secretsSaving") : protectionAction}
+									</button>
+								</div>
+							</div>
+							{protectionError && (
+								<div className="gui-secret-form-error" role="alert">
+									{protectionError}
+								</div>
+							)}
+						</form>
+					)}
+				</div>
+			)}
 
 			{listKnown && (
 				<div className="gui-secret-listhead">
@@ -466,13 +694,18 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 						/>
 					)}
 					<div className="gui-secret-listhead-actions">
-						<button type="button" className="gui-btn gui-btn-primary" disabled={bodyOpen} onClick={openAdd}>
+						<button
+							type="button"
+							className="gui-btn gui-btn-primary"
+							disabled={bodyOpen || locked}
+							onClick={openAdd}
+						>
 							<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
 						</button>
 						<button
 							type="button"
 							className="gui-btn"
-							disabled={bodyOpen}
+							disabled={bodyOpen || locked}
 							onClick={() => {
 								setForm(null);
 								setFormError(null);
@@ -534,7 +767,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 								spellCheck={false}
 								autoComplete="off"
 								dir="ltr"
-								placeholder="STRIPE_SECRET_KEY=…"
+								placeholder={t("settings.secretsImportPlaceholder")}
 								autoFocus
 								disabled={busy}
 								onChange={event => {
@@ -608,7 +841,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 											type="button"
 											className="gui-btn gui-btn-ghost"
 											data-secret-action="widen"
-											disabled={widening === entry.name}
+											disabled={widening === entry.name || locked}
 											onClick={() => void widen(entry)}
 										>
 											{t("settings.secretsAllowAll")}
@@ -618,6 +851,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 										type="button"
 										className="gui-btn gui-btn-ghost"
 										data-secret-action="replace"
+										disabled={locked}
 										onClick={() => openReplace(entry)}
 									>
 										{t("settings.secretsReplace")}
@@ -627,7 +861,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 										className="gui-btn gui-btn-ghost gui-btn-icon"
 										data-secret-action="delete"
 										aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
-										disabled={deleting === entry.name}
+										disabled={deleting === entry.name || locked}
 										onClick={() => void remove(entry)}
 									>
 										<Trash2 size={13} aria-hidden="true" />

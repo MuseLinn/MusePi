@@ -157,10 +157,11 @@ returns an error telling the user to add the secret from Settings → Vault.
 
 ```
 <agentDir>/agent-secrets/
-  secrets.json    # AES-256-GCM envelope per name (values only)
-  metadata.json   # name, purpose, scope, delivery, timestamps (0600, atomic write)
-  .master.key     # per-profile master key (0600; optional MUSEPI_AGENT_SECRET_KEY override)
-  files/          # working copies for `file` delivery (0700; each file 0600)
+  secrets.json          # AES-256-GCM envelope per name (values only)
+  metadata.json         # name, purpose, scope, delivery, timestamps (0600, atomic write)
+  .master.key           # per-profile master key (0600) — plain form
+  .master.key.wrapped   # same key wrapped by a passphrase (0600) — protected form
+  files/                # working copies for `file` delivery (0700; each file 0600)
 ```
 
 The store is always encrypted; there is no plaintext mode. Values are
@@ -172,6 +173,34 @@ contains a value, and the encrypted file never contains one either.
 subdirectories; comparison is case-insensitive on Windows. An unrecognized
 stored value narrows to an empty list (nobody may use it), never widening to
 `"all"`. Replacing a value without a new choice keeps the stored scope.
+
+### Passphrase protection
+
+The master key exists in exactly one of two forms: a plain `0600` file, or the
+same key wrapped by a user passphrase. Settings → Vault shows which one is in
+use and switches between them; the daemon methods are `secret.encrypt`,
+`secret.decrypt` and `secret.unlock`.
+
+`secret.encrypt` derives a key-encryption key with scrypt (N=2^15, r=8, p=1)
+over 16 random salt bytes, wraps the 32-byte master key with AES-256-GCM (AAD
+`musepi-agent-master-key v1`), writes `.master.key.wrapped` and deletes
+`.master.key`. Existing envelopes are not rewritten: the master key itself is
+unchanged, only how it is stored.
+
+A wrapped key with no passphrase available leaves the store **locked**. Reads
+report no usable value, writes fail, and `secret.status` reports
+`protectedBy: "passphrase"`, `locked: true` plus a reason (`missing-passphrase`,
+`wrong-passphrase` or `passphrase-source`). Metadata stays readable, so the page
+can still list what is stored. Unlocking never writes the key to disk:
+`secret.unlock` keeps the unwrapped key in this process's memory, registers the
+values it made readable into every live session's obfuscator, and leaves the
+wrapped file in place. `secret.decrypt` proves the passphrase, restores
+`.master.key` and removes the wrapped file.
+
+Unattended starts read the passphrase from `MUSEPI_AGENT_SECRET_PASSPHRASE`, or
+from the file named by `MUSEPI_AGENT_SECRET_PASSPHRASE_FILE` (one trailing
+newline dropped). `MUSEPI_AGENT_SECRET_KEY` still takes precedence over all
+three: a deployment that sets it bypasses the passphrase by design.
 
 ### Bash injection
 
@@ -238,12 +267,15 @@ writing it into `mcp.json` or the process environment.
 
 | RPC              | Params                                           | Result                                     |
 | ---------------- | ------------------------------------------------ | ------------------------------------------ |
-| `secret.status`  | `{}`                                             | `{ mode: "encrypted", count }`             |
+| `secret.status`  | `{}`                                             | `{ mode, count, protectedBy?, locked?, reason? }` |
 | `secret.list`    | `{}`                                             | `{ entries: SecretEntryView[], count }`    |
 | `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ entry }`       |
 | `secret.update`  | `{ name, scope: "all" }`                         | `{ entry }`                                |
 | `secret.delete`  | `{ name }`                                       | `{ ok: true }` (idempotent)                |
 | `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ ok: true }` |
+| `secret.unlock`  | `{ passphrase }`                                 | `SecretStatus`                             |
+| `secret.encrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
+| `secret.decrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 
 Timestamps in `SecretEntryView` are epoch milliseconds. `secret.answer` saves
 the value in the daemon before resolving the tool's promise, so the tool only
@@ -251,7 +283,9 @@ sees which action won. `"workspace"` resolves to the pending request's session
 directory; `secret.set` refuses it because the settings page has no session
 context, and `secret.update` only widens a narrowed entry to `"all"`. Unknown
 or expired request ids fail with `Unknown secret request: <id>`. No response,
-push, log or transcript contains a value.
+push, log or transcript contains a value. The passphrase is equally absent from
+results and errors: `secret.unlock` reports the same text for a wrong passphrase
+and a damaged wrapped key, and requires 8–1024 characters.
 
 ### Known limitations
 
@@ -269,7 +303,15 @@ push, log or transcript contains a value.
   binary blobs are not.
 - The vault is outside session export and workspace file operations, but a
   profile backup or folder sync still copies `agent-secrets/` as-is, including
-  `.master.key`. There is no master-key rotation yet.
+  `.master.key` or `.master.key.wrapped`. A wrapped key is useless without its
+  passphrase, so copy the profile and the passphrase separately. There is no
+  master-key rotation and no re-wrap: changing the passphrase means decrypting
+  with the old one first, and a forgotten passphrase cannot be recovered.
+- Unlocking is per process and in memory. Another process using the same agent
+  directory (a second daemon, a TUI run) starts locked again, and an application
+  restart asks for the passphrase again unless it comes from the environment.
+  Bash injection begins as soon as that process unlocks; nothing else needs a
+  restart.
 - An entry whose envelope cannot be decrypted stays listed as unavailable.
   Save the value again through `request_secret` or Settings → Vault to repair
   it; do not edit the sidecar by hand.
@@ -292,6 +334,7 @@ push, log or transcript contains a value.
 - `packages/coding-agent/src/secrets/obfuscator.ts` -- `SecretObfuscator` class, placeholder generation, message obfuscation
 - `packages/coding-agent/src/secrets/regex.ts` -- regex literal parsing and compilation
 - `packages/coding-agent/src/secrets/agent-store.ts` -- encrypted agent secret store, metadata sidecar, validation
+- `packages/coding-agent/src/secrets/encrypted-store.ts` -- envelope crypto, master key file and passphrase wrapping
 - `packages/coding-agent/src/secrets/agent-runtime.ts` -- session loading, dynamic obfuscator registration, bash env and output scrub
 - `packages/coding-agent/src/tools/request-secret.ts` -- the interactive secret card tool
 - `packages/coding-agent/src/tools/list-secrets.ts` -- metadata-only listing tool

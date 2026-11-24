@@ -157,15 +157,26 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
 
 ```
 <agentDir>/agent-secrets/
-  secrets.json    # 每个名字一个 AES-256-GCM 信封（仅值）
-  metadata.json   # name、purpose、scope、delivery、时间戳（0600，原子写）
-  .master.key     # 每 profile 主密钥（0600；可用 MUSEPI_AGENT_SECRET_KEY 覆盖）
-  files/          # file 交付的工作副本（0700；每个文件 0600）
+  secrets.json          # 每个名字一个 AES-256-GCM 信封（仅值）
+  metadata.json         # name、purpose、scope、delivery、时间戳（0600，原子写）
+  .master.key           # 每 profile 主密钥（0600）——明文形态
+  .master.key.wrapped   # 同一把主密钥、由口令包裹（0600）——受保护形态
+  files/                # file 交付的工作副本（0700；每个文件 0600）
 ```
 
 存储恒为加密，不提供明文模式。值是以 profile 主密钥经 HKDF 派生的 AES-256-GCM 信封，复用 connector vault 的信封实现。元数据 sidecar 不含值，加密文件同样不含值。
 
 `scope` 为 `"all"` 或一组绝对工作目录根。根覆盖自己的子目录；Windows 上比较不区分大小写。无法识别的已存值会收窄为空列表（任何会话都不可用），绝不放宽为 `"all"`。不带新选择地替换值时保留原 scope。
+
+### 口令保护
+
+主密钥只有两种形态之一：明文 `0600` 文件，或被用户口令包裹的同一把主密钥。「设置 → 智能体 → 保险库」显示当前形态并可在两者间切换；对应的 daemon 方法是 `secret.encrypt`、`secret.decrypt` 与 `secret.unlock`。
+
+`secret.encrypt` 用 scrypt（N=2^15、r=8、p=1）在 16 字节随机盐上派生密钥加密密钥，再用 AES-256-GCM（AAD `musepi-agent-master-key v1`）包裹 32 字节主密钥，写出 `.master.key.wrapped` 并删除 `.master.key`。已有信封不会重写：主密钥本身没有变，变的只是它的存放形式。
+
+存在包裹文件而本进程拿不到口令时，保险库处于**锁定**状态：读取一律报告无可用值，写入失败，`secret.status` 返回 `protectedBy: "passphrase"`、`locked: true` 以及原因（`missing-passphrase`、`wrong-passphrase` 或 `passphrase-source`）。元数据仍可读，因此设置页仍能列出已存条目。解锁从不把密钥写回磁盘：`secret.unlock` 把解包后的主密钥留在本进程内存里，把刚变得可读的值注册进每个活跃会话的 obfuscator，包裹文件保持不变。`secret.decrypt` 验证口令后恢复 `.master.key` 并删除包裹文件。
+
+无人值守启动可把口令放在 `MUSEPI_AGENT_SECRET_PASSPHRASE`，或放在 `MUSEPI_AGENT_SECRET_PASSPHRASE_FILE` 指向的文件里（尾部一个换行会被去掉）。`MUSEPI_AGENT_SECRET_KEY` 的优先级仍高于这三者：设置了它的部署会按设计绕过口令。
 
 ### Bash 注入
 
@@ -195,21 +206,25 @@ MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连�
 
 | RPC              | 参数                                             | 结果                                       |
 | ---------------- | ------------------------------------------------ | ------------------------------------------ |
-| `secret.status`  | `{}`                                             | `{ mode: "encrypted", count }`             |
+| `secret.status`  | `{}`                                             | `{ mode, count, protectedBy?, locked?, reason? }` |
 | `secret.list`    | `{}`                                             | `{ entries: SecretEntryView[], count }`    |
 | `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ entry }`  |
 | `secret.update`  | `{ name, scope: "all" }`                         | `{ entry }`                                |
 | `secret.delete`  | `{ name }`                                       | `{ ok: true }`（幂等）                     |
 | `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ ok: true }` |
+| `secret.unlock`  | `{ passphrase }`                                 | `SecretStatus`                             |
+| `secret.encrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
+| `secret.decrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 
-`SecretEntryView` 中的时间戳是 epoch 毫秒。`secret.answer` 在 daemon 内先落盘再落定工具的 promise，因此工具只看得到最终动作。`"workspace"` 会解析为待决请求所属会话的工作目录；`secret.set` 不接受它（设置页没有会话上下文），`secret.update` 只把收窄的条目放宽为 `"all"`。未知或已过期的 request id 会报 `Unknown secret request: <id>`。任何响应、推送、日志或 transcript 都不包含值。
+`SecretEntryView` 中的时间戳是 epoch 毫秒。`secret.answer` 在 daemon 内先落盘再落定工具的 promise，因此工具只看得到最终动作。`"workspace"` 会解析为待决请求所属会话的工作目录；`secret.set` 不接受它（设置页没有会话上下文），`secret.update` 只把收窄的条目放宽为 `"all"`。未知或已过期的 request id 会报 `Unknown secret request: <id>`。任何响应、推送、日志或 transcript 都不包含值。口令同样不会出现在结果与错误里：口令错误与包裹文件损坏时 `secret.unlock` 返回同一句话，长度限定 8–1024 个字符。
 
 ### 已知限制
 
 - 值至少 4 个字符。短于 8 个字符的值使用单向 marker，且只在独立出现时替换（两侧没有字母或数字）：它在显示上下文里不会被还原，出现在更长单词内部时会有意保留。低于 4 个字符会被拒绝。
 - scope 为 `"all"` 或工作目录。任何不在已覆盖根之内的会话都会收到 allow 卡片；若要再次收窄，只能以「仅本工作区」重新保存，因为设置页只提供放宽。
 - `file` 交付的工作副本会一直保留到条目被删除或替换；暂无按文件计的 TTL。它是普通的「仅本人可读」文件，管理员或同一用户下的其他进程可以读取。值按 UTF-8 文本写入，证书与 JSON 可用，二进制内容不支持。
-- 保险库不参与会话导出与工作区文件操作，但 profile 备份或目录同步会把 `agent-secrets/` 连同 `.master.key` 原样复制。目前还没有主密钥轮换。
+- 保险库不参与会话导出与工作区文件操作，但 profile 备份或目录同步会把 `agent-secrets/` 连同 `.master.key` 或 `.master.key.wrapped` 原样复制。包裹文件离开口令不可用，因此请把 profile 与口令分开备份。目前没有主密钥轮换，也没有重新包裹：更换口令需要先解密、再以新口令加密，忘记口令则无法恢复。
+- 解锁是按进程、只在内存中生效的。同一 agent 目录上的另一个进程（第二个 daemon、一次 TUI 运行）会重新处于锁定；应用重启也会再次询问口令，除非口令来自环境变量。该进程一旦解锁，bash 注入立即可用，不需要重启。
 - 信封无法解密的条目仍会列为不可用。通过 `request_secret` 或「设置 → 智能体 → 保险库」重新保存该值来修复；不要手工编辑 sidecar。
 - 删除密钥会从磁盘和未来的 bash 注入中移除它，但运行中会话里已经存活的 obfuscator 会在该会话生命周期内继续替换这个旧值。这是有意为之：撤掉覆盖可能让已经出现过的值重新对 provider 可见。
 - Bash 的原始输出 artifact 由执行器在输出清洗之前写入，因此回显了值的命令可能把值留在该本地 artifact 文件里。值不会进入工具结果；若该 artifact 被读回模型上下文，provider 边界混淆（对 Agent 密钥始终生效）仍会替换它。
@@ -221,6 +236,7 @@ MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连�
 - `packages/coding-agent/src/secrets/obfuscator.ts` -- `SecretObfuscator` 类、占位符生成、消息混淆
 - `packages/coding-agent/src/secrets/regex.ts` -- 正则字面量解析与编译
 - `packages/coding-agent/src/secrets/agent-store.ts` -- 加密的 Agent 密钥存储、元数据 sidecar、校验
+- `packages/coding-agent/src/secrets/encrypted-store.ts` -- 信封加密、主密钥文件与口令包裹
 - `packages/coding-agent/src/secrets/agent-runtime.ts` -- 会话加载、动态 obfuscator 注册、bash 环境与输出清洗
 - `packages/coding-agent/src/tools/request-secret.ts` -- 交互式密钥卡片工具
 - `packages/coding-agent/src/tools/list-secrets.ts` -- 只读元数据的列表工具
