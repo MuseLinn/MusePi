@@ -7831,15 +7831,30 @@ body.gui-resizing {
 	background: transparent;
 }
 
+/* Control frame: an accent ring around the page plus the capsule. Geometry and
+ * stacking are the caller's (inline, measured rect); this class owns the paint
+ * only — a class-level `inset` would fight the inline `width`/`height` and
+ * silently depend on which of `right`/`width` the cascade drops. */
 .gui-browser-control-frame {
-	position: absolute;
-	inset: 5px;
-	z-index: 6;
 	border: 2px solid var(--color-accent);
 	border-radius: var(--radius-lg);
 	box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 18%, transparent), 0 8px 32px color-mix(in oklab, var(--color-accent) 12%, transparent);
 	pointer-events: none;
 	animation: gui-browser-control-in 190ms var(--spring-liquid);
+	transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* The page belongs to the agent while it drives this tab: this layer is the
+ * only hit target inside the ring, so clicks, context menus and drags stop
+ * here instead of reaching a page the user is not operating. Wheel/touch
+ * scrolling is deliberately not blocked — reading the page is not acting on
+ * it. The capsule (a sibling) keeps its own pointer-events: auto buttons. */
+.gui-browser-control-blocker {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	cursor: default;
+	pointer-events: auto;
 }
 
 .gui-browser-control-card {
@@ -7941,6 +7956,26 @@ body.gui-resizing {
 	box-shadow: none;
 }
 
+/* Refused interaction: the capsule answers in the danger tone and shakes once,
+ * so a click that did nothing reads as "not yours right now" rather than as a
+ * broken pane. The ring follows, so the whole control surface answers at once. */
+.gui-browser-control-frame[data-blocked="true"] {
+	border-color: var(--color-danger);
+	box-shadow:
+		0 0 0 1px color-mix(in oklab, var(--color-danger) 22%, transparent),
+		0 8px 32px color-mix(in oklab, var(--color-danger) 14%, transparent);
+}
+
+.gui-browser-control-frame[data-blocked="true"] .gui-browser-control-card {
+	border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
+	animation: gui-browser-control-deny 320ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.gui-browser-control-frame[data-blocked="true"] .gui-browser-control-leading,
+.gui-browser-control-frame[data-blocked="true"] .gui-browser-control-title {
+	color: var(--color-danger);
+}
+
 .gui-browser-control-frame[data-browser-control="closing"] {
 	opacity: 0;
 	transform: translateY(5px);
@@ -7963,6 +7998,28 @@ body.gui-resizing {
 	}
 }
 
+/* Shake on the `translate` property, not `transform`: the card is centred with
+ * `transform: translateX(-50%)`, and animating transform would throw that away
+ * for the duration of the refusal. */
+@keyframes gui-browser-control-deny {
+	0%,
+	100% {
+		translate: 0 0;
+	}
+	20% {
+		translate: -3px 0;
+	}
+	40% {
+		translate: 3px 0;
+	}
+	60% {
+		translate: -2px 0;
+	}
+	80% {
+		translate: 1px 0;
+	}
+}
+
 @container (max-width: 480px) {
 	.gui-browser-control-summary {
 		display: none;
@@ -7980,8 +8037,18 @@ body.gui-resizing {
 	animation: none;
 }
 
+.gui-motion-off .gui-browser-control-frame[data-blocked="true"] .gui-browser-control-card {
+	animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.gui-browser-control-frame {
+		animation: none;
+	}
+
+	/* The refusal still reads: the danger border and copy stay, only the
+	 * shake is dropped. */
+	.gui-browser-control-frame[data-blocked="true"] .gui-browser-control-card {
 		animation: none;
 	}
 }

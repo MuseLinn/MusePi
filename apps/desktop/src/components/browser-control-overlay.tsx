@@ -20,6 +20,10 @@ export interface BrowserControlActivity {
 
 const EXIT_MS = 180;
 
+/** How long a refused page interaction keeps the capsule in its denial state.
+ *  Long enough to read, short enough that the next attempt reads as new. */
+const DENY_MS = 1_400;
+
 export function BrowserControlOverlay({
 	activity,
 	onTakeover,
@@ -59,6 +63,10 @@ export function BrowserControlOverlay({
 	const [closing, setClosing] = useState(false);
 	const [pending, setPending] = useState(false);
 	const [clock, setClock] = useState(now ?? Date.now());
+	// The page is not the user's to operate while the agent drives it: the
+	// blocker swallows the interaction and the capsule answers, so a click is
+	// refused visibly instead of being acted on behind the agent's back.
+	const [denied, setDenied] = useState(false);
 
 	useEffect(() => {
 		if (active) {
@@ -82,6 +90,27 @@ export function BrowserControlOverlay({
 		const timer = window.setInterval(() => setClock(Date.now()), 1000);
 		return () => window.clearInterval(timer);
 	}, [active, now]);
+
+	// A refusal is a transient reading of the same capsule, not a second state
+	// machine: the denial styling clears itself so the next attempt reads new.
+	useEffect(() => {
+		if (!denied) return;
+		const timer = window.setTimeout(() => setDenied(false), DENY_MS);
+		return () => window.clearTimeout(timer);
+	}, [denied]);
+
+	// The agent holds this tab: nothing on the page is the user's to operate —
+	// not even while a takeover request is still in flight. A background tab
+	// (out of view) is the user's own page, so it stays live.
+	const blocked = active && inView;
+	useEffect(() => {
+		if (!blocked) setDenied(false);
+	}, [blocked]);
+	const refuse = (event: { preventDefault(): void; stopPropagation(): void }): void => {
+		event.preventDefault();
+		event.stopPropagation();
+		setDenied(true);
+	};
 
 	// User-owned: the agent no longer controls this tab. Keep the handoff
 	// visible and give it back explicitly; nothing resumes on its own.
@@ -168,6 +197,7 @@ export function BrowserControlOverlay({
 		<div
 			className={`gui-browser-control-frame${inView ? "" : " gui-browser-control-frame--out-of-view"}`}
 			data-browser-control={state}
+			data-blocked={denied ? "true" : undefined}
 			style={{
 				position: "fixed",
 				left: frameRect?.x ?? 5,
@@ -177,6 +207,25 @@ export function BrowserControlOverlay({
 				zIndex: 1000,
 			}}
 		>
+			{blocked && (
+				// The page is the agent's while it drives this tab. This layer is
+				// the only pointer target inside the ring, so clicks, context
+				// menus and drags stop here instead of acting behind the agent's
+				// back. It takes no tab stop and blocks no wheel: reading the page
+				// is passive, and the takeover button is already reachable by
+				// keyboard. Typing keeps going wherever it went before — on the
+				// guest that is the main process's own handoff.
+				<div
+					className="gui-browser-control-blocker"
+					data-browser-control-blocker=""
+					aria-hidden="true"
+					onPointerDown={refuse}
+					onClick={refuse}
+					onDoubleClick={refuse}
+					onContextMenu={refuse}
+					onDragStart={refuse}
+				/>
+			)}
 			<div className="gui-browser-control-card gui-liquid-glass">
 				<span className="gui-browser-control-leading" aria-hidden>
 					<Icon name="robot" className="h-4 w-4" />
@@ -201,8 +250,14 @@ export function BrowserControlOverlay({
 						)}
 					</span>
 					<span className="gui-browser-control-summary" title={displayActivity.summary}>
-						{displayActivity.domain ? `${displayActivity.domain} · ` : ""}
-						{displayActivity.summary}
+						{denied ? (
+							t("tools.browserBlockedHint")
+						) : (
+							<>
+								{displayActivity.domain ? `${displayActivity.domain} · ` : ""}
+								{displayActivity.summary}
+							</>
+						)}
 					</span>
 				</span>
 				<span className="gui-browser-control-time" data-elapsed={elapsed} aria-hidden="true">

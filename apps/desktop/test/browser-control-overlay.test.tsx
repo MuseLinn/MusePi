@@ -188,3 +188,47 @@ describe("BrowserControlOverlay context", () => {
 		expect(summary?.getAttribute("title")).toBe("点击元素");
 	});
 });
+
+describe("BrowserControlOverlay pointer blocking", () => {
+	it("puts a hit layer over the page while the agent drives the visible tab", () => {
+		act(() => root.render(<BrowserControlOverlay activity={running} now={2_000} onTakeover={() => {}} />));
+		expect(document.querySelector("[data-browser-control-blocker]")).not.toBeNull();
+	});
+
+	it("does not block the user's own page on a background tab", () => {
+		act(() =>
+			root.render(
+				<BrowserControlOverlay activity={running} inView={false} onTakeover={() => {}} onReveal={() => {}} />,
+			),
+		);
+		expect(document.querySelector("[data-browser-control-blocker]")).toBeNull();
+	});
+
+	it("refuses a click on the page and answers on the capsule instead", async () => {
+		act(() => root.render(<BrowserControlOverlay activity={running} now={2_000} onTakeover={() => {}} />));
+		const blocker = document.querySelector<HTMLElement>("[data-browser-control-blocker]")!;
+		const frame = document.querySelector<HTMLElement>("[data-browser-control]")!;
+
+		const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+		act(() => {
+			blocker.dispatchEvent(click);
+		});
+
+		// Cancelled on the blocker: the guest never sees a default action, and
+		// the capsule answers in place instead of the click doing nothing.
+		expect(click.defaultPrevented).toBe(true);
+		expect(frame.getAttribute("data-blocked")).toBe("true");
+		expect(document.querySelector(".gui-browser-control-summary")?.textContent).toBe(t("tools.browserBlockedHint"));
+
+		await act(async () => Bun.sleep(1_500));
+		expect(frame.getAttribute("data-blocked")).toBeNull();
+		expect(document.querySelector(".gui-browser-control-summary")?.textContent).toContain("example.com");
+	});
+
+	it("never blocks while the user owns the tab", () => {
+		act(() =>
+			root.render(<BrowserControlOverlay activity={null} userOwned onTakeover={() => {}} onHandBack={() => {}} />),
+		);
+		expect(document.querySelector("[data-browser-control-blocker]")).toBeNull();
+	});
+});
