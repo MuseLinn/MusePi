@@ -102,6 +102,8 @@ export interface GuiSessionState {
 	unviewedCompleted: readonly string[];
 	/** Pending tool approvals (approval cards above the composer). */
 	approvals: readonly ApprovalRequest[];
+	/** Host-computed projection values by key (session-projection seam). */
+	projections: ReadonlyMap<string, unknown>;
 	/** Latest idle recap (TUI parity) — cleared on any new wire activity. */
 	recap: { text: string; at: number } | null;
 	/** Frozen per-round totals (final assistant msg ts → ms) — each completed
@@ -247,6 +249,9 @@ export class GuiSessionStore {
 	#progress = new Map<string, SubagentProgressPayload>();
 	#lifecycle = new Map<string, SubagentLifecyclePayload>();
 	#approvals = new Map<string, ApprovalRequest>();
+	/** Whole current projection values by key; the host sends a baseline on
+	 *  resume and one change list per committed event afterwards. */
+	#projections = new Map<string, unknown>();
 	#recap: { text: string; at: number } | null = null;
 	#roundDurations: Map<number, number>;
 	#listeners = new Set<() => void>();
@@ -316,6 +321,9 @@ export class GuiSessionStore {
 			 *  `approval-request` envelope is the fast path; this is the
 			 *  hydration path for a client that opens or reconnects later. */
 			pendingApprovals?: ApprovalRequest[];
+			/** Baseline host projections from the resume snapshot (the
+			 *  session-projection seam). */
+			projections?: { values: Readonly<Record<string, unknown>>; seq: number };
 		},
 		cwd: string,
 		hooks: SessionGapHooks = {},
@@ -367,6 +375,9 @@ export class GuiSessionStore {
 				tool: approval.tool,
 				prompt: approval.prompt,
 			});
+		}
+		for (const [key, value] of Object.entries(snapshot.projections?.values ?? {})) {
+			this.#projections.set(key, value);
 		}
 		this.#watermark = typeof snapshot.cursor === "number" && Number.isInteger(snapshot.cursor) ? snapshot.cursor : 0;
 		this.#snapshot = this.#buildSnapshot();
@@ -772,6 +783,7 @@ export class GuiSessionStore {
 			lifecycle: this.#lifecycle,
 			unviewedCompleted: [...unviewedCompletedFor(this.#sessionId)],
 			approvals: [...this.#approvals.values()],
+			projections: this.#projections,
 			recap: this.#recap,
 			roundDurations: this.#roundDurations,
 			structureRev: snap.structureRev,
@@ -805,7 +817,8 @@ export class GuiSessionStore {
 			event.kind === "approval-request" ||
 			event.kind === "approval-request-end" ||
 			event.kind === "ask-request-end" ||
-			event.kind === "recap"
+			event.kind === "recap" ||
+			event.kind === "projection"
 		) {
 			if (this.#applyNow(event)) this.#commit();
 			return;
@@ -1047,6 +1060,21 @@ export class GuiSessionStore {
 				if (!p.isStreaming) this.#streaming = false;
 			}
 			return true;
+		}
+		// Host-computed projection changes: whole values, already validated by
+		// the daemon. One map row per key; no client-side domain folding.
+		if (event.kind === "projection") {
+			const p = event.payload as { changes?: unknown } | null;
+			if (!Array.isArray(p?.changes)) return false;
+			let changed = false;
+			for (const change of p.changes) {
+				if (!change || typeof change !== "object") continue;
+				const key = (change as { key?: unknown }).key;
+				if (typeof key !== "string") continue;
+				this.#projections.set(key, (change as { value?: unknown }).value);
+				changed = true;
+			}
+			return changed;
 		}
 		// Pending tool approvals — the GUI answers via tool.approve / tool.deny.
 		if (event.kind === "approval-request") {

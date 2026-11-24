@@ -15,17 +15,18 @@ import {
 	messageDisplayContext,
 	normalizeDisplayContexts,
 } from "@musepi/client-core/src/messages/display-context";
-import type { SessionEntry } from "@musepi/pi-wire";
+import type { ContextUsageProjection, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../i18n/index.js";
 import type { CompanionMood, CompanionState } from "../lib/companion";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
-import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
+import { isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
 import { createSendCorrelation } from "../lib/send-identity";
+import type { SessionUsageSnapshot } from "../lib/session-usage-types";
 import { onSettingsChanged } from "../lib/settings-events";
 import { sfxFor } from "../lib/sfx";
 import { eventMatches } from "../lib/shortcut-registry";
@@ -52,7 +53,7 @@ import type { SttSubmitTrigger } from "../lib/voice";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
 import { CompanionArt, useCompanionArt } from "./CompanionArt";
-import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
+import { ContextRing, type UsageQuotaView } from "./ContextRing";
 import {
 	EnhanceButton,
 	type EnhanceState,
@@ -63,7 +64,6 @@ import {
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
-import type { CompactionThresholdView } from "./composer/auto-compact-threshold";
 import { attachmentChipActions } from "./composer/chip-actions";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
@@ -146,6 +146,8 @@ export { fmtQuotaDuration, UsageGapLines, UsageProviderSection } from "./compose
 
 export interface SessionComposerProps {
 	working: boolean;
+	/** Host-computed context/usage projection; pushed per committed event. */
+	contextUsage?: ContextUsageProjection | null;
 	/** Agent companion mood (伙伴) — derived by ChatView from the session
 	 *  snapshot; the pet renders only when enabled + input mode. */
 	companionMood?: CompanionMood;
@@ -238,20 +240,6 @@ export interface SessionComposerProps {
 
 type ComposerKeyEvent = globalThis.KeyboardEvent & { nativeEvent?: { isComposing?: boolean } };
 
-/** One `session.contextUsage` answer: usage ring, /context card, and the
- *  auto-compaction threshold control all read this shape. */
-type ContextUsageSnapshot = {
-	tokens: number;
-	contextWindow: number;
-	percent: number;
-	model?: string | null;
-	snapcompact?: SnapcompactSavingsView | null;
-	breakdown?: ContextBreakdownView | null;
-	usage?: UsageSummaryView | null;
-	autoCompactBufferTokens?: number;
-	freeTokens?: number;
-} & CompactionThresholdView;
-
 function shouldSubmitOnEnter(e: ComposerKeyEvent, composing: boolean): boolean {
 	if (e.key !== "Enter") return false;
 	// IME composition: the confirming Enter must commit the candidate text,
@@ -286,6 +274,7 @@ async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: s
 
 export function SessionComposer({
 	working,
+	contextUsage = null,
 	companionMood,
 	companionState,
 	onSend,
@@ -613,78 +602,23 @@ export function SessionComposer({
 	const { designStyle, pickDesignStyle } = useSessionDesignSystem(rpc, sessionId, isDesignSession);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
-	const [contextUsage, setContextUsage] = useState<ContextUsageSnapshot | null>(null);
-	// Shared by the 3s poll and the model-switch immediate refresh — the
-	// ring/card must follow a model change without waiting for the next tick.
-	const refreshUsage = useCallback((): void => {
+	// Ring numbers come from the host `contextUsage` projection (pushed per
+	// committed event). The full `/context` facets — thresholds, snapcompact,
+	// breakdown — are a user-initiated one-off read, never a poll.
+	const [usageDetails, setUsageDetails] = useState<SessionUsageSnapshot | null>(null);
+	const loadUsageDetails = useCallback((): void => {
 		if (!rpc || !sessionId) return;
 		void rpc
-			.request<ContextUsageSnapshot | null>("session.contextUsage", {
-				sessionId,
-			})
-			.then(usage => {
-				// Value-compare: skip the setState (and the re-render)
-				// when the ring's numbers did not move. contextWindow is
-				// part of the identity: an empty/low-use session switching
-				// to a differently-sized model keeps percent=0 and
-				// tokens=0, and without this the window line would freeze
-				// on the old model's capacity. model rides along: the
-				// composer's model selector seeds from it, and an external
-				// switch (auto downshift, same-window-size model) must not
-				// leave the displayed model stale.
-				setContextUsage(prev => {
-					if (!usage || !prev) return usage;
-					// The cost / cache-hit block moves independently of the
-					// token counts, so it is part of the identity too —
-					// otherwise the spend line freezes until the next
-					// context-window change.
-					const usageSame =
-						prev.usage?.cost === usage.usage?.cost &&
-						prev.usage?.cacheRead === usage.usage?.cacheRead &&
-						prev.usage?.cacheHitRate === usage.usage?.cacheHitRate;
-					return prev.tokens === usage.tokens &&
-						prev.percent === usage.percent &&
-						prev.contextWindow === usage.contextWindow &&
-						prev.model === usage.model &&
-						prev.thresholdTokens === usage.thresholdTokens &&
-						prev.thresholdPercent === usage.thresholdPercent &&
-						prev.thresholdMode === usage.thresholdMode &&
-						prev.thresholdScope === usage.thresholdScope &&
-						prev.thresholdValuePercent === usage.thresholdValuePercent &&
-						prev.thresholdModelKey === usage.thresholdModelKey &&
-						usageSame &&
-						prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
-						? prev
-						: usage;
-				});
-				// Keep the /context card in step with the live session:
-				// model switches change contextWindow/percent and the
-				// card must follow instead of freezing at open time.
-				setContextPanel(s => (s?.open ? { open: true, loading: false, data: usage } : s));
-			})
+			.request<SessionUsageSnapshot | null>("session.contextUsage", { sessionId })
+			.then(usage => setUsageDetails(usage ?? null))
 			.catch(() => {});
 	}, [rpc, sessionId]);
-	useEffect(() => {
-		if (!rpc || !sessionId) return;
-		refreshUsage();
-		// Event-driven freshness: poll only while the agent WORKS; the
-		// `working` flip re-runs this effect (idle = zero polling).
-		if (!working) return;
-		// Same 3s cadence + visibility pause as the modes poll above.
-		let id = setInterval(refreshUsage, 3000);
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") {
-				refreshUsage();
-				id = setInterval(refreshUsage, 3000);
-			}
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
-	}, [rpc, sessionId, refreshUsage, working]);
+	const handleRingOpen = useCallback(
+		(open: boolean): void => {
+			if (open) loadUsageDetails();
+		},
+		[loadUsageDetails],
+	);
 
 	// ── Manual context compaction (TUI /compact parity) ────────────────────
 	// The ring shows usage; this is the escape hatch when it fills up. The
@@ -706,19 +640,7 @@ export function SessionComposer({
 			})
 			.then(() => {
 				refreshModes();
-				void rpc
-					.request<{
-						tokens: number;
-						contextWindow: number;
-						percent: number;
-						snapcompact?: SnapcompactSavingsView | null;
-					} | null>("session.contextUsage", {
-						sessionId,
-					})
-					.then(usage => {
-						if (usage) setContextUsage(prev => (prev && prev.tokens === usage.tokens ? prev : usage));
-					})
-					.catch(() => {});
+				loadUsageDetails();
 			})
 			.catch(() => {
 				if (compactCancelledRef.current) return;
@@ -752,8 +674,8 @@ export function SessionComposer({
 	// compaction.thresholdTokens) is replaced explicitly, never silently.
 	const [thresholdBusy, setThresholdBusy] = useState(false);
 	const [thresholdError, setThresholdError] = useState<string | null>(null);
-	const thresholdScope = contextUsage?.thresholdScope ?? null;
-	const thresholdModelKey = contextUsage?.thresholdModelKey ?? null;
+	const thresholdScope = usageDetails?.thresholdScope ?? null;
+	const thresholdModelKey = usageDetails?.thresholdModelKey ?? null;
 
 	const readModelThresholds = useCallback(async (): Promise<Record<string, number | string | null>> => {
 		if (!rpc) return {};
@@ -777,10 +699,10 @@ export function SessionComposer({
 				})
 				.finally(() => {
 					setThresholdBusy(false);
-					refreshUsage();
+					loadUsageDetails();
 				});
 		},
-		[refreshUsage, rpc],
+		[loadUsageDetails, rpc],
 	);
 
 	const writeThresholdPercent = useCallback(
@@ -983,24 +905,37 @@ export function SessionComposer({
 	const [contextPanel, setContextPanel] = useState<{
 		open: boolean;
 		loading: boolean;
-		data: ContextUsageSnapshot | null;
+		data: SessionUsageSnapshot | null;
 	} | null>(null);
+	// The open card follows the live projection for window/percent while keeping
+	// the wider facets (breakdown, threshold) from the one-off details read.
+	useEffect(() => {
+		setContextPanel(s => {
+			if (!s?.open) return s;
+			if (!contextUsage && !usageDetails) return s;
+			const data: SessionUsageSnapshot | null = usageDetails
+				? {
+						...usageDetails,
+						tokens: contextUsage?.tokens ?? usageDetails.tokens,
+						contextWindow: contextUsage?.contextWindow ?? usageDetails.contextWindow,
+						percent: contextUsage?.percent ?? usageDetails.percent,
+						model: contextUsage?.model ?? usageDetails.model,
+					}
+				: (contextUsage as SessionUsageSnapshot);
+			return { open: true, loading: false, data };
+		});
+	}, [contextUsage, usageDetails]);
 	const openContextPanel = useCallback((): void => {
 		if (!rpc || !sessionId) {
 			setContextPanel({ open: true, loading: false, data: null });
 			return;
 		}
 		setUsagePanel(s => ({ ...s, open: false }));
-		setContextPanel({ open: true, loading: true, data: null });
-		void rpc
-			.request<ContextUsageSnapshot | null>("session.contextUsage", { sessionId })
-			.then(usage => {
-				setContextPanel(s => (s?.open ? { open: true, loading: false, data: usage } : s));
-			})
-			.catch(() => {
-				setContextPanel(s => (s?.open ? { open: true, loading: false, data: null } : s));
-			});
-	}, [rpc, sessionId]);
+		// Paint the cached read at once and revalidate through the shared entry;
+		// the effect above advances it (or reports the failure).
+		setContextPanel({ open: true, loading: contextUsage === null, data: contextUsage });
+		loadUsageDetails();
+	}, [rpc, sessionId, contextUsage, loadUsageDetails]);
 
 	// Context dialog: same floating card (mutually exclusive with quota —
 	// opening one closes the other).
@@ -2410,11 +2345,11 @@ export function SessionComposer({
 								onAddProvider={onAddProvider}
 								onModelSelect={id => {
 									if (id) onModelChange?.(id);
-									// The daemon finished the switch before this
-									// fires — refresh the ring/card immediately so
-									// they show the new model's window without
-									// waiting for the next 3s poll.
-									refreshUsage();
+									// The daemon publishes the new `contextUsage` projection on
+									// `model_changed`; the full facets are re-read here
+									// because a route switch can change the threshold
+									// scope too.
+									loadUsageDetails();
 								}}
 								onSetThinking={onSetThinking}
 							/>
@@ -2484,7 +2419,7 @@ export function SessionComposer({
 								percent={contextUsage.percent}
 								tokens={contextUsage.tokens}
 								contextWindow={contextUsage.contextWindow}
-								threshold={contextUsage}
+								threshold={usageDetails}
 								thresholdBusy={thresholdBusy}
 								thresholdError={thresholdError}
 								onThresholdChange={writeThresholdPercent}
@@ -2493,8 +2428,9 @@ export function SessionComposer({
 								onCompact={compactContext}
 								compacting={compacting}
 								compactFailed={compactFailed}
-								snapcompact={contextUsage.snapcompact ?? null}
-								usage={contextUsage.usage ?? null}
+								snapcompact={usageDetails?.snapcompact ?? null}
+								usage={usageDetails?.usage ?? contextUsage.usage}
+								onOpenChange={handleRingOpen}
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}

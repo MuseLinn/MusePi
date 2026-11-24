@@ -26,6 +26,7 @@ import {
 import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
 import {
 	type ChatQuoteAnchor,
+	type ContextUsageProjection,
 	entryStartMs,
 	type OfficeQuoteAnchor,
 	type PdfQuoteAnchor,
@@ -3188,6 +3189,7 @@ export function ChatView({
 	const sessionComposerProps: SessionComposerProps | null = store
 		? {
 				working: snap?.working ?? false,
+				contextUsage: (snap?.projections?.get("contextUsage") as ContextUsageProjection | undefined) ?? null,
 				entries: snap?.entries ?? [],
 				companionMood: companionMoodFromSession({
 					working: snap?.working ?? false,
