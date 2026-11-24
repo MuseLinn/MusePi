@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
@@ -791,27 +792,53 @@ function getExtensionForMime(mimeType: string): string {
 	return map[mimeType] ?? "png";
 }
 
-async function saveImageToTemp(image: InlineImageData): Promise<string> {
-	const ext = getExtensionForMime(image.mimeType);
-	const filename = `omp-image-${Snowflake.next()}.${ext}`;
-	const filepath = path.join(os.tmpdir(), filename);
-	await Bun.write(filepath, Buffer.from(image.data, "base64"));
-	return filepath;
+/**
+ * Where a generated image lands, and whether that location outlives the session.
+ *
+ * A persisted session writes into its own artifacts directory (the same one
+ * `artifact://` and `local://` resolve against), so the file survives the turn
+ * and moves with a fork. A session with no durable file yet has no such
+ * directory — those still need somewhere to put bytes, and the OS temp dir is
+ * the only location guaranteed writable, so the path is reported as ephemeral
+ * instead of silently pretending to be durable.
+ */
+interface SavedImage {
+	path: string;
+	ephemeral: boolean;
 }
 
-async function saveImagesToTemp(images: InlineImageData[]): Promise<string[]> {
-	return Promise.all(images.map(saveImageToTemp));
+async function saveImage(image: InlineImageData, artifactsDir: string | null): Promise<SavedImage> {
+	const ext = getExtensionForMime(image.mimeType);
+	const filename = `omp-image-${Snowflake.next()}.${ext}`;
+	if (artifactsDir === null) {
+		const filepath = path.join(os.tmpdir(), filename);
+		await Bun.write(filepath, Buffer.from(image.data, "base64"));
+		return { path: filepath, ephemeral: true };
+	}
+	await fs.mkdir(artifactsDir, { recursive: true });
+	const filepath = path.join(artifactsDir, filename);
+	await Bun.write(filepath, Buffer.from(image.data, "base64"));
+	return { path: filepath, ephemeral: false };
 }
 
 function buildResponseSummary(
 	provider: ImageProvider,
 	model: string,
-	imagePaths: string[],
+	saved: SavedImage[],
 	responseText: string | undefined,
 ): string {
-	const lines = [`Provider: ${provider}`, `Model: ${model}`, `Generated ${imagePaths.length} image(s):`];
-	for (const p of imagePaths) {
-		lines.push(`  ${p}`);
+	const lines = [`Provider: ${provider}`, `Model: ${model}`, `Generated ${saved.length} image(s):`];
+	for (const image of saved) {
+		lines.push(`  ${image.path}`);
+	}
+	// Say it here rather than letting a temp path read as a delivered file: the
+	// model quotes this text back to the user, and "saved at /tmp/..." without
+	// the caveat invites a broken reference later.
+	if (saved.some(image => image.ephemeral)) {
+		lines.push(
+			"",
+			"These files are in the OS temp directory and will be cleaned up; copy one into the workspace before relying on it.",
+		);
 	}
 	if (responseText) {
 		lines.push("", responseText.trim());
@@ -1210,6 +1237,9 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 			const sessionId = ctx.sessionManager.getSessionId();
 			const providerOrder = imageProviderOrder(ctx.model, params.provider);
 			const cwd = ctx.sessionManager.getCwd();
+			// Resolved once: the directory only appears when the session has a
+			// durable file, and every provider branch below saves through it.
+			const artifactsDir = ctx.sessionManager.getArtifactsDir?.() ?? null;
 			const requestSignal = ptree.combineSignals(signal, IMAGE_TIMEOUT);
 			const fetchImpl = ctx.fetch ?? fetch;
 			const failures: Array<{ provider: ImageProvider; error: ProviderHttpError }> = [];
@@ -1269,7 +1299,8 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 						}
 						if (result.url) {
 							const inline = await loadImageFromUrl(result.url, fetchImpl, requestSignal);
-							const imagePaths = await saveImagesToTemp([inline]);
+							const saved = await Promise.all([inline].map(image => saveImage(image, artifactsDir)));
+							const imagePaths = saved.map(image => image.path);
 							return {
 								content: [
 									{
@@ -1277,7 +1308,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 										text: buildResponseSummary(
 											provider,
 											extensionConfig.models[0]?.id ?? provider,
-											imagePaths,
+											saved,
 											undefined,
 										),
 									},
@@ -1333,11 +1364,12 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							};
 						}
 
-						const imagePaths = await saveImagesToTemp(parsed.images);
+						const saved = await Promise.all(parsed.images.map(image => saveImage(image, artifactsDir)));
+						const imagePaths = saved.map(image => image.path);
 
 						return {
 							content: [
-								{ type: "text", text: buildResponseSummary(provider, model, imagePaths, parsed.responseText) },
+								{ type: "text", text: buildResponseSummary(provider, model, saved, parsed.responseText) },
 							],
 							details: {
 								provider,
@@ -1473,10 +1505,11 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							};
 						}
 
-						const imagePaths = await saveImagesToTemp(parsed.images);
+						const saved = await Promise.all(parsed.images.map(image => saveImage(image, artifactsDir)));
+						const imagePaths = saved.map(image => image.path);
 
 						return {
-							content: [{ type: "text", text: buildResponseSummary(provider, model, imagePaths, responseText) }],
+							content: [{ type: "text", text: buildResponseSummary(provider, model, saved, responseText) }],
 							details: {
 								provider,
 								model,
@@ -1591,11 +1624,12 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							};
 						}
 
-						const xaiImagePaths = await saveImagesToTemp(xaiInlineImages);
+						const xaiSaved = await Promise.all(xaiInlineImages.map(image => saveImage(image, artifactsDir)));
+						const xaiImagePaths = xaiSaved.map(image => image.path);
 
 						return {
 							content: [
-								{ type: "text", text: buildResponseSummary(provider, resolvedModel, xaiImagePaths, undefined) },
+								{ type: "text", text: buildResponseSummary(provider, resolvedModel, xaiSaved, undefined) },
 							],
 							details: {
 								provider,
@@ -1676,11 +1710,12 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							};
 						}
 
-						const imagePaths = await saveImagesToTemp(inlineImages);
+						const saved = await Promise.all(inlineImages.map(image => saveImage(image, artifactsDir)));
+						const imagePaths = saved.map(image => image.path);
 
 						return {
 							content: [
-								{ type: "text", text: buildResponseSummary(provider, resolvedModel, imagePaths, responseText) },
+								{ type: "text", text: buildResponseSummary(provider, resolvedModel, saved, responseText) },
 							],
 							details: {
 								provider,
@@ -1775,13 +1810,14 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 							};
 						}
 
-						const agnesImagePaths = await saveImagesToTemp(agnesInlineImages);
+						const agnesSaved = await Promise.all(agnesInlineImages.map(image => saveImage(image, artifactsDir)));
+						const agnesImagePaths = agnesSaved.map(image => image.path);
 
 						return {
 							content: [
 								{
 									type: "text",
-									text: buildResponseSummary(provider, DEFAULT_AGNES_MODEL, agnesImagePaths, undefined),
+									text: buildResponseSummary(provider, DEFAULT_AGNES_MODEL, agnesSaved, undefined),
 								},
 							],
 							details: {
@@ -1880,10 +1916,11 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 						};
 					}
 
-					const imagePaths = await saveImagesToTemp(inlineImages);
+					const saved = await Promise.all(inlineImages.map(image => saveImage(image, artifactsDir)));
+					const imagePaths = saved.map(image => image.path);
 
 					return {
-						content: [{ type: "text", text: buildResponseSummary(provider, model, imagePaths, responseText) }],
+						content: [{ type: "text", text: buildResponseSummary(provider, model, saved, responseText) }],
 						details: {
 							provider,
 							model,

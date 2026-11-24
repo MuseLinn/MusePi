@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { Model } from "@musepi/pi-ai";
 import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import type { CustomToolContext } from "@musepi/pi-coding-agent/extensibility/custom-tools";
@@ -13,9 +16,11 @@ import { removeWithRetries, USER_AGENT } from "@musepi/pi-utils";
 
 const originalOpenRouterKey = Bun.env.OPENROUTER_API_KEY;
 const generatedImagePaths: string[] = [];
+const artifactsDirs: string[] = [];
 
 afterEach(async () => {
 	await Promise.all(generatedImagePaths.splice(0).map(imagePath => removeWithRetries(imagePath)));
+	for (const dir of artifactsDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 	if (originalOpenRouterKey === undefined) {
 		delete Bun.env.OPENROUTER_API_KEY;
 	} else {
@@ -47,6 +52,41 @@ function createAntigravityXAIContext(model: Model | undefined, fetchMock: typeof
 			},
 			resolver: (provider: string) => async () =>
 				provider === "google-antigravity" ? antigravityCredentials : "test-xai-token",
+		} as unknown as ModelRegistry,
+		model,
+		isIdle: () => true,
+		hasQueuedMessages: () => false,
+		abort: () => {},
+	};
+}
+
+/** First text block of a tool result, or "" when the tool returned none. */
+function resultText(result: { content: readonly { type: string }[] }): string {
+	const block = result.content.find(part => part.type === "text");
+	if (block !== undefined && "text" in block && typeof block.text === "string") return block.text;
+	return "";
+}
+
+/** Minimal OpenAI-backed context; `session` supplies only the manager members the tool reads. */
+function openAiContext(
+	fetchMock: typeof fetch,
+	session: Pick<ReadonlySessionManager, "getCwd" | "getSessionId" | "getArtifactsDir">,
+): CustomToolContext {
+	const model = {
+		api: "openai-responses",
+		provider: "openai",
+		id: "gpt-5.5",
+		name: "GPT 5.5",
+		baseUrl: "https://api.openai.com/v1",
+	} as Model;
+	return {
+		fetch: fetchMock,
+		sessionManager: session as unknown as ReadonlySessionManager,
+		modelRegistry: {
+			getApiKey: async () => "test-openai-key",
+			getApiKeyForProvider: async () => undefined,
+			authStorage: { rotateSessionCredential: async () => false },
+			resolver: () => async () => "test-openai-key",
 		} as unknown as ModelRegistry,
 		model,
 		isIdle: () => true,
@@ -802,5 +842,66 @@ describe("imageGenTool", () => {
 
 		expect(requestUrls).toEqual(["https://api.x.ai/v1/images/generations"]);
 		expect(result.details?.provider).toBe("xai");
+	});
+
+	it("writes a generated image into the session artifacts directory", async () => {
+		setImageProviderOrder(["openai"]);
+		const artifactsDir = mkdtempSync(path.join(os.tmpdir(), "omp-image-artifacts-"));
+		const fetchMock: typeof fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					output: [
+						{
+							type: "image_generation_call",
+							result: Buffer.from("persisted-png").toString("base64"),
+						},
+					],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			)) as unknown as typeof fetch;
+		const ctx = openAiContext(fetchMock, {
+			getCwd: () => "/tmp",
+			getSessionId: () => "test-session",
+			getArtifactsDir: () => artifactsDir,
+		});
+
+		const result = await imageGenTool.execute("call-persist", { subject: "a cat" }, undefined, ctx);
+		const savedPath = result.details?.imagePaths[0];
+		if (!savedPath) throw new Error("Expected generated image path");
+
+		expect(path.dirname(savedPath)).toBe(artifactsDir);
+		expect(await Bun.file(savedPath).text()).toBe("persisted-png");
+		// The summary must not warn about a location that outlives the session.
+		expect(result.content[0]).toMatchObject({ type: "text" });
+		expect(resultText(result)).not.toContain("OS temp directory");
+	});
+
+	it("falls back to the temp directory and says so when the session has no artifacts directory", async () => {
+		setImageProviderOrder(["openai"]);
+		const fetchMock: typeof fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					output: [
+						{
+							type: "image_generation_call",
+							result: Buffer.from("ephemeral-png").toString("base64"),
+						},
+					],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			)) as unknown as typeof fetch;
+		const ctx = openAiContext(fetchMock, {
+			getCwd: () => "/tmp",
+			getSessionId: () => "test-session",
+			getArtifactsDir: () => null,
+		});
+
+		const result = await imageGenTool.execute("call-ephemeral", { subject: "a cat" }, undefined, ctx);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+		const savedPath = result.details?.imagePaths[0];
+		if (!savedPath) throw new Error("Expected generated image path");
+
+		expect(path.dirname(savedPath)).toBe(os.tmpdir());
+		expect(resultText(result)).toContain("OS temp directory");
 	});
 });
