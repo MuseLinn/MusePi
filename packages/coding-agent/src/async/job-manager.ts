@@ -574,6 +574,23 @@ export class AsyncJobManager {
 	}
 
 	/**
+	 * Record that a settled job's result already reached the caller another way
+	 * — a foreground tool result, a `hub` snapshot, a vibe wait, or an eviction
+	 * that deliberately drops the delivery. Suppresses any queued delivery AND
+	 * marks the durable row delivered, so session adoption never replays the
+	 * same outcome as a transcript card (user report: a pile of "已完成" cards
+	 * appeared after the turn, one per fast auto-backgrounded command).
+	 */
+	consumeDeliveries(jobIds: string[]): number {
+		const removed = this.acknowledgeDeliveries(jobIds);
+		for (const rawId of jobIds) {
+			const jobId = rawId.trim();
+			if (jobId) AsyncJobManager.#ledger?.markDelivered(jobId);
+		}
+		return removed;
+	}
+
+	/**
 	 * Lift a foreground-wait suppression set via `acknowledgeDeliveries`. If the
 	 * job already finished while suppressed (its delivery enqueue was skipped),
 	 * re-enqueue the completion so the result is still delivered exactly once.
@@ -629,7 +646,10 @@ export class AsyncJobManager {
 		let evicted = 0;
 		for (const job of this.#filterJobs(this.#jobs.values(), filter)) {
 			if (job.status !== "completed" && job.status !== "failed") continue;
-			this.acknowledgeDeliveries([job.id]);
+			// Eviction says the outcome must never reach any transcript — a
+			// cleared delivery that stays `delivered = 0` in the ledger would be
+			// replayed by the next session adoption as a card.
+			this.consumeDeliveries([job.id]);
 			if (this.#evictJob(job.id)) evicted += 1;
 		}
 		return evicted;

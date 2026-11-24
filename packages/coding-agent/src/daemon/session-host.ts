@@ -2370,6 +2370,11 @@ export class DaemonSessionHost {
 		// Replay completed-but-undelivered job results that survived a daemon
 		// restart. Custom entries stay out of the model context; the transcript
 		// keeps the outcome inspectable instead of losing it with the process.
+		//
+		// `delivered` is the gate: a foreground bash call records its result in
+		// the ledger when it hands the output back as the tool result, so only
+		// outcomes that never reached any transcript are replayed (see
+		// AsyncJobManager.consumeDeliveries).
 		const persistedJobResults = new Set(
 			agentSession.sessionManager
 				.getEntries()
@@ -2377,17 +2382,30 @@ export class DaemonSessionHost {
 				.map(entry => (entry as { details?: { jobId?: unknown } }).details?.jobId)
 				.filter((jobId): jobId is string => typeof jobId === "string"),
 		);
+		const liveManager = AsyncJobManager.instance();
+		// Only outcomes still being delivered by THIS process are excluded; a
+		// job the manager no longer holds (or whose delivery already drained)
+		// falls through to the replay below.
+		const inFlightDeliveries = new Set(liveManager?.getDeliveryState().pendingJobIds ?? []);
 		for (const job of AsyncJobManager.undeliveredJobsForSession(sessionId)) {
 			if (persistedJobResults.has(job.id)) {
 				AsyncJobManager.markJobDelivered(job.id);
 				continue;
 			}
+			if (inFlightDeliveries.has(job.id)) continue;
 			const body = job.resultText?.trim();
 			agentSession.sessionManager.appendCustomMessageEntry(
 				"async-job-result",
 				`Background ${job.type} job "${job.label}" ${job.status}${body ? `:\n\n${body}` : "."}`,
 				true,
-				{ jobId: job.id, status: job.status, label: job.label },
+				{
+					jobId: job.id,
+					status: job.status,
+					label: job.label,
+					// The card's own fields come from `details`: without `type` the
+					// replay row lost its `[bash]` tag and read as an anonymous job.
+					type: job.type,
+				},
 				"agent",
 			);
 			AsyncJobManager.markJobDelivered(job.id);

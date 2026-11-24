@@ -38,6 +38,7 @@ import {
 	prompt,
 	updateManifestUrlForVersion,
 	VERSION,
+	withTimeout,
 } from "@musepi/pi-utils";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
@@ -299,6 +300,12 @@ const SLASH_CATEGORY: Record<string, string> = {
 function slashCommandCategory(name: string): string {
 	return SLASH_CATEGORY[name] ?? "system";
 }
+
+/** How long a tree mutation waits for an in-flight run to unwind before it
+ *  refuses with `SESSION_BUSY`. Longer than a normal abort (provider stream
+ *  teardown plus tool cleanup), short enough that a stuck run surfaces as a
+ *  retryable message instead of a hung RPC. */
+const BRANCH_SETTLE_TIMEOUT_MS = 20_000;
 
 /** Snapshot text extraction for revert-restore (string or content blocks). */
 function extractSnapshotText(content: unknown): string {
@@ -4024,6 +4031,24 @@ export class DaemonServer {
 				// branch bar and the canvas all go through here.
 				const blive = this.#host.get(bp.sessionId) ?? (await this.#host.activate(bp.sessionId).catch(() => null));
 				if (!blive) throw new Error(`Unknown session: ${bp.sessionId}`);
+				// A leaf move under a live run re-anchors the branch beneath the
+				// in-flight turn: the run's remaining tool results and its reply
+				// land on the OLD leaf while the tree already points at the target,
+				// so the transcript shows the withdrawn turn's tail hanging off a
+				// sibling (user report: 撤回 succeeded, the turn stayed). The GUI
+				// stops the run before asking, but its wait is bounded — a slow
+				// unwind (tool teardown, provider flush) can still be running when
+				// the RPC arrives, and then navigateTree mutates the tree the run
+				// is about to append to. Wait for the daemon's own settle point
+				// instead of trusting the client's timing; a run that never
+				// settles is reported as retryable rather than corrupting the tree.
+				if (blive.agentSession.isStreaming) {
+					await withTimeout(
+						blive.agentSession.waitForIdle(),
+						BRANCH_SETTLE_TIMEOUT_MS,
+						`SESSION_BUSY: the run did not settle within ${BRANCH_SETTLE_TIMEOUT_MS / 1000}s; retry the branch once it stops`,
+					);
+				}
 				// Resolve the view key ("role:timestamp") to the SDK entry id
 				// (shared matcher — regenerateAt resolves the same way).
 				const bentries = (
