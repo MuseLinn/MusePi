@@ -2429,9 +2429,27 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	flex-direction: column;
 	min-width: 0;
 }
+/* Keeper reveal: opacity only.
+ *
+ * These two classes mark a KEEPER becoming visible again (settings closing, an
+ * alt page handing the column back), not a view entering. They used to share
+ * `gui-view-blur-in`, which meant a `filter: blur(10px)` over the whole chat
+ * column — an offscreen rasterization of a surface that already existed, and
+ * the most expensive thing about returning from Settings. Opacity is
+ * compositor-only: same gentle reveal, none of the per-frame re-raster. A real
+ * view entrance keeps the blur (`.gui-view-enter`). */
+@keyframes gui-keeper-reveal {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
 .gui-chat-keeper--enter,
 .gui-workspace-keeper--enter {
-	animation: gui-view-blur-in 300ms var(--spring);
+	animation: gui-keeper-reveal 160ms ease-out;
 }
 .gui-workspace-keeper {
 	flex: 1;
@@ -2476,6 +2494,43 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+}
+
+/* The view transition is the app's one full-surface blur: `filter: blur()`
+ * re-rasterizes the whole surface every frame, and at 300ms that is ~18 of
+ * them. It must therefore follow the same motion contract as every other
+ * animation — the switch and the OS setting both turn it into the instant
+ * swap, which also makes "is the lag animation or layout?" testable by
+ * flipping the switch.
+ *
+ * The leave classes need `opacity: 0` as well as `animation: none`: their
+ * entry animates TO opacity 0 with `fill: forwards`, so dropping the
+ * animation alone would leave the outgoing surface fully visible for the
+ * 150ms its JS window keeps it mounted. */
+.gui-motion-off .gui-view-enter,
+.gui-motion-off .gui-chat-keeper--enter,
+.gui-motion-off .gui-workspace-keeper--enter {
+	animation: none;
+}
+
+.gui-motion-off .gui-view-leave,
+.gui-motion-off .gui-slot-leave {
+	animation: none;
+	opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-view-enter,
+	.gui-chat-keeper--enter,
+	.gui-workspace-keeper--enter {
+		animation: none;
+	}
+
+	.gui-view-leave,
+	.gui-slot-leave {
+		animation: none;
+		opacity: 0;
+	}
 }
 
 /* Settings shell — slot replacement (2026-09-24, retires the old

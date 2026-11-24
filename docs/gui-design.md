@@ -90,6 +90,15 @@ A sent prompt lands as itself: the bubble that appears in the transcript perform
 - **Identity still matters.** `entryViewKey` keys a user row by its `requestIdentity` (`msg:<clientId>:<clientRequestId>`), the string the daemon stamps on the persisted message, so the optimistic row and the acknowledged entry are one DOM node and the entrance does not replay when the ack lands.
 - **Off switches.** `prefers-reduced-motion: reduce` and `.gui-motion-off` remove the animation; the bubble simply appears.
 
+### Full-surface view transitions and the off switch (2026-11-25)
+
+`.gui-view-enter` / `.gui-view-leave` / `.gui-slot-leave` / the keeper `--enter` modifiers are the app's one full-surface transition: 300ms in, 150ms out, both animating `filter: blur()`. A blur radius change re-rasterizes the whole surface every frame, so this is the most expensive animation in the GUI — and until now it was the only one with no off switch, which also meant nobody could tell an animation stall from a layout one.
+
+- **Both switches apply.** `.gui-motion-off` and `prefers-reduced-motion: reduce` set `animation: none` on the entering classes, and the swap becomes instant.
+- **Leaving surfaces also get `opacity: 0`.** The leave keyframes end at opacity 0 with `fill: forwards`; removing the animation alone would leave the outgoing surface fully visible for the 150ms its JS window keeps it mounted, so the off state must state the end value.
+- **A keeper never blurs.** An element that hides itself by toggling `display` restarts its animations on every reveal, so an entrance on a keeper's base class replays on each round-trip. Keeper state is preserved by keeping the DOM, not by re-playing an entrance: the settings column keeper animates nothing, and the alt-page keepers reveal with a 160ms opacity fade (`gui-keeper-reveal`). They used to share `gui-view-blur-in`, i.e. a full-column offscreen rasterization each time Settings closed. A real view entrance keeps the blur.
+- **Held by** `apps/desktop/test/keeper-entrance-motion.test.ts`.
+
 ## 3a. Status transitions
 
 State copy is a fixed slot, not a block that appears and disappears. `StatusText` (`packages/client-core/src/components/shell/StatusText.tsx`, shared CSS in `shell.css`) is the single implementation: outgoing and incoming strings share one grid cell and cross-fade at `--gui-motion-fade-out` / `--gui-motion-fade-in` (160ms) with `--gui-motion-slide-y` (6px). `gui-motion-off` and `prefers-reduced-motion` swap instantly with no leaving layer. The wrapper owns `role="status"` + `aria-live="polite"`, the leaving copy is `aria-hidden`, and `text: null` clears the line. No remount, height jump or blink.

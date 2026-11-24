@@ -59,9 +59,38 @@ describe("keeper display toggles and entrance animations", () => {
 		expect(body).not.toContain("animation");
 	});
 
-	test("surfaces that really enter still opt in through a modifier", () => {
-		expect(ruleBody(css, ".gui-chat-keeper--enter")).toContain("gui-view-blur-in");
-		expect(ruleBody(css, ".gui-workspace-keeper--enter")).toContain("gui-view-blur-in");
+	test("keepers reveal with opacity, never with a full-surface blur", () => {
+		for (const selector of [".gui-chat-keeper--enter", ".gui-workspace-keeper--enter"]) {
+			const body = ruleBody(css, selector);
+			expect(body).toContain("gui-keeper-reveal");
+			expect(body).not.toContain("gui-view-blur-in");
+		}
+	});
+
+	test("a real view entrance keeps the blur", () => {
 		expect(ruleBody(css, ".gui-view-enter")).toContain("gui-view-blur-in");
+	});
+
+	test("the full-surface view transition follows the motion contract", () => {
+		// `filter: blur()` re-rasterizes the whole surface every frame; it must
+		// not run for a user who asked for reduced motion, in either form.
+		for (const selector of [
+			".gui-motion-off .gui-view-enter",
+			".gui-motion-off .gui-chat-keeper--enter",
+			".gui-motion-off .gui-workspace-keeper--enter",
+		]) {
+			expect(ruleBody(css, selector)).toContain("animation: none");
+		}
+	});
+
+	test("a leaving surface disappears instead of lingering at full opacity", () => {
+		// The leave keyframes end at opacity 0 with `fill: forwards`. Dropping
+		// the animation alone would leave the surface fully visible for the
+		// 150ms its JS window keeps it mounted.
+		for (const selector of [".gui-motion-off .gui-view-leave", ".gui-motion-off .gui-slot-leave"]) {
+			const body = ruleBody(css, selector);
+			expect(body).toContain("animation: none");
+			expect(body).toContain("opacity: 0");
+		}
 	});
 });
