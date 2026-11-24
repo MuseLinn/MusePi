@@ -298,6 +298,7 @@ import { readSdkNewestTimestamp, rekeyEntriesToViewSpace, snapshotFromJsonl } fr
 
 export { snapshotFromJsonl };
 
+import type { ConnectorConnectOutcome } from "../connectors/connect-outcome";
 import type {
 	ExtensionNotificationMessage,
 	ExtensionSetting,
@@ -316,6 +317,7 @@ import {
 	type ApprovalBridge,
 	approvalRequestPayload,
 	askRequestPayload,
+	connectorRequestPayload,
 	createApprovalBridge,
 	type PendingApproval,
 	secretRequestPayload,
@@ -1149,6 +1151,22 @@ export class DaemonSessionHost {
 	setMcpAuthFlow(port: McpAuthFlowPort | null): void {
 		this.#mcpAuthFlow = port;
 	}
+	/**
+	 * Enables one connector for a `connector_catalog` request, through the same
+	 * catalog service the settings page calls. Absent means the host has no
+	 * connector surface, and the tool reports that instead of pretending.
+	 */
+	#connectorConnectPort: ((id: string) => Promise<ConnectorConnectOutcome>) | null = null;
+
+	setConnectorConnectPort(port: ((id: string) => Promise<ConnectorConnectOutcome>) | null): void {
+		this.#connectorConnectPort = port;
+	}
+
+	async #connectorConnect(id: string): Promise<ConnectorConnectOutcome> {
+		const port = this.#connectorConnectPort;
+		if (!port) throw new Error("This host cannot enable a connector.");
+		return await port(id);
+	}
 	/** TTL cache of the SDK session-dir scan (history rows the view-store
 	 *  never journaled) + the two-level sub-agent transcript scan. Refreshed
 	 *  on demand; 10s covers GUI list refreshes without re-scanning the whole
@@ -1592,7 +1610,14 @@ export class DaemonSessionHost {
 				...(params.modeId ? { modeId: params.modeId } : {}),
 			}),
 		);
-		const live = await this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, parentId, pauseGate);
+		const live = await this.#adoptAgentSession(
+			result.session,
+			cwd,
+			result.setToolUIContext,
+			parentId,
+			pauseGate,
+			result.setConnectorRequests,
+		);
 		sessionBus.setSessionId(live.sessionId);
 		// Extension-contributed settings (registerSetting): merge every loaded
 		// extension's settings into the host-level cache AND the live session
@@ -1750,7 +1775,14 @@ export class DaemonSessionHost {
 		if (manager.getAdditionalDirectories().length > 0) {
 			await result.session.refreshSkills();
 		}
-		const live = await this.#adoptAgentSession(result.session, resumeCwd, result.setToolUIContext, null, pauseGate);
+		const live = await this.#adoptAgentSession(
+			result.session,
+			resumeCwd,
+			result.setToolUIContext,
+			null,
+			pauseGate,
+			result.setConnectorRequests,
+		);
 		return live;
 	}
 
@@ -1766,6 +1798,7 @@ export class DaemonSessionHost {
 		setToolUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void,
 		parentId: string | null = null,
 		pauseGate: AgentPauseGate,
+		setConnectorRequests?: (port: { connect(id: string): Promise<ConnectorConnectOutcome> }) => void,
 	): Promise<LiveSession> {
 		// GUI approval gate: enable UI so the wrapper's approval select is
 		// reachable, then inject the bridge context that pauses tool calls
@@ -1846,9 +1879,35 @@ export class DaemonSessionHost {
 						}
 					}
 				},
+				onConnectorRequest: record => {
+					// The card carries the id, name and the agent's reason; the
+					// decision goes back through `connector.request.answer`.
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "connector-request", seq: 0, payload: connectorRequestPayload(record) });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				},
+				onConnectorResolved: requestId => {
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "connector-request-end", seq: 0, payload: { requestId } });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				},
 			},
 		);
 		setToolUIContext(approvals.uiContext, true);
+		// Connector requests run the same `connect` the settings page does. The
+		// service is reached lazily so a host built before services exist still
+		// constructs; a missing service only disables `connector_catalog` request.
+		setConnectorRequests?.({
+			connect: id => this.#connectorConnect(id),
+		});
 		// Keep the first session's registry for provider/model management RPCs
 		// that legitimately run outside any live session.
 		this.#registry ??= agentSession.modelRegistry;
@@ -2851,6 +2910,7 @@ export class DaemonSessionHost {
 				pendingApprovals?: ReturnType<typeof approvalRequestPayload>[];
 				pendingAsks?: ReturnType<typeof askRequestPayload>[];
 				pendingSecrets?: ReturnType<typeof secretRequestPayload>[];
+				pendingConnectors?: ReturnType<typeof connectorRequestPayload>[];
 				pendingMcpAuth?: McpAuthRequest[];
 				state: {
 					goalMode?: unknown;
@@ -2899,6 +2959,7 @@ export class DaemonSessionHost {
 			snap.pendingApprovals = [...live.approvals.pending.values()].map(approvalRequestPayload);
 			snap.pendingAsks = [...live.approvals.pendingAsks.values()].map(askRequestPayload);
 			snap.pendingSecrets = [...live.approvals.pendingSecrets.values()].map(secretRequestPayload);
+			snap.pendingConnectors = [...live.approvals.pendingConnectors.values()].map(connectorRequestPayload);
 			snap.pendingMcpAuth = [...live.pendingMcpAuth.values()];
 			snap.projections = this.#projections.snapshot(sessionId);
 			return snap;
@@ -3534,6 +3595,14 @@ export class DaemonSessionHost {
 		}
 		for (const record of live.approvals.pendingSecrets.values()) {
 			this.emitEvent(conn, { kind: "secret-request", seq: 0, sessionId, payload: secretRequestPayload(record) });
+		}
+		for (const record of live.approvals.pendingConnectors.values()) {
+			this.emitEvent(conn, {
+				kind: "connector-request",
+				seq: 0,
+				sessionId,
+				payload: connectorRequestPayload(record),
+			});
 		}
 		this.replayRecentResolutions(sessionId, conn);
 		// The subscribe watermark is the journal tail, never the non-journal

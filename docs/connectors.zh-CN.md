@@ -167,6 +167,7 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 | `connectors.token.save` | 按 schema 校验 Token 表单值，合并进加密库，并要求所有必填字段。空值保留已存值。 |
 | `connectors.cli.status` | 为待授权流程运行 CLI `status` 命令；`success` 时启用连接器。 |
 | `connectors.cli.cancel` | 停止认证进程并忘记该流程。 |
+| `connector.request.answer` | 落定一张停在会话里的 `connector_catalog` 请求卡：`decision` 为 `connect` 或 `decline`。卡片只做决定；真正执行 `connectors.connect` 的是那次被停住的工具调用本身。 |
 | `mcp.servers.probe` | 握手后立即释放，不进入任何会话、不缓存。带 `url`/`command` 时按 `add` 的同一套输入校验；只给 `name`（可带 `cwd`/`sessionId`）时，先解析用户 `mcp.json`、再读该工作区 live manager 的配置，经 `prepareConfig` 注入已存凭据后连接。返回 `{ ok, serverInfo?, toolNames?, resourceCount?, promptCount?, error? }`；缺少 live manager 时返回明确的失败原因，绝不降级成无凭据重试。 |
 
 `connect` 不启动 OAuth。当 `needsAuth` 为真时，客户端用返回的服务器名调用现有的 `mcp.oauth.start`；授权落在 auth storage，manager 随后重连。桌面端还会传 `redirectUri: musepi://oauth/callback`：Electron shell 注册 `musepi://`，把 URL 转给渲染器，渲染器再调 `mcp.oauth.callback`。state 与 PKCE 在 flow 内校验，因此其他应用唤起该协议也无法完成授权。当 `needsTokenConfig` 为真时，连接器不会被启用，客户端显示 Token 表单，经 `connectors.token.save` 保存后再次调用 `connect`。这样手写服务器与目录连接器共用一套 OAuth 实现和一套凭据存储。
@@ -216,7 +217,20 @@ bun scripts/probe-connectors.ts --json
 
 ## Agent 面
 
-`connector_catalog` 是只读内置工具，提供 `list`、`search`、`detail` 三个动作。它读取同一份加载器与状态文件，返回展示元数据与启用状态，绝不返回端点 header 或凭据。其模型侧提示词（`packages/coding-agent/src/prompts/tools/connector-catalog.md`）要求模型只从真实行推荐、不臆造 id，并把启用与 OAuth 留给连接器 UI。
+`connector_catalog` 提供四个动作：`list`、`search`、`detail`、`request`。前三个是只读发现，绝不返回端点 header 或凭据。其模型侧提示词（`packages/coding-agent/src/prompts/tools/connector-catalog.md`）要求模型只从真实行推荐、不臆造 id，并把启用与 OAuth 留给用户。
+
+`request` 是会话在任务中途索要某个服务的方式。它只给一个 id 和一句用途，daemon 把这次调用停在会话卡片上（`connector-request`，与审批、提问、密钥同一槽位）。卡片只带 id、名称和 agent 的理由，从不带 URL 或凭据。用户的回答落定等待，之后这次调用才执行 `connectors.connect`——与设置页完全同一条路径，所以一次请求不可能到达 UI 到达不了的状态。
+
+回来四种结果，模型据此继续而不是重试：
+
+| 结果 | 含义 |
+| --- | --- |
+| `connected` | 该行已启用，工具在下一步挂载。 |
+| `declined` | 用户拒绝，或十分钟窗口关闭。什么都没改。 |
+| `needs-user` | 点击无法完成——浏览器登录、token 或本地命令审批要在「设置 → 连接器」里做。原因会说明是哪一种。 |
+| `error` | `connect` 抛错，消息来自 daemon。 |
+
+没有卡片面的宿主（TUI、无头 SDK）在 UI 上下文里没有 `requestConnector`，所以 `request` 会以「请到设置页连接」失败，而不是静默什么都不做。
 
 ## 不在范围内
 

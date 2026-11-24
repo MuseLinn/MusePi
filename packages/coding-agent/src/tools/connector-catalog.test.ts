@@ -79,4 +79,88 @@ describe("connector_catalog tool", () => {
 		await expect(tool.execute("call-5", { action: "detail", id: "missing" })).rejects.toThrow("unknown connector");
 		await expect(tool.execute("call-6", { action: "search" })).rejects.toThrow("search requires query");
 	});
+
+	it("asks the host for a card and enables only after the user agrees", async () => {
+		const asked: Array<{ id: string; purpose: string }> = [];
+		let enabled = false;
+		const ctx = {
+			ui: {
+				requestConnector: async (ask: { id: string; name: string; purpose: string; authMode: string }) => {
+					asked.push({ id: ask.id, purpose: ask.purpose });
+					return "connect" as const;
+				},
+			},
+			connectorRequests: {
+				connect: async (id: string) => {
+					enabled = id === "beta";
+					return { ok: true, status: "connected" as const };
+				},
+			},
+		};
+
+		const result = await tool.execute(
+			"call-7",
+			{ action: "request", id: "beta", purpose: "read the spec" },
+			undefined,
+			undefined,
+			ctx as never,
+		);
+		const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+		expect(asked).toEqual([{ id: "beta", purpose: "read the spec" }]);
+		expect(enabled).toBe(true);
+		expect(text).toContain("is connected");
+		expect((result.details as { request?: { status?: string } }).request?.status).toBe("connected");
+	});
+
+	it("leaves the connector alone when the user declines", async () => {
+		let connectCalls = 0;
+		const ctx = {
+			ui: { requestConnector: async () => "decline" as const },
+			connectorRequests: {
+				connect: async () => {
+					connectCalls += 1;
+					return { ok: true, status: "connected" as const };
+				},
+			},
+		};
+
+		const result = await tool.execute(
+			"call-8",
+			{ action: "request", id: "beta", purpose: "x" },
+			undefined,
+			undefined,
+			ctx as never,
+		);
+		expect(connectCalls).toBe(0);
+		expect((result.details as { request?: { status?: string } }).request?.status).toBe("declined");
+	});
+
+	it("reports a row that needs the user instead of claiming success", async () => {
+		const ctx = {
+			ui: { requestConnector: async () => "connect" as const },
+			connectorRequests: {
+				connect: async () => ({ ok: true, needsAuth: true, status: "disconnected" as const }),
+			},
+		};
+
+		const result = await tool.execute(
+			"call-9",
+			{ action: "request", id: "alpha", purpose: "x" },
+			undefined,
+			undefined,
+			ctx as never,
+		);
+		const details = result.details as { request?: { status?: string; reason?: string } };
+		expect(details.request?.status).toBe("needs-user");
+		expect(details.request?.reason).toContain("sign-in");
+	});
+
+	it("refuses a request when the host has no card surface", async () => {
+		await expect(
+			tool.execute("call-10", { action: "request", id: "beta", purpose: "x" }, undefined, undefined, {} as never),
+		).rejects.toThrow("cannot show a connection card");
+		await expect(tool.execute("call-11", { action: "request", id: "beta" })).rejects.toThrow(
+			"request requires purpose",
+		);
+	});
 });

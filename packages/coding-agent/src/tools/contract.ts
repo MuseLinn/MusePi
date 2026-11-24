@@ -19,6 +19,7 @@ import type { AsyncJobManager } from "../async/job-manager";
 import type { Rule } from "../capability/rule";
 import type { PromptTemplate } from "../config/prompt-templates";
 import type { Settings } from "../config/settings";
+import type { ConnectorConnectOutcome } from "../connectors/connect-outcome";
 import type { ToolPathWithSource } from "../extensibility/custom-tools";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
@@ -157,6 +158,12 @@ export interface ToolSession {
 	 * Read lazily: hosts attach it after session construction.
 	 */
 	uiContext?: ExtensionUIContext;
+	/**
+	 * Connector enablement for `connector_catalog` action `request`. The card
+	 * decides; this runs the same `connect` the settings page does. Absent in
+	 * hosts with no catalog surface.
+	 */
+	connectorRequests?: { connect(id: string): Promise<ConnectorConnectOutcome> };
 	/** Whether this session has begun disposal. */
 	isDisposed?: () => boolean;
 	/**

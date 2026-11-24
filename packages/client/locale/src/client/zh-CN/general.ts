@@ -841,6 +841,12 @@ export const general = {
 	"mcpAuth.success": "已授权，正在继续执行刚才的工具调用。",
 	"mcpAuth.failed": "授权未完成：{error}",
 	"mcpAuth.cancelled": "已取消",
+	"connectorRequest.title": "连接应用",
+	"connectorRequest.needsSettings": "需要到「设置 → 连接器」完成登录。",
+	"connectorRequest.connect": "连接",
+	"connectorRequest.decline": "暂不",
+	"connectorRequest.connected": "已连接，正在继续刚才需要它的任务。",
+	"connectorRequest.declined": "未连接",
 	// 技能市场 · 发现（能力中心 → 技能 tab）:SkillHub + skills.sh。
 	"general.prevPage": "上一页",
 	"general.nextPage": "下一页",

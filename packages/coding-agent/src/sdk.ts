@@ -31,6 +31,7 @@ import {
 	prewarmOpenAICodexResponses,
 } from "@musepi/pi-ai/providers/openai-codex-responses";
 import { FALLBACK_DIALECT, preferredDialect } from "@musepi/pi-catalog/identity";
+import type { ConnectorConnectOutcome } from "./connectors/connect-outcome";
 import type { Component } from "@musepi/pi-tui";
 import { $env, $flag, getAgentDir, getProjectDir, logger, postmortem, prompt, Snowflake } from "@musepi/pi-utils";
 import { INTENT_FIELD } from "@musepi/pi-wire";
@@ -736,6 +737,8 @@ export interface CreateAgentSessionResult {
 	promptHost?: PromptHost;
 	/** Update tool UI context (interactive mode) */
 	setToolUIContext: (uiContext: ExtensionUIContext, hasUI: boolean) => void;
+	/** Inject connector enablement for `connector_catalog` action `request`. */
+	setConnectorRequests?: (port: { connect(id: string): Promise<ConnectorConnectOutcome> }) => void;
 	/** MCP manager for server lifecycle management (undefined if MCP disabled) */
 	mcpManager?: MCPManager;
 	/** Warning if session was restored with a different model than saved */
@@ -4104,6 +4107,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const setToolUIContext = (uiContext: ExtensionUIContext, hasUI: boolean) => {
 			toolContextStore.setUIContext(uiContext, hasUI);
 		};
+		const setConnectorRequests = (port: { connect(id: string): Promise<ConnectorConnectOutcome> }) => {
+			toolContextStore.setConnectorRequests(port);
+		};
 
 		const initialTools = initialToolNames
 			.map(name => toolRegistry.get(name))
@@ -5159,6 +5165,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			extensionsResult,
 			promptHost,
 			setToolUIContext,
+			setConnectorRequests,
 			mcpManager,
 			modelFallbackMessage,
 			lspServers,

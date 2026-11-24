@@ -185,6 +185,7 @@ Sign-in is one action. A row whose catalog entry pins a client id without a clie
 | `connectors.cli.cancel` | Stop the auth process and forget the flow. |
 | `connectors.import.scan` | MCP servers the other agents on this machine have configured, by source and endpoint. Credential fields are listed by name; no value crosses the wire. |
 | `connectors.import.apply` | Copy the picked servers into the user's own catalog and move a plain-text credential into the encrypted secret store. The source file is never written to. |
+| `connector.request.answer` | Settle a parked `connector_catalog` request card: `decision` is `connect` or `decline`. The card only decides; the parked tool call runs `connectors.connect` itself. |
 | `mcp.servers.probe` | Handshake and release, joining no session and caching nothing. With `url`/`command` it validates like `add`; with only a `name` (plus optional `cwd`/`sessionId`) it resolves the user `mcp.json` entry, then the workspace's live manager config, injects stored credentials through `prepareConfig`, and connects. Returns `{ ok, serverInfo?, toolNames?, resourceCount?, promptCount?, error? }`; a missing live manager is a stated failure, never a credential-less retry. |
 
 `connect` does not start OAuth. When `needsAuth` is true the client calls the existing `mcp.oauth.start` with the returned server name; the grant lands in auth storage and the manager reconnects. On desktop the start call also passes `redirectUri: musepi://oauth/callback`: the Electron shell registers `musepi://`, forwards the URL to the renderer, and the renderer calls `mcp.oauth.callback`. State and PKCE are validated inside the flow, so an unrelated app invoking the scheme cannot finish a grant. When `needsTokenConfig` is true the connector is not enabled and the client shows the Token form, saves it through `connectors.token.save`, then calls `connect` again. This keeps one OAuth implementation and one credential store for hand-written servers and catalog connectors alike.
@@ -240,7 +241,20 @@ bun scripts/probe-connectors.ts --json
 
 ## Agent surface
 
-`connector_catalog` is a read-only built-in tool with three actions: `list`, `search`, `detail`. It reads the same loader and state file, returns display metadata and enablement, and never returns endpoints' headers or credentials. Its model-facing prompt (`packages/coding-agent/src/prompts/tools/connector-catalog.md`) tells the model to recommend from real rows, never invent ids, and leave enabling and OAuth to the Connectors UI.
+`connector_catalog` has four actions: `list`, `search`, `detail` and `request`. The first three are read-only discovery and never return endpoints' headers or credentials. Its model-facing prompt (`packages/coding-agent/src/prompts/tools/connector-catalog.md`) tells the model to recommend from real rows, never invent ids, and leave enabling and OAuth to the user.
+
+`request` is how a session asks for a service mid-task. It names one id and a one-sentence purpose, and the daemon parks the call on a conversation card (`connector-request`, the same slot as approval/ask/secret). The card carries the id, name and the agent's reason; it never carries a URL or a credential. The user's answer settles the wait, and only then does the parked call run `connectors.connect` — the exact path the settings page uses, so a request can never reach a state the UI could not.
+
+Four outcomes come back, and the model acts on them rather than retrying:
+
+| Outcome | Meaning |
+| --- | --- |
+| `connected` | The row is enabled; its tools mount on the next step. |
+| `declined` | The user said no, or the ten-minute window closed. Nothing changed. |
+| `needs-user` | The click cannot finish it — a browser sign-in, a token, or a local-command approval lives in Settings → Connectors. The reason names which. |
+| `error` | `connect` threw; the message is the daemon's own. |
+
+A host with no card surface (TUI, headless SDK) has no `requestConnector` on its UI context, so `request` fails with an instruction to use Settings instead of silently doing nothing.
 
 ## Out of scope
 

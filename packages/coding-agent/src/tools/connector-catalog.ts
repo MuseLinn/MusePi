@@ -9,19 +9,23 @@
  * and never a token, header, or client secret.
  */
 import { type } from "@musepi/musepi-type";
-import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { loadConnectorCatalog } from "../connectors/catalog";
 import { readConnectorState } from "../connectors/state";
 import type { ConnectorCatalogEntry, ConnectorStateFile } from "../connectors/types";
+import type { ConnectorRequestUIContext } from "../daemon/approval-bridge";
 import connectorCatalogDescription from "../prompts/tools/connector-catalog.md" with { type: "text" };
 
 const MAX_LISTED = 50;
 
 const connectorCatalogSchema = type({
-	action: type('"list" | "search" | "detail"').describe("operation to apply"),
+	action: type('"list" | "search" | "detail" | "request"').describe("operation to apply"),
 	"query?": type("string").describe("case-insensitive text for action=search (id, name, description, category)"),
-	"id?": type("string").describe("connector id for action=detail, exactly as list reports it"),
+	"id?": type("string").describe("connector id for action=detail or action=request, exactly as list reports it"),
+	"purpose?": type("string").describe(
+		"for action=request: why you need this connector, in one sentence the user reads",
+	),
 });
 type ConnectorCatalogParams = typeof connectorCatalogSchema.infer;
 
@@ -32,6 +36,12 @@ export interface ConnectorCatalogToolDetails {
 	connectors?: Array<{ id: string; name: string; enabled: boolean }>;
 	/** The connector `detail` addressed. */
 	connector?: { id: string; name: string; enabled: boolean; authMode: "oauth" | "none" | "token" };
+	/** The outcome of `request`: what the user decided, and what the agent should do next. */
+	request?: {
+		id: string;
+		status: "connected" | "declined" | "needs-user" | "error";
+		reason?: string;
+	};
 }
 
 function isEnabled(id: string, state: ConnectorStateFile): boolean {
@@ -70,8 +80,82 @@ export class ConnectorCatalogTool implements AgentTool<typeof connectorCatalogSc
 	async execute(
 		_toolCallId: string,
 		params: ConnectorCatalogParams,
+		_signal?: AbortSignal,
+		_onUpdate?: unknown,
+		ctx?: AgentToolContext,
 	): Promise<AgentToolResult<ConnectorCatalogToolDetails>> {
 		const [catalog, state] = await Promise.all([loadConnectorCatalog(), readConnectorState()]);
+
+		if (params.action === "request") {
+			const id = params.id?.trim();
+			if (!id) throw new Error("request requires id");
+			const purpose = params.purpose?.trim();
+			if (!purpose) throw new Error("request requires purpose");
+			const entry = catalog.entries.find(candidate => candidate.id === id);
+			if (!entry) throw new Error(`unknown connector: ${id}`);
+			if (isEnabled(id, state)) {
+				return {
+					content: [{ type: "text", text: `${entry.name} is already connected; use its tools directly.` }],
+					details: { action: params.action, count: 1, request: { id, status: "connected" } },
+				};
+			}
+			const ui = ctx?.ui as ConnectorRequestUIContext | undefined;
+			if (!ui?.requestConnector) {
+				throw new Error(
+					"This host cannot show a connection card. Ask the user to connect it in Settings → Connectors.",
+				);
+			}
+			const decision = await ui.requestConnector({
+				id,
+				name: entry.name,
+				purpose,
+				authMode: entry.auth.mode,
+			});
+			if (decision === "decline") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `The user did not connect ${entry.name}. Continue without it, or ask what they prefer.`,
+						},
+					],
+					details: { action: params.action, count: 1, request: { id, status: "declined" } },
+				};
+			}
+			// The card only decided; enabling is the same call the settings page
+			// makes, so a request cannot reach a state the UI could not.
+			const connectorRequests = ctx?.connectorRequests;
+			if (!connectorRequests) {
+				throw new Error(
+					"This host cannot enable a connector. Ask the user to connect it in Settings → Connectors.",
+				);
+			}
+			const result = await connectorRequests.connect(id);
+			const outcome: NonNullable<ConnectorCatalogToolDetails["request"]> =
+				result.needsAuth || result.needsDeviceAuth
+					? {
+							id,
+							status: "needs-user",
+							reason: "This connector needs a browser sign-in in Settings → Connectors.",
+						}
+					: result.needsTokenConfig
+						? { id, status: "needs-user", reason: "This connector needs a token only you can supply." }
+						: result.needsApproval || result.needsCliAuth
+							? { id, status: "needs-user", reason: "This connector needs your approval for a local command." }
+							: result.status === "connected"
+								? { id, status: "connected" }
+								: { id, status: "error", reason: "The connector did not report a connection." };
+			const text =
+				outcome.status === "connected"
+					? `${entry.name} is connected. Its tools appear on the next step; use them now.`
+					: outcome.status === "needs-user"
+						? `${entry.name} needs the user: ${outcome.reason}`
+						: `${entry.name} could not be connected: ${outcome.reason}`;
+			return {
+				content: [{ type: "text", text }],
+				details: { action: params.action, count: 1, request: outcome },
+			};
+		}
 
 		if (params.action === "detail") {
 			const id = params.id?.trim();

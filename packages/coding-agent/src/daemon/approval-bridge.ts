@@ -99,6 +99,55 @@ export function approvalRequestPayload(record: PendingApproval): {
 	return { requestId: record.requestId, tool: record.tool, args: null, prompt: record.prompt };
 }
 
+/** One parked `connector_catalog` action `request`, waiting for the user. */
+export interface PendingConnectorRequest {
+	requestId: string;
+	/** Catalog id, exactly as the catalog reports it. */
+	id: string;
+	name: string;
+	/** Why the agent wants it, in its own words. */
+	purpose: string;
+	/** How this connector signs in, so the card can say what the click does. */
+	authMode: "oauth" | "none" | "token";
+	resolve(decision: "connect" | "decline"): void;
+}
+
+/** What the tool asks the host for; mirrors `AgentSecretUIContext`. */
+export interface ConnectorRequestAsk {
+	id: string;
+	name: string;
+	purpose: string;
+	authMode: "oauth" | "none" | "token";
+}
+
+/**
+ * Duck-typed extension of the host UI context used by the daemon bridge.
+ *
+ * The answer is only the user's decision. Enabling the connector happens in
+ * the service, so a card cannot put the session in a state the settings page
+ * could not reach.
+ */
+export interface ConnectorRequestUIContext {
+	requestConnector?(ask: ConnectorRequestAsk): Promise<"connect" | "decline">;
+}
+
+/** Wire payload for a `connector-request` push; shared by live broadcast and replay. */
+export function connectorRequestPayload(record: PendingConnectorRequest): {
+	requestId: string;
+	id: string;
+	name: string;
+	purpose: string;
+	authMode: "oauth" | "none" | "token";
+} {
+	return {
+		requestId: record.requestId,
+		id: record.id,
+		name: record.name,
+		purpose: record.purpose,
+		authMode: record.authMode,
+	};
+}
+
 /** Wire payload for an `ask-request` push. Multi-question dialogs carry the
  *  questions array; single select/input keep the flat title/options shape. */
 export function askRequestPayload(record: PendingAsk):
@@ -149,10 +198,20 @@ export interface ApprovalBridge {
 	/** Answer a pending secret request. Persistence happens in SecretService
 	 *  before this settlement; the tool only learns which action won. */
 	resolveSecret(requestId: string, action: AgentSecretAnswer["action"]): boolean;
+	/** Active connector requests keyed by requestId. */
+	pendingConnectors: Map<string, PendingConnectorRequest>;
+	/** Answer a pending connector request. The card decides connect-or-decline;
+	 *  enabling happens in the service, so this only settles the wait. */
+	resolveConnector(requestId: string, decision: "connect" | "decline"): boolean;
 	/** Recently settled requests (bounded TTL). A client that fetched a
 	 *  snapshot before attaching its stream replays these to clear cards that
 	 *  were resolved in the snapshot→subscribe window. */
-	recentResolutions(): { approvals: RecentApprovalResolution[]; asks: string[]; secrets: string[] };
+	recentResolutions(): {
+		approvals: RecentApprovalResolution[];
+		asks: string[];
+		secrets: string[];
+		connectors: string[];
+	};
 }
 
 let counter = 0;
@@ -168,6 +227,10 @@ export interface ApprovalBridgeOptions {
 	onSecretRequest?: (record: PendingSecret) => void;
 	/** Called after a secret request settles, including the timeout cancel. */
 	onSecretResolved?: (requestId: string) => void;
+	/** Push a newly parked connector request to subscribers. */
+	onConnectorRequest?: (record: PendingConnectorRequest) => void;
+	/** Called after a connector request settles, including the timeout decline. */
+	onConnectorResolved?: (requestId: string) => void;
 }
 
 export function createApprovalBridge(
@@ -183,12 +246,14 @@ export function createApprovalBridge(
 	const pending = new Map<string, PendingApproval>();
 	const pendingAsks = new Map<string, PendingAsk>();
 	const pendingSecrets = new Map<string, PendingSecret>();
+	const pendingConnectors = new Map<string, PendingConnectorRequest>();
 	const listeners = new Set<() => void>();
 	const timeoutMs = options.timeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
 	const timers = new Map<string, ReturnType<typeof setTimeout>>();
 	const recentApprovals = new Map<string, RecentApprovalResolution>();
 	const recentAsks = new Map<string, number>();
 	const recentSecrets = new Map<string, number>();
+	const recentConnectors = new Map<string, number>();
 	const RECENT_TTL_MS = 60_000;
 	const RECENT_MAX = 64;
 	const pruneRecent = (): void => {
@@ -201,6 +266,9 @@ export function createApprovalBridge(
 		}
 		for (const [requestId, at] of recentSecrets) {
 			if (at < cutoff) recentSecrets.delete(requestId);
+		}
+		for (const [requestId, at] of recentConnectors) {
+			if (at < cutoff) recentConnectors.delete(requestId);
 		}
 		while (recentApprovals.size > RECENT_MAX) {
 			const oldest = recentApprovals.keys().next().value;
@@ -217,6 +285,11 @@ export function createApprovalBridge(
 			if (oldest === undefined) break;
 			recentSecrets.delete(oldest);
 		}
+		while (recentConnectors.size > RECENT_MAX) {
+			const oldest = recentConnectors.keys().next().value;
+			if (oldest === undefined) break;
+			recentConnectors.delete(oldest);
+		}
 	};
 	const rememberApproval = (requestId: string, approved: boolean, note?: string): void => {
 		recentApprovals.set(requestId, { requestId, approved, ...(note ? { note } : {}), at: Date.now() });
@@ -228,6 +301,10 @@ export function createApprovalBridge(
 	};
 	const rememberSecret = (requestId: string): void => {
 		recentSecrets.set(requestId, Date.now());
+		pruneRecent();
+	};
+	const rememberConnector = (requestId: string): void => {
+		recentConnectors.set(requestId, Date.now());
 		pruneRecent();
 	};
 	const notifyApprovals = (): void => {
@@ -250,7 +327,7 @@ export function createApprovalBridge(
 		timers.set(requestId, timer);
 	};
 
-	const uiContext: ExtensionUIContext & AgentSecretUIContext = {
+	const uiContext: ExtensionUIContext & AgentSecretUIContext & ConnectorRequestUIContext = {
 		// A page that holds the turn is answered through the GUI's widget card.
 		widgetAnswers: true,
 		// The approval gate awaits this exact select; any OTHER select (ask
@@ -418,6 +495,34 @@ export function createApprovalBridge(
 			notifyApprovals();
 			return await promise;
 		},
+		async requestConnector(ask) {
+			const requestId = `daemon-connector-${Date.now()}-${++counter}`;
+			const { promise, resolve } = Promise.withResolvers<"connect" | "decline">();
+			const record: PendingConnectorRequest = {
+				requestId,
+				id: ask.id,
+				name: ask.name,
+				purpose: ask.purpose,
+				authMode: ask.authMode,
+				resolve: decision => {
+					if (!pendingConnectors.has(requestId)) return;
+					pendingConnectors.delete(requestId);
+					notifyApprovals();
+					resolve(decision);
+				},
+			};
+			pendingConnectors.set(requestId, record);
+			armTimeout(requestId, () => {
+				// Walking away is a decline, never an implicit connect.
+				if (!pendingConnectors.has(requestId)) return;
+				record.resolve("decline");
+				options.onConnectorResolved?.(requestId);
+				rememberConnector(requestId);
+			});
+			options.onConnectorRequest?.(record);
+			notifyApprovals();
+			return await promise;
+		},
 		setEditorText: () => {},
 		pasteToEditor: () => {},
 		getEditorText: () => "",
@@ -479,12 +584,23 @@ export function createApprovalBridge(
 			rememberSecret(requestId);
 			return true;
 		},
+		pendingConnectors,
+		resolveConnector(requestId, decision) {
+			const record = pendingConnectors.get(requestId);
+			if (!record) return false;
+			clearTimer(requestId);
+			record.resolve(decision);
+			options.onConnectorResolved?.(requestId);
+			rememberConnector(requestId);
+			return true;
+		},
 		recentResolutions() {
 			pruneRecent();
 			return {
 				approvals: [...recentApprovals.values()],
 				asks: [...recentAsks.keys()],
 				secrets: [...recentSecrets.keys()],
+				connectors: [...recentConnectors.keys()],
 			};
 		},
 	};

@@ -860,6 +860,12 @@ export const general = {
 	"mcpAuth.success": "Authorized. Continuing the tool call that was paused.",
 	"mcpAuth.failed": "Authorization did not complete: {error}",
 	"mcpAuth.cancelled": "Cancelled",
+	"connectorRequest.title": "Connect an app",
+	"connectorRequest.needsSettings": "Finishing this needs a sign-in in Settings → Connectors.",
+	"connectorRequest.connect": "Connect",
+	"connectorRequest.decline": "Not now",
+	"connectorRequest.connected": "Connected. Continuing the task that asked for it.",
+	"connectorRequest.declined": "Not connected",
 	// 技能市场 · 发现（能力中心 → 技能 tab）:SkillHub + skills.sh。
 	"general.prevPage": "Prev",
 	"general.nextPage": "Next",

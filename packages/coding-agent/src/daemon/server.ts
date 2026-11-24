@@ -42,6 +42,7 @@ import {
 } from "@musepi/pi-utils";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
+	ConnectorRequestAnswerParams,
 	MessageDisplayContext,
 	SecretAnswerParams,
 	SecretDeleteParams,
@@ -360,6 +361,7 @@ import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { BundleService } from "./services/bundle-service";
 import { ConnectorCatalogService } from "./services/connector-catalog-service";
+import { ConnectorRequestService } from "./services/connector-request-service";
 import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
 import { CredentialService } from "./services/credential-service";
@@ -767,6 +769,12 @@ export class DaemonServer {
 			}),
 		);
 		this.#services.register(
+			new ConnectorRequestService({
+				get: sessionId => this.#host.get(sessionId),
+				allSessions: () => this.#host.allSessions(),
+			}),
+		);
+		this.#services.register(
 			new BrowserService({
 				settings: () => this.#settingsForRpc(),
 				cwd: () => this.#host.cwd(),
@@ -934,6 +942,20 @@ export class DaemonServer {
 			cancel: flowId => {
 				this.#services.get<McpOAuthService>("mcpOAuth").cancel({ flowId });
 			},
+		});
+		// A `connector_catalog` request parks on a session card; the user's yes
+		// runs the same `connect` the settings page runs.
+		this.#host.setConnectorConnectPort(async id => {
+			const result = await this.#services.get<ConnectorCatalogService>("connectorCatalog").connect({ id });
+			return {
+				ok: result.ok,
+				...(result.needsAuth ? { needsAuth: true } : {}),
+				...(result.needsDeviceAuth ? { needsDeviceAuth: true } : {}),
+				...(result.needsTokenConfig ? { needsTokenConfig: true } : {}),
+				...(result.needsApproval ? { needsApproval: true } : {}),
+				...(result.needsCliAuth ? { needsCliAuth: true } : {}),
+				status: result.status,
+			};
 		});
 		// Catalog discovery and enablement: connecting an entry writes the
 		// connector state file, the connector-catalog provider turns it into an
@@ -6757,6 +6779,11 @@ export class DaemonServer {
 			}
 			case "secret.answer": {
 				return this.#services.get<SecretService>("secrets").answer((params ?? {}) as SecretAnswerParams);
+			}
+			case "connector.request.answer": {
+				return this.#services
+					.get<ConnectorRequestService>("connectorRequests")
+					.answer((params ?? {}) as ConnectorRequestAnswerParams);
 			}
 			case "secret.unlock": {
 				return this.#services.get<SecretService>("secrets").unlock((params ?? {}) as SecretPassphraseParams);

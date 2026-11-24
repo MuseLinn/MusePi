@@ -13,6 +13,8 @@ export type SessionStreamEnvelope = {
 		| "ask-request"
 		| "secret-request"
 		| "secret-request-end"
+		| "connector-request"
+		| "connector-request-end"
 		| "agent-lifecycle"
 		| "agent-progress"
 		| "pause-state"

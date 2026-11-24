@@ -150,3 +150,36 @@ export interface SecretAnswerParams {
 export interface SecretAnswerResult {
 	ok: true;
 }
+
+/**
+ * A `connector_catalog` action `request`, pushed while the tool call waits.
+ *
+ * The card decides only whether to connect: enabling runs the same
+ * `connectors.connect` the settings page uses, inside the parked tool call, so
+ * a card can never put the session in a state the UI could not reach.
+ */
+export interface ConnectorRequestPayload {
+	requestId: string;
+	/** Catalog id, exactly as the catalog reports it. */
+	id: string;
+	name: string;
+	/** Why the agent wants it, in its own words. */
+	purpose: string;
+	authMode: "oauth" | "none" | "token";
+}
+
+/** Settlement broadcast so other cards clear after the first answer. */
+export interface ConnectorRequestEndPayload {
+	requestId: string;
+}
+
+export interface ConnectorRequestAnswerParams {
+	requestId: string;
+	decision: "connect" | "decline";
+	/** Optional when request ids are already unique across live sessions. */
+	sessionId?: string;
+}
+
+export interface ConnectorRequestAnswerResult {
+	ok: true;
+}

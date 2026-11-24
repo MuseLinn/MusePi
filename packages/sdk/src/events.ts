@@ -19,6 +19,8 @@
 import type {
 	AgentEvent,
 	AgentSnapshot,
+	ConnectorRequestEndPayload,
+	ConnectorRequestPayload,
 	SecretRequestEndPayload,
 	SecretRequestPayload,
 	SessionEntry,
@@ -68,6 +70,8 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("ask-request"),
 		Type.Literal("secret-request"),
 		Type.Literal("secret-request-end"),
+		Type.Literal("connector-request"),
+		Type.Literal("connector-request-end"),
 		Type.Literal("mcp-auth-request"),
 		Type.Literal("mcp-auth-request-end"),
 		Type.Literal("agent-lifecycle"),
@@ -135,6 +139,11 @@ export type SessionStreamEvent =
 	| { kind: "secret-request"; seq: number; payload: SecretRequestPayload }
 	// Settlement broadcast for a secret card (including timeout/cancel).
 	| { kind: "secret-request-end"; seq: number; payload: SecretRequestEndPayload }
+	// The agent asked for a connector it is not connected to. The card decides
+	// whether to connect; enabling runs the same `connectors.connect` the
+	// settings page uses, inside the parked tool call.
+	| { kind: "connector-request"; seq: number; payload: ConnectorRequestPayload }
+	| { kind: "connector-request-end"; seq: number; payload: ConnectorRequestEndPayload }
 	// A tool call hit an MCP server's 401 challenge and is parked on a browser
 	// grant. The URL carries the CSRF state and PKCE challenge, so it rides only
 	// this session's stream — never a broadcast, a log, or the transcript. The
