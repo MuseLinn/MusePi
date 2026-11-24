@@ -523,11 +523,16 @@ export function SessionSidebar({
 			if (target instanceof Element && target.closest(".gui-project-hover-card")) return;
 			setProjectCard(null);
 		};
+		// 尺寸变化同样让锚点失效(卡片按侧栏与项目行的矩形定位);会话悬浮卡
+		// 走同一套收卡时机,kimi-code 的 workspace 卡也在 resize 时关闭。
+		const onResize = (): void => setProjectCard(null);
 		window.addEventListener("keydown", onKeyDown);
 		window.addEventListener("scroll", onScroll, true);
+		window.addEventListener("resize", onResize);
 		return () => {
 			window.removeEventListener("keydown", onKeyDown);
 			window.removeEventListener("scroll", onScroll, true);
+			window.removeEventListener("resize", onResize);
 		};
 	}, [projectCard]);
 	useEffect(
