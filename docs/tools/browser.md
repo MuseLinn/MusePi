@@ -12,7 +12,7 @@
   - `packages/coding-agent/src/tools/browser/registry.ts` — browser-handle registry keyed by browser kind.
   - `packages/coding-agent/src/tools/browser/managed-bridge.ts` — in-process registry of the desktop app's managed browser bridge (`browser.managedBridge` RPC); decides whether an unconfigured `browser.gui` defaults to the in-app browser.
   - `packages/coding-agent/src/tools/browser/launch.ts` — Puppeteer loading, Chromium resolution/download, headless launch, stealth injection.
-  - `packages/coding-agent/src/tools/browser/shared-daemon.ts` — project-shared broker-owned Chromium (ensure/attach over the daemon broker).
+  - `packages/coding-agent/src/tools/browser/shared-daemon.ts` — project-shared broker-owned Chromium. `ensureSharedBrowser()` launches/attaches for the tool path; `describeSharedBrowser()` is the READ-ONLY status variant the GUI polls (never starts or stops a process).
   - `packages/coding-agent/src/tools/browser/attach.ts` — CDP attach/reuse, target picking, spawned-app process handling.
   - `packages/coding-agent/src/tools/browser/tab-protocol.ts` — worker init/run/result message schema.
   - `packages/coding-agent/src/tools/browser/readable.ts` — `tab.extract()` readability extraction.

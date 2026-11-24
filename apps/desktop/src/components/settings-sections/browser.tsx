@@ -32,6 +32,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [gui, setGui] = useState<boolean | null>(null);
 	const [restrictToPublic, setRestrictToPublic] = useState<boolean | null>(null);
 	const [agentControl, setAgentControl] = useState<boolean | null>(null);
+	const [cmux, setCmux] = useState<boolean | null>(null);
 	const [searchEngine, setSearchEngine] = useState("google");
 	const [zoom, setZoom] = useState("1");
 	const [userAgent, setUserAgent] = useState("");
@@ -73,6 +74,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					"browser.relay",
 					"browser.gui",
 					"browser.guiUrl",
+					"browser.cmux",
 					"browser.policy.restrictToPublic",
 					"browser.agentControl",
 					"browser.searchEngine",
@@ -89,6 +91,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				setHeadless(res["browser.headless"] === true);
 				setRelay(res["browser.relay"] === true);
 				setGui(res["browser.gui"] === true);
+				if (typeof res["browser.cmux"] === "boolean") setCmux(res["browser.cmux"]);
 				if (typeof res["browser.guiUrl"] === "string") setGuiUrl(res["browser.guiUrl"]);
 				setRestrictToPublic(res["browser.policy.restrictToPublic"] === true);
 				setAgentControl(res["browser.agentControl"] !== false);
@@ -129,6 +132,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			| "browser.headless"
 			| "browser.relay"
 			| "browser.gui"
+			| "browser.cmux"
 			| "browser.policy.restrictToPublic"
 			| "browser.agentControl"
 			| "browser.download.askWhereToSave"
@@ -246,6 +250,24 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									}}
 								/>
 							</div>
+						</div>
+						{/* cmux 排在受管浏览器之前：有 cmux socket 时它先被选中，所以它
+						 * 必须和 gui 一样能在这里关掉，否则优先级说明无法兑现。 */}
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.cmuxBrowser")}</div>
+								<div className="gui-settings-row-desc">{t("tools.cmuxBrowserDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={cmux === true}
+								className={`gui-toggle${cmux === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.cmux", !(cmux === true))}
+								aria-label={t("tools.cmuxBrowser")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
 						</div>
 						<div className="gui-settings-row">
 							<div>

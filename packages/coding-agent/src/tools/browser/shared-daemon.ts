@@ -60,6 +60,33 @@ async function probeEndpoint(wsEndpoint: string): Promise<boolean> {
 }
 
 /**
+ * Read the project-shared browser WITHOUT launching it.
+ *
+ * Status surfaces (the settings pane, the agent-tab strip) poll for "is a
+ * shared Chromium running, and what tabs does it have". Answering that with
+ * {@link ensureSharedBrowser} made a passive read start a browser: opening
+ * Settings → Browser was enough to spawn a headless Chromium next to the
+ * desktop app's own managed browser. This only describes the broker's record
+ * and probes the endpoint it reports; no process is started, replaced or
+ * stopped, so a dead record simply reads as "not running".
+ */
+export async function describeSharedBrowser(opts: {
+	projectDir: string;
+	headless: boolean;
+	signal?: AbortSignal;
+}): Promise<SharedBrowserEndpoint | null> {
+	const client = await daemonClientForProject(opts.projectDir);
+	const name = sharedBrowserDaemonName(opts.headless);
+	const existing = await describeQuietly(client, name, "Shared browser", opts.signal);
+	if (!existing || existing.state === "exited" || existing.state === "failed") return null;
+	// A status read never waits for readiness: a broker record that has not
+	// reached ready yet reads as "not running" and the next poll picks it up.
+	const wsEndpoint = wsEndpointOf(existing);
+	if (!wsEndpoint || !(await probeEndpoint(wsEndpoint))) return null;
+	return { wsEndpoint, daemonName: name, projectDir: client.projectDir };
+}
+
+/**
  * Ensure the project-shared automation Chromium is running and reachable,
  * launching it under the daemon broker when needed. Idempotent across
  * processes: losers of the start race adopt the winner's endpoint on the next

@@ -3,9 +3,11 @@
  * Chromium (the same instance the agent drives — per-project broker
  * supervised) to the settings panel and the right-pane BrowserPane.
  *
- * - browser.endpoint    ensure the shared Chromium and return its CDP ws
- *                       endpoint + stable profile dir (no agent involved)
- * - browser.tabs        list live page targets (title/url)
+ * - browser.endpoint    report the shared Chromium's CDP ws endpoint + stable
+ *                       profile dir (no agent involved). READ-ONLY: a status
+ *                       read must never launch a browser, or opening Settings
+ *                       spawns a headless Chromium beside the app's own.
+ * - browser.tabs        list live page targets (title/url), read-only
  * - browser.screenshot  JPEG capture of one tab (attach → capture → detach)
  * - browser.extensions  list extensions present in the shared profile
  * - browser.relayInstall  write the MusePi Browser Relay extension files
@@ -21,7 +23,7 @@ import { getBrowserRelayDir } from "@musepi/pi-utils";
 import { DEFAULT_RELAY_PORT } from "../cli/browser-relay-cli";
 import type { Settings } from "../config/settings";
 import { DEFAULT_RELAY_URL } from "../tools/browser/relay/kind";
-import { ensureSharedBrowser } from "../tools/browser/shared-daemon";
+import { describeSharedBrowser } from "../tools/browser/shared-daemon";
 
 export interface BrowserTabInfo {
 	targetId: string;
@@ -144,13 +146,15 @@ async function cdpRequest(
 	}
 }
 
-/** Resolve the shared-browser endpoint honoring the headless setting. */
+/** Resolve the shared-browser endpoint honoring the headless setting.
+ *  Read-only: `describeSharedBrowser` reports what the broker already has and
+ *  never starts, replaces or stops a process. */
 async function sharedBrowserEndpoint(
 	settings: Settings,
 	projectDir: string,
 ): Promise<{ wsEndpoint: string; profileDir: string; headless: boolean } | null> {
 	const headless = (settings.get("browser.headless") as boolean | undefined) ?? true;
-	const shared = await ensureSharedBrowser({ projectDir, headless });
+	const shared = await describeSharedBrowser({ projectDir, headless });
 	if (!shared) return null;
 	const { sharedBrowserDaemonName } = await import("../tools/browser/shared-daemon");
 	const profileDir = path.join(

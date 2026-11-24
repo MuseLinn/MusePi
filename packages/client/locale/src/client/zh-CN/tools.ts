@@ -210,6 +210,9 @@ export const tools = {
 	"tools.headlessBrowser": "无头浏览器",
 	"tools.headlessBrowserDescription": "关闭后 agent 使用的浏览器会显示界面（默认隐藏）",
 	"tools.browserRelay": "浏览器中继（真实 Chrome）",
+	"tools.cmuxBrowser": "cmux 窗口",
+	"tools.cmuxBrowserDescription":
+		"有 cmux socket 时优先驱动 cmux 的 WKWebView 窗口；关掉后跳过这条通道，继续往下走受管浏览器或无头浏览器。",
 	"tools.browserRelayDescription": "通过 MusePi Browser Relay 扩展驱动你自己的 Chrome 标签页（需安装扩展）",
 	"tools.browserRelayExtension": "MusePi Browser Relay 扩展",
 	"tools.browserRelayExtensionDescription":
@@ -337,7 +340,7 @@ export const tools = {
 		"桌面应用本地 CDP 桥的回环地址。桥已在运行时以它实际绑定的端口为准（9230-9239 是重试区间），这里的值只在没有桥时兜底。",
 	"tools.browserChannelPriority": "通道优先级",
 	"tools.browserChannelPriorityDescription":
-		"工具调用的 app.cdp_url / app.path > 浏览器中继（relay）> 受管浏览器（gui）> browser.cdpUrl > 无头浏览器。桌面应用运行时受管浏览器默认生效，除非你显式关掉它。",
+		"工具调用的 app.cdp_url / app.path > 浏览器中继（relay）> browser.cdpUrl > cmux 窗口 > 受管浏览器（gui）> 无头浏览器。桌面应用运行时受管浏览器默认生效，除非你显式关掉它。",
 	"tools.sharedHeadlessBrowser": "共享无头浏览器",
 	"tools.agentActivity": "Agent 活动",
 	"tools.agentCreatedTab": "Agent",

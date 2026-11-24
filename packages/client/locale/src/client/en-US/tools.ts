@@ -216,6 +216,9 @@ export const tools = {
 	"tools.headlessBrowser": "Headless browser",
 	"tools.headlessBrowserDescription": "When off, the browser used by the agent shows its UI (hidden by default)",
 	"tools.browserRelay": "Browser relay (real Chrome)",
+	"tools.cmuxBrowser": "cmux surfaces",
+	"tools.cmuxBrowserDescription":
+		"Drive cmux WKWebView surfaces when a cmux socket is available. Turn it off to skip that channel and fall through to the managed browser or a headless Chromium.",
 	"tools.browserRelayDescription":
 		"Drive your own Chrome tabs through the MusePi Browser Relay extension (extension required)",
 	"tools.browserRelayExtension": "MusePi Browser Relay extension",
@@ -348,7 +351,7 @@ export const tools = {
 		"Loopback CDP endpoint of the desktop app's local bridge. While a bridge is up its ACTUAL bound port wins (9230-9239 is a retry range), so the value here only applies when no bridge is running.",
 	"tools.browserChannelPriority": "Channel priority",
 	"tools.browserChannelPriorityDescription":
-		"A call's app.cdp_url / app.path > browser relay > managed browser (gui) > browser.cdpUrl > headless. The managed browser wins by default while the desktop app is running, unless you turn it off explicitly.",
+		"A call's app.cdp_url / app.path > browser relay > browser.cdpUrl > cmux surfaces > managed browser (gui) > headless. The managed browser wins by default while the desktop app is running, unless you turn it off explicitly.",
 	"tools.sharedHeadlessBrowser": "Shared headless browser",
 	"tools.agentActivity": "Agent activity",
 	"tools.agentCreatedTab": "Agent",
