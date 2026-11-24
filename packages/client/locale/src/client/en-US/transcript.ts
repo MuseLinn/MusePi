@@ -35,7 +35,6 @@ export const transcript = {
 	"transcript.roundFailedWithCount": "{count} failed",
 	"transcript.roundToolTime": "Tool time {duration}",
 	"transcript.traceTitle": "This turn",
-	"transcript.traceTurnTotal": "Turn",
 	"transcript.traceRequest": "Request",
 	"transcript.traceRestTime": "Elsewhere",
 	"transcript.traceOpen": "View trace",

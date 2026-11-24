@@ -32,7 +32,6 @@ export const transcript = {
 	"transcript.roundFailedWithCount": "{count} 个失败",
 	"transcript.roundToolTime": "工具耗时 {duration}",
 	"transcript.traceTitle": "本轮轨迹",
-	"transcript.traceTurnTotal": "本轮",
 	"transcript.traceRequest": "请求",
 	"transcript.traceRestTime": "其余",
 	"transcript.traceOpen": "查看轨迹",
