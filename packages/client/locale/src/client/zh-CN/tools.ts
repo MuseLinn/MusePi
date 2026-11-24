@@ -224,6 +224,8 @@ export const tools = {
 	"tools.browserRelayInstalledNot": "已写入但未加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
 	"tools.install": "安装",
 	"tools.uninstall": "卸载",
+	"tools.extRemoveModule": "移除扩展",
+	"tools.extRemoveConfirm": "确定移除扩展「{name}」？将删除其目录及其中的文件，且不可撤销。",
 	"tools.sharedBrowser": "共享浏览器",
 	"tools.sharedBrowserRunningTabsWithTabs": "运行中 · {tabs} 个标签页",
 	"tools.sharedBrowserIdle": "未启动（agent 首次使用浏览器时自动启动）",

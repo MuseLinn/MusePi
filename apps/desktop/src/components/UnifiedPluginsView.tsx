@@ -50,6 +50,14 @@ export interface PluginPackageEntry {
 	management?: "package" | "bundle";
 	/** False for a selected bundle whose package or patch cannot be read. */
 	readable?: boolean;
+	/** Host-computed removal availability (`removable`). Absent on an older
+	 *  daemon; the card treats only an explicit false as unremovable. */
+	removable?: boolean;
+	/** Why the row cannot be removed (project-scope package, missing bundle…). */
+	removeBlockedReason?: string;
+	/** Marketplace id when this package was installed from one
+	 *  (`name@marketplace`); removal then has to clear that registry too. */
+	marketplace?: string;
 	tools: number;
 	commands: number;
 	handlers: number;
@@ -354,12 +362,14 @@ interface ModuleCardProps {
 	busy: boolean;
 	onOpen(item: ExtensionItem): void;
 	onToggle(item: ExtensionItem): void;
+	/** 宿主判定可删的用户模块：渲染卸载入口（`removable` parity）。 */
+	onRemove?(item: ExtensionItem): void;
 	/** 设置里的完整库存：带上技术身份（id、只读/预设专用、配置/组件数）。
 	 *  能力中心只留用户能判断的状态与版本。 */
 	detail?: boolean;
 }
 
-function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, detail = false }: ModuleCardProps): ReactNode {
+function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, onRemove, detail = false }: ModuleCardProps): ReactNode {
 	const name = builtinDisplayName(e);
 	const configCount = e.config?.length ?? 0;
 	const componentCount = e.components?.length ?? 0;
@@ -401,22 +411,39 @@ function ModulePluginCard({ e, rpc, busy, onOpen, onToggle, detail = false }: Mo
 				</>
 			}
 			actions={
-				!e.readonly ? (
-					<button
-						type="button"
-						role="switch"
-						aria-checked={e.state === "active"}
-						aria-label={`${e.state === "active" ? t("tools.disableSkill") : t("tools.enableSkill")} ${e.name}`}
-						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
-						disabled={!rpc || busy}
-						onClick={event => {
-							event.stopPropagation();
-							onToggle(e);
-						}}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				) : undefined
+				<>
+					{e.removable === true && onRemove && (
+						<button
+							type="button"
+							className="gui-icon-btn"
+							disabled={!rpc || busy}
+							title={t("tools.extRemoveModule")}
+							aria-label={`${t("tools.extRemoveModule")} ${name}`}
+							onClick={event => {
+								event.stopPropagation();
+								onRemove(e);
+							}}
+						>
+							<Icon name="delete-bin" className="h-3.5 w-3.5" />
+						</button>
+					)}
+					{!e.readonly ? (
+						<button
+							type="button"
+							role="switch"
+							aria-checked={e.state === "active"}
+							aria-label={`${e.state === "active" ? t("tools.disableSkill") : t("tools.enableSkill")} ${e.name}`}
+							className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+							disabled={!rpc || busy}
+							onClick={event => {
+								event.stopPropagation();
+								onToggle(e);
+							}}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					) : null}
+				</>
 			}
 			onOpen={() => onOpen(e)}
 		/>
@@ -467,19 +494,21 @@ function PackagePluginCard({
 			}
 			actions={
 				<>
-					<button
-						type="button"
-						className="gui-icon-btn"
-						disabled={uninstallBusy}
-						title={t("tools.uninstall")}
-						aria-label={`${t("tools.uninstall")} ${pkg.name}`}
-						onClick={event => {
-							event.stopPropagation();
-							onUninstall();
-						}}
-					>
-						<Icon name="delete-bin" className="h-3.5 w-3.5" />
-					</button>
+					{pkg.removable !== false && (
+						<button
+							type="button"
+							className="gui-icon-btn"
+							disabled={uninstallBusy}
+							title={t("tools.uninstall")}
+							aria-label={`${t("tools.uninstall")} ${pkg.name}`}
+							onClick={event => {
+								event.stopPropagation();
+								onUninstall();
+							}}
+						>
+							<Icon name="delete-bin" className="h-3.5 w-3.5" />
+						</button>
+					)}
 					<button
 						type="button"
 						role="switch"
@@ -566,6 +595,8 @@ export function UnifiedPluginsView({
 	];
 	// 卸载在途标记（卡片直卸 + 详情弹层卸载共用,一次一个）。
 	const [uninstallBusy, setUninstallBusy] = useState(false);
+	// 模块删除在途标记（用户自建扩展，extensions.remove）。
+	const [removeBusyId, setRemoveBusyId] = useState<string | null>(null);
 	const { confirm } = useConfirm();
 	/**
 	 * Re-read the installed packages after a spec install or uninstall.
@@ -590,7 +621,15 @@ export function UnifiedPluginsView({
 			if (!rpc) return;
 			setUninstallBusy(true);
 			try {
-				await rpc.request("plugins.uninstall", { name: p.name });
+				// The row's origin decides which registry has to forget the package:
+				// a marketplace install, a profile bundle, or an ordinary npm/link
+				// package. The Host dispatches on these facts; the GUI never guesses.
+				await rpc.request("plugins.uninstall", {
+					name: p.name,
+					...(p.marketplace ? { marketplace: p.marketplace } : {}),
+					...(p.management ? { management: p.management } : {}),
+					scope: p.scope,
+				});
 				onError(null);
 				refreshPackages();
 			} catch (err) {
@@ -612,6 +651,33 @@ export function UnifiedPluginsView({
 			});
 		},
 		[confirm, uninstallPackage],
+	);
+
+	/**
+	 * Remove a user-owned extension module (extensions.remove).
+	 *
+	 * The row only offers this when the Host marked it `removable`; the Host
+	 * re-checks the same fact, so a stale list cannot delete a bundled unit.
+	 */
+	const removeModule = useCallback(
+		(e: ExtensionItem): void => {
+			if (!rpc) return;
+			void confirm(t("tools.extRemoveConfirm", { name: builtinDisplayName(e) }), t("tools.extRemoveModule"), {
+				destructive: true,
+			}).then(ok => {
+				if (!ok) return;
+				setRemoveBusyId(e.id);
+				void rpc
+					.request("extensions.remove", { id: e.id, path: e.path })
+					.then(() => {
+						onError(null);
+						if (detailId === e.id) setDetailId(null);
+					})
+					.catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)))
+					.finally(() => setRemoveBusyId(null));
+			});
+		},
+		[rpc, confirm, onError, detailId],
 	);
 	/**
 	 * Re-read the installed packages after a spec install.
@@ -876,10 +942,11 @@ export function UnifiedPluginsView({
 										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
-										busy={busyId !== null}
+										busy={busyId !== null || removeBusyId !== null}
 										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
+										onRemove={removeModule}
 									/>
 								))}
 							</div>
@@ -896,10 +963,11 @@ export function UnifiedPluginsView({
 										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
-										busy={busyId !== null}
+										busy={busyId !== null || removeBusyId !== null}
 										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
+										onRemove={removeModule}
 									/>
 								))}
 							</div>
@@ -931,10 +999,11 @@ export function UnifiedPluginsView({
 										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
-										busy={busyId !== null}
+										busy={busyId !== null || removeBusyId !== null}
 										detail
 										onOpen={item => setDetailId(item.id)}
 										onToggle={toggleModule}
+										onRemove={removeModule}
 									/>
 								))}
 							</div>
@@ -956,9 +1025,10 @@ export function UnifiedPluginsView({
 									key={e.id}
 									e={e}
 									rpc={rpc}
-									busy={busyId !== null}
+									busy={busyId !== null || removeBusyId !== null}
 									onToggle={toggleModule}
 									onOpen={item => setDetailId(item.id)}
+									onRemove={removeModule}
 								/>
 							))}
 						</div>
@@ -973,9 +1043,10 @@ export function UnifiedPluginsView({
 									key={e.id}
 									e={e}
 									rpc={rpc}
-									busy={busyId !== null}
+									busy={busyId !== null || removeBusyId !== null}
 									onToggle={toggleModule}
 									onOpen={item => setDetailId(item.id)}
+									onRemove={removeModule}
 								/>
 							))}
 						</div>
@@ -1002,9 +1073,10 @@ export function UnifiedPluginsView({
 									key={e.id}
 									e={e}
 									rpc={rpc}
-									busy={busyId !== null}
+									busy={busyId !== null || removeBusyId !== null}
 									onToggle={toggleModule}
 									onOpen={item => setDetailId(item.id)}
+									onRemove={removeModule}
 								/>
 							))}
 						</div>
@@ -1018,7 +1090,8 @@ export function UnifiedPluginsView({
 				rpc={rpc}
 				onError={onError}
 				onToggle={toggleModule}
-				toggleBusy={busyId !== null}
+				onRemove={removeModule}
+				toggleBusy={busyId !== null || removeBusyId !== null}
 			/>
 			<PluginInstallDialog
 				rpc={rpc}

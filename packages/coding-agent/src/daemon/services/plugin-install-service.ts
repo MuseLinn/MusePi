@@ -47,6 +47,10 @@
  *   卸载这一动作上向所有活跃会话投递一次。
  */
 
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { getActiveHome } from "@musepi/pi-utils";
 import { PluginManager } from "../../extensibility/plugins/management/manager";
 import {
 	PluginInstallMachine,
@@ -54,6 +58,11 @@ import {
 	type PluginInstallStartParams,
 	type PluginInstallView,
 } from "../../extensibility/plugins/management/plugin-install-machine";
+import {
+	profileDirFor,
+	readProfileComposition,
+	writeProfileBundles,
+} from "../../extensibility/plugins/profile/profile-composition";
 import type { InstalledPlugin } from "../../extensibility/plugins/runtime/types";
 import { applyPackageChange, type LiveApplySummary, type LiveApplyTarget } from "../live-plugin-apply";
 import type { DaemonService } from "./types";
@@ -166,19 +175,39 @@ export class PluginInstallService implements DaemonService {
 	 * This is blocking and reports through the RPC result rather than through the
 	 * install machine: a removal has no state worth watching, it either completes
 	 * or leaves the same rollback the install path already guarantees.
+	 *
+	 * A row's origin decides which owner has to forget it (profile-owned bundle
+	 * vs npm dependency):
+	 * - a marketplace install is removed through its registry, or the npm tree
+	 *   and the runtime link are removed but the registry keeps a ghost row;
+	 * - a profile bundle is deselected from `musepi.profile.bundles` first, then
+	 *   its package is uninstalled when one exists (a selected-but-missing
+	 *   bundle is deselect-only);
+	 * - an ordinary npm/link package goes through {@link PluginManager}.
 	 */
 	async uninstall(params: {
 		name: string;
+		marketplace?: string;
+		scope?: "user" | "project";
+		management?: "package" | "bundle";
 	}): Promise<{ name: string; application?: "applied" | "pending"; applied?: number; deferred?: number }> {
+		const name = params.name;
 		// The package row is what resolves its entry paths, so read them before
 		// the removal makes the inventory forget the package.
-		const paths = await this.#deps.resolvePackagePaths?.(params.name);
-		await this.#manager.uninstall(params.name);
+		const paths = await this.#deps.resolvePackagePaths?.(name);
+		if (params.management === "bundle") await this.#deselectBundle(name);
+		if (params.marketplace) {
+			await this.#uninstallMarketplace(name, params.marketplace, params.scope);
+		} else {
+			const installed = (await this.#manager.list()).some(plugin => plugin.name === name);
+			if (installed) await this.#manager.uninstall(name);
+			else if (params.management === "bundle") await this.#removeProfileBundleDir(name);
+		}
 		this.#deps.invalidatePluginCaches();
 		this.#deps.onChanged();
-		const summary = await this.#applyLive("uninstall", params.name, paths);
+		const summary = await this.#applyLive("uninstall", name, paths);
 		return {
-			name: params.name,
+			name,
 			...(summary !== undefined
 				? {
 						application: summary.deferred > 0 ? "pending" : "applied",
@@ -187,6 +216,55 @@ export class PluginInstallService implements DaemonService {
 					}
 				: {}),
 		};
+	}
+
+	/** Deselect one name from the active profile's bundle composition. */
+	async #deselectBundle(name: string): Promise<void> {
+		const home = os.homedir();
+		const profile = getActiveHome() ?? "";
+		const note = await readProfileComposition(profile, home);
+		if (note.kind !== "ok") return;
+		const next = note.composition.bundles.filter(bundle => bundle !== name);
+		if (next.length === note.composition.bundles.length) return;
+		await writeProfileBundles(profile, next, home);
+	}
+
+	/**
+	 * Remove a bundle that lives in the profile's own `node_modules` and is not
+	 * a package-manager dependency of the plugins root (a hand-placed or linked
+	 * bundle). The path is normalized and confined to that one package entry.
+	 */
+	async #removeProfileBundleDir(name: string): Promise<void> {
+		const profile = getActiveHome() ?? "";
+		const root = path.resolve(profileDirFor(profile, os.homedir()), "node_modules");
+		const target = path.resolve(root, name);
+		const relative = path.relative(root, target);
+		if (relative.length === 0 || relative.startsWith("..") || path.isAbsolute(relative)) return;
+		await fs.rm(target, { recursive: true, force: true });
+	}
+
+	/** Remove a marketplace install through its own registry (scope-aware). */
+	async #uninstallMarketplace(name: string, marketplace: string, scope?: "user" | "project"): Promise<void> {
+		const {
+			MarketplaceManager,
+			getInstalledPluginsRegistryPath,
+			getMarketplacesCacheDir,
+			getMarketplacesRegistryPath,
+			getPluginsCacheDir,
+		} = await import("../../extensibility/plugins/marketplace");
+		const { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } = await import(
+			"../../discovery/helpers"
+		);
+		const manager = new MarketplaceManager({
+			marketplacesRegistryPath: getMarketplacesRegistryPath(),
+			installedRegistryPath: getInstalledPluginsRegistryPath(),
+			projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(this.#deps.cwd()),
+			marketplacesCacheDir: getMarketplacesCacheDir(),
+			pluginsCacheDir: getPluginsCacheDir(),
+			includeDefaultMarketplaces: true,
+			clearPluginRootsCache: clearPluginRootsAndCaches,
+		});
+		await manager.uninstallPlugin(`${name}@${marketplace}`, scope);
 	}
 
 	/** Installed package rows, as the model-facing `plugin_manager` lists them. */

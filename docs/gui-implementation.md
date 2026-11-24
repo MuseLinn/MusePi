@@ -169,6 +169,8 @@ The settings "Extensions" tab + the sidebar "Extensions" entry share `components
 daemon RPC:
 - `extensions.list` (10s TTL cache, reuses state-manager's loadAllExtensions, returns a unified Extension shape across 10 kinds, no raw — raw goes through `extensions.raw{id}` truncated at 16KB)
 - `extensions.setEnabled{id,enabled}` writes `settings.disabledExtensions` (TUI same key, same `kind:name` id; `mcp:` prefix goes through the mcp.json canonical denylist + legacy reconciliation; flush + cache invalidation)
+- `extensions.remove{id,path?}` deletes a user-owned module only when `extensions.list` marked that row `removable` (a direct child of a managed `extensions/` root); it unloads the runtime, removes the entry's directory, and clears `disabledExtensions` / `disabledExtensionComponents` / explicit `extensions` paths. Bundled and externally configured modules are listed but refused.
+- `plugins.uninstall{name,marketplace?,management?,scope?}` dispatches by the row's origin: a marketplace install clears its registry, a profile bundle is deselected from `musepi.profile.bundles` before the package is removed, and an ordinary npm/link package goes through `PluginManager`.
 - `extensions.setProviderEnabled{providerId}` uses enableProvider/disableProvider (native rejected; **the capability layer only calls settings.set without flush, the daemon adds the flush**)
 - `skills.setEnabled` was deleted (migrated to extensions.setEnabled); `skills.list/read/delete` remain
 

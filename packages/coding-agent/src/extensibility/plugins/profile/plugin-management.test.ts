@@ -58,6 +58,10 @@ describe("plugin management inventory", () => {
 			["@demo/missing", "bundle", true, false],
 			["@demo/optional", "bundle", false, true],
 		]);
+		// Every row has a removal path: an ordinary user package, a selected
+		// bundle (deselect), a missing selected bundle (deselect), or an installed
+		// but unselected bundle (uninstall). None is a dead trash button.
+		expect(rows.map(row => row.removable)).toEqual([true, true, true, true]);
 	});
 
 	it("propagates only literal experimental true for packages and bundles", async () => {

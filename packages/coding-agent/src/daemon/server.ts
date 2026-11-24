@@ -3117,9 +3117,14 @@ export class DaemonServer {
 					.installOutput((params ?? {}) as { installId: string });
 			}
 			case "plugins.uninstall": {
-				return this.#services
-					.get<PluginInstallService>("pluginInstall")
-					.uninstall((params ?? {}) as { name: string });
+				return this.#services.get<PluginInstallService>("pluginInstall").uninstall(
+					(params ?? {}) as {
+						name: string;
+						marketplace?: string;
+						scope?: "user" | "project";
+						management?: "package" | "bundle";
+					},
+				);
 			}
 			case "marketplace.list": {
 				// 实现归 MarketplaceService（marketplace/skills 面语义不变）。
@@ -3233,6 +3238,11 @@ export class DaemonServer {
 			}
 			case "extensions.setEnabled": {
 				return this.#services.get<ExtensionService>("extensions").setEnabled(params ?? {});
+			}
+			case "extensions.remove": {
+				// 删除用户自建扩展模块（受管 extensions/ 根内）：Host 重新校验
+				// 可删事实后删目录并清启停残留，UI 的垃圾桶只在 removable 时出现。
+				return this.#services.get<ExtensionService>("extensions").removeExtension(params ?? {});
 			}
 			case "extensions.setForceEnabled": {
 				return this.#services.get<ExtensionService>("extensions").setForceEnabled(params ?? {});

@@ -77,6 +77,41 @@ describe("shared plugin horizontal card", () => {
 		host.remove();
 	});
 
+	it("renders the removal affordance only for a Host-marked removable module", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		let removed = 0;
+		let opened = 0;
+		const render = (removable: boolean | undefined): void => {
+			act(() =>
+				root.render(
+					createElement(ModuleRow, {
+						e: { ...plugin(), removable },
+						rpc: {} as never,
+						busy: false,
+						onOpen: () => opened++,
+						onToggle: () => {},
+						onRemove: () => removed++,
+					}),
+				),
+			);
+		};
+
+		render(false);
+		expect(host.querySelector(".gui-plugin-card-actions .gui-icon-btn")).toBeNull();
+
+		render(true);
+		const remove = host.querySelector<HTMLElement>(".gui-plugin-card-actions .gui-icon-btn")!;
+		expect(remove).not.toBeNull();
+		act(() => remove.click());
+		expect(removed).toBe(1);
+		expect(opened).toBe(0);
+
+		await act(async () => root.unmount());
+		host.remove();
+	});
+
 	it("prefers the manifest icon over the name-derived tile", async () => {
 		const host = document.createElement("div");
 		document.body.appendChild(host);

@@ -231,6 +231,9 @@ export const tools = {
 	"tools.browserRelayInstalledNot": "Written but not loaded — load it unpacked in chrome://extensions",
 	"tools.install": "Install",
 	"tools.uninstall": "Uninstall",
+	"tools.extRemoveModule": "Remove extension",
+	"tools.extRemoveConfirm":
+		'Remove extension "{name}"? Its directory and every file in it will be deleted; this cannot be undone.',
 	"tools.sharedBrowser": "Shared browser",
 	"tools.sharedBrowserRunningTabsWithTabs": "Running · {tabs} tabs",
 	"tools.sharedBrowserIdle": "Not started (auto-starts the first time the agent uses the browser)",

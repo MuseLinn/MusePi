@@ -42,6 +42,7 @@ description: 为 MusePi（TUI/CLI + 桌面 GUI）创建、修改或修复插件�
 - **入口**：具名导出 `name` / `inject` / `provide` / `apply`，能力通过 `ctx.*` 注册。
 - **原型**：会话内用 `cordis_*` 验证交互与工具语义，不写盘、不跨会话。
 - **交付**：写成包放到工作区或 `~/.musepi/plugins/<name>/`，用 `plugin_manager` 安装启用；非自动批准会话里让用户从插件页完成。
+- **目录规范**：`~/.musepi/agent/extensions/<name>/` 是用户级环境扩展根（也可用 `<cwd>/.musepi/extensions/<name>/`），能力中心按扩展模块列出，可启停、可删除；`~/.musepi/plugins/node_modules/<name>` 才是 `plugin_manager` / marketplace 写出的安装树，不要手写。创建的是原型或单机扩展就放前者，要安装、启用、分发才走后者。
 
 动态 `cordis_*` 的 `hostCode` 是沙箱函数体（只有 `defineTool`/timers/console）；插件包入口拿到的是宿主 `PluginAPI`。原型验证交互，包承载完整能力——两者不要混写。
 

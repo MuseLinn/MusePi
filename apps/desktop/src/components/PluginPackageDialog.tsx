@@ -95,16 +95,18 @@ export function PluginPackageDialog({
 								{t("tools.extExperimental")}
 							</span>
 						)}
-						<button
-							type="button"
-							className="gui-tool-btn"
-							disabled={uninstalling}
-							onClick={askUninstall}
-							title={t("tools.uninstall")}
-							aria-label={`${t("tools.uninstall")} ${pkg.name}`}
-						>
-							<Icon name="delete-bin" className="h-4 w-4" />
-						</button>
+						{pkg.removable !== false && (
+							<button
+								type="button"
+								className="gui-tool-btn"
+								disabled={uninstalling}
+								onClick={askUninstall}
+								title={t("tools.uninstall")}
+								aria-label={`${t("tools.uninstall")} ${pkg.name}`}
+							>
+								<Icon name="delete-bin" className="h-4 w-4" />
+							</button>
+						)}
 						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 							<Icon name="close" className="h-4 w-4" />
 						</button>

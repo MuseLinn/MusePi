@@ -166,6 +166,8 @@ WSL:`lib/connection/wsl.ts` 解析 `wsl.exe -l -q` 输出(UTF-16 按 Latin-1 读
 daemon RPC:
 - `extensions.list`(TTL 10s 缓存,复用 state-manager 的 loadAllExtensions,返回 10 种 kind 统一 Extension 形状,无 raw——raw 走 `extensions.raw{id}` 16KB 截断)
 - `extensions.setEnabled{id,enabled}` 写 `settings.disabledExtensions`(TUI 同 key 同 `kind:name` id;`mcp:` 前缀走 mcp.json canonical denylist + legacy 对账;flush + 缓存失效)
+- `extensions.remove{id,path?}` 仅当 `extensions.list` 把该行标为 `removable`(受管 `extensions/` 根的直接子项)时删除用户模块:卸运行时、删入口所属目录,并清理 `disabledExtensions` / `disabledExtensionComponents` / 显式 `extensions` 路径。内置与外部配置的模块仍会列出,但拒绝删除。
+- `plugins.uninstall{name,marketplace?,management?,scope?}` 按行来源分派:marketplace 安装清自己的登记表,profile bundle 先从 `musepi.profile.bundles` 取消选择再卸包,普通 npm/link 包走 `PluginManager`。
 - `extensions.setProviderEnabled{providerId}` 用 enableProvider/disableProvider(native 拒绝;**capability 层只 settings.set 不 flush,daemon 补 flush**)
 - `skills.setEnabled` 已删除(迁移到 extensions.setEnabled),`skills.list/read/delete` 保留
 

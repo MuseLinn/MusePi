@@ -142,6 +142,8 @@ export default function myExtension(pi: ExtensionAPI) {
   - 五个包共用 `task/external-executable-probe.ts` 注册 `probeExecutable` RPC。配置页打开、路径失焦或手动重检时按当前工作目录解析 PATH 或显式路径，并以 5 秒超时执行一次 `--version`，显示解析路径和版本；找不到、非零退出与超时均显示失败。检测只证明 CLI 可执行，不验证原生模型、凭据或后续任务可用性。`env` 在失焦时校验 JSON 对象与字符串值，输入修正时清除旧错误。
 - **第三方生态发现**:Pi、OMP、Codex 与 Claude 的扩展、技能、Commands 和 MCP 继续由各自独立 provider 适配,不使用 MusePi 已退休的第一方 ID。`kimi-code` provider 读取 `$KIMI_CODE_HOME`(默认 `~/.kimi-code`)与项目 `.kimi-code/`,支持用户和项目 Skills、MCP,以及 `plugins/installed.json` 中启用插件的 Skills、Commands 和 MCP;插件 MCP 使用官方 `plugin-<pluginId>:<serverName>` 命名。当前不接入 Kimi 的 hooks、agents、systemPrompt 或 sessionStart。
 - **插件安装**(`~/.musepi/plugins/`):provider = user,可启停。
+- **用户自建扩展模块**(`<agentDir>/extensions/<name>`,项目 `<cwd>/.musepi/extensions/<name>`):在能力中心按扩展模块列出,由宿主下发 `removable` 事实——只有这两个受管根的**直接子项**可删;随客户端分发的包(`level=native`)与配置在别处的外部路径仍会列出,但不提供删除。删除走 `extensions.remove`:宿主重新校验同一事实,卸载运行时、删掉入口所属目录(包内支撑文件一起走),并清理 `disabledExtensions`、`disabledExtensionComponents` 与显式 `extensions` 路径,避免下轮清单留下幽灵行。
+- **插件包删除**:卡片只按宿主的 `removable` 显示入口,卸载按来源分派——marketplace 安装清自己的登记表(`marketplace.remove`),profile bundle 先从 `musepi.profile.bundles` 取消选择再卸载包,普通 npm/link 包走 `PluginManager`。项目级普通包当前没有卸载通道,如实标为不可删,而不是给一个必然失败的按钮。
 - 测试/示例扩展(如 `harmony-leak` 夹具)是测试资产,不算产品扩展。
 
 ## 5. 相关文档

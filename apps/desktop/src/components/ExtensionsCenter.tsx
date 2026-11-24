@@ -84,6 +84,20 @@ function isDeletable(e: ExtensionItem): boolean {
 	);
 }
 
+/** User-owned extension module: the daemon's `removable` fact is the single
+ *  authority (same one `extensions.remove` re-checks). */
+function isRemovableModule(e: ExtensionItem): boolean {
+	return (e.kind === "plugin-module" || e.kind === "extension-module") && e.removable === true;
+}
+
+function isRemovable(e: ExtensionItem): boolean {
+	return isDeletable(e) || isRemovableModule(e);
+}
+
+function removeLabel(e: ExtensionItem): string {
+	return e.kind === "skill" ? t("tools.deleteSkill") : t("tools.extRemoveModule");
+}
+
 /** GUI-only capability kinds (visual extensions with no TUI-side effect):
  *  motion packs + the built-in style. Tagged with a badge in the list and
  *  the detail pane so users can tell GUI-surface extensions apart. */
@@ -441,12 +455,20 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	const remove = (e: ExtensionItem): void => {
 		if (!rpc) return;
-		void confirm(t("tools.deleteSkillConfirmWithName", { name: e.name }), t("settings.delete"), {
-			destructive: true,
-		}).then(ok => {
+		const skill = e.kind === "skill";
+		void confirm(
+			skill
+				? t("tools.deleteSkillConfirmWithName", { name: e.name })
+				: t("tools.extRemoveConfirm", { name: extensionDisplayName(e, locale) }),
+			skill ? t("settings.delete") : t("tools.extRemoveModule"),
+			{ destructive: true },
+		).then(ok => {
 			if (!ok) return;
 			void rpc
-				.request("skills.delete", { name: e.name })
+				.request(
+					skill ? "skills.delete" : "extensions.remove",
+					skill ? { name: e.name } : { id: e.id, path: e.path },
+				)
 				.then(() => {
 					if (selectedId === e.id) setSelectedId(null);
 					clearError();
@@ -804,7 +826,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																				)}
 																				<span className="gui-ext-item-tag">{levelLabel(e)}</span>
 																				<span className="gui-ext-item-ops">
-																					{isDeletable(e) && (
+																					{isRemovable(e) && (
 																						<button
 																							type="button"
 																							className="gui-icon-btn"
@@ -812,8 +834,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																								ev.stopPropagation();
 																								remove(e);
 																							}}
-																							title={t("tools.deleteSkill")}
-																							aria-label={t("tools.deleteSkill")}
+																							title={removeLabel(e)}
+																							aria-label={removeLabel(e)}
 																						>
 																							<Icon name="delete-bin" className="h-3 w-3" />
 																						</button>
@@ -961,11 +983,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												)}
 											</HeightMorph>
 										</div>
-										{isDeletable(selected) && (
+										{isRemovable(selected) && (
 											<div className="gui-ext-detail-actions">
 												<button type="button" className="gui-btn" onClick={() => remove(selected)}>
 													<Icon name="delete-bin" className="h-3.5 w-3.5" />
-													{t("tools.deleteSkill")}
+													{removeLabel(selected)}
 												</button>
 											</div>
 										)}

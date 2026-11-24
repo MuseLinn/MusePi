@@ -138,6 +138,12 @@ export interface Extension {
 	activation?: { kind: "setting"; key: string };
 	/** 清单版本（extension-module 从宿主 fiber 检视面透出;豁免键输入）。 */
 	version?: string;
+	/** 宿主算出的可删除事实（`removable`）：仅受管 `extensions/` 根下的
+	 *  用户模块为 true；内置、随客户端分发的包、已装插件包内的模块与显式
+	 *  外部路径为 false。UI 只按此渲染卸载入口，`extensions.remove` 再校验。 */
+	removable?: boolean;
+	/** 不可删除时的事实原因（`removable === false` 的模块行）。 */
+	removeBlockedReason?: "builtin" | "bundled" | "unmanaged-path";
 	/** 兼容性预检判定（回退保护②,extension-module 才有）：incompatible =
 	 *  结构化拒绝的证据面（GUI 渲染归因与豁免入口）,exempted = 放行但
 	 *  如实标注。兼容（无未满足 peer）无此项。 */

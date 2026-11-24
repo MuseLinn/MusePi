@@ -491,6 +491,11 @@ export interface ExtensionItem {
 	activation?: { kind: "setting"; key: string };
 	/** 插件清单版本（extension-module 条目;宿主 runtime 透出,回退保护②）。 */
 	version?: string;
+	/** 宿主算出的可删除事实（dsh `removable`）：仅受管 `extensions/` 根下的
+	 *  用户模块为 true。UI 只按此渲染卸载入口，`extensions.remove` 再校验。 */
+	removable?: boolean;
+	/** 不可删除时的事实原因（模块行）。 */
+	removeBlockedReason?: "builtin" | "bundled" | "unmanaged-path";
 	/** 兼容性预检判定（回退保护②;incompatible = 结构化拒绝的证据面,
 	 *  exempted = 精确版本豁免放行,GUI 归因段据此渲染 + 提供豁免入口）。 */
 	compatibility?: PluginCompatibility;

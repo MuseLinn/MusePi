@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import { SLOT_CATALOG, SLOT_PREFIX_CATALOG } from "@musepi/collab-proto/slot-catalog.generated";
-import { logger } from "@musepi/pi-utils";
+import { getAgentDir, logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc, PluginCompatibility, PluginComponentDecl, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import { invalidateCapabilityCache } from "../../capability";
@@ -11,6 +11,12 @@ import { isModuleEntryKind, LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } f
 import { pluginEntryId, pluginNameOfEntryId, setPluginEnabledIn } from "../../capability/plugin-identity";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult, Extension as RuntimeExtension } from "../../extensibility/extensions/types";
+import {
+	extensionRemovalFacts,
+	extensionRemovalTarget,
+	managedExtensionRoots,
+	removeManagedExtension,
+} from "../../extensibility/extensions-center/removability";
 import type { Extension } from "../../extensibility/extensions-center/types";
 import {
 	readCompatibilityExemptions,
@@ -229,6 +235,7 @@ export class ExtensionService implements DaemonService {
 		"extensions.setConfig": "setConfig",
 		"extensions.setComponentEnabled": "setComponentEnabled",
 		"extensions.setVersionExemption": "setVersionExemption",
+		"extensions.remove": "removeExtension",
 		"ext.call": "call",
 		"plugins.list": "listPlugins",
 		"plugins.packages": "pluginPackages",
@@ -459,6 +466,17 @@ export class ExtensionService implements DaemonService {
 		// served lazily via extensions.raw for the inspector.
 		const extensions = await this.getExtensions();
 		mark("extensions");
+		// dsh `removable` parity: the Host owns the fact, the GUI only renders it.
+		// Computed on every list (not folded into getExtensions) because it follows
+		// the active profile's agent dir and the caller's cwd.
+		const removalRoots = managedExtensionRoots({ userAgentDir: getAgentDir(), cwd: this.#deps.cwd() });
+		for (const ext of extensions) {
+			if (!isModuleEntryKind(ext.kind)) continue;
+			const facts = extensionRemovalFacts(ext, removalRoots);
+			ext.removable = facts.removable;
+			if (facts.removeBlockedReason) ext.removeBlockedReason = facts.removeBlockedReason;
+			else delete ext.removeBlockedReason;
+		}
 		let s = this.#deps.settings();
 		if (!s) {
 			// Shell mode/enabled live in settings; bootstrap the shared
@@ -920,6 +938,101 @@ export class ExtensionService implements DaemonService {
 		this.#runtimeLoadCache = null;
 		this.#deps.onChanged();
 		return { ok: true };
+	}
+
+	/**
+	 * RPC extensions.remove: delete a user-owned extension module.
+	 *
+	 * The listing decides what to render; this call decides what may actually
+	 * disappear. Same fact source (`extensionRemovalFacts`), same managed roots,
+	 * so a stale or forged list row cannot turn into a delete of a bundled unit
+	 * or an arbitrary configured path. Removal deletes the entry's own directory
+	 * (a package's supporting modules live beside its entry file), detaches it
+	 * from open sessions, and clears the enable/component/path residue so the
+	 * next list does not show a ghost.
+	 */
+	async removeExtension(params: unknown) {
+		const p = (params ?? {}) as { id?: unknown; path?: unknown };
+		if (typeof p.id !== "string" || p.id.length === 0) {
+			throw new Error("extensions.remove: id required");
+		}
+		let settings = this.#deps.settings();
+		if (!settings) {
+			await this.#deps.ensureRegistry();
+			settings = this.#deps.settings();
+		}
+		const extensions = await this.getExtensions();
+		const candidates = extensions.filter(extension => extension.id === p.id);
+		const requestedPath = typeof p.path === "string" ? p.path : undefined;
+		const ext = requestedPath
+			? (candidates.find(extension => path.resolve(extension.path) === path.resolve(requestedPath)) ?? undefined)
+			: candidates[0];
+		if (!ext) throw new Error(`unknown extension: ${p.id}`);
+		if (!isModuleEntryKind(ext.kind)) {
+			throw new Error(`extensions.remove: ${p.id} is not an extension module`);
+		}
+		const roots = managedExtensionRoots({ userAgentDir: getAgentDir(), cwd: this.#deps.cwd() });
+		const target = extensionRemovalTarget(ext, roots);
+		if (target === null) {
+			const reason = extensionRemovalFacts(ext, roots).removeBlockedReason ?? "not-removable";
+			throw new Error(`extensions.remove: ${p.id} is not removable (${reason})`);
+		}
+		// Unload before deleting: a live fiber holding code from a directory that
+		// is about to disappear would fail its next reload with ENOENT instead of
+		// the deletion the person asked for.
+		try {
+			const runtime = await this.#deps.dynamicRuntime?.();
+			await runtime?.unloadPlugin?.(ext.name);
+		} catch (error) {
+			logger.warn("extensions.remove: runtime unload failed", { plugin: ext.name, error: String(error) });
+		}
+		await removeManagedExtension(target);
+		// Open sessions still hold the tool/handler registrations; removal is the
+		// same live-apply path an uninstall uses. Absent → next session.
+		try {
+			await this.#deps.applyLive?.({ remove: [ext.path] });
+		} catch (error) {
+			logger.warn("extensions.remove: live detach failed", { plugin: ext.name, error: String(error) });
+		}
+		if (settings) {
+			const disabled = (settings.get("disabledExtensions") ?? []) as string[];
+			const staleIds = new Set([
+				ext.name,
+				ext.id,
+				`path:${ext.path}`,
+				`extension-module:${ext.name}`,
+				`plugin-module:${ext.name}`,
+			]);
+			const nextDisabled = disabled.filter(id => !staleIds.has(id));
+			if (nextDisabled.length !== disabled.length) {
+				settings.set("disabledExtensions", nextDisabled as never);
+			}
+			const components = (settings.get("disabledExtensionComponents") ?? []) as string[];
+			const nextComponents = components.filter(id => !id.startsWith(`${ext.name}/`));
+			if (nextComponents.length !== components.length) {
+				settings.set("disabledExtensionComponents", nextComponents as never);
+			}
+			const forceRaw = (settings.getRaw("forceEnabledExtensions") ?? []) as string[];
+			const force = forceRaw.filter(id => id !== ext.name);
+			if (force.length !== forceRaw.length) {
+				settings.set("forceEnabledExtensions" as Parameters<Settings["set"]>[0], force as never);
+			}
+			const configured = (settings.get("extensions") ?? []) as string[];
+			const samePath = (entry: string): boolean => {
+				const resolved = path.isAbsolute(entry) ? entry : path.resolve(this.#deps.cwd(), entry);
+				return path.resolve(resolved) === path.resolve(target) || path.resolve(resolved) === path.resolve(ext.path);
+			};
+			const nextConfigured = configured.filter(entry => !samePath(entry));
+			if (nextConfigured.length !== configured.length) {
+				settings.set("extensions", nextConfigured as never);
+			}
+			await settings.flush();
+		}
+		this.invalidateCaches();
+		this.#pluginPackagesCache = null;
+		this.invalidateExtensionsCache();
+		this.#deps.onChanged();
+		return { ok: true as const, name: ext.name, path: target };
 	}
 
 	/** Enable or disable one declared Cordis entry component. */
