@@ -18,6 +18,7 @@ import {
 	t,
 } from "@musepi/client-core";
 import { openPlanFromChat } from "@musepi/client-core/src/components/transcript/canvas-jump";
+import { toolActivityKind } from "@musepi/client-core/src/lib/tool-activity";
 import {
 	createChatQuoteContext,
 	type DisplayContext,
@@ -961,6 +962,30 @@ export function ChatView({
 		const date = new Date(at);
 		return Number.isNaN(date.getTime()) ? null : `${date.getMonth() + 1}/${date.getDate()}`;
 	}, [snap?.entries, nowMs]);
+	/* What this turn is running, for the tail presence's expandable card: the
+	 * counts by family plus the newest running call's own name. Read from the
+	 * same `activeTools` the transcript renders, so the card and the tool rows
+	 * can never disagree about what is in flight. */
+	const tailDetailNode = useMemo(() => {
+		const tools = [...(snap?.activeTools?.values() ?? [])];
+		if (tools.length === 0) return undefined;
+		let files = 0;
+		let commands = 0;
+		for (const tool of tools) {
+			const kind = toolActivityKind(tool.toolName);
+			if (kind === "reading" || kind === "writing") files += 1;
+			else if (kind === "running-commands") commands += 1;
+		}
+		const newest = tools[tools.length - 1];
+		return (
+			<>
+				<div className="presence-detail-line">
+					{t("transcript.presenceSteps", { files: String(files), commands: String(commands) })}
+				</div>
+				<div className="presence-detail-line presence-detail-tool">{newest?.toolName}</div>
+			</>
+		);
+	}, [snap?.activeTools]);
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
 	// Dock side (bottom vs right). The TerminalPanel stays mounted across
@@ -3796,6 +3821,23 @@ export function ChatView({
 																	 * width. */
 																	userGutter=""
 																	agentGutter=""
+																	/* The tail presence's mark: the same 28px orb the
+																	 * capsule carries, so the conversation keeps ONE
+																	 * identity while the work row stands where the reply
+																	 * will land. */
+																	tailAvatar={
+																		showAvatars ? (
+																			<AgentAvatar
+																				state={orb}
+																				size={28}
+																				signals={agentSignals}
+																				seed={store.sessionId}
+																			/>
+																		) : undefined
+																	}
+																	tailDetail={tailDetailNode}
+																	approvals={snap?.approvals.length ?? 0}
+																	paused={snap?.state?.paused === true}
 																	/* Layer-1 branch topology: multi-child messages render a
 																	 * switchable branch bar; off-path entries collapse. */
 																	branchInfo={{

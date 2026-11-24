@@ -228,4 +228,48 @@ describe("agent identity capsule", () => {
 		}
 		await unmount();
 	});
+
+	it("gives the tail presence row the same 28px orb the capsule carries", async () => {
+		// A working session with no reply yet: the presence row stands where the
+		// answer will land, and it must carry the SAME identity as the capsule
+		// rather than a second, differently-sized mark. The store marks itself
+		// working on the user's own message, which is the real trigger.
+		//
+		// The suite's beforeEach turns the orb off (musepi-gui-avatars=0) so the
+		// capsule assertions stay structural; this case is ABOUT the mark, so it
+		// turns it back on and restores the suite default afterwards.
+		localStorage.setItem("musepi-gui-avatars", "1");
+		try {
+			const workingEntries: SessionEntry[] = [
+				...entries,
+				{
+					type: "message",
+					id: "user-2",
+					parentId: null,
+					timestamp: "2026-07-09T00:00:00Z",
+					message: { role: "user", content: [{ type: "text", text: "继续" }], timestamp: Date.now() },
+				} as SessionEntry,
+			];
+			const { rpc } = makeRpc();
+			const store = new GuiSessionStore("session-1", { entries: workingEntries, cursor: 0 }, "C:/workspace");
+			// apply() takes the full stream envelope, not a bare event.
+			store.apply({
+				kind: "event",
+				seq: 1,
+				payload: {
+					type: "message_start",
+					message: { role: "user", content: [{ type: "text", text: "继续" }], timestamp: Date.now() },
+				},
+			} as never);
+			const { host, unmount } = await mount(store, rpc);
+			const row = host.querySelector(".presence");
+			expect(row).not.toBeNull();
+			const avatar = row?.querySelector(".presence-avatar");
+			expect(avatar).not.toBeNull();
+			expect(avatar?.querySelector("svg, canvas, span")).not.toBeNull();
+			await unmount();
+		} finally {
+			localStorage.setItem("musepi-gui-avatars", "0");
+		}
+	});
 });
