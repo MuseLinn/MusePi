@@ -1183,22 +1183,14 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 				signal,
 				ctx?.toolCall?.steeringSignal,
 			);
-			// The wait ended in the foreground, so this tool result IS the
-			// delivery. Record it in the durable ledger too: suppression alone
-			// leaves `delivered = 0`, and the next session adoption then replays
-			// the command as a settlement card next to the card the user already
-			// has (user report: a pile of "已完成" cards after the turn).
 			if (waitResult.kind === "completed") {
-				autoBgManager.consumeDeliveries([job.jobId]);
 				return waitResult.result;
 			}
 			if (waitResult.kind === "failed") {
-				autoBgManager.consumeDeliveries([job.jobId]);
 				throw waitResult.error;
 			}
 			if (waitResult.kind === "aborted") {
 				autoBgManager.cancel(job.jobId);
-				autoBgManager.consumeDeliveries([job.jobId]);
 				throw new ToolAbortError(job.getLatestText() || "Command aborted");
 			}
 			job.stopUpdates();

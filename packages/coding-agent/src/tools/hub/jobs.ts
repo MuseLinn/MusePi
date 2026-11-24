@@ -210,7 +210,7 @@ export function buildJobResult(
 	});
 	const jobResults = snapshotJobs(session, uniqueJobs);
 
-	manager.consumeDeliveries(jobResults.filter(j => j.status !== "running").map(j => j.id));
+	manager.acknowledgeDeliveries(jobResults.filter(j => j.status !== "running").map(j => j.id));
 
 	const completed = jobResults.filter(j => j.status !== "running");
 	const running = jobResults.filter(j => j.status === "running");

@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import * as path from "node:path";
-import { JobLedger } from "@musepi/pi-coding-agent/async/job-ledger";
 import { AsyncJobManager } from "@musepi/pi-coding-agent/async/job-manager";
-import { TempDir } from "@musepi/pi-utils";
 
 describe("AsyncJobManager", () => {
 	test("forwards progress updates and delivers completion", async () => {
@@ -247,35 +244,6 @@ describe("AsyncJobManager", () => {
 		await Bun.sleep(80);
 		expect(manager.getJob(completedJobId)).toBeUndefined();
 		expect(manager.getJob(runningJobId)).toBeUndefined();
-	});
-
-	test("consumeDeliveries records the outcome as delivered so it cannot be replayed", async () => {
-		using tempDir = TempDir.createSync("@omp-job-consume-");
-		const ledger = new JobLedger(path.join(tempDir.path(), "jobs.db"));
-		AsyncJobManager.setLedger(ledger);
-		try {
-			const manager = new AsyncJobManager({ onJobComplete: async () => {} });
-			// A foreground bash call: the owner waits for the result and hands it
-			// back as the tool result, so no follow-up delivery is wanted.
-			const jobId = manager.register("bash", "rtk grep x", async () => "done", {
-				sessionId: "session-consume",
-				ownerId: "agent-consume",
-			});
-			await manager.waitForAll();
-			manager.acknowledgeDeliveries([jobId]);
-
-			// Suppression alone left `delivered = 0`: the next session adoption
-			// replayed the command as a settlement card even though the tool
-			// result had already shown it.
-			expect(AsyncJobManager.undeliveredJobsForSession("session-consume").map(job => job.id)).toContain(jobId);
-
-			manager.consumeDeliveries([jobId]);
-
-			expect(AsyncJobManager.undeliveredJobsForSession("session-consume")).toHaveLength(0);
-		} finally {
-			AsyncJobManager.setLedger(null);
-			ledger.close();
-		}
 	});
 
 	test("acknowledgeDeliveries suppresses pending retries for completed jobs", async () => {

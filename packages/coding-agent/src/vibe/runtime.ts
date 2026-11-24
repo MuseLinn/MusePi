@@ -1145,7 +1145,7 @@ export class VibeSessionRegistry {
 		}
 
 		const settled = collectSettled();
-		manager.consumeDeliveries(settled.map(entry => entry.jobId));
+		manager.acknowledgeDeliveries(settled.map(entry => entry.jobId));
 		// Current in-flight state, independent of the snapshot: a session whose
 		// watched turn settled may already be mid queued follow-up.
 		const stillRunning = watched.filter(record => record.turn !== undefined).map(record => record.id);
