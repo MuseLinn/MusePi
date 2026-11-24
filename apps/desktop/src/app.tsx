@@ -5596,8 +5596,11 @@ function AppInner(): ReactNode {
 									// Chat 常驻挂载:看板/任务/能力中心打开时 chat 仅
 									// display:none,不卸载——返回时会话/转录/虚拟列表状态全保留
 									// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
-									// Settings 关闭的 150ms 模糊退出期间让 chat keeper 重新占位
-									// (交叉淡入); settingsOpen 真正翻 false 后才隐藏。
+									// 设置外壳是同一 flex 列里的兄弟且同样 flex:1,同时可见会
+									// 各占一半高度,所以 keeper 一直隐藏到外壳卸载那一帧才显形。
+									// 关闭时看到的是「外壳模糊淡出 → 聊天列出现」,不是交叉淡入;
+									// 要叠化就得把外壳改成 absolute 覆盖层,那会在覆盖层下重做一次
+									// 内容布局,得不偿失。
 									const chatKeeperHidden =
 										settingsOpen || boardOpen || scheduledOpen || capabilityOpen || prBoardOpen;
 									return (

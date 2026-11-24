@@ -33,7 +33,10 @@ export interface SettingsShellState {
 	navSlotLeaving: boolean;
 	/** Sidebar keeper display:none (session list state preserved). */
 	sideKeeperHidden: boolean;
-	/** Chat-column keeper display:none (transcript state preserved). */
+	/** Chat-column keeper display:none (transcript state preserved). It stays
+	 *  hidden through the whole close window because it and the settings shell
+	 *  are `flex: 1` siblings in one column: showing both would split the
+	 *  column instead of cross-fading. */
 	chatColKeeperHidden: boolean;
 }
 

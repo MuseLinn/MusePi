@@ -57,9 +57,13 @@ describe("computeSettingsShellState", () => {
 	});
 
 	test("leaving (close window): slot stays mounted for the blur-out", () => {
-		// settingsOpen already flipped false while the 150ms blur-out plays —
-		// the shell must NOT unmount early or the fade would clip.
-		const s = computeSettingsShellState({ settingsOpen: false, leavingSettings: true });
+		// `closeSettings` flips both flags only when its 150ms timer fires, so
+		// the window really is settingsOpen + leavingSettings together. The
+		// shell must NOT unmount early or the fade would clip, and the chat
+		// keeper must stay hidden through it: the shell is a flex:1 sibling in
+		// the same column, so revealing the keeper mid-fade would split the
+		// column 50/50 instead of cross-fading.
+		const s = computeSettingsShellState({ settingsOpen: true, leavingSettings: true });
 		expect(s.settingsActive).toBe(true);
 		expect(s.navSlotMounted).toBe(true);
 		expect(s.navSlotLeaving).toBe(true);
