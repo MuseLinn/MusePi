@@ -237,6 +237,37 @@ describe("conditional blocks in the primer use the shared Reveal", () => {
 	});
 });
 
+describe("the primer keeps one vertical rhythm across steps", () => {
+	test("every step's content starts at the same gap under the heading", () => {
+		const widgets = read(WIDGETS);
+		const misc = read("apps/desktop/src/styles/gui-misc.css");
+		// A step that starts 14px higher than its neighbours makes the card
+		// jump when the spine advances.
+		for (const [name, body] of [
+			[".gui-obo-appearance", rule(misc, ".gui-obo-appearance")],
+			[".gui-obo-provider-form", rule(widgets, ".gui-obo-provider-form")],
+			[".gui-obo-voice-setup", rule(misc, ".gui-obo-voice-setup")],
+			[".gui-obo-branches", rule(widgets, ".gui-obo-branches")],
+		] as const) {
+			expect(body, `no ${name} block`).not.toBeNull();
+			expect(declaration(body!, "margin-top"), `${name} heading gap`).toBe("14px");
+		}
+	});
+
+	test("the open branch reads as the active container", () => {
+		const css = read(WIDGETS);
+		// Five identical collapsed cards gave no clue which one was open.
+		expect(css).toContain('.gui-obo-branch:has(> .gui-obo-branch-head[aria-expanded="true"])');
+	});
+
+	test("the six accent chips keep one line each", () => {
+		// The full "自定义强调色" wrapped to two lines and made that chip taller
+		// than its neighbours — same control, different weight.
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain('{ id: "custom", key: "settings.customAccentShort" }');
+	});
+});
+
 describe("the announcement keyboard contract lets links open", () => {
 	test("Enter on a focused link does not dismiss the panel", () => {
 		const tsx = read(ANNOUNCEMENT_TSX);

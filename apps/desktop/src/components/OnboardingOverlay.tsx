@@ -1276,13 +1276,16 @@ const THEME_OPTIONS = [
 	{ id: "system", key: "settings.followSystem" },
 ] as const;
 
+// Six chips share one row, so the custom entry uses the short label: the
+// full "自定义强调色" wrapped to two lines and made that chip taller than its
+// neighbours, which read as a different weight for the same control.
 const ACCENT_OPTIONS = [
 	{ id: "theme", key: "settings.accentTheme" },
 	{ id: "brand", key: "settings.accentBrand" },
 	{ id: "mono", key: "settings.accentMono" },
 	{ id: "ocean", key: "settings.accentOcean" },
 	{ id: "jade", key: "settings.accentJade" },
-	{ id: "custom", key: "settings.customAccent" },
+	{ id: "custom", key: "settings.customAccentShort" },
 ] as const;
 
 /** Step 2 — appearance: scheme (dark/light/system), palette (the 18

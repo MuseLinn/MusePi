@@ -855,6 +855,7 @@ export const settings = {
 	"settings.windowTransparencyDescription":
 		"When off, the glass background becomes opaque and the transparency slider is hidden.",
 	"settings.customAccent": "Custom accent",
+	"settings.customAccentShort": "Custom",
 	"settings.interfaceFontSize": "Interface font size",
 	"settings.fontSizeSmall": "Small",
 	"settings.fontSizeDefault": "Default",

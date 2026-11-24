@@ -801,6 +801,7 @@ export const settings = {
 	"settings.windowTransparency": "窗口透明度",
 	"settings.windowTransparencyDescription": "关闭后玻璃背景变为不透明，隐藏透明度调节。",
 	"settings.customAccent": "自定义强调色",
+	"settings.customAccentShort": "自定义",
 	"settings.interfaceFontSize": "界面字体大小",
 	"settings.fontSizeSmall": "小",
 	"settings.fontSizeDefault": "标准",

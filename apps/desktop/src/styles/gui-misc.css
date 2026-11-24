@@ -436,6 +436,9 @@
 	flex-direction: column;
 	gap: 10px;
 	width: 100%;
+	/* Same heading→content gap as the appearance and provider steps; without
+	 * it this step started 14px higher than its neighbours. */
+	margin-top: 14px;
 }
 .gui-obo-voice-check {
 	display: grid;

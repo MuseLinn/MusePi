@@ -2642,12 +2642,23 @@
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+	/* Same heading→content gap as the other steps. */
+	margin-top: 14px;
 }
 .gui-obo-branch {
 	border: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
 	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
 	overflow: hidden;
+	transition:
+		border-color 160ms ease-out,
+		background 160ms ease-out;
+}
+/* The open branch is the active container: five identical collapsed cards
+ * gave no clue which one the page was showing. */
+.gui-obo-branch:has(> .gui-obo-branch-head[aria-expanded="true"]) {
+	border-color: color-mix(in oklab, var(--accent) 38%, transparent);
+	background: color-mix(in oklab, var(--color-surface-raised) 82%, transparent);
 }
 .gui-obo-branch-head {
 	display: flex;
