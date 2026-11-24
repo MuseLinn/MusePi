@@ -1703,7 +1703,7 @@ export class MCPManager {
 			if (resolved.env && resolved.envPolicy !== "literal") {
 				const nextEnv: Record<string, string> = {};
 				for (const [key, value] of Object.entries(resolved.env)) {
-					const resolvedValue = await resolveConfigValue(value);
+					const resolvedValue = await resolveConfigValue(value, { cwd: this.cwd });
 					if (resolvedValue) nextEnv[key] = resolvedValue;
 				}
 				resolved = { ...resolved, env: nextEnv };
@@ -1714,7 +1714,7 @@ export class MCPManager {
 			if (resolved.headers && resolved.headerPolicy !== "origin-locked") {
 				const nextHeaders: Record<string, string> = {};
 				for (const [key, value] of Object.entries(resolved.headers)) {
-					const resolvedValue = await resolveConfigValue(value);
+					const resolvedValue = await resolveConfigValue(value, { cwd: this.cwd });
 					if (resolvedValue) nextHeaders[key] = resolvedValue;
 				}
 				resolved = { ...resolved, headers: nextHeaders };

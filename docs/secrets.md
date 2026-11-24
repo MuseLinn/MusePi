@@ -213,6 +213,14 @@ toggle only controls the generic sources (environment scanning, `secrets.yml`,
 built-in credential patterns); with it off, those sources are not registered,
 while agent-card values still are.
 
+### MCP config reference
+
+An MCP server's `env` or `headers` value may be exactly `${vault:NAME}`. At
+connect time the daemon reads that entry for the server's workspace, so the
+config file never holds the value; a missing, unreadable or out-of-scope entry
+drops that env/header. This is the path that lets MCP use a vault value without
+writing it into `mcp.json` or the process environment.
+
 ### Daemon RPC
 
 | RPC              | Params                                           | Result                                     |

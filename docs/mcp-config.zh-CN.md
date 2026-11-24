@@ -383,10 +383,11 @@ MusePi 在从 MusePi 原生文件和独立回退文件发现 MCP 配置时展开
 
 在 MusePi 启动 stdio server 或发出 HTTP/SSE 请求之前，它会按如下方式解析 stdio `env` 值和 HTTP/SSE `headers` 值：
 
-1. 如果某个值以 `!` 开头，MusePi 会以 10s 超时运行其余部分作为 shell 命令，并使用去除头尾空白后的 stdout。
-2. 如果命令失败、超时或仅输出空白，则该 `env`/`headers` 条目会被省略。
-3. 否则 MusePi 检查该值是否命名了一个环境变量。
-4. 如果该环境变量被设置为非空值，MusePi 使用环境值；否则按字面字符串使用。
+1. 如果整个值就是 `${vault:NAME}`（NAME 匹配 `/^[A-Z][A-Z0-9_]{0,63}$/`），MusePi 会从当前工作区的 Agent 密钥库读取该条目并使用其值。配置文件里只有名字，永不包含值；条目缺失、不可解密或不在当前工作区范围内时，该 `env`/`headers` 条目会被省略。
+2. 如果某个值以 `!` 开头，MusePi 会以 10s 超时运行其余部分作为 shell 命令，并使用去除头尾空白后的 stdout。
+3. 如果命令失败、超时或仅输出空白，则该 `env`/`headers` 条目会被省略。
+4. 否则 MusePi 检查该值是否命名了一个环境变量。
+5. 如果该环境变量被设置为非空值，MusePi 使用环境值；否则按字面字符串使用。
 
 示例：
 
@@ -404,6 +405,7 @@ MusePi 在从 MusePi 原生文件和独立回退文件发现 MCP 配置时展开
 这意味着以下写法对本地凭据有效且方便：
 
 - `"GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_PERSONAL_ACCESS_TOKEN"` → 从当前 shell 环境复制
+- `"GITHUB_PERSONAL_ACCESS_TOKEN": "${vault:GITHUB_TOKEN}"` → 读取「设置 → 智能体 → 保险库」里保存的条目；配置文件只保留名字
 - `"Authorization": "Bearer hardcoded-token"` → 使用字面值
 - `"Authorization": "!printf 'Bearer %s' \"$GITHUB_TOKEN\""` → 从命令构建 header
 

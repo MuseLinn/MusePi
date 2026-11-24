@@ -404,10 +404,11 @@ Example:
 
 Before MusePi launches a stdio server or makes an HTTP/SSE request, it resolves stdio `env` values and HTTP/SSE `headers` values like this:
 
-1. If a value starts with `!`, MusePi runs the rest as a shell command with a 10s timeout and uses trimmed stdout.
-2. If the command fails, times out, or prints only whitespace, that `env`/`headers` entry is omitted.
-3. Otherwise MusePi checks whether the value names an environment variable.
-4. If that environment variable is set to a non-empty value, MusePi uses the environment value; otherwise it uses the string literally.
+1. If the whole value is `${vault:NAME}` (NAME matching `/^[A-Z][A-Z0-9_]{0,63}$/`), MusePi reads that entry from the agent secret store for this workspace and uses its value. The config file never holds the value; a missing, unreadable or out-of-scope entry drops that env/header entry.
+2. If a value starts with `!`, MusePi runs the rest as a shell command with a 10s timeout and uses trimmed stdout.
+3. If the command fails, times out, or prints only whitespace, that `env`/`headers` entry is omitted.
+4. Otherwise MusePi checks whether the value names an environment variable.
+5. If that environment variable is set to a non-empty value, MusePi uses the environment value; otherwise it uses the string literally.
 
 Examples:
 
@@ -425,6 +426,7 @@ Examples:
 That means this is valid and convenient for local secrets:
 
 - `"GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_PERSONAL_ACCESS_TOKEN"` → copy from the current shell environment
+- `"GITHUB_PERSONAL_ACCESS_TOKEN": "${vault:GITHUB_TOKEN}"` → read the entry saved in Settings → Vault; the file holds only the name
 - `"Authorization": "Bearer hardcoded-token"` → use the literal value
 - `"Authorization": "!printf 'Bearer %s' \"$GITHUB_TOKEN\""` → build the header from a command
 

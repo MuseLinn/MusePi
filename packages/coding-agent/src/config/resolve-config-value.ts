@@ -6,6 +6,11 @@
 
 import { executeShell } from "@musepi/pi-natives";
 import { $envExact } from "@musepi/pi-utils";
+import { getAgentDir } from "@musepi/pi-utils/dirs";
+import { getAgentSecretStore, secretScopeIncludes } from "../secrets/agent-store";
+
+/** The whole value must be the reference; partial substitution would be ambiguous. */
+const VAULT_REFERENCE = /^\$\{vault:([A-Z][A-Z0-9_]{0,63})\}$/u;
 
 /** Cache for successful shell command results (persists for process lifetime). */
 const commandResultCache = new Map<string, string>();
@@ -13,17 +18,37 @@ const commandResultCache = new Map<string, string>();
 /** De-duplicates concurrent executions for the same command. */
 const commandInFlight = new Map<string, Promise<string | undefined>>();
 
+export interface ResolveConfigValueOptions {
+	/** The workspace the config belongs to, for a scoped vault entry. */
+	cwd?: string;
+}
+
 /**
  * Resolve a config value (API key, header value, etc.) to an actual value.
+ * - `${vault:NAME}` reads the agent secret store; the config file never holds the value
  * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
  * - Otherwise checks environment variable first, then treats as literal (not cached)
  */
-export async function resolveConfigValue(config: string): Promise<string | undefined> {
+export async function resolveConfigValue(
+	config: string,
+	options: ResolveConfigValueOptions = {},
+): Promise<string | undefined> {
+	const vault = VAULT_REFERENCE.exec(config);
+	if (vault) return await readVaultValue(vault[1]!, options.cwd);
 	if (config.startsWith("!")) {
 		return await executeCommand(config);
 	}
 	const envValue = $envExact(config);
 	return envValue || config;
+}
+
+/** A scoped entry is readable only from its own workspace; no workspace means only `all`. */
+async function readVaultValue(name: string, cwd: string | undefined): Promise<string | undefined> {
+	const store = getAgentSecretStore(getAgentDir());
+	const entry = await store.getEntry(name);
+	if (entry === undefined) return undefined;
+	if (entry.scope !== "all" && (cwd === undefined || !secretScopeIncludes(entry.scope, cwd))) return undefined;
+	return await store.getValue(name);
 }
 
 async function executeCommand(commandConfig: string): Promise<string | undefined> {
@@ -76,11 +101,12 @@ async function runShellCommand(command: string, timeoutMs: number): Promise<stri
  */
 export async function resolveHeaders(
 	headers: Record<string, string> | undefined,
+	options: ResolveConfigValueOptions = {},
 ): Promise<Record<string, string> | undefined> {
 	if (!headers) return undefined;
 	const resolved: Record<string, string> = {};
 	for (const [key, value] of Object.entries(headers)) {
-		const resolvedValue = await resolveConfigValue(value);
+		const resolvedValue = await resolveConfigValue(value, options);
 		if (resolvedValue) {
 			resolved[key] = resolvedValue;
 		}

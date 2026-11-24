@@ -5,6 +5,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 ## [Unreleased]
 
 ### 新功能
+- **MCP 配置现在可以直接引用保险库，配置文件里不再落值**：`env` 或 `headers` 的值可以整个写成 `${vault:NAME}`。MusePi 在连接前按该 server 的工作区读取加密条目，配置里只保留名字；缺失、不可解密或不在当前工作区范围内的条目会让该 env/header 被省略，而不是把名字当字面值发出去。视觉组件（`ui` 块、`widget`）的提示词也明确禁止收集密钥。
+  - EN: MCP config can now reference the vault directly, and the config file no longer holds a value. An `env` or `headers` value may be exactly `${vault:NAME}`; before connecting, MusePi reads the encrypted entry for that server's workspace, so only the name lives in the file. A missing, unreadable or out-of-scope entry drops that env/header instead of sending the name as a literal. The visual-answers prompt (`ui` blocks and `widget`) now also refuses to collect a credential.
+
 - **密钥可以按文件交付，工具拿到的是路径而不是值**：`request_secret` 新增 `delivery: "env" | "file"`。`file` 把值写到 `agent-secrets/files/<NAME>`（目录 0700、文件 0600，适用于有 POSIX 权限的平台），结果只给出该路径，值绝不进入任何 bash 环境变量；删除或替换条目时文件同步维护。设置页与 `list_secrets` 显示交付方式，替换表单会说明是哪一种。
   - EN: A secret can now be delivered as a file, and the tool receives its path instead of the value. `request_secret` accepts `delivery: "env" | "file"`; `file` writes the value to `agent-secrets/files/<NAME>` (directory 0700, file 0600 where the platform has POSIX modes), returns only that path, and never exports it to a bash environment variable. Deleting or replacing the entry maintains the file. Settings and `list_secrets` show the delivery, and the replace form names it.
 

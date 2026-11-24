@@ -182,6 +182,10 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
 
 Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值，与通用扫描特性是两份不同的授权。即使 `secrets.enabled=false`，会话也会构建 Agent 密钥 obfuscator。该开关只控制通用来源（环境变量扫描、`secrets.yml`、内置凭据模式）；关闭时这些来源不注册，但 Agent 卡片保存的值仍然注册。
 
+### MCP 配置引用
+
+MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连接时 daemon 会按该 server 的工作区读取条目，因此配置文件永不包含值；条目缺失、不可解密或不在范围内时，该 env/header 会被省略。这是让 MCP 使用保险库值、而不把值写进 `mcp.json` 或进程环境的路径。
+
 ### Daemon RPC
 
 | RPC              | 参数                                             | 结果                                       |
