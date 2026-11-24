@@ -30,7 +30,8 @@ One text summary block, then one `image` block per rendered page (`image/png`). 
 ## Engine
 Rendering goes through the host's Office kit. The default engine converts Office documents to PDF with LibreOffice (`soffice`) and rasterizes pages with poppler's `pdftoppm`; a PDF source needs only `pdftoppm`. LibreOffice and `pdftoppm` are discovered at call time.
 
+A spreadsheet selection is a workbook rewrite, not a crop: `sheet` keeps only that worksheet visible and hides the others, and `range` also becomes the sheet's `_xlnm.Print_Area`, so the engine prints exactly that area. This needs an `.xlsx` workbook; convert `.xls`/`.ods` to `.xlsx` first.
+
 ## Limits
 - A missing engine fails the call with an `unavailable` message; the tool never substitutes a text summary, `soffice`, `npx`, or another converter.
-- Worksheet-area rendering (`sheet` + `range`) needs a native engine that can render a cell range; the default engine rejects the selection instead of approximating it.
 - The image count (`Config.maxImages`, default 20) and total PNG bytes (`Config.maxBytes`, default 32 MiB) bound one render.

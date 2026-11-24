@@ -16,6 +16,7 @@ import { existsSync } from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 
 /** Document families the seam distinguishes by input extension. */
 export type OfficeExtension = "doc" | "docx" | "odt" | "xls" | "xlsx" | "ods" | "ppt" | "pptx" | "odp" | "pdf";
@@ -167,6 +168,102 @@ export function isSpreadsheet(extension: OfficeExtension): boolean {
 	return familyOf(extension) === "spreadsheet";
 }
 
+const XLSX_WORKBOOK = "xl/workbook.xml";
+
+function attributeValue(tag: string, name: string): string | undefined {
+	return new RegExp(`\\b${name}="([^"]*)"`).exec(tag)?.[1];
+}
+
+/** Set, replace, or remove one attribute on a single XML tag. */
+function setAttribute(tag: string, name: string, value: string | undefined): string {
+	const pattern = new RegExp(`\\s${name}="[^"]*"`);
+	if (value === undefined) return tag.replace(pattern, "");
+	if (pattern.test(tag)) return tag.replace(pattern, ` ${name}="${value}"`);
+	return tag.replace(/\s*\/?>$/, match => ` ${name}="${value}"${match.trimStart()}`);
+}
+
+function escapeXml(text: string): string {
+	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Normalize an A1 range to the absolute form a print area uses ($A$1:$H$40). */
+export function normalizePrintRange(range: string): string {
+	const match = /^([A-Za-z]+)(\d+):([A-Za-z]+)(\d+)$/.exec(range.trim());
+	if (!match) throw new OfficeKitError("invalid-request", `invalid range "${range}"; expected A1:H40`);
+	return `$${match[1]!.toUpperCase()}$${match[2]}:$${match[3]!.toUpperCase()}$${match[4]}`;
+}
+
+export interface WorkbookSheetSelection {
+	/** Exact worksheet name. */
+	sheet: string;
+	/** A1 range inside the sheet; omitted prints the sheet's used area. */
+	range?: string;
+}
+
+/**
+ * Rewrite an `.xlsx` package so the engine prints one worksheet, optionally
+ * only one cell range: every other worksheet is hidden and an
+ * `_xlnm.Print_Area` defined name scopes the output. This keeps worksheet
+ * selection and ranges inside the engine instead of cropping rendered pages.
+ * Only OOXML workbooks carry this structure; legacy `.xls` and `.ods` input is
+ * refused.
+ */
+export function selectWorkbookSheet(bytes: Uint8Array, selection: WorkbookSheetSelection): Uint8Array {
+	let files: Record<string, Uint8Array>;
+	try {
+		files = unzipSync(bytes);
+	} catch (error) {
+		throw new OfficeKitError(
+			"invalid-request",
+			`cannot read the workbook: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+	const workbook = files[XLSX_WORKBOOK];
+	if (!workbook) {
+		throw new OfficeKitError("invalid-request", "not an Excel workbook: xl/workbook.xml is missing");
+	}
+	const source = strFromU8(workbook);
+	const tags = [...source.matchAll(/<sheet\b[^>]*\/?>/g)].map(match => match[0]);
+	const names = tags.map(tag => attributeValue(tag, "name") ?? "");
+	const index = names.findIndex(name => name.toLowerCase() === selection.sheet.toLowerCase());
+	if (index < 0) {
+		throw new OfficeKitError(
+			"invalid-request",
+			`worksheet "${selection.sheet}" not found; available: ${names.join(", ") || "(none)"}`,
+		);
+	}
+
+	let rewritten = source;
+	for (let position = 0; position < tags.length; position += 1) {
+		const tag = tags[position]!;
+		const next = setAttribute(tag, "state", position === index ? "visible" : "hidden");
+		rewritten = rewritten.replace(tag, next);
+	}
+
+	if (selection.range !== undefined) {
+		const sheetName = names[index]!.replaceAll("'", "''");
+		const area = escapeXml(`'${sheetName}'!${normalizePrintRange(selection.range)}`);
+		const defined = `<definedName name="_xlnm.Print_Area" localSheetId="${index}">${area}</definedName>`;
+		rewritten = rewritten.replace(
+			new RegExp(
+				`<definedName\\b[^>]*name="_xlnm\\.Print_Area"[^>]*localSheetId="${index}"[^>]*>[\\s\\S]*?</definedName>`,
+				"g",
+			),
+			"",
+		);
+		if (/<definedNames\b[^>]*\/>/.test(rewritten)) {
+			rewritten = rewritten.replace(/<definedNames\b[^>]*\/>/, `<definedNames>${defined}</definedNames>`);
+		} else if (rewritten.includes("</definedNames>")) {
+			rewritten = rewritten.replace("</definedNames>", `${defined}</definedNames>`);
+		} else {
+			rewritten = rewritten.replace("</sheets>", `</sheets><definedNames>${defined}</definedNames>`);
+		}
+	}
+
+	files[XLSX_WORKBOOK] = strToU8(rewritten);
+	return zipSync(files);
+}
+
 const LIBREOFFICE_CANDIDATES = [
 	"soffice",
 	"libreoffice",
@@ -264,18 +361,72 @@ export class LibreOfficeKit implements OfficeKit {
 		return new Uint8Array(await Bun.file(pdf).arrayBuffer());
 	}
 
+	/** Convert already-rewritten document bytes (e.g. one hidden sheet). */
+	async #toPdfBytes(bytes: Uint8Array, extension: "xlsx", signal?: AbortSignal): Promise<Uint8Array> {
+		const dir = await this.#scratch();
+		const input = path.join(dir, `input.${extension}`);
+		await Bun.write(input, bytes);
+		const result = await run([this.#soffice(), "--headless", "--convert-to", "pdf", "--outdir", dir, input], {
+			signal,
+		});
+		if (result.exitCode !== 0) {
+			throw new OfficeKitError("engine-failed", `The Office converter failed: ${tail(result.stderr)}`);
+		}
+		const pdf = path.join(dir, "input.pdf");
+		if (!(await Bun.file(pdf).exists())) {
+			throw new OfficeKitError("engine-failed", "The Office converter produced no PDF.");
+		}
+		return new Uint8Array(await Bun.file(pdf).arrayBuffer());
+	}
+
 	async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult> {
-		if (request.sheet !== undefined || request.range !== undefined) {
+		const spreadsheet = isSpreadsheet(request.extension);
+		if (spreadsheet && request.pages !== undefined) {
 			throw new OfficeKitError(
 				"invalid-request",
-				"Worksheet-area rendering needs the native Office engine; omit sheet/range to render whole sheets.",
+				"pages does not apply to spreadsheets; select sheet and range instead.",
+			);
+		}
+		if (!spreadsheet && (request.sheet !== undefined || request.range !== undefined)) {
+			throw new OfficeKitError("invalid-request", "sheet and range apply only to spreadsheets.");
+		}
+		if (request.range !== undefined && request.sheet === undefined) {
+			throw new OfficeKitError("invalid-request", "range requires sheet.");
+		}
+		if (request.extension === "pdf" && (request.sheet !== undefined || request.range !== undefined)) {
+			throw new OfficeKitError("invalid-request", "sheet and range apply only to spreadsheets.");
+		}
+		if (request.sheet !== undefined && request.extension !== "xlsx") {
+			throw new OfficeKitError(
+				"invalid-request",
+				`worksheet selection needs an .xlsx workbook; convert this ${request.extension} file first.`,
 			);
 		}
 		const dpi = request.dpi ?? DEFAULT_DPI;
 		const pdf =
 			request.extension === "pdf"
 				? new Uint8Array(await Bun.file(request.input).arrayBuffer())
-				: await this.#toPdf(request.input, signal);
+				: request.sheet === undefined
+					? await this.#toPdf(request.input, signal)
+					: await this.#toPdfBytes(
+							// Worksheet selection and ranges are a workbook rewrite: only the
+							// chosen sheet stays visible, and its print area is the range.
+							selectWorkbookSheet(new Uint8Array(await Bun.file(request.input).arrayBuffer()), {
+								sheet: request.sheet,
+								...(request.range === undefined ? {} : { range: request.range }),
+							}),
+							"xlsx",
+							signal,
+						);
+		return this.#rasterize(pdf, request, dpi, signal);
+	}
+
+	async #rasterize(
+		pdf: Uint8Array,
+		request: OfficeImagesRequest,
+		dpi: number,
+		signal?: AbortSignal,
+	): Promise<OfficeImagesResult> {
 		if (request.pages !== undefined && request.maxImages !== undefined && request.pages.length > request.maxImages) {
 			throw new OfficeKitError(
 				"output-too-large",

@@ -21,7 +21,7 @@ description: 处理 Word/Excel/PowerPoint 文档与 PDF——读结构、按页�
 ## 参数要点
 
 - `input`：相对会话工作目录的路径；工具不改源文件。
-- `office_render`：`pages` 是去重的一基页码/幻灯片号；表格用 `sheet` 加可选 `range`（A1:H40）；`dpi` 24–600，默认 144。表格的 `range` 需要原生渲染引擎，不支持时改用 `office_convert` 的 csv。
+- `office_render`：`pages` 是去重的一基页码/幻灯片号；表格用 `sheet` 加可选 `range`（A1:H40）——工具会把选区写成工作簿的打印区域再渲染，只支持 `.xlsx`；`dpi` 24–600，默认 144。
 - `office_convert`：Word → pdf/docx/odt/txt/md；Excel → pdf/xlsx/ods/csv/txt/md；PowerPoint → pdf/pptx/odp/txt/md。`sheet` 只用于表格转 csv，多工作表时必须指定。`output` 把结果写进工作区；不给 `output` 时二进制结果留在转换目录，返回的是路径，需要用 shell 复制。
 - `office_recalculate`：只接 xls/xlsx/ods，输出 xlsx/ods。转换不会刷新公式结果，没有重算引擎时调用直接失败。
 
