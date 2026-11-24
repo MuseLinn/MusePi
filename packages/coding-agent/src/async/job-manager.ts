@@ -986,7 +986,6 @@ export class AsyncJobManager {
 			this.#inFlightDeliveries.push(delivery);
 			try {
 				await sink(delivery.jobId, delivery.text, this.#jobs.get(delivery.jobId));
-				AsyncJobManager.#ledger?.markDelivered(delivery.jobId);
 			} catch (error) {
 				delivery.attempt += 1;
 				delivery.lastError = error instanceof Error ? error.message : String(error);

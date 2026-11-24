@@ -37,7 +37,6 @@ describe("JobLedger", () => {
 			startTime: Date.now(),
 		});
 		first.finish("job-2", "completed", "done");
-		first.markDelivered("job-2");
 		first.close();
 
 		const second = new JobLedger(file);

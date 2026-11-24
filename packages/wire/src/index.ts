@@ -454,9 +454,7 @@ export function asyncJobResultView(content: unknown, details: unknown): AsyncJob
 		jobId,
 		label,
 		status,
-		// `details` wins over the sentence: the restart replay writes the job
-		// kind there, and the sentence's wording is not a contract.
-		type: asyncJobStrField(details, "type") ?? prefix?.[1] ?? envAttrs.agent,
+		type: prefix?.[1] ?? envAttrs.agent,
 		duration: envAttrs.duration,
 		output: output || replayBody || undefined,
 		lines: Number.isFinite(lines) && lines > 0 ? lines : undefined,

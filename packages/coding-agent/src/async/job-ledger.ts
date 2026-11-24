@@ -28,7 +28,6 @@ export interface DurableJobRecord {
 	agentId?: string;
 	toolCallId?: string;
 	resultText?: string;
-	delivered: boolean;
 }
 
 export interface RegisterDurableJob {
@@ -54,7 +53,6 @@ interface JobRow {
 	agent_id: string | null;
 	tool_call_id: string | null;
 	result_text: string | null;
-	delivered: number;
 }
 
 function toRecord(row: JobRow): DurableJobRecord {
@@ -70,7 +68,6 @@ function toRecord(row: JobRow): DurableJobRecord {
 		...(row.agent_id ? { agentId: row.agent_id } : {}),
 		...(row.tool_call_id ? { toolCallId: row.tool_call_id } : {}),
 		...(row.result_text !== null ? { resultText: row.result_text } : {}),
-		delivered: row.delivered === 1,
 	};
 }
 
@@ -93,8 +90,7 @@ export class JobLedger {
 				owner_id TEXT,
 				agent_id TEXT,
 				tool_call_id TEXT,
-				result_text TEXT,
-				delivered INTEGER NOT NULL DEFAULT 0
+				result_text TEXT
 			);
 			CREATE INDEX IF NOT EXISTS async_jobs_session
 				ON async_jobs(session_id, updated_at DESC);
@@ -106,8 +102,8 @@ export class JobLedger {
 		this.#db
 			.query(
 				`INSERT OR REPLACE INTO async_jobs
-					(id, session_id, type, label, status, start_time, updated_at, owner_id, agent_id, tool_call_id, result_text, delivered)
-				 VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, NULL, 0)`,
+					(id, session_id, type, label, status, start_time, updated_at, owner_id, agent_id, tool_call_id, result_text)
+				 VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, NULL)`,
 			)
 			.run(
 				job.id,
@@ -130,10 +126,6 @@ export class JobLedger {
 				 WHERE id = ?`,
 			)
 			.run(status, Date.now(), resultText ?? null, id);
-	}
-
-	markDelivered(id: string): void {
-		this.#db.query("UPDATE async_jobs SET delivered = 1, updated_at = ? WHERE id = ?").run(Date.now(), id);
 	}
 
 	/** Startup reconciliation: a `running` row has no live process anymore.
