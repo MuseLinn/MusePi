@@ -579,132 +579,6 @@ describe("TTSR / IRC custom_message rendering", () => {
 	});
 });
 
-describe("async-job-result settlement card", () => {
-	function jobEntry(overrides: {
-		content: string;
-		details: Record<string, unknown>;
-		display?: boolean;
-	}): SessionEntry {
-		return {
-			type: "custom_message",
-			id: "job-1",
-			parentId: null,
-			timestamp: "2026-11-07T17:13:33Z",
-			customType: "async-job-result",
-			display: overrides.display ?? true,
-			content: overrides.content,
-			details: overrides.details,
-			attribution: "agent",
-		} as unknown as SessionEntry;
-	}
-
-	const envelope = (output: string, attrs = 'id="Alice" agent="task" status="completed" duration="2m57s"'): string =>
-		`Background task job "Alice" completed:\n\n<task-result ${attrs}>\n<meta lines="4" size="974B"/>\n<output>\n${output}\n</output>\n</task-result>\n\nAlice is now idle — message it via \`hub\` to follow up; transcript at history://Alice`;
-
-	it("renders a settled background job as a card, never the task-result envelope", () => {
-		const entry = jobEntry({
-			content: envelope('{\n  "reportSentToMain": true\n}'),
-			details: { jobId: "Alice", status: "completed", label: "Alice" },
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job");
-		expect(html).toContain("tr-row--job");
-		expect(html).toContain("tr-async-job-head");
-		// The status line is a plain readout; folding lives on the output control.
-		expect(html).not.toContain("tr-async-job-collapse");
-		expect(html).not.toContain("tr-async-job-chev");
-		expect(html).not.toContain("tr-custom");
-		expect(html).not.toContain("<task-result");
-		expect(html).not.toContain("<meta");
-		expect(html).not.toContain("<output>");
-		expect(html).not.toContain("Background task job");
-		expect(html).toContain("Alice");
-		expect(html).toContain("2m57s");
-		expect(html).toContain("reportSentToMain");
-		expect(html).toContain("history://Alice");
-	});
-
-	it("marks a failed job with the error tone", () => {
-		const entry = jobEntry({
-			content: envelope("boom", 'id="Bob" agent="task" status="failed" duration="3s"').replace(
-				'Background task job "Alice" completed',
-				'Background task job "Bob" failed',
-			),
-			details: { jobId: "Bob", status: "failed", label: "Bob" },
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job--err");
-		expect(html).toContain("boom");
-	});
-
-	it("renders a restart replay that has no output body", () => {
-		const entry = jobEntry({
-			content: 'Background task job "Alice" completed.',
-			details: { jobId: "Alice", status: "completed", label: "Alice" },
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job");
-		expect(html).not.toContain("Background task job");
-		expect(html).toContain("Alice");
-	});
-
-	it("keeps a hidden job card out", () => {
-		const entry = jobEntry({
-			content: envelope("hidden output"),
-			details: { jobId: "Alice", status: "completed", label: "Alice" },
-			display: false,
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).not.toContain("tr-async-job");
-		expect(html).not.toContain("hidden output");
-	});
-
-	it("formats a JSON output into fields and decodes escaped newlines", () => {
-		const output = JSON.stringify(
-			{
-				notes: "第 1 轮：带制氧机。\n第 2 轮：沙暴怎么办？\n第 3 轮：能量从哪来？",
-				reportSentToMain: true,
-			},
-			null,
-			2,
-		);
-		const entry = jobEntry({
-			content: envelope(output),
-			details: { jobId: "Alice", status: "completed", label: "Alice" },
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job-field");
-		expect(html).toContain("notes");
-		expect(html).toContain("reportSentToMain");
-		expect(html).toContain("第 1 轮");
-		// Parsed: the value carries real line breaks, not the JSON escape.
-		expect(html).not.toContain("第 1 轮：带制氧机。\\n第 2 轮");
-		// The envelope and the raw JSON braces never render.
-		expect(html).not.toContain('{"notes"');
-	});
-
-	it("falls back to plain text when the output is not JSON", () => {
-		const entry = jobEntry({
-			content: envelope("plain failure text"),
-			details: { jobId: "Alice", status: "completed", label: "Alice" },
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job-text");
-		expect(html).toContain("plain failure text");
-	});
-
-	it("clamps a long output and offers expansion", () => {
-		const output = Array.from({ length: 14 }, (_, i) => `行 ${i + 1}：job output`).join("\n");
-		const entry = jobEntry({
-			content: envelope(output),
-			details: { jobId: "Alice", status: "completed", label: "Alice" },
-		});
-		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job-body--clamped");
-		expect(html).toContain("tr-async-job-more");
-	});
-});
-
 describe("Transcript display-settings parity (TUI)", () => {
 	it("renders the 活动 header for a turn whose process sits after the reply", () => {
 		// Real journal shape (round-collapse's regression fixture, rendered):
@@ -795,17 +669,6 @@ describe("Transcript display-settings parity (TUI)", () => {
 					isError: false,
 					timestamp: 2,
 				},
-			} as unknown as SessionEntry,
-			{
-				type: "custom_message",
-				id: "job-1",
-				parentId: null,
-				timestamp: "2026-07-09T00:00:02Z",
-				customType: "async-job-result",
-				display: true,
-				content: 'Background task job "Alice" completed.',
-				details: { jobId: "Alice", status: "completed", label: "Alice" },
-				attribution: "agent",
 			} as unknown as SessionEntry,
 			assistantEntry({ timestamp: 4, text: "done" }),
 		];
@@ -1646,6 +1509,47 @@ describe("a failed call stays visible in a folded round", () => {
 		const html = renderTranscript({ entries: failedRound(), working: false });
 		expect(html).toContain("tr-round-fold-failed");
 		expect(html).toMatch(/1 个失败|1 failed/);
+	});
+
+	it("shows the tools' own run time in the closed header", () => {
+		// A turn that took 90s because one command ran 42s should say so, rather
+		// than only that it took 90s.
+		const entries: SessionEntry[] = [
+			userEntry(200),
+			{
+				type: "message",
+				id: "a-call",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:00Z",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "sleep 42" } }],
+					model: "test/model",
+					usage: assistantUsage(),
+					stopReason: "stop",
+					timestamp: 201,
+				},
+			} as SessionEntry,
+			{
+				type: "message",
+				id: "r-ok",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:01Z",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "bash",
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					startedAt: 201,
+					durationMs: 42_000,
+					timestamp: 43_000,
+				},
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 44_000, text: "跑完了。" }),
+		];
+		const html = renderTranscript({ entries, working: false });
+		expect(html).toMatch(/工具耗时 42\.0s|Tool time 42\.0s/);
 	});
 
 	it("keeps the failed call out of the fold's hidden span", () => {

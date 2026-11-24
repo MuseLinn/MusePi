@@ -31,7 +31,6 @@ import type { SessionMessageEntry } from "../../session/session-entries";
 import {
 	assistantHasVisibleContent,
 	assistantUsageIsBilled,
-	buildAsyncJobResultBlock,
 	buildAsyncResultBlock,
 	buildFileMentionBlock,
 	buildIrcMessageCard,
@@ -474,10 +473,6 @@ export class ChatTranscriptBuilder {
 	}
 	#appendCustomMessage(message: Extract<AgentMessage, { role: "custom" | "hookMessage" }>): void {
 		if (!message.display) return;
-		if (message.customType === "async-job-result") {
-			this.container.addChild(buildAsyncJobResultBlock(message, () => this.#expanded));
-			return;
-		}
 		if (message.customType === "async-result") {
 			const component = buildAsyncResultBlock(message);
 			this.container.addChild(component);

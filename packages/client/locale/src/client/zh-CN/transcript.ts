@@ -30,6 +30,7 @@ export const transcript = {
 	"transcript.runCommandWithCount": "运行了 {count} 个命令",
 	"transcript.runFailedWithCount": "{count} 个失败",
 	"transcript.roundFailedWithCount": "{count} 个失败",
+	"transcript.roundToolTime": "工具耗时 {duration}",
 	"transcript.runPluginWithCount": "插件操作 {count} 次",
 	"transcript.runOtherWithCount": "执行了 {count} 次其他操作",
 	// ── IRC / 代理间消息 ──────────────────────────────────────────────────────
@@ -42,13 +43,6 @@ export const transcript = {
 	"transcript.thinkingInProgress": "思考中",
 	"transcript.thinkingProcess": "思考过程",
 	"transcript.thinkingDone": "思考完成",
-	"transcript.asyncJobCompleted": "已完成",
-	"transcript.asyncJobFailed": "失败",
-	"transcript.asyncJobCancelled": "已取消",
-	"transcript.asyncJobRunning": "运行中",
-	"transcript.asyncJobLines": "{count} 行",
-	"transcript.asyncJobShowMore": "展开输出",
-	"transcript.asyncJobShowLess": "收起输出",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	"transcript.redacted": " · 已隐去",
 	"transcript.turnUsage": "本轮用量",

@@ -564,7 +564,6 @@ daemon RPC:
 | `collab-prompt` | 用户行 + 来源 badge | `details.from` |
 | `ttsr` | `TtsrBlock`(警告折叠) | `details.rules[]` |
 | `irc:*` | `IrcCard`(`.tr-irc`):路由由 `details` 组成、按 kind 分级、正文 3 行截断;同双方连续行共享一次表头 | `details.from/to/message/body/replyTo`;`content` 的路由头/提示模板永不渲染 |
-| `async-job-result` | `.tr-async-result .tr-async-job` 结算卡:状态字形 + label + `[type]` + 时长 + 状态,`<output>` 限量预览可展开,尾部 idle/`history://` 提示 | `details.jobId/status/label` + 信封里的 `<output>`、duration、`<meta>`;`<task-result>` 标记永不渲染 |
 | `async-result` | `.tr-async-result` 卡片(每 job 一行「✓ 后台任务已完成 [type] id (耗时)」) | `details.jobs[]` |
 | `advisor` | `AdvisorBlock`(severity 色 rail + badge、blocker 计数、>3 条折叠) | `details.notes[]` |
 | 其他 | 默认 `tr-custom`(chip `customType` + `content` markdown) | — |
@@ -572,8 +571,6 @@ daemon RPC:
 **铁律**:模型-facing 模板(`<system-notice>`、`<advisory severity=…>`)只存在于 `content`(给 LLM 的 payload),GUI 渲染器**只读 `details.*` 干净文本,绝不把模板正文渲染给用户**——`async-result`/`advisor` 都是 2026-08-22 补上 GUI 渲染(此前落入默认 `tr-custom`,把 `<system-notice>`/`<advisory>` XML 原样显示,与 TUI 的 `buildAsyncResultBlock`/`createAdvisorMessageCard` 不对齐)。
 
 **IRC 行**(`client-core/src/lib/irc.ts` + `components/transcript/irc-message.tsx`):`irc:relay`/`irc:autoreply` 的 `content` 自带 `[IRC a → b]` 路由头,`irc:incoming` 的 `content` 是渲染后的 `irc-incoming.md` 模板。`ircPresentation` 优先读 `details`,旧快照缺失时剥离这两种形状;会话自己一侧的 `from`/`to` 留空,由各端自行命名。`ircPairKeyOf` 不区分方向,回复沿用上一条路由,一段连续消息只在首行显示表头。正文超过 3 个非空行时截断并提供显式展开。Markdown 导出(`desktop-app/src/lib/session-markdown.ts`)复用同一份 presentation,输出 `## IRC · from → to`,导出的记录不再丢失 IRC 流量。
-
-**后台任务结算卡**(`@musepi/pi-wire` `asyncJobResultView` + `components/transcript/async-job-result.tsx`):`async-job-result` 是已结算任务(最常见是子 agent task)的 display-only 卡,现在不再有任何写入方:守护进程唯一的产生者是「重启时回放账本里未投递的行」,而这条回放已删除——模型早已通过工具结果或 `async-result` 跟随消息拿到结果,卡片只是把同一件事在转录末尾重复一遍。作业结局现在保存在落盘账本与「后台任务」面板里。渲染器保留,用于已包含这类条目的旧转录(以及从不回放的 TUI)。它的 `content` 是模型-facing 的 `<task-result>` 信封;`asyncJobResultView` 读取 `details` 以及信封内部的 `<output>`/`<preview>`、`duration`、`<meta>`,卡片渲染状态字形、label、type、时长与状态,下面是限量输出的预览和共享 collapse morph,最后是 idle/`history://` 提示。输出是 JSON 对象时按字段渲染(解析后的字符串值保留真实换行,不再显示字面量 `\n`),其余内容按等宽正文展示。TUI 通过 `buildAsyncJobResultBlock` 渲染同一份 view(状态行 + 限量预览)。参考实现同样把后台工作收束成结算行:kimi-code 只保留 phase 行并把完整输出交给独立 viewer,且只在任务确实 detached、通知从未进入转录时才恢复一次完成记录;openchamber 跟随子会话状态并提供子任务入口。
 
 **行高由虚拟列表独占**:transcript 行不得使用 `content-visibility` 或内在尺寸兜底。行高会异步变化——widget iframe 在挂载后才上报高度、图片解码、折叠 morph 运行——Chromium 会把被跳过的行按 `contain-intrinsic-size` 计高,于是虚拟列表按折叠后的 60px 行布局(实测 686px 的 widget 行只量到 72px):相邻行重叠、尾部出现空白。虚拟列表自己的窗口化是唯一的离屏优化,`tr-row` 保持正常布局。widget 页面通过 `widgets/html.tsx` 的探针上报内容高度:root 只在内容溢出视口时采用;否则取 body 内容范围(仅统计在流子元素,因此 `body{height:100%}` 的拉伸页也能缩回);贴在 frame 底边的滚动容器会撑高 frame 而不是内部滚动(只保留一个滚动条,其撑高值在该容器自身高度不变期间被记住);只有当宿主封顶 frame 时,页面才拥有自己的滚动条与滚轮所有权。
 

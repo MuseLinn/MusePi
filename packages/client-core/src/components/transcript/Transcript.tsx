@@ -15,7 +15,6 @@ function hapticTap(): void {
 	}
 }
 
-import { asyncJobResultView } from "@musepi/pi-wire";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
 	createContext,
@@ -37,7 +36,6 @@ import { morphSurfaceBack, morphSurfaceFrom, sharedSurfaceTransitionAllowed } fr
 import type { ToolRenderHost } from "../../tool-render";
 import type { PresentedFile } from "../../tool-render/presented.js";
 import { ImageLightbox } from "../image-lightbox";
-import { AsyncJobResultCard } from "./async-job-result";
 import { BashCard } from "./bash-card";
 import { BranchSummaryDivider } from "./branch-summary-divider";
 import { TurnErrorBody } from "./error-notice";
@@ -502,7 +500,7 @@ function Row({
 	quoteText,
 	retryTarget,
 }: {
-	kind: "user" | "assistant" | "custom" | "job" | "marker" | "bash";
+	kind: "user" | "assistant" | "custom" | "marker" | "bash";
 	id?: string;
 	gutter: ReactNode;
 	/** Keep the gutter's width even when this row shows nothing in it.
@@ -1049,17 +1047,6 @@ function renderCustomMessage({
 		return (
 			<Row kind="custom" gutter="" title={timestamp} turnStart>
 				<AdvisorBlock notes={notes} open={advisorOpen} onToggle={() => onToggleAdvisor?.()} />
-			</Row>
-		);
-	}
-	if (customType === "async-job-result") {
-		if (!display) return null;
-		// A background completion is a message FROM the background to the
-		// reader: it anchors on the user side (right), like the prompt that
-		// started the work, instead of joining the agent's left column.
-		return (
-			<Row kind="job" gutter="" title={timestamp}>
-				<AsyncJobResultCard view={asyncJobResultView(content, details)} />
 			</Row>
 		);
 	}

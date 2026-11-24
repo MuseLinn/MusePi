@@ -460,7 +460,6 @@ turn
 
 **IRC 流量行（`irc:*`）**：每条消息一行，不并入工作段折叠。路由（`from → to`）由 `details` 组成，`content` 里的 `[IRC …]` 头与 incoming 的 `<irc>` 模板都不渲染；三种 kind 只差视觉权重——`relay`（旁观的双方流量）最轻，`incoming` 读作发给当前会话，`autoreply` 带 `auto` / `reply` 标签。同一对 agent 的连续消息共享一次路由头，正文超过 3 行截断并提供显式展开——一段往返问答不再逐条重复发言人。展开/收起复用共享 collapse morph：clamp 在开始展开时摘下、收起结束后再挂回，高度按 220ms `--spring` 过渡，不会瞬跳。
 
-**后台任务结算卡（`async-job-result`）**：L1 卡片（复用 `.tr-async-result` 外壳），头行是状态字形（✓ / ✕ / ⊘，按 completed / failed / cancelled 取色）+ agent 名 + `[type]` + 时长 + 状态文字 + 行数/体积；`<output>` 是 JSON 对象时按字段渲染（字符串值解码换行），其余按等宽正文；超过 8 行截断并淡出，展开/收起走同一 collapse morph；尾部 idle / `history://` 提示降为一行 faint 文本。卡片只表达"这个 job 结算了"，运行中的实时状态仍由右侧子代理面板承担，不在这里重复。
 
 **过程行的折叠锚点**：思考块、活动/运行汇总与工具卡片共用左侧折叠字形（`.tr-round-fold-icon` / 前置 `.tv-chev`）；思考块流式输出显示「思考中」，结束后显示「思考过程 · 时长」或「思考完成」。后台完成卡改为用户侧锚定（右对齐、与用户气泡同右缘），卡片头即折叠锚点，输出/payload 可整体收起。
 

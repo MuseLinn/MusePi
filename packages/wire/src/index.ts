@@ -210,6 +210,14 @@ export interface ToolResultMessage {
 	details?: unknown;
 	isError: boolean;
 	timestamp: number;
+	/** When the call started executing (epoch ms). Absent on journals written
+	 *  before this was recorded, and on calls that never ran (validation or
+	 *  interrupt before start) — readers must treat absence as UNKNOWN, never
+	 *  as zero. */
+	startedAt?: number;
+	/** Execution time in ms, measured around the tool's own run. Same
+	 *  absence rule as {@link startedAt}. */
+	durationMs?: number;
 	/** 会话内条目树父节点 id(/tree 语义)。 */
 	parentId?: string | null;
 }
@@ -369,98 +377,6 @@ export function advisorNoteText(details: unknown): string {
 		.map(n => (typeof (n as { note?: unknown } | null)?.note === "string" ? (n as { note: string }).note : ""))
 		.filter(s => s.trim().length > 0)
 		.join("; ");
-}
-
-/**
- * Display shape of an `async-job-result` custom message: the daemon's card for
- * a settled background job (most visibly a subagent task), written by normal
- * delivery and by the restart replay.
- *
- * `content` is the model-facing `<task-result>` envelope from
- * `prompts/tools/task-summary.md` (or the replay sentence), so every surface
- * must compose its card from `details` plus the envelope's inner
- * `<output>`/`<preview>`, duration and `<meta>` — rendering `content` directly
- * puts the markup in front of the reader.
- */
-export interface AsyncJobResultView {
-	jobId?: string;
-	label: string;
-	status: string;
-	type?: string;
-	duration?: string;
-	output?: string;
-	lines?: number;
-	size?: string;
-	/** Trailing model-facing sentence after the envelope ("is now idle …"). */
-	hint?: string;
-}
-
-const ASYNC_JOB_PREFIX = /^\s*Background\s+([\w-]+)\s+job\s+"([^"]*)"\s+([^:\n.]+)[.:]?/i;
-const ASYNC_JOB_ENVELOPE = /<task-result\b([^>]*)>([\s\S]*?)<\/task-result>/i;
-const ASYNC_JOB_META = /<meta\b([^>]*)\/?>/i;
-const ASYNC_JOB_OUTPUT = /<(output|preview)\b[^>]*>\n?([\s\S]*?)\n?<\/\1>/i;
-const ASYNC_JOB_ATTR = /([\w-]+)\s*=\s*"([^"]*)"/g;
-
-function contentText(content: unknown): string {
-	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return "";
-	return content
-		.filter((b): b is { type: "text"; text: string } => typeof b === "object" && b !== null && b.type === "text")
-		.map(b => b.text)
-		.join(" ");
-}
-
-function asyncJobAttrs(block: string | undefined): Record<string, string> {
-	const found: Record<string, string> = {};
-	if (!block) return found;
-	for (const match of block.matchAll(ASYNC_JOB_ATTR)) {
-		const [, key, value] = match;
-		if (key && value !== undefined) found[key] = value;
-	}
-	return found;
-}
-
-function asyncJobStrField(details: unknown, key: string): string | undefined {
-	if (details === null || typeof details !== "object" || !(key in details)) return undefined;
-	const value = (details as Record<string, unknown>)[key];
-	return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
-}
-
-export function asyncJobResultView(content: unknown, details: unknown): AsyncJobResultView {
-	const text = contentText(content).trim();
-	const prefix = ASYNC_JOB_PREFIX.exec(text);
-	const envelope = ASYNC_JOB_ENVELOPE.exec(text);
-	const envAttrs = asyncJobAttrs(envelope?.[1]);
-	const inner = envelope?.[2] ?? "";
-	const metaAttrs = asyncJobAttrs(ASYNC_JOB_META.exec(inner)?.[1]);
-	const output = ASYNC_JOB_OUTPUT.exec(inner)?.[2]?.trim();
-	const afterEnvelope = envelope ? text.slice(envelope.index + envelope[0].length) : "";
-	const hint = afterEnvelope.replace(/^[\s.:]+/, "").trim();
-	// A restart-replay entry can carry only the daemon's sentence; the body (if
-	// any) follows its colon. Keep it as output so a human still sees it.
-	const replayBody =
-		!envelope && prefix
-			? text
-					.slice(prefix[0].length)
-					.replace(/^\s*:?\s*/, "")
-					.trim()
-			: "";
-	const label =
-		asyncJobStrField(details, "label") ?? envAttrs.id ?? prefix?.[2] ?? asyncJobStrField(details, "jobId") ?? "job";
-	const status = asyncJobStrField(details, "status") ?? envAttrs.status ?? prefix?.[3] ?? "completed";
-	const jobId = asyncJobStrField(details, "jobId") ?? envAttrs.id ?? prefix?.[2];
-	const lines = Number(metaAttrs.lines);
-	return {
-		jobId,
-		label,
-		status,
-		type: prefix?.[1] ?? envAttrs.agent,
-		duration: envAttrs.duration,
-		output: output || replayBody || undefined,
-		lines: Number.isFinite(lines) && lines > 0 ? lines : undefined,
-		size: metaAttrs.size,
-		hint: hint || undefined,
-	};
 }
 
 /** Frozen round-total record, shared by the daemon (agent_end in the
