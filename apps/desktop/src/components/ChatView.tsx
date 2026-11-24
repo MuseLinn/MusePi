@@ -154,6 +154,23 @@ function formatPauseElapsed(pausedAt: number): string {
 	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+/** Leaf a withdrawal's undo should branch back to.
+ *
+ *  The leaf is normally the newest entry. Two shapes are not addressable by
+ *  `session.branchAt` and made the dock's undo look dead:
+ *  - the optimistic echo row (`user:optimistic-N`) exists only in this client,
+ *    so the daemon answers `Unknown message`;
+ *  - a "root" pin has no leaf at all, so there is nothing to go back to. */
+function undoLeafTarget(entries: readonly SessionEntry[], leafKey: string | "root" | null): string | null {
+	if (leafKey === "root") return null;
+	if (leafKey) return leafKey;
+	for (let index = entries.length - 1; index >= 0; index -= 1) {
+		const id = (entries[index] as { id?: unknown }).id;
+		if (typeof id === "string" && !id.startsWith("user:optimistic-")) return id;
+	}
+	return null;
+}
+
 /**
  * `display.liveActivityRows` → the row count the transcript wants.
  *
@@ -1553,7 +1570,7 @@ export function ChatView({
 	// single source of truth). The composer gets the message text back for
 	// editing, and the dock card above the composer shows the jump target
 	// with an explicit undo (jump back to the leaf we came from).
-	const [jumpBack, setJumpBack] = useState<{ fromLeafKey: string; text: string } | null>(null);
+	const [jumpBack, setJumpBack] = useState<{ fromLeafKey: string | null; text: string } | null>(null);
 	const [jumpDockOpen, setJumpDockOpen] = useState(false);
 	// Any new prompt after a jump-back commits the new branch — the undo
 	// window closes (both branches stay on the tree).
@@ -1616,7 +1633,7 @@ export function ChatView({
 		// Kimi parity: undo restores the prompt AND its pictures. The entry is
 		// the source; an off-window message still restores the text it carries.
 		const images = userMessageImages(snap?.entries.find(entry => entry.id === messageId));
-		const fromLeafKey = effectiveLeaf;
+		const fromLeafKey = undoLeafTarget(snap?.entries ?? [], currentLeafKey);
 		try {
 			const res = await rpc.request<{
 				ok: boolean;
@@ -1643,7 +1660,9 @@ export function ChatView({
 			if (text || images.length > 0) {
 				setPendingEdit({ text, ...(images.length > 0 ? { images } : {}) });
 			}
-			setJumpBack(fromLeafKey ? { fromLeafKey, text } : null);
+			// The dock stays even when the previous leaf is not addressable: the
+			// text and close action are still useful, only undo is disabled.
+			setJumpBack({ fromLeafKey, text });
 			pulseSwitch();
 			return true;
 		} catch (err) {
@@ -1653,9 +1672,15 @@ export function ChatView({
 		}
 	};
 	// Undo the jump-back: branchAt back to the leaf we came from (the
-	// sibling branch — nothing was ever truncated).
+	// sibling branch — nothing was ever truncated). Failures are surfaced:
+	// a rejected undo used to be swallowed, so the dock's button read as dead.
 	const undoJumpBack = async (): Promise<void> => {
 		if (!store || !jumpBack) return;
+		const target = jumpBack.fromLeafKey;
+		if (!target) {
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("general.undoJumpUnavailable") }));
+			return;
+		}
 		try {
 			const res = await rpc.request<{
 				ok: boolean;
@@ -1663,9 +1688,12 @@ export function ChatView({
 				path?: string[];
 			}>("session.branchAt", {
 				sessionId: store.sessionId,
-				messageId: jumpBack.fromLeafKey,
+				messageId: target,
 			});
-			if (res?.ok !== true) return;
+			if (res?.ok !== true) {
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("general.branchFailed") }));
+				return;
+			}
 			// Restored to the session TIP = nothing is pinned anymore: keep the
 			// explicit leaf and the breadcrumb would resurrect the rewind view
 			// on the next render cycle (nav showed a stale path after undo).
@@ -1681,8 +1709,9 @@ export function ChatView({
 			}
 			setJumpBack(null);
 			pulseSwitch();
-		} catch {
-			// daemon rejected — keep as-is
+		} catch (err) {
+			const reason = `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`;
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
 		}
 	};
 	// Map 重答 (branchTo): branch to the turn's user message and backfill the
@@ -1841,16 +1870,18 @@ export function ChatView({
 	 *  earlier turn" — naming an empty turn would be a false statement, not a
 	 *  neutral one. A running turn is named in the same dialog: the leaf cannot
 	 *  move under the run, so the question also has to say it will be stopped.
-	 *  Not the bare "are you sure": the action looks destructive and is not. */
+	 *  Not the bare "are you sure": the action looks destructive and is not.
+	 *
+	 *  The excerpt is the TITLE and appears once: the old shape repeated the
+	 *  whole prompt in the body right under a heading that already quoted it
+	 *  (user report: the dialog read as the message pasted twice). */
 	const confirmWithdraw = async (quote: string, busy: boolean): Promise<boolean> => {
 		const flat = quote.replace(/\s+/g, " ").trim();
 		const named = flat ? `“${withdrawExcerpt(flat)}”` : t("general.withdrawConfirmEarlierTurn");
-		const body = [
-			flat ? `“${flat}”` : "",
-			t("general.withdrawConfirm"),
-			busy ? t("general.withdrawConfirmBusy") : "",
-		];
-		return confirm(`${named}\n\n${body.filter(Boolean).join("\n\n")}`, t("general.withdrawConfirmAction"));
+		const body = [t("general.withdrawConfirm"), busy ? t("general.withdrawConfirmBusy") : ""];
+		return confirm(named, t("general.withdrawConfirmAction"), {
+			body: body.filter(Boolean).join("\n\n"),
+		});
 	};
 	/** Order matters: name the turn WHILE the run still stands, then stop it. The
 	 *  interrupt guard used to fire first, so a working-run withdraw asked twice
@@ -4012,62 +4043,61 @@ export function ChatView({
 								 * Reveal motion (fade + collapse). */}
 								<Reveal open={jumpBack !== null}>
 									<div className="gui-revert-dock" role="region" aria-label={t("general.jumpedBack")}>
-										<div
-											role="button"
-											tabIndex={0}
-											className="gui-revert-dock-head"
-											onClick={() => setJumpDockOpen(v => !v)}
-											onKeyDown={e => {
-												if (e.key === "Enter" || e.key === " ") {
-													e.preventDefault();
-													setJumpDockOpen(v => !v);
-												}
-											}}
-											aria-expanded={jumpDockOpen}
-										>
-											<Icon
-												name="arrow-go-back"
-												className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
-											/>
-											<span className="gui-revert-dock-title" title={jumpBack?.text}>
-												{jumpBack
-													? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
-													: t("general.jumpedBack")}
-											</span>
+										{/* The disclosure is its own button; the two actions are
+										 * siblings, never children. Nesting real buttons inside a
+										 * role="button" row gave the dock two conflicting
+										 * activation targets (click toggled the panel while the
+										 * inner control was meant to run). */}
+										<div className="gui-revert-dock-head">
 											<button
 												type="button"
-												className="gui-pane-action !w-auto px-1.5"
-												title={t("general.undoJump")}
-												onClick={e => {
-													// The head is a click target for collapse/expand —
-													// don't toggle it when the undo button fires.
-													e.stopPropagation();
-													void undoJumpBack();
-												}}
+												className="gui-revert-dock-toggle"
+												aria-expanded={jumpDockOpen}
+												onClick={() => setJumpDockOpen(v => !v)}
 											>
-												<Icon name="arrow-go-forward" className="h-3 w-3" />
+												<Icon
+													name="arrow-go-back"
+													className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
+												/>
+												<span className="gui-revert-dock-title" title={jumpBack?.text}>
+													{jumpBack
+														? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
+														: t("general.jumpedBack")}
+												</span>
+												<Icon
+													name="arrow-down-s"
+													className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
+													aria-hidden="true"
+												/>
 											</button>
-											<button
-												type="button"
-												className="gui-pane-action !w-auto px-1.5"
-												title={t("settings.close")}
-												onClick={e => {
-													// #12: dismiss the dock but STAY at the reverted
-													// position — the sibling branch stays on the tree,
-													// reachable again via the breadcrumb or the row
-													// buttons. The undo button above keeps its role.
-													e.stopPropagation();
-													setJumpBack(null);
-													setJumpDockOpen(false);
-												}}
-											>
-												<Icon name="close" className="h-3 w-3" />
-											</button>
-											<Icon
-												name="arrow-down-s"
-												className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
-												aria-hidden="true"
-											/>
+											<div className="gui-revert-dock-actions">
+												<button
+													type="button"
+													className="gui-pane-action !w-auto px-1.5"
+													title={t("general.undoJump")}
+													disabled={!jumpBack?.fromLeafKey}
+													onClick={() => {
+														void undoJumpBack();
+													}}
+												>
+													<Icon name="arrow-go-forward" className="h-3 w-3" />
+												</button>
+												<button
+													type="button"
+													className="gui-pane-action !w-auto px-1.5"
+													title={t("settings.close")}
+													onClick={() => {
+														// #12: dismiss the dock but STAY at the reverted
+														// position — the sibling branch stays on the tree,
+														// reachable again via the breadcrumb or the row
+														// buttons. The undo button above keeps its role.
+														setJumpBack(null);
+														setJumpDockOpen(false);
+													}}
+												>
+													<Icon name="close" className="h-3 w-3" />
+												</button>
+											</div>
 										</div>
 
 										<Reveal open={jumpDockOpen}>

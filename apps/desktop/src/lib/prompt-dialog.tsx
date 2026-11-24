@@ -11,6 +11,11 @@ export interface PromptSpec {
 
 interface ConfirmOptions {
 	destructive?: boolean;
+	/** Explanation under the title. Kept apart from the title so the heading
+	 *  stays one short line and the body keeps its own type ramp — a message
+	 *  that carried both in one string rendered the whole paragraph as an
+	 *  17px/600 heading. */
+	body?: string;
 }
 
 type PromptFn = (spec: PromptSpec) => Promise<string | null>;
@@ -20,6 +25,8 @@ type ConfirmFn = (message: string, okLabel?: string, options?: ConfirmOptions) =
 interface DialogState {
 	kind: "prompt" | "confirm";
 	spec: PromptSpec;
+	/** Confirm explanation, rendered as body copy under the heading. */
+	body?: string;
 	okLabel?: string;
 	destructive?: boolean;
 }
@@ -94,7 +101,23 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 			};
 			setValue("");
 			setPhase("open");
-			setState({ kind: "confirm", spec: { title: message }, okLabel, destructive: options?.destructive });
+			// Callers that describe an action put the explanation in the second
+			// paragraph (`"<name>\n\n<why>"`). That shape is a heading plus body,
+			// not a heading alone: rendering it whole in <h3> set the paragraph
+			// in the 17px/600 title ramp. Split here so every caller gets the
+			// two-part dialog without threading a new parameter.
+			const explicitBody = options?.body;
+			const split = explicitBody === undefined ? message.indexOf("\n\n") : -1;
+			const title = split > 0 ? message.slice(0, split) : message;
+			const body = explicitBody ?? (split > 0 ? message.slice(split + 2) : undefined);
+			const trimmedBody = body?.trim();
+			setState({
+				kind: "confirm",
+				spec: { title: title.trim() },
+				...(trimmedBody ? { body: trimmedBody } : {}),
+				okLabel,
+				destructive: options?.destructive,
+			});
 			return promise;
 		},
 		[cancelPending],
@@ -196,6 +219,15 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 								onClick={event => event.stopPropagation()}
 							>
 								<h3>{state.spec.title}</h3>
+								{state.body
+									? state.body.split(/\n{2,}/).map((paragraph, index) => (
+											// Blank lines in a caller's body are paragraph breaks, not
+											// whitespace to collapse into one run-on block.
+											<p key={`${index}-${paragraph.slice(0, 12)}`} className="gui-dialog-body">
+												{paragraph}
+											</p>
+										))
+									: null}
 								{state.kind === "prompt" ? (
 									<input
 										className="gui-input mt-2 w-full"

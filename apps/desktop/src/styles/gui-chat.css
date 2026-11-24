@@ -5906,19 +5906,44 @@ body.gui-resizing .gui-pane-right {
 .gui-revert-dock-head {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 4px;
 	width: 100%;
-	padding: 8px 12px;
-	text-align: left;
+	/* Padding lives on the toggle and the action cluster: the whole row is no
+	 * longer one click target, so each control keeps a hit area of its own. */
+	padding-right: 8px;
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	color: var(--color-text);
-	cursor: pointer;
 	user-select: none;
 }
 
-.gui-revert-dock-head:hover {
+.gui-revert-dock-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1;
+	padding: 8px 4px 8px 12px;
+	text-align: left;
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text);
+	background: none;
+	border: 0;
+	border-radius: var(--radius-lg);
+	cursor: pointer;
+}
+
+.gui-revert-dock-toggle:hover {
 	background: color-mix(in oklab, var(--color-warning) 14%, transparent);
+}
+
+.gui-revert-dock-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: none;
 }
 
 .gui-revert-dock-title {

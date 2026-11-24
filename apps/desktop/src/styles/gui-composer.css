@@ -2504,6 +2504,28 @@ button.gui-stats-pill {
 	font-size: 17px;
 	font-weight: 600;
 	letter-spacing: -0.01em;
+	line-height: 1.35;
+	/* Wraps naturally: a caller that still passes one long sentence must not
+	 * have its copy clipped. Explanations belong in `body` instead. */
+	overflow-wrap: anywhere;
+}
+
+/* Confirm body: the explanation under the heading. Scrolls instead of growing
+ * past the viewport — a quoted turn can be arbitrarily long, and a dialog that
+ * outgrows the window loses its buttons. */
+.gui-dialog-body {
+	margin: 8px 0 0;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--color-text-muted);
+	overflow-y: auto;
+	max-height: min(46vh, 320px);
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+
+.gui-dialog-body + .gui-dialog-body {
+	margin-top: 6px;
 }
 
 .gui-dialog--confirm p {

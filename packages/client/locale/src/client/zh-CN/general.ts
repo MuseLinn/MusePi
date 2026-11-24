@@ -200,6 +200,7 @@ export const general = {
 	"general.jumpedBack": "已回退",
 	"general.jumpedBack2": "已回退到",
 	"general.undoJump": "撤销跳转",
+	"general.undoJumpUnavailable": "这次回退没有可撤销的原节点",
 	"general.jumpBackHint": "原回复保留为树上的分支——撤销可跳回原节点，或发送新消息提交新分支。",
 	"general.branchFailed": "分支切换失败",
 	"general.bootTakingLongerThan": "启动时间过长 — 本地 daemon 可能卡住了",

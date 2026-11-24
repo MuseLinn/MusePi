@@ -397,7 +397,20 @@ button.tr-display-context-source:hover {
 	gap: 6px;
 }
 
+.tr-async-result-text {
+	/* The label is a command line: let it shrink and ellipsize so the status
+	 * never gets squeezed into a two-character column (user report: 「已完成」
+	 * wrapped to one character per line on long commands). */
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .tr-async-job-status {
+	flex: none;
+	white-space: nowrap;
 	font-family: var(--font-mono);
 	font-size: 11px;
 	color: var(--fg-faint);

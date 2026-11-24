@@ -210,6 +210,7 @@ export const general = {
 	"general.jumpedBack": "Jumped back",
 	"general.jumpedBack2": "Jumped back to",
 	"general.undoJump": "Undo jump",
+	"general.undoJumpUnavailable": "This revert has no previous node to undo to",
 	"general.jumpBackHint":
 		"The original reply stays on the tree as a sibling branch — undo jumps back, or send a new message to commit the new branch.",
 	"general.branchFailed": "Could not move the branch",
