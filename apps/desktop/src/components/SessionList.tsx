@@ -716,6 +716,15 @@ const SessionRow = memo(function SessionRow({
 				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${
 					unread && !failed ? " gui-session-row--unread" : ""
 				}`}
+				// Row padding is part of the click target, as it was when the whole
+				// row was the button. Controls keep their own handlers: a click
+				// inside a real button is not a row click.
+				onClick={event => {
+					if ((event.target as HTMLElement).closest("button")) return;
+					tapFeedback();
+					clearSessionHover();
+					onSelect(id);
+				}}
 				onContextMenu={e => {
 					e.preventDefault();
 					e.stopPropagation();
