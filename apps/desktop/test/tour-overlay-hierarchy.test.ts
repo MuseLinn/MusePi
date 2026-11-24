@@ -336,16 +336,25 @@ describe("the appearance step uses the settings page's own controls", () => {
 });
 
 describe("the segmented control answers a press", () => {
-	test("the thumb sinks on :active without dropping its offset", () => {
+	test("the press scales the thumb around its own segment", () => {
 		const css = read("packages/client-core/src/styles/tokens.css");
-		// The segment offset lives in `transform`, so the press must use the
-		// standalone `scale` property — a second `transform` declaration would
-		// snap the thumb to segment 0 while pressed.
-		expect(css).toContain('.gui-seg:active:not([aria-disabled="true"]) .gui-seg-thumb');
+		const pressed = rule(css, '.gui-seg:active:not([aria-disabled="true"]) .gui-seg-thumb');
+		expect(pressed, "no pressed-thumb block").not.toBeNull();
+		// The offset must be restated INSIDE the same transform. The standalone
+		// `scale` property composes before `transform` and scales about the
+		// element's untranslated centre, so it pulled every segment after the
+		// first to the left by (1 - scale) * index * width.
+		expect(declaration(pressed!, "transform")).toContain("translateX(calc(var(--seg-index) * 100%))");
+		expect(declaration(pressed!, "transform")).toContain("scale(0.94)");
+		// A bare `scale` declaration would reintroduce the offset bug.
+		expect(declaration(pressed!, "scale")).toBe("");
+	});
+
+	test("the resting thumb does not opt into a scale transition", () => {
+		const css = read("packages/client-core/src/styles/tokens.css");
 		const thumb = rule(css, ".gui-seg-thumb");
 		expect(thumb, "no .gui-seg-thumb block").not.toBeNull();
-		expect(declaration(thumb!, "transition")).toContain("scale");
-		expect(thumb).not.toContain("transition: transform 100ms");
+		expect(declaration(thumb!, "transition")).toBe("");
 	});
 });
 
