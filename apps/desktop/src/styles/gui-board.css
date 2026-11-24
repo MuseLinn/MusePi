@@ -2527,14 +2527,22 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 
 /* Chat-column keeper: header + surface stay mounted (display:none) while
  * the settings content fills the column — transcript/virtual-list state
- * survives the settings round-trip (same contract as .gui-chat-keeper). */
+ * survives the settings round-trip (same contract as .gui-chat-keeper).
+ *
+ * NO enter animation here. This class toggles `display`, and a `display`
+ * change restarts any animation on the element: carrying the shared
+ * `.gui-view-blur-in` on the base class replayed a 300ms `blur(10px)` over the
+ * WHOLE chat column every time settings closed — a full-column offscreen
+ * rasterization for a surface that was merely hidden, not entering. The
+ * surfaces that really enter (`.gui-view-enter`, `.gui-chat-keeper--enter`,
+ * `.gui-workspace-keeper--enter`) opt in with their own modifier; the sidebar
+ * keeper next to this one has no animation for the same reason. */
 .gui-chat-col-keeper {
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	animation: gui-view-blur-in 300ms var(--spring);
 }
 .gui-chat-col-keeper--hidden {
 	display: none;

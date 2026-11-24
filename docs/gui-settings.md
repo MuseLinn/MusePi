@@ -31,7 +31,7 @@ gui-main (flex ROW)
                  margin-inline:auto (openchamber SettingsPageLayout parity)
 ```
 
-- **Workspace keepers**: the real `SessionSidebar` (`.gui-side-keeper`) and the chat header + surface (`.gui-chat-col-keeper`) stay mounted, display:none, while the shell is active — closing settings restores them with the standard blur-in (expanded groups / transcript / virtual-list state all survive). The slot/keeper decision table lives in `src/lib/settings-shell.ts` and is contract-tested (`test/settings-shell.test.tsx`).
+- **Workspace keepers**: the real `SessionSidebar` (`.gui-side-keeper`) and the chat header + surface (`.gui-chat-col-keeper`) stay mounted, display:none, while the shell is active — closing settings restores them with **no entrance animation** (expanded groups / transcript / virtual-list state all survive). A `display` change restarts an element's animations, so an entrance on the keeper's base class replays on every close; on the chat column that was a 300ms `filter: blur(10px)` over the whole column. The slot/keeper decision table lives in `src/lib/settings-shell.ts` and is contract-tested (`test/settings-shell.test.tsx`); the motion rule is held by `test/keeper-entrance-motion.test.ts`.
 - **Retired**: `.gui-settings-host` (the absolute chat-column overlay) — the sidebar no longer floats beside a second nav column; the settings nav IS the sidebar slot's content.
 
 - **Rounded card**: a rounded, shadowed card consistent with the main chat area, separated from the left navigation over the frosted-glass background. The earlier "flat, no card" experiment was rejected by the user; the card was restored.

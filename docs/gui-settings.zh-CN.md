@@ -30,7 +30,7 @@ gui-main (flex ROW)
                  margin-inline:auto(openchamber SettingsPageLayout parity)
 ```
 
-- **工作区 keeper**:真实 `SessionSidebar`(`.gui-side-keeper`)与聊天列 header + surface(`.gui-chat-col-keeper`)在壳层激活期间保持挂载、仅 display:none——关闭设置按标准 blur-in 恢复(分组展开态/转录/虚拟列表全部保留)。槽位与 keeper 的决策表在 `src/lib/settings-shell.ts`,契约测试 `test/settings-shell.test.tsx`。
+- **工作区 keeper**:真实 `SessionSidebar`(`.gui-side-keeper`)与聊天列 header + surface(`.gui-chat-col-keeper`)在壳层激活期间保持挂载、仅 display:none——关闭设置恢复它们时**不播入场动画**(分组展开态/转录/虚拟列表全部保留)。`display` 变化会重启元素上的动画,把入场放在 keeper 基础类上就会每次关闭都重播;对聊天列来说那是整列 300ms 的 `filter: blur(10px)`。槽位与 keeper 的决策表在 `src/lib/settings-shell.ts`,契约测试 `test/settings-shell.test.tsx`;动效规则由 `test/keeper-entrance-motion.test.ts` 守住。
 - **已退役**:`.gui-settings-host`(聊天列绝对定位覆盖层)——侧栏不再与第二根导航列并排漂浮;设置导航就是侧栏槽位的内容。
 
 - **圆角卡片**:与主聊天区一致的圆角阴影卡片,与左侧导航在磨砂玻璃背景上分隔。早期"平铺无卡片"实验已被用户否决,恢复卡片。
