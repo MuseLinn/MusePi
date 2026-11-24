@@ -9982,6 +9982,18 @@ export class AgentSession {
 			targetEntry.message.role === "toolResult" &&
 			targetEntry.message.toolName === "ask";
 
+		// A user message (and an ordinary custom message) LANDS ON ITS PARENT,
+		// so a leaf that already sits on the target still has a move to make:
+		// the target itself has to leave the active path. Treating that as the
+		// "already there" no-op reported success while the withdrawn message
+		// stayed on screen (user report: 撤回 showed 已回退 but the turn was
+		// still there). The no-op only holds when the target IS the landing
+		// position.
+		const landsOnItself =
+			targetEntry.type === "message"
+				? targetEntry.message.role !== "user"
+				: targetEntry.type !== "custom_message" || targetEntry.customType === SKILL_PROMPT_MESSAGE_TYPE;
+
 		// No-op if already at target — except mid-flight through the `ask`
 		// re-answer protocol (issue #5642): a probe or completion call can
 		// legitimately target the *current* leaf (e.g. the user interrupted
@@ -9989,7 +10001,12 @@ export class AgentSession {
 		// landed, or another caller navigated straight onto the ask result),
 		// and must still return `reopenAsk` / branch the new answer instead of
 		// silently reporting a no-op (chatgpt-codex review on #5895).
-		if (targetId === oldLeafId && !options.regenerate && !(options.allowAskReopen && targetIsAskResult)) {
+		if (
+			targetId === oldLeafId &&
+			landsOnItself &&
+			!options.regenerate &&
+			!(options.allowAskReopen && targetIsAskResult)
+		) {
 			return { cancelled: false };
 		}
 
