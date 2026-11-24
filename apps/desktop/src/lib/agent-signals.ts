@@ -14,6 +14,7 @@
  * Never feed one renderer's state enum into another.
  */
 
+import { toolActivityKind } from "@musepi/client-core/src/lib/tool-activity";
 import { entryStartMs, type SessionEntry } from "@musepi/pi-wire";
 
 export type AgentPhase =
@@ -140,26 +141,21 @@ export const DROWSY_AFTER_MS = 90_000;
 export const SLEEPING_AFTER_MS = 5 * 60_000;
 export const BORED_AFTER_MS = 30_000;
 
-/** Map a tool name to the closest Aora activity verb. */
+/** Map a tool name to the closest Aora activity verb.
+ *
+ *  The common families live in the shared classifier (`toolActivityKind`),
+ *  which the transcript's tail presence also reads. This adapter keeps only
+ *  the three verbs that exist in the companion's vocabulary and nowhere
+ *  else — uploading, dictating, connecting — and delegates the rest, so the
+ *  two surfaces can never disagree about what "reading" means. */
 export function activityVerbForTool(toolName: string | null | undefined): AgentActivityVerb {
 	const name = (toolName ?? "").trim().toLowerCase();
 	if (!name) return "working";
-	if (name.includes("search") || /(^|_)(grep|glob|find|ast_grep)($|_)/.test(name)) return "searching";
-	if (name.includes("read") || /(^|_)(view|inspect|cat)($|_)/.test(name)) return "reading";
-	if (name.includes("edit") || name.includes("write") || name.includes("patch") || name.includes("apply"))
-		return "writing";
-	if (/(^|_)(bash|shell|exec|command|terminal|run)($|_)/.test(name)) return "running-commands";
-	if (name.includes("browser") || name.includes("fetch") || name.includes("http")) return "browsing";
-	if (name.includes("computer") || name.includes("mouse") || name.includes("keyboard")) return "using-computer";
 	if (name.includes("upload") || name.includes("attach")) return "uploading";
 	if (name.includes("tts") || name.includes("voice") || name.includes("dictat") || name.includes("speech"))
 		return "dictating";
-	if (name.includes("message") || name.includes("chat") || name.includes("reply")) return "messaging";
 	if (name.includes("connect") || name.includes("oauth") || name.includes("auth")) return "connecting";
-	if (name.includes("todo") || name.includes("ask") || name.includes("approval") || name.includes("wait"))
-		return "waiting";
-	if (name.includes("task") || name.includes("agent") || name.includes("delegate")) return "working";
-	return "working";
+	return toolActivityKind(name) as AgentActivityVerb;
 }
 
 /**
