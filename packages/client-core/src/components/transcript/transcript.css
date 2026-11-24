@@ -5407,3 +5407,158 @@ a.tr-tool-search-title:hover {
 .tr-secret-line[data-status="interrupted"] .tr-secret-state {
 	color: var(--color-text-faint, var(--fg-faint));
 }
+
+/* ── Turn trace waterfall (the fold header's "查看轨迹") ─────────────────
+ * One row per step, each bar placed on the turn's own 0–100 axis. The axis is
+ * a plain percentage track rather than a measured pixel timeline: the trace is
+ * read at a glance for shape (one long bar, one red one), not for milliseconds,
+ * and a percentage layout survives any dialog width without a resize observer. */
+.tr-trace {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	font-size: 12.5px;
+	color: var(--fg-muted);
+}
+
+.tr-trace-stats {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--border);
+}
+
+.tr-trace-stat-label {
+	display: block;
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.tr-trace-stat-value {
+	display: block;
+	font-variant-numeric: tabular-nums;
+	color: var(--fg);
+}
+
+.tr-trace-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tr-trace-row {
+	display: grid;
+	grid-template-columns: minmax(90px, 1.2fr) minmax(80px, 2fr) 64px;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.tr-trace-label {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tr-trace-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--fg);
+}
+
+.tr-trace-row[data-kind="tool"] .tr-trace-name {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+}
+
+.tr-trace-failed {
+	flex: 0 0 auto;
+	font-size: 10.5px;
+	color: var(--err, #f85149);
+}
+
+.tr-trace-axis {
+	position: relative;
+	display: block;
+	height: 8px;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	overflow: hidden;
+}
+
+.tr-trace-bar {
+	position: absolute;
+	inset-block: 0;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--accent) 65%, transparent);
+}
+
+.tr-trace-row[data-kind="model"] .tr-trace-bar {
+	background: color-mix(in oklab, var(--fg) 34%, transparent);
+}
+
+.tr-trace-row[data-status="error"] .tr-trace-bar {
+	background: var(--err, #f85149);
+}
+
+.tr-trace-duration {
+	font-variant-numeric: tabular-nums;
+	text-align: end;
+	color: var(--fg-faint);
+}
+
+.tr-trace-note {
+	margin: 0;
+	color: var(--fg-faint);
+	font-size: 11.5px;
+}
+
+.tr-trace-note--failed {
+	color: var(--err, #f85149);
+}
+
+/* The header's way in: a quiet text button, never a second row of chrome. */
+/* Header + trace action on one line: the header flexes, the action keeps its
+ * own width so a long summary never pushes it out of reach. */
+.tr-round-fold-wrap {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	width: 100%;
+}
+
+.tr-round-fold-wrap > .tr-round-fold {
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0;
+}
+
+.tr-round-fold-trace {
+	margin-inline-start: auto;
+	padding: 2px 6px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--fg-faint);
+	font: inherit;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.tr-round-fold-trace:hover {
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+}
+
+.tr-round-fold-trace:focus-visible {
+	outline: 1.5px solid var(--ring);
+	outline-offset: 1px;
+}

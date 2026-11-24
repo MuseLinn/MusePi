@@ -138,6 +138,7 @@ function renderTranscript(props: {
 	tailDetail?: ReactNode;
 	approvals?: number;
 	paused?: boolean;
+	onOpenTrace?(trace: import("../src/components/transcript/turn-trace").TurnTrace): void;
 }): string {
 	return renderToStaticMarkup(
 		<Transcript
@@ -156,6 +157,7 @@ function renderTranscript(props: {
 			tailDetail={props.tailDetail}
 			approvals={props.approvals}
 			paused={props.paused}
+			onOpenTrace={props.onOpenTrace}
 		/>,
 	);
 }
@@ -1509,6 +1511,48 @@ describe("a failed call stays visible in a folded round", () => {
 		const html = renderTranscript({ entries: failedRound(), working: false });
 		expect(html).toContain("tr-round-fold-failed");
 		expect(html).toMatch(/1 个失败|1 failed/);
+	});
+
+	it("offers the trace action only when the host can open one", () => {
+		const entries: SessionEntry[] = [
+			userEntry(200),
+			{
+				type: "message",
+				id: "a-call",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:00Z",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } }],
+					model: "test/model",
+					usage: assistantUsage(),
+					stopReason: "stop",
+					timestamp: 201,
+				},
+			} as SessionEntry,
+			{
+				type: "message",
+				id: "r-ok",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:01Z",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "bash",
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					startedAt: 201,
+					durationMs: 900,
+					timestamp: 1_100,
+				},
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 1_200, text: "完成。" }),
+		];
+		expect(renderTranscript({ entries, working: false })).not.toContain("tr-round-fold-trace");
+		const withTrace = renderTranscript({ entries, working: false, onOpenTrace: () => {} });
+		expect(withTrace).toContain("tr-round-fold-trace");
+		// A sibling of the header button, never nested inside it.
+		expect(withTrace).toContain("tr-round-fold-wrap");
 	});
 
 	it("shows the tools' own run time in the closed header", () => {

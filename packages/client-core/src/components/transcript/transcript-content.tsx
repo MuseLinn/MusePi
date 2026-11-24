@@ -878,6 +878,7 @@ export function RoundFoldHeader({
 	startTs,
 	detail,
 	onToggle,
+	onOpenTrace,
 }: {
 	fold: RoundFold;
 	open: boolean;
@@ -889,6 +890,9 @@ export function RoundFoldHeader({
 	 *  keep the category summary only. */
 	detail?: string;
 	onToggle(): void;
+	/** Host-supplied: open this round's trace waterfall. Omitted on surfaces
+	 *  without one, which is why the affordance is conditional. */
+	onOpenTrace?(): void;
 }): ReactNode {
 	const changed = fold.filesChanged > 0;
 	// Keep the reader still when this fold closes above them. Without it the
@@ -948,7 +952,7 @@ export function RoundFoldHeader({
 			</span>,
 		);
 	}
-	return (
+	const header = (
 		<button
 			ref={headerRef}
 			type="button"
@@ -983,6 +987,17 @@ export function RoundFoldHeader({
 			 *  and its toggle. Revert belongs to the message it reverts (the user
 			 *  row's own affordance), not to a collapsed-process header. */}
 		</button>
+	);
+	if (onOpenTrace === undefined) return header;
+	// A sibling, not a child: the header IS a button, and a button inside a
+	// button is invalid HTML that swallows one of the two clicks.
+	return (
+		<div className="tr-round-fold-wrap">
+			{header}
+			<button type="button" className="tr-round-fold-trace" onClick={onOpenTrace}>
+				{t("transcript.traceOpen")}
+			</button>
+		</div>
 	);
 }
 

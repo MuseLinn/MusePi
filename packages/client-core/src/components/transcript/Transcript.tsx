@@ -97,6 +97,7 @@ import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 import { collectTurnFiles, type TurnFileChange } from "./turn-files.js";
 import { collectTurnPresented, mergePresentedFiles, presentedEntryFiles } from "./turn-presented.js";
 import { collectTurnSources, type TurnSources } from "./turn-sources.js";
+import { buildTurnTrace, type TurnTrace } from "./turn-trace";
 
 export {
 	isBranchFormingEntry,
@@ -255,6 +256,10 @@ export interface TranscriptProps {
 	approvals?: number;
 	/** Session pause, same story as {@link approvals}. */
 	paused?: boolean;
+	/** Host-supplied: hand this round's trace to the host's own dialog. Omitted
+	 *  hides the affordance, which is how mobile and the subagent panel stay
+	 *  free of a shell they do not have. */
+	onOpenTrace?(trace: TurnTrace): void;
 
 	compact?: boolean; // dense variant for the agent drawer
 	/** Sub-session drill-down capabilities forwarded to tool renderers. */
@@ -1478,6 +1483,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		tailDetail,
 		approvals = 0,
 		paused = false,
+		onOpenTrace,
 		compact,
 		host,
 		userGutter,
@@ -2997,6 +3003,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						onToggle={() => toggleFold(foldKeyOf(row.fold), !foldOpenOf(row.fold))}
 						startTs={entries[row.fold.startIdx]?.timestamp}
 						detail={detail}
+						onOpenTrace={
+							onOpenTrace === undefined
+								? undefined
+								: () => {
+										const trace = buildTurnTrace(entries, row.fold.startIdx, row.fold.endIdx);
+										if (trace !== null) onOpenTrace(trace);
+									}
+						}
 					/>
 				</Row>
 			);

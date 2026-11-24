@@ -19,6 +19,8 @@ import {
 } from "@musepi/client-core";
 import { openPlanFromChat } from "@musepi/client-core/src/components/transcript/canvas-jump";
 import { toolActivityKind } from "@musepi/client-core/src/lib/tool-activity";
+import { TurnTracePanel } from "@musepi/client-core/src/components/transcript/TurnTracePanel";
+import type { TurnTrace } from "@musepi/client-core/src/components/transcript/turn-trace";
 import {
 	createChatQuoteContext,
 	type DisplayContext,
@@ -118,6 +120,7 @@ import { morphSurfaceBack, morphSurfaceFrom } from "../lib/view-transition";
 import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
+import { DialogFrame } from "./DialogFrame";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
@@ -125,6 +128,7 @@ import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatDropAnchor } from "./ChatDropAnchor";
 import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer, type HeroComposerProps } from "./Composer";
+import { type ConnectorRequest, ConnectorRequestCard } from "./ConnectorRequestCard";
 import type { CreationMessage } from "./CreationModeRow";
 import { flushPendingConnectorSelection } from "./composer/connector-panel";
 import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
@@ -574,6 +578,63 @@ export function ChatView({
 				});
 			} catch (err) {
 				answeredSecretRequestsRef.current.delete(answer.requestId);
+				throw err;
+			}
+		},
+		[rpc],
+	);
+	// Connector request cards: the agent asked for an app it is not connected
+	// to. Same shape and lifecycle as the secret card — independent per
+	// requestId, settled through `connector.request.answer`, and only this
+	// session's stream is read.
+	const [connectorRequests, setConnectorRequests] = useState<readonly ConnectorRequest[]>([]);
+	const answeredConnectorRequestsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		const sessionId = store?.sessionId;
+		return rpc.addEventListener(event => {
+			if (!sessionId || event.sessionId !== sessionId) return;
+			if (event.kind === "connector-request") {
+				const payload = event.payload as Partial<ConnectorRequest> | undefined;
+				if (
+					!payload ||
+					typeof payload.requestId !== "string" ||
+					typeof payload.id !== "string" ||
+					typeof payload.name !== "string" ||
+					typeof payload.purpose !== "string" ||
+					(payload.authMode !== "oauth" && payload.authMode !== "none" && payload.authMode !== "token")
+				) {
+					return;
+				}
+				const next: ConnectorRequest = {
+					requestId: payload.requestId,
+					id: payload.id,
+					name: payload.name,
+					purpose: payload.purpose,
+					authMode: payload.authMode,
+				};
+				setConnectorRequests(current =>
+					current.some(item => item.requestId === next.requestId) ? current : [...current, next],
+				);
+				return;
+			}
+			if (event.kind === "connector-request-end") {
+				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+				if (typeof requestId === "string" && !answeredConnectorRequestsRef.current.has(requestId)) {
+					setConnectorRequests(current => current.filter(item => item.requestId !== requestId));
+				}
+			}
+		});
+	}, [rpc, store?.sessionId]);
+	const answerConnector = useCallback(
+		async (request: ConnectorRequest, decision: "connect" | "decline"): Promise<void> => {
+			answeredConnectorRequestsRef.current.add(request.requestId);
+			try {
+				await rpc.request("connector.request.answer", {
+					requestId: request.requestId,
+					decision,
+				});
+			} catch (err) {
+				answeredConnectorRequestsRef.current.delete(request.requestId);
 				throw err;
 			}
 		},
@@ -1377,6 +1438,9 @@ export function ChatView({
 	// of leaving the user on a tab they just asked to close.
 	const agentInfoTabOpen =
 		activePanelTab?.surface === AGENT_INFO_SURFACE && activePanelTab.target === (store?.sessionId ?? null);
+	/* The transcript derives a round's trace and hands it up; the desktop owns
+	 * the dialog shell, so the shared layer never reaches for a desktop one. */
+	const [turnTrace, setTurnTrace] = useState<TurnTrace | null>(null);
 	const agentInfoExpanded = agentInfoTabOpen && rightPanelOpen && !focusMode;
 	const capsuleAvatarRef = useRef<HTMLSpanElement | null>(null);
 	const toggleAgentInfo = useCallback((): void => {
@@ -3888,6 +3952,7 @@ export function ChatView({
 																		) : undefined
 																	}
 																	tailDetail={tailDetailNode}
+																	onOpenTrace={setTurnTrace}
 																	approvals={snap?.approvals.length ?? 0}
 																	paused={snap?.state?.paused === true}
 																	/* Layer-1 branch topology: multi-child messages render a
@@ -4237,6 +4302,17 @@ export function ChatView({
 										}}
 									/>
 								))}
+								{connectorRequests.map(request => (
+									<ConnectorRequestCard
+										key={request.requestId}
+										request={request}
+										onAnswer={decision => answerConnector(request, decision)}
+										onSettled={requestId => {
+											answeredConnectorRequestsRef.current.delete(requestId);
+											setConnectorRequests(current => current.filter(item => item.requestId !== requestId));
+										}}
+									/>
+								))}
 								{mcpAuth && onMcpAuthAuthorize && onMcpAuthCancel && onMcpAuthDismiss && (
 									<div className="gui-mcp-auth-wrap">
 										<McpAuthCard
@@ -4509,6 +4585,17 @@ export function ChatView({
 				text={saveImageText ?? ""}
 				onClose={() => setSaveImageText(null)}
 			/>
+			{/* Turn trace: the round's steps on one time axis. The transcript derives
+			 * it and hands it up; the shell lives here because DialogFrame is a
+			 * desktop component and the shared layer must not reach for it. */}
+			<DialogFrame
+				open={turnTrace !== null}
+				onClose={() => setTurnTrace(null)}
+				label={t("transcript.traceTitle")}
+				className="w-[620px] max-w-[92vw]"
+			>
+				{turnTrace !== null && <TurnTracePanel trace={turnTrace} />}
+			</DialogFrame>
 			<SessionArtifactPreviewDialog rpc={rpc} request={artifactPreview} onClose={() => setArtifactPreview(null)} />
 		</main>
 	);
