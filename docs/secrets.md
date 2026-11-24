@@ -217,6 +217,15 @@ toggle only controls the generic sources (environment scanning, `secrets.yml`,
 built-in credential patterns); with it off, those sources are not registered,
 while agent-card values still are.
 
+### Local sinks
+
+Memory writes persist text verbatim, so every stored agent secret registers its
+raw, JSON-escaped and URL-encoded forms with the exact-value guard;
+`redactMemorySecrets` replaces them with `[REDACTED]` even when the heuristic
+would miss a short or unremarkable value. Registrations last for the process, so
+deleting a secret does not stop scrubbing a value that may already sit in a
+memory file.
+
 ### MCP config reference
 
 An MCP server's `env` or `headers` value may be exactly `${vault:NAME}`. At
@@ -258,6 +267,9 @@ push, log or transcript contains a value.
   administrator or another process running as the same user can read it. Binary
   values are written as UTF-8 text, so certificates and JSON are supported but
   binary blobs are not.
+- The vault is outside session export and workspace file operations, but a
+  profile backup or folder sync still copies `agent-secrets/` as-is, including
+  `.master.key`. There is no master-key rotation yet.
 - An entry whose envelope cannot be decrypted stays listed as unavailable.
   Save the value again through `request_secret` or Settings → Vault to repair
   it; do not edit the sidecar by hand.

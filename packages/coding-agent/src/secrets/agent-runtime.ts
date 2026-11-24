@@ -22,6 +22,7 @@ import {
 	type SecretScope,
 	secretScopeIncludes,
 } from "./agent-store";
+import { registerExactSecret } from "./exact-guard";
 import { secretForms } from "./forms";
 import type { SecretEntry, SecretObfuscator } from "./obfuscator";
 
@@ -39,6 +40,7 @@ function agentKey(agentDir: string): string {
 export async function loadAgentSecretEntries(agentDir: string): Promise<SecretEntry[]> {
 	try {
 		const values = await getAgentSecretStore(agentDir).values();
+		for (const { value } of values) registerExactSecret(value);
 		return values.flatMap(({ name, value }) =>
 			secretForms(value).map(form => ({
 				type: "plain" as const,
@@ -84,6 +86,7 @@ function liveObfuscators(agentDir: string): SecretObfuscator[] {
 
 /** Register a just-saved value into every live session for this agent dir. */
 export function notifyAgentSecretSaved(agentDir: string, name: string, value: string): void {
+	registerExactSecret(value);
 	for (const obfuscator of liveObfuscators(agentDir)) {
 		for (const form of secretForms(value)) obfuscator.addSecret(form, name);
 	}

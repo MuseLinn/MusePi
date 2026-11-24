@@ -6,6 +6,8 @@
  * carried a private copy of this pattern list. `mnemopi` carried none.
  */
 
+import { redactExactSecrets } from "../secrets/exact-guard";
+
 // Fixed-prefix provider tokens. Each is anchored on a literal, so it matches in one
 // pass with no backtracking.
 const PATTERNS = [
@@ -143,7 +145,7 @@ function redactJwts(input: string): string {
 }
 
 export function redactMemorySecrets(input: string): string {
-	let out = redactJwts(redactKeywordSecrets(input));
+	let out = redactExactSecrets(redactJwts(redactKeywordSecrets(input)));
 	for (const pattern of PATTERNS) out = out.replace(pattern, "[REDACTED]");
 	return out;
 }
