@@ -75,6 +75,7 @@ import {
 } from "./sticky-user-message";
 import { TailPresence } from "./TailPresence";
 import { ToolCard } from "./ToolCard";
+import { type ToolActivityPolicy, toolActivityPolicy } from "./tool-activity-policy";
 import {
 	AdvisorBlock,
 	type AdvisorNote,
@@ -298,8 +299,12 @@ export interface TranscriptProps {
 	 *  the previous scroll offset and render at its very first rows. */
 	sessionKey?: string;
 	/** TUI display.hideToolActivity parity: suppress model-initiated tool
-	 *  call cards and running tail tools from the transcript. */
+	 *  call cards and running tail tools from the transcript. A failed call is
+	 *  never suppressed — see `toolActivityPolicy`. */
 	hideToolActivity?: boolean;
+	/** The bot lane's own answer to the same question. Unset hides the bot
+	 *  lane's tool activity; the workbench lane is unaffected. */
+	hideBotToolActivity?: boolean;
 	/** How many recent rows a RUNNING turn keeps visible; earlier ones fold
 	 *  into a "+N more" line. 0 (default) = unlimited — watching the agent work
 	 *  is the transcript. */
@@ -775,12 +780,13 @@ interface EntryRowProps {
 	 *  agent is idle, instead of leaving the card pending forever. */
 	working?: boolean;
 	/** Round start (last user message ts) for the live ticker. */
-	runStartTs?: number;
 	/** Frozen round duration (ms) — the completed round's total. */
 	roundDuration?: number;
 	userPlain?: boolean;
 	collapseLongUserMessages?: boolean;
-	hideToolActivity?: boolean;
+	/** The resolved tool-activity answer for this row (an expanded fold or the
+	 *  live span outranks the setting — see `rowHideTools`). */
+	toolPolicy: ToolActivityPolicy;
 	/** 活动 header rendered INSIDE this row's content column: it inherits the
 	 *  message alignment and
 	 *  the row's gutter, so a collapsed turn shows orb + 活动 + answer on ONE line
@@ -938,9 +944,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 		prev.collapseLongUserMessages !== next.collapseLongUserMessages ||
 		prev.streamingLast !== next.streamingLast ||
 		prev.working !== next.working ||
-		prev.runStartTs !== next.runStartTs ||
 		prev.roundDuration !== next.roundDuration ||
-		prev.hideToolActivity !== next.hideToolActivity ||
 		prev.settledReasoningPreview !== next.settledReasoningPreview ||
 		prev.showTokenUsage !== next.showTokenUsage ||
 		prev.smoothStreaming !== next.smoothStreaming ||
@@ -1251,9 +1255,8 @@ const EntryRow = memo(function EntryRow({
 	collapseLongUserMessages = false,
 	streamingLast = false,
 	working = false,
-	runStartTs,
 	roundDuration,
-	hideToolActivity = false,
+	toolPolicy,
 	foldHeader,
 	textOnly = false,
 	settledReasoningPreview = true,
@@ -1372,10 +1375,9 @@ const EntryRow = memo(function EntryRow({
 									active={active}
 									pending={streamingLast}
 									working={working}
-									runStartTs={runStartTs}
 									roundDuration={roundDuration}
 									host={host}
-									hideToolActivity={hideToolActivity}
+									toolPolicy={toolPolicy}
 									textOnly={textOnly}
 									settledReasoningPreview={settledReasoningPreview}
 									showTokenUsage={showTokenUsage}
@@ -1502,6 +1504,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		smoothStreaming = true,
 		taskCardStyle = "swarm",
 		hideToolActivity = false,
+		hideBotToolActivity,
 		liveActivityRows = 0,
 		sessionKey,
 		showTokenUsage = false,
@@ -1556,6 +1559,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// retry action truncates to that message and re-sends it. Built over
 	// the FULL entries (not the windowed slice): a reply whose user message
 	// scrolled out of the window still retries correctly.
+	/** One resolved answer for every tool row: cards hidden, summaries on/off,
+	 *  failures always kept. `bot` reads its own switch once that lane exists;
+	 *  until then both lanes resolve from the same preferences. */
+	const toolPolicy = useMemo(
+		() => toolActivityPolicy({ hideToolActivity, hideBotToolActivity, toolCallSummary }),
+		[hideToolActivity, hideBotToolActivity, toolCallSummary],
+	);
+
 	const retryTargets = useMemo(() => {
 		const map = new Map<string, { id: string; text: string }>();
 		let lastUser: { id: string; text: string } | null = null;
@@ -1689,7 +1700,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// default) never inverts it. Rounds the reader never touched follow the
 	// default (`foldOpenOf`).
 	const [roundFoldStates, setRoundFoldStates] = useState<ReadonlyMap<string, boolean>>(() =>
-		readFoldStates(sessionKey ?? "", defaultRoundFoldExpanded && !hideToolActivity),
+		readFoldStates(sessionKey ?? "", defaultRoundFoldExpanded && !toolPolicy.hidden),
 	);
 	/** Epoch-ms until which virtualizer measure compensation stays off
 	 *  (prepend anchor-restore window). 0 = inactive. */
@@ -1976,9 +1987,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				working,
 				lastEntryIdx: entries.length - 1,
 				defaultExpanded: defaultRoundFoldExpanded,
-				hideToolActivity,
+				hideToolActivity: toolPolicy.hidden,
 			}),
-		[entries.length, working, defaultRoundFoldExpanded, hideToolActivity],
+		[entries.length, working, defaultRoundFoldExpanded, toolPolicy.hidden],
 	);
 	const foldOpenOf = useCallback(
 		(f: RoundFold): boolean => roundFoldStates.get(foldKeyOf(f)) ?? foldDefaultOpenOf(f),
@@ -2001,11 +2012,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		});
 	}, []);
 	// Runs ride the same structural derive as the folds (one scan per change);
-	// the two display toggles only decide whether to USE them.
-	const toolRuns = useMemo(
-		() => (toolCallSummary && !hideToolActivity ? runs : []),
-		[runs, toolCallSummary, hideToolActivity],
-	);
+	// the resolved policy only decides whether to USE them.
+	const toolRuns = useMemo(() => (toolPolicy.summarize ? runs : []), [runs, toolPolicy.summarize]);
 	const runByHeadIdx = useMemo(() => {
 		const map = new Map<number, ToolRunSummary>();
 		for (const r of toolRuns) map.set(r.headIdx, r);
@@ -2843,7 +2851,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// 活动 row — asking to expand it outranks the setting — and
 		// (b) during the live round, where the activity is the point.
 		// Completed rounds are what the fold + the setting govern.
-		const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
+		// The row's own answer: the setting applies, minus the two places where
+		// watching the work IS the point (an expanded fold, the live span).
+		const hiddenToolsPolicy: ToolActivityPolicy = { ...toolPolicy, hidden: true, summarize: false };
+		const rowHideTools = toolPolicy.hidden && !foldOpen && absIdx < liveFromIdx;
 		// Tail trim (opt-in): rows the running turn already scrolled past are
 		// suppressed and counted on the first visible one. Only work rows and
 		// only in the in-flight span (absIdx >= liveFromIdx) — a settled turn
@@ -2889,7 +2900,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							agentGutter={rowOwnsOrb ? agentGutter : ""}
 							userPlain={userPlain}
 							collapseLongUserMessages={collapseLongUserMessages}
-							hideToolActivity={rowHideTools}
+							toolPolicy={rowHideTools ? hiddenToolsPolicy : toolPolicy}
 							textOnly={rowTextOnly}
 							settledReasoningPreview={policy.settledReasoningPreview}
 							showTokenUsage={showTokenUsage}
@@ -2907,7 +2918,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							thinkingLevel={thinkingLevel}
 							streamingLast={streamingLast}
 							working={working}
-							runStartTs={streamingLast ? lastUserTs : undefined}
 							roundDuration={roundDuration}
 							onQuote={onQuote}
 							onJumpToMessage={onJumpToMessage}
@@ -3112,31 +3122,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					aria-hidden="true"
 				/>
 			)}
-			{/* Model-response gap (working but no assistant entry yet): the
-			 * ticker stands alone under the user message — the exact spot
-			 * where the reply will land — instead of hanging off the
-			 * previous round's message. */}
-			{working && stream === null && lastUserTs !== undefined && !lastAssistantInRound && (
-				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""} rail={tailRail}>
-					<div className="tr-ghost-working">
-						<TailPresence
-							visible={working}
-							phrase={livePhraseFor({
-								working,
-								streaming: stream !== null,
-								approvals,
-								paused,
-								toolName: tailTools.at(-1)?.toolName,
-							})}
-							seed={sessionKey ?? ""}
-							since={lastUserTs}
-							quietMs={quietSince(entries)}
-							avatar={tailAvatar}
-							detail={tailDetail}
-						/>
-					</div>
-				</Row>
-			)}
 			{stream !== null && (
 				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""} rail={tailRail}>
 					<AssistantBody
@@ -3145,7 +3130,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						active={activeTools}
 						pending={!streamDone}
 						working
-						runStartTs={lastUserTs}
 						roundDuration={
 							// Ghost stream row: the round froze under the turn-start
 							// key; the stream-ts fallback keeps pre-anchor snapshots
@@ -3153,7 +3137,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							roundDurations?.get(lastUserTs ?? Number.NaN) ?? roundDurations?.get(stream.timestamp)
 						}
 						host={host}
-						hideToolActivity={hideToolActivity}
+						toolPolicy={toolPolicy}
 						showTokenUsage={showTokenUsage}
 						usageHere
 						smoothStreaming={smoothStreaming}
@@ -3163,7 +3147,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					/>
 				</Row>
 			)}
-			{tailTools.length > 0 && !hideToolActivity && (
+			{tailTools.length > 0 && !toolPolicy.hidden && (
 				<Row
 					kind="assistant"
 					gutter={tailOwnsOrb && stream === null ? (agentGutter ?? t("settings.agent")) : ""}
@@ -3184,6 +3168,41 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							onPreviewImage={openPreview}
 						/>
 					))}
+				</Row>
+			)}
+			{/* The turn's live presence, at the very tail: it stands where the
+			 * next output will land and stays for the WHOLE turn — a bot's text
+			 * in the middle of a turn is not its end, and the engine may spend
+			 * minutes writing a file before the next step shows (OpenMausBot's
+			 * rule). One live timer per session: an in-message ticker would
+			 * duplicate it, so a streaming reply no longer carries one; each
+			 * COMPLETED round keeps its frozen total under its final message. */}
+			{working && lastUserTs !== undefined && (
+				<Row
+					kind="assistant"
+					gutter={tailOwnsOrb && stream === null ? (agentGutter ?? t("settings.agent")) : ""}
+					rail={tailRail}
+				>
+					<div className="tr-ghost-working">
+						<TailPresence
+							visible={working}
+							phrase={livePhraseFor({
+								working,
+								streaming: stream !== null,
+								approvals,
+								paused,
+								toolName: tailTools.at(-1)?.toolName,
+							})}
+							seed={sessionKey ?? ""}
+							since={lastUserTs}
+							/* While chunks arrive there is no silence to report, and the
+							 * stream is not in `entries`, so a count from entries would
+							 * call a busy turn quiet. Suppressed rather than guessed. */
+							quietMs={stream === null ? quietSince(entries) : undefined}
+							avatar={tailAvatar}
+							detail={tailDetail}
+						/>
+					</div>
 				</Row>
 			)}
 			{/* Back to bottom — sticky LAST child of .tr-root: its natural

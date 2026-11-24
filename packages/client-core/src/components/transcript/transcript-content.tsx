@@ -44,6 +44,7 @@ import { requestQuoteReveal } from "./quote-highlight";
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
+import { type ToolActivityPolicy, toolRowHidden } from "./tool-activity-policy";
 import { resultPicturesOf } from "./tool-media";
 import type { TurnFileChange } from "./turn-files.js";
 import { TurnFilesCard } from "./turn-files-card.js";
@@ -1241,10 +1242,9 @@ export function AssistantBody({
 	active,
 	pending,
 	working,
-	runStartTs,
 	roundDuration,
 	host,
-	hideToolActivity = false,
+	toolPolicy,
 	textOnly = false,
 	settledReasoningPreview = true,
 	showTokenUsage = false,
@@ -1280,15 +1280,14 @@ export function AssistantBody({
 	/** Agent liveness — an unpaired tool call is queued while working, and
 	 *  interrupted once the agent is idle (see ToolCard). */
 	working?: boolean;
-	/** Round start (last user message ts) — the live ticker's anchor so the
-	 *  count spans the whole working period, including tool execution. */
-	runStartTs?: number;
 	/** Frozen round duration (ms, recorded at agent_end) — renders the
-	 *  completed round's total under its final message. */
+	 *  completed round's total under its final message. The LIVE count is the
+	 *  tail presence row's job now, so this is the only timer left here. */
 	roundDuration?: number;
 	host?: ToolRenderHost;
-	/** display.hideToolActivity parity: drop toolCall cards. */
-	hideToolActivity?: boolean;
+	/** The resolved tool-activity answer for this row's lane. One decision for
+	 *  cards, the summary and the failure exception — see `toolActivityPolicy`. */
+	toolPolicy: ToolActivityPolicy;
 	/** Collapsed 活动 fold's reply row: render TEXT blocks (plus the media a
 	 *  tool call produced). The turn's process (thinking + tool cards) folds
 	 *  into the activity row, so the closed turn reads as "活动 … " + the
@@ -1378,7 +1377,7 @@ export function AssistantBody({
 					/>
 				);
 			case "toolCall": {
-				// Caller-decided: Transcript passes `hideToolActivity` per row, so
+				// Caller-decided: Transcript passes `toolPolicy` per row, so
 				// an EXPANDED 活动 row always shows its process while the setting
 				// still hides it everywhere else (including the live round).
 				// Suppressing the row outright — the old behaviour — left the
@@ -1389,7 +1388,9 @@ export function AssistantBody({
 					// the reply keeps its media row without the card body
 					// (tool-media is the same read the fold's exemption uses).
 					const produced = results.get(block.id);
-					if (hideToolActivity || resultPicturesOf(produced).length === 0) return null;
+					// A failed call is the reason the turn went wrong, so the fold
+					// shows it rather than swallowing it with the rest of the process.
+					if (toolRowHidden(toolPolicy, produced) && resultPicturesOf(produced).length === 0) return null;
 					return (
 						<ToolCard
 							key={block.id}
@@ -1397,14 +1398,16 @@ export function AssistantBody({
 							name={block.name}
 							args={block.arguments}
 							result={produced}
-							mediaOnly
+							mediaOnly={resultPicturesOf(produced).length > 0}
 							onPreviewImage={onPreviewImage}
 						/>
 					);
 				}
-				if (hideToolActivity) return null;
 				const act = active.get(block.id);
 				const result = results.get(block.id);
+				// Failures survive the setting: hiding the one call that broke
+				// turns a diagnosis into silence.
+				if (toolRowHidden(toolPolicy, result)) return null;
 				const args = act?.args ?? block.arguments;
 				return (
 					<ToolCard
@@ -1454,11 +1457,13 @@ export function AssistantBody({
 				<PresentFilesCard files={presented} host={host} />
 			)}
 			{!pending && sources !== undefined && <TurnSourcesCard sources={sources} />}
-			{pending ? (
-				<WorkingLine start={runStartTs ?? message.timestamp} meta={modelLevelMeta(message.model, thinkingLevel)} />
-			) : roundDuration !== undefined ? (
+			{/* The live ticker moved to the tail presence row: one live timer per
+			 *  session, so a streaming reply no longer carries a second one. A
+			 *  COMPLETED round keeps its frozen total here, under its final
+			 *  message (每轮单独计时). */}
+			{!pending && roundDuration !== undefined && (
 				<WorkingLine start={0} freezeMs={roundDuration} meta={modelLevelMeta(message.model, thinkingLevel)} />
-			) : null}
+			)}
 			{showTokenUsage && usageHere && !pending && !failed && message.duration !== undefined && (
 				<TurnUsage message={message} />
 			)}

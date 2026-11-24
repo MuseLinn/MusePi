@@ -230,7 +230,6 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 	// the component mount time, craft-agents ProcessingIndicator parity).
 	const USER_TS = Date.now() - 5_500;
 	const ASSISTANT_TS = USER_TS + 100;
-	const ticking = /working for 6s|已工作 6 秒/;
 	const took = /took 6s|用时 6 秒/;
 	// Frozen totals live under the turn-START key (shared recorder contract,
 	// same key space daemon snapshots seed); the turn-start entry here is the
@@ -238,13 +237,15 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 	const round = (ms: number): ReadonlyMap<number, number> => new Map([[USER_TS, ms]]);
 
 	it("ticks from the round start (last user message) while working", () => {
+		// The live count is the tail presence's now, so the row it draws is
+		// `.presence`; the in-message `.tr-working` is gone for a running round.
 		const html = renderTranscript({
 			entries: [userEntry(USER_TS), assistantEntry({ timestamp: ASSISTANT_TS })],
 			working: true,
 		});
-		expect(countElements(html, ".tr-working")).toBe(1);
-		expect(countElements(html, ".tr-working-spin")).toBe(1);
-		expect(html).toMatch(ticking);
+		expect(countElements(html, ".presence")).toBe(1);
+		expect(countElements(html, ".tr-working")).toBe(0);
+		expect(html).toMatch(/0:0[56]/);
 	});
 
 	it("stays anchored across remounts (switching sessions and back)", () => {
@@ -253,8 +254,8 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 		// a mount-anchored timer (the pre-fix bug) restarts at 0 here.
 		const a = renderTranscript({ entries, working: true });
 		const b = renderTranscript({ entries, working: true });
-		expect(a).toMatch(ticking);
-		expect(b).toMatch(ticking);
+		expect(a).toMatch(/0:0[56]/);
+		expect(b).toMatch(/0:0[56]/);
 	});
 
 	it("shows the frozen round total on the completed round's final message (no spinner)", () => {
@@ -973,12 +974,64 @@ describe("msgText (per-message copy / edit / fork source)", () => {
 	});
 });
 
+describe("hiding tool activity never hides a failure", () => {
+	const callAndResult = (isError: boolean): SessionEntry[] => [
+		userEntry(200),
+		{
+			type: "message",
+			id: "a1",
+			parentId: null,
+			timestamp: "2026-07-09T00:00:00Z",
+			message: {
+				role: "assistant",
+				content: [
+					{ type: "text", text: "running it" },
+					{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "false" } },
+				],
+				model: "test/model",
+				usage: assistantUsage(),
+				stopReason: "stop",
+				timestamp: 200,
+			},
+		} as SessionEntry,
+		{
+			type: "message",
+			id: "r1",
+			parentId: null,
+			timestamp: "2026-07-09T00:00:01Z",
+			message: {
+				role: "toolResult",
+				toolCallId: "c1",
+				toolName: "bash",
+				content: [{ type: "text", text: isError ? "command failed" : "ok" }],
+				isError,
+				timestamp: 300,
+			},
+		} as unknown as SessionEntry,
+	];
+
+	it("hides a successful tool card when the setting is on", () => {
+		const html = renderTranscript({ entries: callAndResult(false), working: false, hideToolActivity: true });
+		expect(html).not.toContain("command failed");
+	});
+
+	it("keeps a FAILED tool card even when the setting is on", () => {
+		// Hiding the one call that broke turns a diagnosis into silence.
+		const html = renderTranscript({ entries: callAndResult(true), working: false, hideToolActivity: true });
+		expect(html).toContain("command failed");
+	});
+
+	it("shows both when the setting is off", () => {
+		const html = renderTranscript({ entries: callAndResult(true), working: false, hideToolActivity: false });
+		expect(html).toContain("command failed");
+	});
+});
+
 describe("Transcript work-timer round anchoring", () => {
-	it("keeps the live ticker off the previous round's message while the model is responding", () => {
+	it("keeps the presence row off the previous round's message while the model is responding", () => {
 		// Old round assistant(100), then user(200) sent, model not replying yet:
-		// the last assistant entry does NOT belong to the current round, so no
-		// "已用时 X 秒" under the wrong message — the standalone tail presence
-		// row shows it instead.
+		// the presence row stands at the tail, not under the previous round's
+		// message.
 		const html = renderTranscript({
 			entries: [assistantEntry({ timestamp: 100 }), userEntry(200)],
 			working: true,
@@ -987,14 +1040,16 @@ describe("Transcript work-timer round anchoring", () => {
 		expect(countElements(html, ".presence")).toBe(1);
 	});
 
-	it("mounts the ticker inside the current round's assistant message once it exists", () => {
+	it("keeps the presence row for the whole turn, including once the reply streams", () => {
+		// The turn is not over when text starts arriving: the engine may spend
+		// minutes on a file before its next step. One live timer per session —
+		// the row carries it, the streaming message does not.
 		const html = renderTranscript({
 			entries: [userEntry(200), assistantEntry({ timestamp: 300 })],
 			working: true,
 		});
-		expect(countElements(html, ".tr-ghost-working")).toBe(0);
-		expect(countElements(html, ".presence")).toBe(0);
-		expect(countElements(html, ".tr-working")).toBe(1);
+		expect(countElements(html, ".presence")).toBe(1);
+		expect(countElements(html, ".tr-working")).toBe(0);
 	});
 
 	it("renders no work timer for idle sessions", () => {
@@ -1017,13 +1072,23 @@ describe("Transcript work-timer round anchoring", () => {
 		expect(countElements(html, ".presence-toggle")).toBe(0);
 	});
 
-	it("drops the tail presence the moment a reply starts streaming", () => {
-		// Streaming begins: the tail row leaves and the timer appears exactly
-		// once, under the reply — never in both places.
+	it("keeps exactly one live timer while a reply streams", () => {
+		// Streaming begins: the presence row stays at the tail and the message
+		// body carries no second ticker, so the screen never runs two clocks.
 		const html = renderTranscript({
 			entries: [userEntry(200)],
 			working: true,
 			streaming: true,
+		});
+		expect(countElements(html, ".presence")).toBe(1);
+		expect(countElements(html, ".tr-working")).toBe(0);
+	});
+
+	it("drops the presence row once the turn ends, keeping the frozen round total", () => {
+		const html = renderTranscript({
+			entries: [userEntry(200), assistantEntry({ timestamp: 300 })],
+			working: false,
+			roundDurations: new Map([[200, 6_300]]),
 		});
 		expect(countElements(html, ".presence")).toBe(0);
 		expect(countElements(html, ".tr-working")).toBe(1);
