@@ -3164,6 +3164,7 @@ export function ChatView({
 		rpc,
 		cwd: store?.cwd ?? null,
 		title: sessionTitle ?? null,
+		contextUsage: (snap?.projections?.get("contextUsage") as ContextUsageProjection | undefined) ?? null,
 		tabs: panelTabs.tabs,
 		activeTabId: panelTabs.activeId,
 		progress: snap?.progress ?? null,
