@@ -3336,6 +3336,205 @@ a.tr-tool-search-title:hover {
 	}
 }
 
+/* ── Tail presence: the row that stands where the reply will land while the
+ *    turn runs (design spec 2026-11-24). It replaces the bare ticker in the
+ *    pre-stream slot: same anchor, plus what the agent is doing.
+ *
+ *    The sheen is the whole reason this block is fussy. A bright copy of the
+ *    phrase would marquee if it moved on its own, so the band (a soft-edged
+ *    mask window) sweeps one way and the copy inside it counter-translates by
+ *    the same amount: on screen the glyphs never move, only the light does.
+ *    The sweep spends the first 35% of the cycle moving, in 12 steps, and then
+ *    rests — a long turn must not repaint the page every display frame. */
+.presence {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	min-height: 36px;
+	padding-inline-start: 4px;
+}
+
+.presence-avatar {
+	flex: 0 0 auto;
+	display: inline-flex;
+	width: 28px;
+	height: 28px;
+}
+
+.presence-body {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+/* The slot owns the truncation so a long file name or MCP tool name can never
+ * push the timer out of the row. */
+.presence-toggle,
+.presence-slot {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.presence-toggle {
+	margin: -4px -6px;
+	padding: 4px 6px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.presence-toggle:hover {
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+}
+
+.presence-toggle:focus-visible {
+	outline: 1.5px solid var(--ring);
+	outline-offset: 1px;
+}
+
+.presence-phrase {
+	position: relative;
+	min-width: 0;
+	font-size: 13.5px;
+	line-height: 22px;
+	color: var(--fg-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	/* A tight line box clips ascenders and CJK marks; pad past the glyphs and
+	 * pull the margins back so the layout does not move. */
+	padding: 0.3em 0.1em;
+	margin: -0.3em -0.1em;
+}
+
+.presence-sheen {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	user-select: none;
+}
+
+.presence-band {
+	position: absolute;
+	inset: 0;
+	-webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 50%, transparent 70%);
+	mask-image: linear-gradient(90deg, transparent 30%, #000 50%, transparent 70%);
+	animation: presence-band 2200ms linear infinite;
+	animation-delay: var(--presence-sheen-delay, 0ms);
+}
+
+.presence-band::before {
+	content: attr(data-text) / "";
+	position: absolute;
+	inset: 0;
+	padding: 0.3em 0.1em;
+	font-size: 13.5px;
+	line-height: 22px;
+	color: var(--fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	animation: presence-bright 2200ms linear infinite;
+	animation-delay: var(--presence-sheen-delay, 0ms);
+}
+
+@keyframes presence-band {
+	from {
+		transform: translateX(-70%);
+		animation-timing-function: steps(12, jump-none);
+	}
+	35%,
+	to {
+		transform: translateX(70%);
+	}
+}
+
+@keyframes presence-bright {
+	from {
+		transform: translateX(70%);
+		animation-timing-function: steps(12, jump-none);
+	}
+	35%,
+	to {
+		transform: translateX(-70%);
+	}
+}
+
+.presence-sep {
+	flex: 0 0 auto;
+	color: var(--fg-faint);
+	font-size: 11px;
+}
+
+.presence-timer {
+	flex: 0 0 auto;
+	color: var(--fg-faint);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.presence-quiet {
+	flex: 0 0 auto;
+	color: var(--fg-faint);
+	font-size: 12px;
+}
+
+.presence-detail {
+	width: 100%;
+	overflow: hidden;
+	height: var(--h, 0px);
+	transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.presence-detail-inner {
+	margin-top: 8px;
+	padding: 10px 12px;
+	border-radius: var(--radius-xl);
+	background: var(--bg-inset);
+}
+
+/* Visually hidden: the canonical phrase for assistive tech. The visible copy
+ * rotates and is ellipsised, so it is not what a screen reader should read. */
+.presence-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.presence-band {
+		display: none;
+	}
+	.presence-detail {
+		transition: none;
+	}
+}
+
+.gui-motion-off .presence-band {
+	display: none;
+}
+
+.gui-motion-off .presence-detail {
+	transition: none;
+}
+
 
 /* ── TTSR warning block (TUI TtsrNotificationComponent parity): rule
  *    violation → stream rewind → injected rules, warning-tinted. ─────── */
