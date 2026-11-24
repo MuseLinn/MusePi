@@ -151,3 +151,55 @@ describe("buildTurnTrace", () => {
 		expect(tool.widthPct).toBeGreaterThan(0);
 	});
 });
+
+describe("delegated members of a task call", () => {
+	const taskResult = (details: unknown): SessionEntry =>
+		withId({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolCallId: "c1",
+				toolName: "task",
+				content: [{ type: "text", text: "spawned" }],
+				details,
+				isError: false,
+				startedAt: 1_000,
+				durationMs: 5_000,
+				timestamp: 6_000,
+			},
+		});
+
+	it("shows each member with its own duration, tokens and outcome", () => {
+		const entries = [
+			user(0),
+			call(1_000, "c1", "task"),
+			taskResult({
+				results: [
+					{ id: "m1", agent: "reviewer", description: "审查改动", durationMs: 3_000, tokens: 12_000, exitCode: 0 },
+					{ id: "m2", agent: "researcher", lastIntent: "查资料", durationMs: 2_000, tokens: 5_000, exitCode: 1 },
+				],
+			}),
+		];
+		const trace = buildTurnTrace(entries, 0, entries.length - 1)!;
+		const task = trace.steps.find(step => step.kind === "tool")!;
+		expect(task.children?.map(child => child.label)).toEqual(["reviewer", "researcher"]);
+		expect(task.children?.[0]?.durationMs).toBe(3_000);
+		expect(task.children?.[0]?.tokens).toBe(12_000);
+		expect(task.children?.[1]?.status).toBe("error");
+		expect(task.children?.[1]?.detail).toBe("查资料");
+	});
+
+	it("leaves a plain tool call without children", () => {
+		const entries = [user(0), call(1_000, "c1"), result(2_000, "c1", { durationMs: 500 })];
+		const trace = buildTurnTrace(entries, 0, entries.length - 1)!;
+		expect(trace.steps.find(step => step.kind === "tool")?.children).toBeUndefined();
+	});
+
+	it("ignores a malformed task payload instead of dropping the row", () => {
+		const entries = [user(0), call(1_000, "c1", "task"), taskResult({ results: "nope" })];
+		const trace = buildTurnTrace(entries, 0, entries.length - 1)!;
+		const task = trace.steps.find(step => step.kind === "tool")!;
+		expect(task.children).toBeUndefined();
+		expect(task.label).toBe("task");
+	});
+});

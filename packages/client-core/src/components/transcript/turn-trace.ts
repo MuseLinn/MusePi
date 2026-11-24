@@ -20,6 +20,20 @@ import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 export type TraceStepKind = "model" | "tool";
 export type TraceStepStatus = "ok" | "error" | "unknown";
 
+/** One delegated subagent, as the `task` result already reports it: its own
+ *  duration, tokens and outcome. Its INTERNAL steps live in another session's
+ *  journal and are not in this transcript — that is the remaining gap against a
+ *  cross-thread tree. */
+export interface TraceSubStep {
+	id: string;
+	label: string;
+	detail?: string;
+	durationMs: number;
+	status: TraceStepStatus;
+	/** Cumulative input + output + cache-write tokens for this member. */
+	tokens?: number;
+}
+
 export interface TraceStep {
 	/** Row id (or call id) — stable enough for React keys within one trace. */
 	id: string;
@@ -37,6 +51,8 @@ export interface TraceStep {
 	widthPct: number;
 	tokens?: { input: number; output: number; cached: number };
 	cost?: number;
+	/** Delegated members of a `task` call. */
+	children?: TraceSubStep[];
 }
 
 export interface TurnTrace {
@@ -69,6 +85,44 @@ function callDetail(args: unknown): string | undefined {
 		if (typeof value === "string" && value.trim().length > 0) return value.trim().slice(0, 120);
 	}
 	return undefined;
+}
+
+/** The members a `task` result reports. Their own internal steps live in the
+ *  subagent's session, so this is everything one transcript can honestly say
+ *  about them: who ran, how long, how many tokens, and whether it failed. */
+function subStepsOf(details: unknown): TraceSubStep[] | undefined {
+	if (details === null || typeof details !== "object") return undefined;
+	const results = (details as { results?: unknown }).results;
+	if (!Array.isArray(results)) return undefined;
+	const out: TraceSubStep[] = [];
+	for (const raw of results) {
+		if (raw === null || typeof raw !== "object") continue;
+		const item = raw as {
+			id?: unknown;
+			agent?: unknown;
+			description?: unknown;
+			task?: unknown;
+			lastIntent?: unknown;
+			exitCode?: unknown;
+			durationMs?: unknown;
+			tokens?: unknown;
+		};
+		const durationMs =
+			typeof item.durationMs === "number" && Number.isFinite(item.durationMs) ? item.durationMs : undefined;
+		if (durationMs === undefined) continue;
+		const intent = typeof item.lastIntent === "string" ? item.lastIntent : undefined;
+		const description = typeof item.description === "string" ? item.description : undefined;
+		const task = typeof item.task === "string" ? item.task : undefined;
+		out.push({
+			id: typeof item.id === "string" ? item.id : `sub:${out.length}`,
+			label: typeof item.agent === "string" && item.agent ? item.agent : "subagent",
+			...((description ?? intent ?? task) ? { detail: (description ?? intent ?? task)!.slice(0, 120) } : {}),
+			durationMs,
+			status: typeof item.exitCode === "number" && item.exitCode !== 0 ? "error" : "ok",
+			...(typeof item.tokens === "number" && Number.isFinite(item.tokens) ? { tokens: item.tokens } : {}),
+		});
+	}
+	return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -124,6 +178,7 @@ export function buildTurnTrace(entries: readonly SessionEntry[], startIdx: numbe
 
 		if (message.role === "toolResult") {
 			const call = callDetails.get(message.toolCallId);
+			const subs = message.toolName === "task" ? subStepsOf(message.details) : undefined;
 			raw.push({
 				id: message.toolCallId,
 				kind: "tool",
@@ -132,6 +187,7 @@ export function buildTurnTrace(entries: readonly SessionEntry[], startIdx: numbe
 				startedAt: message.startedAt ?? message.timestamp,
 				...(typeof message.durationMs === "number" ? { durationMs: message.durationMs } : {}),
 				status: message.isError ? "error" : "ok",
+				...(subs === undefined ? {} : { children: subs }),
 			});
 			continue;
 		}

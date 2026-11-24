@@ -96,6 +96,30 @@ export function TurnTracePanel({ trace, className }: { trace: TurnTrace; classNa
 						</li>
 					);
 				})}
+				{trace.steps.flatMap((step, index) =>
+					(step.children ?? []).map(child => (
+						<li
+							key={`${step.id}:sub:${child.id}:${index}`}
+							className="tr-trace-row tr-trace-row--sub"
+							data-kind="subagent"
+							data-status={child.status}
+						>
+							<span className="tr-trace-label" title={child.detail ?? child.label}>
+								<span className="tr-trace-name">{child.label}</span>
+								{child.status === "error" && (
+									<span className="tr-trace-failed">{t("transcript.traceFailed")}</span>
+								)}
+							</span>
+							<span className="tr-trace-axis tr-trace-axis--empty" aria-hidden="true" />
+							<span className="tr-trace-duration">
+								{child.tokens !== undefined && (
+									<span className="tr-trace-sub-tokens">{compactTokens(child.tokens)}</span>
+								)}
+								{fmtDuration(child.durationMs)}
+							</span>
+						</li>
+					)),
+				)}
 			</ol>
 
 			{totals.untimedSteps > 0 && (

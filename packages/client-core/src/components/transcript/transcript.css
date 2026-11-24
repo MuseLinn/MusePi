@@ -5562,3 +5562,32 @@ a.tr-tool-search-title:hover {
 	outline: 1.5px solid var(--ring);
 	outline-offset: 1px;
 }
+
+/* Delegated members under their `task` call: indented, no bar (their internal
+ * steps are another session's, so there is no honest position to place them at
+ * on this axis — only their own total duration). */
+.tr-trace-row--sub {
+	grid-template-columns: minmax(90px, 1.2fr) minmax(80px, 2fr) auto;
+	padding-inline-start: 14px;
+}
+
+.tr-trace-row--sub .tr-trace-name {
+	color: var(--fg-muted);
+	font-size: 12px;
+}
+
+.tr-trace-axis--empty {
+	background: none;
+	border-block-end: 1px dashed color-mix(in oklab, var(--fg) 14%, transparent);
+	height: 1px;
+}
+
+.tr-trace-sub-tokens {
+	margin-inline-end: 8px;
+	color: var(--fg-faint);
+	font-size: 11px;
+}
+
+.tr-trace-row--sub .tr-trace-duration {
+	white-space: nowrap;
+}

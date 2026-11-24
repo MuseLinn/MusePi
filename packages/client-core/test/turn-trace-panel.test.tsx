@@ -74,6 +74,33 @@ describe("TurnTracePanel", () => {
 		expect(html).toContain("$0.03");
 	});
 
+	it("lists delegated members under their task call, indented and without a bar", () => {
+		const withSubs = trace({
+			steps: [
+				{
+					id: "c1",
+					kind: "tool",
+					label: "task",
+					startedAt: 0,
+					durationMs: 5_000,
+					status: "ok",
+					offsetPct: 0,
+					widthPct: 50,
+					children: [
+						{ id: "m1", label: "reviewer", detail: "审查改动", durationMs: 3_000, status: "ok", tokens: 12_000 },
+						{ id: "m2", label: "researcher", durationMs: 2_000, status: "error" },
+					],
+				},
+			],
+		});
+		const html = renderToStaticMarkup(<TurnTracePanel trace={withSubs} />);
+		expect(html.match(/tr-trace-row--sub/g)?.length).toBe(2);
+		expect(html).toContain("reviewer");
+		expect(html).toContain("12k");
+		// The failed member is marked in words as well as colour.
+		expect(html).toMatch(/failed|失败/);
+	});
+
 	it("never shows a bare 0ms total for a turn whose steps were all untimed", () => {
 		// "0ms" for the tools column reads as "the tools took no time"; the truth
 		// is that nobody recorded it.
