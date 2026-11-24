@@ -139,7 +139,11 @@ function buildSecretRedactor(entries: ReadonlyArray<{ name: string; value: strin
  * redactor. The synchronous part matters because output streaming callbacks
  * cannot await a store read on every chunk.
  */
-export async function agentSecretSnapshot(agentDir: string, cwd: string): Promise<AgentSecretSnapshot> {
+export async function agentSecretSnapshot(
+	agentDir: string,
+	cwd: string,
+	options: { command?: string; referencedOnly?: boolean } = {},
+): Promise<AgentSecretSnapshot> {
 	const store = getAgentSecretStore(agentDir);
 	const values = await store.values();
 	const key = agentKey(agentDir);
@@ -155,8 +159,17 @@ export async function agentSecretSnapshot(agentDir: string, cwd: string): Promis
 	const sorted = values
 		.filter(({ scope }) => scopeMatches(scope, cwd))
 		.sort((a, b) => b.value.length - a.value.length);
+	const referenced = new Set<string>();
+	if (options.referencedOnly === true && options.command !== undefined) {
+		for (const match of options.command.matchAll(/MUSEPI_SECRET_([A-Z][A-Z0-9_]{0,63})/gu)) {
+			referenced.add(match[1]!);
+		}
+	}
 	for (const { name, value, delivery } of sorted) {
 		if (delivery !== "env") continue;
+		// Narrowed injection: a name the command does not mention never enters the
+		// child environment. The redactor below still covers every stored value.
+		if (options.referencedOnly === true && !referenced.has(name)) continue;
 		env[agentSecretEnvName(name)] = value;
 		// lastUsedAt is best-effort: a metadata failure must not break the command.
 		void store.touch(name, touchedNames).catch(() => {});

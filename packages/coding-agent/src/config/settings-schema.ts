@@ -6176,6 +6176,30 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"secrets.bashInjection": {
+		type: "enum",
+		values: ["all", "referenced"] as const,
+		default: "all",
+		ui: {
+			tab: "providers",
+			group: "Privacy",
+			label: "Bash secret injection",
+			description: "Every saved secret, or only the ones the command names",
+			options: [
+				{
+					value: "all",
+					label: "Every saved secret",
+					description: "Compatible with scripts that read the variables themselves",
+				},
+				{
+					value: "referenced",
+					label: "Only named secrets",
+					description: "Inject only $MUSEPI_SECRET_<NAME> names present in the command",
+				},
+			],
+		},
+	},
+
 	// Provider selection
 	"providers.ollama-cloud.maxConcurrency": {
 		type: "number",

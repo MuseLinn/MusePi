@@ -1055,6 +1055,10 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		const secretSnapshot: AgentSecretSnapshot = await agentSecretSnapshot(
 			this.session.settings.getAgentDir(),
 			this.session.cwd,
+			{
+				command,
+				referencedOnly: this.session.settings.get("secrets.bashInjection") === "referenced",
+			},
 		).catch(error => {
 			// Losing the snapshot also loses injection AND `[secret:NAME]`
 			// scrubbing for this call. Keep the command runnable, but make the

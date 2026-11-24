@@ -269,6 +269,28 @@ describe("dynamic obfuscator registration", () => {
 		expect(obfuscator?.deobfuscate(output)).toContain(encoded);
 	});
 
+	it("narrows bash injection to the names the command mentions", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		await store.set("ALPHA", "alpha-value", "first");
+		await store.set("BETA", "beta-value", "second");
+
+		const narrowed = await agentSecretSnapshot(dir, dir, {
+			command: "echo $MUSEPI_SECRET_ALPHA",
+			referencedOnly: true,
+		});
+		expect(narrowed.env.MUSEPI_SECRET_ALPHA).toBe("alpha-value");
+		expect(narrowed.env.MUSEPI_SECRET_BETA).toBeUndefined();
+		// Redaction still covers a value that was not injected.
+		expect(narrowed.redact("beta-value")).toContain("[secret:BETA]");
+
+		const all = await agentSecretSnapshot(dir, dir, {
+			command: "echo $MUSEPI_SECRET_ALPHA",
+			referencedOnly: false,
+		});
+		expect(all.env.MUSEPI_SECRET_BETA).toBe("beta-value");
+	});
+
 	it("a file delivery stays out of the environment but is still redacted", async () => {
 		const dir = makeDir();
 		const store = new AgentSecretStore(dir);

@@ -193,6 +193,10 @@ child's environment:
   chunks is still replaced.
 - If a command prints the variable, `[secret:NAME]` is the expected marker, not
   a command failure; the model is told not to retry or report an error for it.
+- `secrets.bashInjection` defaults to `"all"`. With `"referenced"`, only the
+  names whose `MUSEPI_SECRET_<NAME>` appears in the command text enter the child
+  environment; the redactor still covers every stored value, so a command that
+  reads another value from a file is still scrubbed.
 
 ### Provider boundary
 
