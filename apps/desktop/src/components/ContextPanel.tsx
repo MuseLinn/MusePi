@@ -41,7 +41,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { browserPanelDescriptor, browserTarget, reconcileBrowserPanelTabs } from "../lib/browser-panel-tabs";
-import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { containingBlockOrigin } from "../lib/containing-block-origin";
 import { restrictToXAxis } from "../lib/dnd-axis";
 import {
@@ -53,7 +52,7 @@ import {
 	pushEditorHistory,
 	updateEditorHistoryCurrent,
 } from "../lib/editor-navigation";
-import { copyToClipboard, isElectron, openExternalUrl } from "../lib/electron";
+import { copyToClipboard, openExternalUrl } from "../lib/electron";
 import {
 	discardFilePreviewBuffer,
 	FILE_WORKSPACE_SURFACE,
@@ -118,7 +117,6 @@ import {
 } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
-import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ContextMenu } from "./ContextMenu";
@@ -133,8 +131,9 @@ import { SubagentPanel, SubagentSessionView } from "./SubagentPanel";
 import { SurfaceTabStripSortable } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
 
-/** Electron <webview> tag (embedded browser): the DOM element exposes
- *  loadURL/executeJavaScript/etc. at runtime; only the JSX shape is typed. */
+/** Electron <webview> tag (managed browser guest, mounted by
+ *  ManagedBrowserHost): the DOM element exposes loadURL/executeJavaScript/etc.
+ *  at runtime; only the JSX shape is typed. */
 declare global {
 	namespace JSX {
 		interface IntrinsicElements {
@@ -1405,8 +1404,15 @@ export function ContextPanel({
 					panelTab={bodyTab ?? undefined}
 					browser={{ open, openRequest: browserOpenRequest, onTakeover: onBrowserTakeover }}
 				/>
-			) : isElectron() ? null : (
-				<LegacyBrowserPane rpc={rpc} />
+			) : (
+				/* The browser surface is the bundled `browser-ui` plugin's
+				 * `panel.tab.browser` component. A build that cannot render it
+				 * says so — it no longer falls back to a second, weaker embedded
+				 * browser of its own (see the removed LegacyBrowserPane): two
+				 * browser panes meant two implementations to keep correct, and
+				 * the fallback also drove the shared headless Chromium just to
+				 * show its tab strip. */
+				surfaceUnavailable()
 			)
 		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
 			<GitPanel rpc={rpc} cwd={cwd} sessionId={snap?.sessionId ?? null} />
@@ -2834,342 +2840,6 @@ export function JobsPane({
 				</div>
 			)}
 			{error && <div className="px-2 pt-2 text-[12px] leading-relaxed text-[var(--color-danger)]">{error}</div>}
-		</div>
-	);
-}
-
-const BROWSER_VIEWPORTS = [
-	{ labelKey: "transcript.viewportFit", width: null },
-	{ labelKey: "transcript.viewportPhone", width: 393 },
-	{ labelKey: "transcript.viewportTablet", width: 768 },
-	{ labelKey: "transcript.viewportDesktop", width: 1440 },
-] as const;
-
-/** Legacy embedded browser: Electron <webview> (real Chromium, cross-origin
- *  executeJavaScript for the element picker) with an iframe fallback for the
- *  plain-browser build. URL bar, back/forward history, quick ports, viewport
- *  presets and an element-picker that inserts the picked element into the
- *  chat composer via the musepi-gui-insert-text window event. The "Agent 标签页"
- *  strip mirrors the SHARED automation Chromium (the same instance the agent
- *  drives) — click a tab to open its URL here and see a live screenshot. */
-interface BrowserTabInfo {
-	targetId: string;
-	title: string;
-	url: string;
-}
-
-function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
-	const [url, setUrl] = useState("http://localhost:5173");
-	// 横向边缘羽化:Agent 标签页 strip 横向滚动时左右羽化(通用
-	// .gui-panel-tabs 类,与 ManagedBrowserPane 的 tab strip 同配方)。
-	const agentTabsRef = useRef<HTMLDivElement | null>(null);
-	useScrollShadow(agentTabsRef);
-	const [current, setCurrent] = useState("http://localhost:5173");
-	const [history, setHistory] = useState<string[]>(["http://localhost:5173"]);
-	const [histIndex, setHistIndex] = useState(0);
-	const [loading, setLoading] = useState(true);
-	const [picking, setPicking] = useState(false);
-	const [viewport, setViewport] = useState<number | null>(null);
-	const [agentTabs, setAgentTabs] = useState<BrowserTabInfo[]>([]);
-	const [agentShot, setAgentShot] = useState<{ targetId: string; base64: string } | null>(null);
-	const webviewRef = useRef<HTMLElement | null>(null);
-	const electron = isElectron();
-
-	// Shared-browser tab strip: refresh every 3s while the pane is open
-	// (cheap Target.getTargets over the daemon).
-	useEffect(() => {
-		let alive = true;
-		const load = (): void => {
-			void rpc
-				.request<{ tabs?: BrowserTabInfo[] }>("browser.tabs", {})
-				.then(res => {
-					if (!alive) return;
-					const tabs = res?.tabs ?? [];
-					setAgentTabs(prev =>
-						prev.length === tabs.length && prev.every((t, i) => t.targetId === tabs[i]?.targetId) ? prev : tabs,
-					);
-				})
-				.catch(() => {});
-		};
-		load();
-		const id = setInterval(load, 3000);
-		return () => {
-			alive = false;
-			clearInterval(id);
-		};
-	}, [rpc]);
-
-	const pickAgentTab = (tab: BrowserTabInfo): void => {
-		go(tab.url);
-		void rpc
-			.request<{ base64?: string }>("browser.screenshot", { targetId: tab.targetId })
-			.then(res => res?.base64 && setAgentShot({ targetId: tab.targetId, base64: res.base64 }))
-			.catch(() => {});
-	};
-	// Webview load-end → clear the loading spinner (addEventListener form:
-	// React's webview JSX types don't expose the Electron event props).
-	useEffect(() => {
-		if (!electron) return;
-		const wv = webviewRef.current as unknown as {
-			addEventListener?(event: string, fn: () => void): void;
-			removeEventListener?(event: string, fn: () => void): void;
-		} | null;
-		if (!wv?.addEventListener) return;
-		const onLoad = (): void => setLoading(false);
-		wv.addEventListener("did-finish-load", onLoad);
-		return () => wv.removeEventListener?.("did-finish-load", onLoad);
-	}, [electron]);
-	const normalize = (target: string): string => {
-		let u = target.trim();
-		if (u && !/^[a-z]+:\/\//i.test(u)) u = `http://${u}`;
-		return u;
-	};
-	const go = (target: string): void => {
-		const u = normalize(target);
-		if (!u) return;
-		setUrl(u);
-		setCurrent(u);
-		setHistory(h => [...h.slice(0, histIndex + 1), u]);
-		setHistIndex(i => i + 1);
-	};
-	const back = (): void => {
-		if (histIndex <= 0) return;
-		const idx = histIndex - 1;
-		setHistIndex(idx);
-		const u = history[idx]!;
-		setUrl(u);
-		setCurrent(u);
-	};
-	const forward = (): void => {
-		if (histIndex >= history.length - 1) return;
-		const idx = histIndex + 1;
-		setHistIndex(idx);
-		const u = history[idx]!;
-		setUrl(u);
-		setCurrent(u);
-	};
-	const refresh = (): void => {
-		const u = `${current}${current.includes("?") ? "&" : "?"}_=${Date.now()}`;
-		setCurrent(u);
-		setHistory(h => [...h.slice(0, histIndex), u]);
-	};
-	const pickElement = async (): Promise<void> => {
-		if (!electron) return;
-		const wv = webviewRef.current as unknown as {
-			executeJavaScript?(script: string, userGesture: boolean): Promise<unknown>;
-		} | null;
-		if (!wv?.executeJavaScript) return;
-		setPicking(true);
-		try {
-			const picked = (await wv.executeJavaScript(BROWSER_INSPECT_SCRIPT, true)) as PickedElement | null;
-			if (picked?.text) {
-				const insertion = `${t("transcript.insertedElement", { tag: picked.tag, text: picked.text.slice(0, 80) })}\n${t("transcript.insertedElementSelector")}: ${picked.selector}`;
-				window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
-			}
-		} catch {
-			// page not scriptable (about:blank / crashed) — ignore
-		} finally {
-			setPicking(false);
-		}
-	};
-	const askSelection = async (): Promise<void> => {
-		if (!electron) return;
-		const wv = webviewRef.current as unknown as {
-			executeJavaScript?(script: string, userGesture: boolean): Promise<unknown>;
-		} | null;
-		if (!wv?.executeJavaScript) return;
-		try {
-			const picked = (await wv.executeJavaScript(BROWSER_ASK_SELECTION_SCRIPT, true)) as {
-				text?: string;
-				title?: string;
-			} | null;
-			if (!picked?.text) return;
-			const rect = webviewRef.current?.getBoundingClientRect();
-			window.dispatchEvent(
-				new CustomEvent("musepi-gui-ask", {
-					detail: {
-						text: picked.text,
-						x: (rect?.left ?? 0) + (rect?.width ?? 0) / 2,
-						y: (rect?.top ?? 0) + Math.min((rect?.height ?? 0) / 2, 200),
-						context: picked.title ? `${t("settings.askBrowserSelection")}: ${picked.title}` : undefined,
-					},
-				}),
-			);
-		} catch {
-			// page not scriptable (about:blank / crashed) — ignore
-		}
-	};
-	return (
-		<div className="flex h-full min-h-0 flex-col">
-			{/* Agent 标签页 strip: live tabs of the shared automation Chromium
-			 * (the browser the agent drives). Click → open the URL here +
-			 * capture a screenshot thumbnail. */}
-			{agentTabs.length > 0 && (
-				<div ref={agentTabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
-						{t("tools.agentTabs")}:
-					</span>
-					{agentTabs.map(tab => (
-						<button
-							key={tab.targetId}
-							type="button"
-							className={`gui-pane-tool flex-shrink-0 px-1.5 py-0.5 text-[11px] ${
-								agentShot?.targetId === tab.targetId ? "gui-pane-tool--active" : ""
-							}`}
-							title={tab.url}
-							onClick={() => pickAgentTab(tab)}
-						>
-							<span className="max-w-[110px] truncate">{tab.title}</span>
-						</button>
-					))}
-				</div>
-			)}
-			{/* Screenshot thumbnail of the picked agent tab. */}
-			{agentShot && (
-				<div className="relative mx-1 mb-1 overflow-hidden rounded-md border border-[var(--border)]">
-					<img
-						src={`data:image/jpeg;base64,${agentShot.base64}`}
-						alt={t("tools.agentTabPreview")}
-						className="block h-24 w-full object-cover object-top opacity-80"
-					/>
-					<button
-						type="button"
-						className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded bg-[rgba(0,0,0,0.6)] text-[10px] text-white"
-						aria-label={t("settings.close")}
-						onClick={() => setAgentShot(null)}
-					>
-						×
-					</button>
-				</div>
-			)}
-			<div className="flex items-center gap-1 px-1 pb-1 pt-1">
-				<button
-					type="button"
-					className="gui-pane-action !w-auto px-1.5"
-					aria-label={t("settings.back")}
-					title={t("settings.back")}
-					disabled={histIndex <= 0}
-					onClick={back}
-				>
-					<Icon name="arrow-left" className="h-3.5 w-3.5" />
-				</button>
-				<button
-					type="button"
-					className="gui-pane-action !w-auto px-1.5"
-					aria-label={t("transcript.forward")}
-					title={t("transcript.forward")}
-					disabled={histIndex >= history.length - 1}
-					onClick={forward}
-				>
-					<Icon name="arrow-right" className="h-3.5 w-3.5" />
-				</button>
-				<form
-					className="flex min-w-0 flex-1 items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--color-surface-sunken)] px-2 py-1"
-					onSubmit={e => {
-						e.preventDefault();
-						go(url);
-					}}
-				>
-					<Icon name="global" className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]" />
-					<input
-						className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--color-text)] outline-none"
-						value={url}
-						spellCheck={false}
-						onChange={e => setUrl(e.target.value)}
-						placeholder="localhost:5173"
-					/>
-				</form>
-				<button
-					type="button"
-					className="gui-pane-action !w-auto px-2"
-					aria-label={loading ? t("settings.loading2") : t("settings.refresh")}
-					title={loading ? t("settings.loading2") : t("settings.refresh")}
-					aria-busy={loading ? "true" : undefined}
-					onClick={refresh}
-				>
-					<Icon name="refresh" className={`h-3.5 w-3.5${loading ? " gui-spin" : ""}`} />
-				</button>
-				<button
-					type="button"
-					className="gui-pane-action !w-auto px-2"
-					aria-label={t("transcript.openBrowser")}
-					title={t("transcript.openBrowser")}
-					onClick={() => void openExternalUrl(current)}
-				>
-					<Icon name="external-link" className="h-3.5 w-3.5" />
-				</button>
-				{electron && (
-					<button
-						type="button"
-						className={`gui-pane-action !w-auto px-2${picking ? " gui-view-opt--active" : ""}`}
-						aria-label={picking ? t("transcript.stopPickingElement") : t("transcript.pickElement")}
-						title={picking ? t("transcript.stopPickingElement") : t("transcript.pickElement")}
-						onClick={() => void pickElement()}
-					>
-						<Icon name="cursor" className="h-3.5 w-3.5" />
-					</button>
-				)}
-				{electron && (
-					<button
-						type="button"
-						className="gui-pane-action !w-auto px-2"
-						aria-label={t("settings.askAboutPageSelection")}
-						title={t("settings.askAboutPageSelection")}
-						onClick={() => void askSelection()}
-					>
-						<Icon name="sparkling" className="h-3.5 w-3.5" />
-					</button>
-				)}
-				{/* Viewport presets (手机/平板/桌面/自适应): the browser pane is
-				 * used for responsive checks — fixed widths wrap the webview. */}
-				<div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] p-0.5">
-					{BROWSER_VIEWPORTS.map(v => (
-						<button
-							key={v.labelKey}
-							type="button"
-							className={`gui-pane-action !w-auto px-1.5 text-[10.5px]${
-								viewport === v.width ? " gui-view-opt--active" : ""
-							}`}
-							aria-label={t(v.labelKey)}
-							title={t(v.labelKey)}
-							onClick={() => setViewport(v.width)}
-						>
-							{t(v.labelKey)}
-						</button>
-					))}
-				</div>
-			</div>
-			<div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-white">
-				<div
-					className="mx-auto h-full min-h-full transition-[width] duration-150"
-					style={viewport ? { width: viewport } : { width: "100%" }}
-				>
-					{electron ? (
-						<webview
-							ref={webviewRef}
-							src={current}
-							partition="persist:musepi-browser"
-							allowpopups
-							webpreferences="contextIsolation=yes, sandbox=yes"
-							className="h-full w-full"
-							style={{ display: "flex" }}
-							{...({
-								onDidStartLoading: () => setLoading(true),
-								onDidStopLoading: () => setLoading(false),
-							} as Record<string, unknown>)}
-						/>
-					) : (
-						<iframe
-							key={current}
-							src={current}
-							className="h-full w-full border-0"
-							sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-							title={t("settings.browser")}
-							onLoad={() => setLoading(false)}
-						/>
-					)}
-				</div>
-			</div>
 		</div>
 	);
 }
