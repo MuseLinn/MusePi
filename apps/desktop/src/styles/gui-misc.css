@@ -337,10 +337,6 @@
 	background: color-mix(in oklab, var(--accent) 12%, transparent);
 	color: var(--accent);
 }
-.gui-obo-appearance-lang {
-	font-size: var(--ui-font-size-sm);
-	font-weight: 550;
-}
 /* Accent preset swatch — the accent colors of each preset, theme-agnostic. */
 .gui-obo-accent-swatch {
 	width: 100%;

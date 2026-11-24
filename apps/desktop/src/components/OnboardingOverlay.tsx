@@ -17,9 +17,13 @@
  */
 
 import {
+	DARK_THEME_PRESETS,
 	isTopModal,
+	LIGHT_THEME_PRESETS,
 	Segmented,
+	type SegmentedOption,
 	setLocale,
+	type ThemePreference,
 	type TranslationKey,
 	t,
 	type UiThemeId,
@@ -30,6 +34,7 @@ import {
 	useUiThemePreferences,
 } from "@musepi/client-core";
 import { KeyRound, Languages, Layers, Mic, Sparkles } from "lucide";
+import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
@@ -1238,38 +1243,39 @@ function LanguageSetup(): ReactNode {
 		<div className="gui-obo-appearance">
 			<div className="gui-obo-appearance-group">
 				<span className="gui-obo-quick-label">{t("settings.language")}</span>
-				<div className="gui-obo-appearance-options">
-					<button
-						type="button"
-						className={`gui-obo-appearance-card${locale !== "en-US" ? " gui-obo-appearance-card--active" : ""}`}
-						onClick={() => {
-							tapFeedback();
-							applyLocale("zh-CN");
-						}}
-					>
-						<span className="gui-obo-appearance-lang">中文</span>
-					</button>
-					<button
-						type="button"
-						className={`gui-obo-appearance-card${locale === "en-US" ? " gui-obo-appearance-card--active" : ""}`}
-						onClick={() => {
-							tapFeedback();
-							applyLocale("en-US");
-						}}
-					>
-						<span className="gui-obo-appearance-lang">English</span>
-					</button>
-				</div>
+				<Segmented
+					ariaLabel={t("settings.language")}
+					value={locale === "en-US" ? "en-US" : "zh-CN"}
+					options={LANGUAGE_SEGMENTS}
+					onChange={next => {
+						tapFeedback();
+						applyLocale(next);
+					}}
+				/>
 			</div>
 		</div>
 	);
 }
 
-const THEME_OPTIONS = [
-	{ id: "dark", key: "settings.dark" },
-	{ id: "light", key: "settings.light" },
-	{ id: "system", key: "settings.followSystem" },
-] as const;
+/** Language is a binary choice, so it is the shared segmented control too. */
+const LANGUAGE_SEGMENTS: SegmentedOption<"zh-CN" | "en-US">[] = [
+	{ value: "zh-CN", label: "中文" },
+	{ value: "en-US", label: "English" },
+];
+
+/** Follow-system / light / dark with the same icons the settings page uses —
+ * the theme-flip overlay morphs between these glyphs. */
+const TYPE_THEME_SEGMENTS: SegmentedOption<ThemePreference>[] = [
+	{ value: "system", label: t("settings.followSystem"), icon: MonitorIcon },
+	{ value: "light", label: t("settings.light"), icon: SunIcon },
+	{ value: "dark", label: t("settings.dark"), icon: MoonIcon },
+];
+
+/** One palette for both schemes vs one per scheme (settings parity). */
+const THEME_MODE_SEGMENTS: SegmentedOption<"separate" | "unified">[] = [
+	{ value: "separate", label: t("settings.themeModeSeparate") },
+	{ value: "unified", label: t("settings.themeModeUnified") },
+];
 
 // Six chips share one row, so the custom entry uses the short label: the
 // full "自定义强调色" wrapped to two lines and made that chip taller than its
@@ -1283,19 +1289,28 @@ const ACCENT_OPTIONS = [
 	{ id: "custom", key: "settings.customAccentShort" },
 ] as const;
 
-/** Step 2 — appearance: scheme (dark/light/system), palette (the 18
- *  ui-themes), and accent (follow-theme / brand/mono/ocean/jade + custom),
- *  applied live through guest-client's theme module so the data-theme ×
- *  data-color-scheme × data-ui-theme × data-accent axes all stay in sync
- *  (same path as the settings page). The right-pane window preview recolors
- *  through the same CSS vars.
+/** Step 2 — appearance: scheme (dark/light/system), palette mode (one theme
+ *  for both schemes, or one per scheme), the palette itself, and accent
+ *  (follow-theme / brand/mono/ocean/jade + custom). Applied live through
+ *  guest-client's theme module so the data-theme × data-color-scheme ×
+ *  data-ui-theme × data-accent axes all stay in sync (same path as the
+ *  settings page). The right-pane window preview recolors through the same
+ *  CSS vars.
  *
- *  The palette row writes BOTH scheme slots: the primer offers one pick (the
- *  settings page still owns the split-light/dark mode). Only the paired
- *  presets are offered, so the id is valid under either scheme. */
+ *  Every choice here is the shared Segmented or GuiSelect the settings page
+ *  uses, so the primer cannot drift into a second control vocabulary. */
 function AppearanceSetup(): ReactNode {
 	const { preference, resolved, setPreference } = useThemePreference();
-	const { lightThemeId, darkThemeId, setLightTheme, setDarkTheme } = useUiThemePreferences();
+	const {
+		lightThemeId,
+		darkThemeId,
+		setLightTheme,
+		setDarkTheme,
+		unifiedMode,
+		unifiedThemeId,
+		setUnifiedMode,
+		setUnifiedTheme,
+	} = useUiThemePreferences();
 	const { accent, setAccent, customAccent, applyCustomAccent } = useAccentPreference();
 	// Custom-accent picker popover (same app-styled panel as the settings).
 	// No className — the panel root owns the card surface (see SettingsView).
@@ -1304,53 +1319,98 @@ function AppearanceSetup(): ReactNode {
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [pickerPreview, setPickerPreview] = useState<string | null>(null);
 	const { anchorRef: customAccentRef, renderMenu: renderAccentMenu } = useFloatingMenu(pickerOpen, setPickerOpen);
-	// The palette on screen right now — the resolved scheme's pick. Picking a
-	// preset unifies both slots, so a split configuration collapses to one.
+	// The palette on screen right now — the resolved scheme's pick.
 	const schemePalette = resolved === "light" ? lightThemeId : darkThemeId;
 	// A scheme-only preset (midnight under light, warm under dark…) is not in
 	// the unified list; it stays selectable so the trigger never renders a raw
 	// id, and picking a unified preset replaces it.
-	const paletteOptions = UNIFIED_THEME_PRESETS.some(p => p.id === schemePalette)
-		? UNIFIED_THEME_PRESETS
-		: [...UNIFIED_THEME_PRESETS, { id: schemePalette, label: schemePalette }];
+	// `UiThemeId` is a closed union, so the extra entry is typed by widening the
+	// element rather than by casting the array.
+	const withCurrent = (list: ReadonlyArray<{ id: UiThemeId; label: string }>, id: UiThemeId) =>
+		list.some(p => p.id === id) ? list : [...list, { id, label: id }];
+	const paletteOptions = withCurrent(UNIFIED_THEME_PRESETS, schemePalette);
 
 	return (
 		<div className="gui-obo-appearance">
 			<div className="gui-obo-appearance-group">
-				<span className="gui-obo-quick-label">{t("settings.theme")}</span>
-				<div className="gui-obo-appearance-options">
-					{THEME_OPTIONS.map(opt => (
-						<button
-							type="button"
-							key={opt.id}
-							className={`gui-obo-appearance-card${preference === opt.id ? " gui-obo-appearance-card--active" : ""}`}
-							onClick={() => {
-								tapFeedback();
-								setPreference(opt.id);
-							}}
-						>
-							<span className="gui-obo-appearance-lang">{t(opt.key)}</span>
-						</button>
-					))}
-				</div>
-			</div>
-			<div className="gui-obo-appearance-group">
-				<span className="gui-obo-quick-label">{t("settings.unifiedTheme")}</span>
-				<GuiSelect
-					className="gui-obo-palette-select"
-					ariaLabel={t("settings.unifiedTheme")}
-					value={schemePalette}
+				<span className="gui-obo-quick-label">{t("settings.interfaceTheme")}</span>
+				<Segmented
+					ariaLabel={t("settings.interfaceTheme")}
+					value={preference}
+					options={TYPE_THEME_SEGMENTS}
 					onChange={next => {
 						tapFeedback();
-						setLightTheme(next as UiThemeId);
-						setDarkTheme(next as UiThemeId);
+						setPreference(next);
 					}}
-					options={paletteOptions.map(p => ({
-						value: p.id,
-						label: t(THEME_PRESET_LABEL[p.id]),
-					}))}
 				/>
 			</div>
+			<div className="gui-obo-appearance-group">
+				<span className="gui-obo-quick-label">{t("settings.themeMode")}</span>
+				<Segmented
+					ariaLabel={t("settings.themeMode")}
+					value={unifiedMode ? "unified" : "separate"}
+					options={THEME_MODE_SEGMENTS}
+					onChange={next => {
+						tapFeedback();
+						setUnifiedMode(next === "unified");
+					}}
+				/>
+			</div>
+			{/* Unified: one palette drives both schemes. Separate: each scheme
+			 * picks its own, exactly like the settings page. */}
+			{unifiedMode ? (
+				<div className="gui-obo-appearance-group">
+					<span className="gui-obo-quick-label">{t("settings.unifiedTheme")}</span>
+					<GuiSelect
+						className="gui-obo-palette-select"
+						ariaLabel={t("settings.unifiedTheme")}
+						value={unifiedThemeId}
+						onChange={next => {
+							tapFeedback();
+							setUnifiedTheme(next as UiThemeId);
+						}}
+						options={UNIFIED_THEME_PRESETS.map(p => ({
+							value: p.id,
+							label: t(THEME_PRESET_LABEL[p.id]),
+						}))}
+					/>
+				</div>
+			) : (
+				<>
+					<div className="gui-obo-appearance-group">
+						<span className="gui-obo-quick-label">{t("settings.lightTheme")}</span>
+						<GuiSelect
+							className="gui-obo-palette-select"
+							ariaLabel={t("settings.lightTheme")}
+							value={lightThemeId}
+							onChange={next => {
+								tapFeedback();
+								setLightTheme(next as UiThemeId);
+							}}
+							options={withCurrent(LIGHT_THEME_PRESETS, lightThemeId).map(p => ({
+								value: p.id,
+								label: t(THEME_PRESET_LABEL[p.id]),
+							}))}
+						/>
+					</div>
+					<div className="gui-obo-appearance-group">
+						<span className="gui-obo-quick-label">{t("settings.darkTheme")}</span>
+						<GuiSelect
+							className="gui-obo-palette-select"
+							ariaLabel={t("settings.darkTheme")}
+							value={darkThemeId}
+							onChange={next => {
+								tapFeedback();
+								setDarkTheme(next as UiThemeId);
+							}}
+							options={withCurrent(DARK_THEME_PRESETS, darkThemeId).map(p => ({
+								value: p.id,
+								label: t(THEME_PRESET_LABEL[p.id]),
+							}))}
+						/>
+					</div>
+				</>
+			)}
 			<div className="gui-obo-appearance-group">
 				<span className="gui-obo-quick-label">{t("settings.accentColor")}</span>
 				<div className="gui-obo-appearance-options">

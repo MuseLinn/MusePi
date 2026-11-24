@@ -129,8 +129,9 @@ describe("the appearance step exposes every theme axis", () => {
 		// unified list, so the trigger appends the current pick rather than
 		// showing an untranslated id.
 		const tsx = read(ONBOARDING_TSX);
-		expect(tsx).toContain("paletteOptions");
-		expect(tsx).toContain("...UNIFIED_THEME_PRESETS, { id: schemePalette, label: schemePalette }");
+		expect(tsx).toContain("const withCurrent =");
+		expect(tsx).toContain("withCurrent(LIGHT_THEME_PRESETS, lightThemeId)");
+		expect(tsx).toContain("withCurrent(DARK_THEME_PRESETS, darkThemeId)");
 	});
 });
 
@@ -280,6 +281,50 @@ describe("the provider switcher is the shared sliding control", () => {
 		expect(css).not.toContain(".gui-obo-tab");
 		// The switcher fills the step width like the search row and the list.
 		expect(css).toContain(".gui-obo-provider-form .gui-seg");
+	});
+});
+
+describe("the appearance step uses the settings page's own controls", () => {
+	test("scheme, palette mode and language are the shared segmented control", () => {
+		const tsx = read(ONBOARDING_TSX);
+		// Three hand-written card rows used to carry these; the settings page
+		// renders all three as Segmented, so the primer drifted on vocabulary.
+		for (const aria of ["settings.interfaceTheme", "settings.themeMode", "settings.language"]) {
+			expect(tsx, `${aria} is not a Segmented`).toContain(`ariaLabel={t("${aria}")}`);
+		}
+		expect(tsx).toContain("TYPE_THEME_SEGMENTS");
+		expect(tsx).toContain("THEME_MODE_SEGMENTS");
+		expect(tsx).toContain("LANGUAGE_SEGMENTS");
+	});
+
+	test("separate mode offers one palette per scheme", () => {
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain("LIGHT_THEME_PRESETS");
+		expect(tsx).toContain("DARK_THEME_PRESETS");
+		expect(tsx).toContain("setLightTheme");
+		expect(tsx).toContain("setDarkTheme");
+		expect(tsx).toContain("setUnifiedTheme");
+	});
+
+	test("the accent chips keep their swatches, not a segmented control", () => {
+		// Segmented has no swatch slot: each accent chip carries the colour it
+		// applies, which a text segment cannot.
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain("gui-obo-accent-swatch");
+	});
+});
+
+describe("the segmented control answers a press", () => {
+	test("the thumb sinks on :active without dropping its offset", () => {
+		const css = read("packages/client-core/src/styles/tokens.css");
+		// The segment offset lives in `transform`, so the press must use the
+		// standalone `scale` property — a second `transform` declaration would
+		// snap the thumb to segment 0 while pressed.
+		expect(css).toContain('.gui-seg:active:not([aria-disabled="true"]) .gui-seg-thumb');
+		const thumb = rule(css, ".gui-seg-thumb");
+		expect(thumb, "no .gui-seg-thumb block").not.toBeNull();
+		expect(declaration(thumb!, "transition")).toContain("scale");
+		expect(thumb).not.toContain("transition: transform 100ms");
 	});
 });
 

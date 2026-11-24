@@ -1275,11 +1275,24 @@
 	box-shadow: 0 1px 3px oklch(0 0 0 / 25%);
 	transform: translateX(calc(var(--seg-index) * 100%));
 	pointer-events: none;
+	/* Press feedback rides the standalone `scale` property, never `transform`:
+	 * the offset lives in `transform` and a second declaration there would
+	 * drop it (the thumb would snap to segment 0 while pressed). Same split as
+	 * the toggle knob and the segmented-control shake. */
+	transition: scale 100ms ease-out;
 }
 
 /* Armed one frame after mount so the first paint never slides in. */
 .gui-seg--armed .gui-seg-thumb {
-	transition: transform 340ms var(--spring-liquid);
+	transition:
+		transform 340ms var(--spring-liquid),
+		scale 100ms ease-out;
+}
+
+/* A press reads as the thumb sinking into its groove before the slide runs.
+ * Without it the control answered hover but not the click itself. */
+.gui-seg:active:not([aria-disabled="true"]) .gui-seg-thumb {
+	scale: 0.96;
 }
 
 .gui-seg-item {
