@@ -9,7 +9,8 @@
  * This file keeps only what the schema cannot express: the two speech-model
  * pickers, live mic enumeration (liquid-glass floating menu), and the
  * dictation / TTS tests — both hosted by the SHARED simulated conversation
- * view (MockConversationPreview, same component 外观 → 效果预览 renders):
+ * view (MockConversationPreview, the same component the appearance hero
+ * renders):
  * dictation starts from the preview composer's real mic button and the
  * transcript lands as a user message in the preview (multi-turn), while the
  * fixed assistant sample carries the read-aloud action, so testing voice I/O

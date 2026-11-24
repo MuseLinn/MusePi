@@ -4,7 +4,7 @@
 
 默认插件形态是**会话级动态 Cordis 插件**（`cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine` / `cordis_inspect_list` / `cordis_inspect_query` / `cordis_inspect_self`，创造模式已自动激活）。没有额外说明时，「创建插件」先做 Cordis 原型：`cordis_inspect_list` / `cordis_inspect_query` 查 API，`cordis_inspect_self` 看现状，`cordis_define` 定义不可变版本，`cordis_run` 激活并自检；失败时用同一个 `pluginId` 追加修正版本，不要另建替换插件。修改已有插件时先用 `cordis_inspect_self(pluginId, packageId)` 读源码。
 
-原型通过后要交付成**可安装的 Track A 插件包**：具名导出 `name` / `inject` / `provide` / `apply`、通过 `ctx.*` 注册能力，放到工作区或 `~/.musepi/plugins/<name>/`，再用 `plugin_manager` 安装启用：`list_bundles` → `install_bundle` → `set_bundle` 管理包与 profile 组合，`list_plugins` → `set_plugin` 切换组合条目；非自动批准会话里让用户在插件页完成。代码契约、交付路径与边界见 `musepi-plugin-dev` 技能的 Cordis 一节。
+原型通过后要交付成**可安装的 MusePi 插件包**：具名导出 `name` / `inject` / `provide` / `apply`、通过 `ctx.*` 注册能力，放到工作区或 `~/.musepi/plugins/<name>/`，再用 `plugin_manager` 安装启用：`list_bundles` → `install_bundle` → `set_bundle` 管理包与 profile 组合，`list_plugins` → `set_plugin` 切换组合条目；非自动批准会话里让用户在插件页完成。代码契约、交付路径与边界见 `musepi-plugin-dev` 技能的 Cordis 一节。
 
 创建预设时，按以下顺序工作：
 1. 根据需求设计预设的 plugins、prompt、settings，以及可选的 extends 组合，并写出完整的定义文本交给用户。内置预设不可覆盖；新预设必须使用新的预设 id。

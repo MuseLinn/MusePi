@@ -345,10 +345,17 @@ export function AppearanceSection({
 			<h2 className="gui-settings-page-title">{t("settings.appearance")}</h2>
 			<p className="gui-settings-page-desc">{t("settings.appearanceSettings")}</p>
 
-			{/* ── 界面设置 — theme + interface type (ZCode section). ── */}
+			{/* ── 头图预览 — the session card itself, not a swatch. Theme, accent,
+			 * fonts, spacing, transparency and the avatar switches reach it through
+			 * the same tokens and classes the chat uses, so it answers every row
+			 * below instead of illustrating one of them. ── */}
+			<div className="gui-appearance-hero" role="img" aria-label={t("settings.appearancePreview")}>
+				<MockConversationPreview showAvatars={showAvatars} framed activity="collapsed" />
+			</div>
+
+			{/* ── 主题 — the palette first: scheme, preset and accent. ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("settings.interfaceSettings")}</div>
-				<div className="gui-settings-section-desc">{t("settings.interfaceSettingsDescription")}</div>
+				<div className="gui-settings-section-title">{t("settings.theme")}</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("settings.interfaceTheme")}</div>
 					<div className="gui-settings-field-hint">{t("settings.chooseLightDark.info")}</div>
@@ -466,6 +473,12 @@ export function AppearanceSection({
 						)}
 					</div>
 				</div>
+			</div>
+
+			{/* ── 界面设置 — type, spacing and window chrome. ── */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("settings.interfaceSettings")}</div>
+				<div className="gui-settings-section-desc">{t("settings.interfaceSettingsDescription")}</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("settings.interfaceFontSize")}</div>
 					<NumberStepper
@@ -630,7 +643,7 @@ export function AppearanceSection({
 			</div>
 
 			{/* ── 效果 — motion / info status bar / avatars (session chrome the
-			 * 效果预览 below reflects live). ── */}
+			 * hero above reflects live). ── */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("settings.effects")}</div>
 				<div className="gui-settings-row">
@@ -763,16 +776,6 @@ export function AppearanceSection({
 				)}
 			</div>
 
-			{/* ── 效果预览 — the shared simulated conversation view (voice-test
-			 * parity): REAL tr-* row markup (user bubble, assistant reply, collapsed
-			 * 活动 fold) with the identity capsule on top, plus the current
-			 * composer card, driven live by the toggles above (the capsule's orb /
-			 * info status bar). ── */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("general.effectsPreview")}</div>
-				<div className="gui-settings-section-desc">{t("general.effectsPreviewDescription")}</div>
-				<MockConversationPreview showAvatars={showAvatars} streamingDemo />
-			</div>
 			{/* ── 图片 — the GUI inline-images toggle + the daemon schema's
 			 * Images group (auto-resize / block images) in one place. ── */}
 			<div className="gui-settings-section">

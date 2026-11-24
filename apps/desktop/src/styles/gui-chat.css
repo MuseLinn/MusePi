@@ -1559,6 +1559,79 @@ html.gui-vt-surface-only::view-transition-new(root),
 	color: var(--color-accent-fg);
 }
 
+/* ── Appearance hero (Settings → 外观 头图) ─────────────────────────────
+ * The preview is the page's header image: a session card, not a settings box.
+ * It paints the chat card's own surface and radius, the capsule floats over
+ * the transcript's reserved head band, and the composer docks on the bottom
+ * edge over a fade — the same three seats ChatView gives them. Everything
+ * inside is the real tr-* / capsule / composer markup, so theme, accent,
+ * fonts, density, transparency and the avatar switches change this card the
+ * way they change a conversation. */
+.gui-appearance-hero {
+	margin-top: calc(18px * var(--gui-density, 1));
+}
+
+.gui-effect-preview--session {
+	position: relative;
+	height: 420px;
+	padding: calc(52px * var(--gui-density, 1)) calc(20px * var(--gui-density, 1)) 0;
+	border: none;
+	border-radius: var(--radius-2xl);
+	background: var(--color-surface);
+	box-shadow: var(--gui-card-shadow);
+	overflow: hidden;
+}
+
+/* In the flat settings box the wrapper is pure grouping; the session card
+ * gives it the scroller's remaining height so the sample clips at the head
+ * band and the composer, like a real transcript viewport. */
+.gui-effect-preview-body {
+	display: contents;
+}
+
+.gui-effect-preview--session > .gui-effect-preview-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	/* Soft cut where the sample meets the docked composer — the transcript's
+	 * own bottom feather, not a hard box edge. */
+	-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* Head band: pinned over the scroller like `.gui-chat-head`, center-aligned. */
+.gui-effect-preview--session .gui-effect-preview-identity {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 3;
+	padding: calc(8px * var(--gui-density, 1)) 12px 2px;
+}
+
+/* The composer is the card's bottom edge, not the last flow row: auto top
+ * margin keeps it docked however short the sample is. */
+.gui-effect-preview--session > .gui-effect-preview-composer {
+	position: relative;
+	z-index: 2;
+	margin: auto calc(12px * var(--gui-density, 1)) calc(12px * var(--gui-density, 1));
+}
+
+/* End fade — rows meeting the docked composer dissolve into the card surface
+ * the way the chat's bottom band does. The composer paints above it. */
+.gui-effect-preview--session::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 104px;
+	pointer-events: none;
+	background: linear-gradient(to top, var(--color-surface) 56%, transparent 100%);
+}
+
 /* Conditional settings fields (Reveal): see the gui-collapse standard
  * block — height via useCollapse px, outer fade. (Formerly a
  * grid-template-rows 0fr↔1fr transition; superseded by the shared
@@ -1594,6 +1667,20 @@ html.gui-vt-surface-only::view-transition-new(root),
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: var(--color-text-faint);
+}
+
+/* Typewriter sample under the 打字效果 picker: the preview lives with the
+ * control that selects it, on the same raised surface the settings cards use
+ * so the looping caret does not read as live chat. */
+.gui-typing-preview {
+	margin-top: 8px;
+	padding: 10px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
 }
 
 .gui-chat-preview-mermaid {

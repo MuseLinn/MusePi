@@ -1,9 +1,9 @@
 /*
  * MockConversationPreview — the simulated conversation view shared by
- * Settings → 外观 「效果预览」 and Settings → 语音 「语音测试」. Both pages
- * need a small mock chat that tracks the REAL transcript markup (the same
- * tr-* classes the chat surface renders), so a setting toggle reads in the
- * preview exactly as it lands in a conversation:
+ * Settings → 外观 (the page's hero) and Settings → 语音 「语音测试」. Both
+ * pages need a small mock chat that tracks the REAL transcript markup (the
+ * same tr-* classes the chat surface renders), so a setting toggle reads in
+ * the preview exactly as it lands in a conversation:
  *
  *  - one agent identity capsule (.gui-agent-capsule, the real pill) over the
  *    rows: its orb follows the avatar toggle while the status text stays, so
@@ -14,10 +14,14 @@
  *  - assistant messages: .tr-row--assistant with an empty gutter + optional
  *    row actions (the voice test mounts its read-aloud button there, same
  *    .tr-action slot the transcript's speak button uses)
- *  - a collapsed-round 活动 summary row (.tr-round-fold, the real fold
- *    classes) between the sample turns, in BOTH fold states
+ *  - a 活动 fold row (.tr-round-fold, the real fold classes) between the
+ *    sample turns; `activity` picks the resting (collapsed) or opened form
  *  - the composer card mock (.gui-effect-preview-composer, the frosted-glass
  *    look of the real input frame); voice overrides it with a live mic
+ *
+ * `framed` turns the whole scene into the session card itself (appearance
+ * hero): the chat surface, the capsule floating over the head band and the
+ * composer docked on the bottom edge. The default is the plain settings box.
  *
  * Message bodies render through the shared Markdown component — the same
  * renderer chat uses — so the preview shows real markdown (the voice TTS
@@ -142,29 +146,24 @@ export function MockActivityFoldRow({ open = false }: { open?: boolean }): React
 	);
 }
 
-/** Mock EXPANDED round: the opened 活动 header plus the process rows it
- *  reveals, then the "+N more" count a trimmed running turn shows.
- *
- *  The preview previously showed only the collapsed header, so the two states
- *  the fold toggle actually moves between were never both on screen — the
- *  expanded side is where the header's rotated chevron, the revealed tool
- *  rows and the tail count live, and a styling change there was invisible. */
-function MockExpandedActivity(): ReactNode {
-	// One row, one 活动 block: the header and the rows it reveals live in the
-	// same transcript column as the reply (gutter rail + body), so the preview
-	// lines up the way a real turn does. Rendering the collapsed header AND an
-	// expanded copy stacked made the preview read as a duplicated control.
+/** Mock 活动 block: the rounded summary header a completed round folds into,
+ *  plus — when `open` — the process rows it reveals. The header nests in a
+ *  railed assistant row so it lines up with the reply's column (one turn, one
+ *  left edge); a bare header would sit flush under the transcript's gutter. */
+function MockActivity({ open }: { open: boolean }): ReactNode {
 	return (
 		<div className="tr-row tr-row--assistant tr-row--railed">
 			<div className="tr-gutter" />
 			<div className="tr-body">
-				<MockActivityFoldRow open />
-				<div className="tr-activity-preview-rows">
-					<div className="tr-activity-preview-row">{t("general.previewActivityEdit")}</div>
-					<div className="tr-activity-preview-row">{t("general.previewActivityCommand")}</div>
-					<div className="tr-activity-preview-row">{t("general.previewActivityRead")}</div>
-					<div className="tr-live-more">{t("tools.moreLinesWithCount", { count: "6" })}</div>
-				</div>
+				<MockActivityFoldRow open={open} />
+				{open && (
+					<div className="tr-activity-preview-rows">
+						<div className="tr-activity-preview-row">{t("general.previewActivityEdit")}</div>
+						<div className="tr-activity-preview-row">{t("general.previewActivityCommand")}</div>
+						<div className="tr-activity-preview-row">{t("general.previewActivityRead")}</div>
+						<div className="tr-live-more">{t("tools.moreLinesWithCount", { count: "6" })}</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -218,7 +217,8 @@ export function MockConversationPreview({
 	assistantActions,
 	extraMessages,
 	composer,
-	streamingDemo = false,
+	framed = false,
+	activity = "expanded",
 }: {
 	/** 显示头像 toggle — drives the capsule's orb (rows carry no avatars). */
 	showAvatars?: boolean;
@@ -232,30 +232,31 @@ export function MockConversationPreview({
 	extraMessages?: ReactNode;
 	/** Composer footer override (voice passes a live-mic composer). */
 	composer?: ReactNode;
-	/** Draw the streaming motion demo under the sample (chat settings). */
-	streamingDemo?: boolean;
+	/** Render as the session card itself (appearance hero): the surface the
+	 *  chat paints, the capsule floating over the transcript's head band and
+	 *  the composer docked at the bottom edge. Off keeps the plain settings
+	 *  box the voice test mounts. */
+	framed?: boolean;
+	/** 活动 fold state. The resting chat shows the collapsed summary, so the
+	 *  hero uses it; the opened form demonstrates the revealed process rows. */
+	activity?: "collapsed" | "expanded";
 }): ReactNode {
 	return (
-		<div className="gui-effect-preview">
+		<div className={`gui-effect-preview${framed ? " gui-effect-preview--session" : ""}`}>
 			<MockAgentCapsule showAvatar={showAvatars} />
-			<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} />
-			{/* The opened 活动 block stands for both states: its header IS the
-			 * collapsed summary, and the rows below it are what the toggle
-			 * reveals. One block, aligned to the reply's column. */}
-			<MockExpandedActivity />
-			<MockAssistantRow
-				markdown={assistantMarkdown ?? t("general.previewAgentMessage")}
-				actions={assistantActions}
-			/>
-			{/* The streaming motion demo lives with the sample it animates, so the
-			 * typing effect is judged on real transcript text. */}
-			{streamingDemo && (
-				<div className="gui-effect-preview-stream">
-					<div className="gui-chat-preview-label">{t("settings.typingEffect")}</div>
-					<TypewriterPreview />
-				</div>
-			)}
-			{extraMessages}
+			<div className="gui-effect-preview-body">
+				<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} />
+				{/* One block, both fold states: the collapsed header is the resting
+				 * form a finished turn keeps; `open` shows the rows the toggle
+				 * reveals. The hero uses the resting form, a live-turn demo the
+				 * opened one. */}
+				<MockActivity open={activity === "expanded"} />
+				<MockAssistantRow
+					markdown={assistantMarkdown ?? t("general.previewAgentMessage")}
+					actions={assistantActions}
+				/>
+				{extraMessages}
+			</div>
 			{composer ?? <MockComposer />}
 		</div>
 	);

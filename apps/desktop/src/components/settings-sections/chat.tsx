@@ -26,6 +26,7 @@ import { useChatHighlight } from "../../lib/highlight";
 import { SESSION_TABS_CHANGED_EVENT, SESSION_TABS_ENABLED_KEY } from "../../lib/session-tabs";
 import { STATS_MODE_EVENT, STATS_MODE_KEY } from "../composer/stats-pills";
 import { GuiSelect } from "../GuiSelect";
+import { TypewriterPreview } from "../MockConversationPreview";
 
 /** Segmented option tables — module scope is fine, the labels are static
  * per locale and the settings view remounts on a language switch. */
@@ -444,8 +445,9 @@ export function ChatSection(): ReactNode {
 						}}
 					/>
 				</div>
-				{/* The sample lives in 外观 → 效果预览 (MockConversationPreview) and
-				 * scopes itself to this picker's value, so it is not drawn twice. */}
+				{/* The sample lives next to the picker it demonstrates (the appearance
+				 * hero shows the conversation, not the typewriter), so the effect is
+				 * judged on real transcript text instead of a name. */}
 				<PrefToggle
 					label={t("settings.streamingCaret")}
 					description={t("settings.streamingCaretDescription")}
@@ -519,6 +521,10 @@ export function ChatSection(): ReactNode {
 							}}
 						/>
 					</div>
+				</div>
+				<div className="gui-typing-preview">
+					<div className="gui-chat-preview-label">{t("settings.typingEffect")}</div>
+					<TypewriterPreview />
 				</div>
 			</div>
 		</CodeHighlightProvider>
