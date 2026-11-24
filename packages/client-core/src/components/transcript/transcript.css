@@ -5408,57 +5408,187 @@ a.tr-tool-search-title:hover {
 	color: var(--color-text-faint, var(--fg-faint));
 }
 
-/* ── Turn trace waterfall (the fold header's "查看轨迹") ─────────────────
- * One row per step, each bar placed on the turn's own 0–100 axis. The axis is
- * a plain percentage track rather than a measured pixel timeline: the trace is
- * read at a glance for shape (one long bar, one red one), not for milliseconds,
- * and a percentage layout survives any dialog width without a resize observer. */
+/* ── Turn trace (the fold header's "查看轨迹") ───────────────────────────
+ * Three layers, read top to bottom: the turn's span with its split, the rounds
+ * it ran, then each step. The split bar is drawn against the SPAN, so the empty
+ * remainder is the time that was neither model nor tool — queueing, or waiting
+ * on a person. Filling it would overstate both known parts.
+ *
+ * Step bars are scaled to the longest step, not to the span: inside one turn
+ * 23ms and five minutes sit together, and an absolute axis renders every bar as
+ * an invisible sliver (the first version did exactly that).
+ */
 .tr-trace {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 14px;
 	font-size: 12.5px;
 	color: var(--fg-muted);
 }
 
-.tr-trace-stats {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 10px;
-	padding-bottom: 10px;
-	border-bottom: 1px solid var(--border);
+/* ── hero: the one number that matters, then its split ── */
+.tr-trace-title {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	font-variant-numeric: tabular-nums;
 }
 
-.tr-trace-stat-label {
-	display: block;
+.tr-trace-title-name {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--fg);
+}
+
+.tr-trace-hero {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 4px 12px;
+}
+
+.tr-trace-hero-main {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.tr-trace-hero-label {
 	font-size: 11px;
 	color: var(--fg-faint);
 }
 
-.tr-trace-stat-value {
-	display: block;
-	font-variant-numeric: tabular-nums;
+.tr-trace-hero-total {
+	font-size: 21px;
+	font-weight: 500;
+	line-height: 1.2;
 	color: var(--fg);
+	font-variant-numeric: tabular-nums;
 }
 
+.tr-trace-hero-side {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-trace-meta {
+	color: var(--fg-faint);
+	font-size: 11.5px;
+}
+
+.tr-trace-split {
+	grid-column: 1 / -1;
+	display: flex;
+	height: 6px;
+	margin-top: 8px;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+	overflow: hidden;
+}
+
+.tr-trace-split-tools {
+	background: color-mix(in oklab, var(--accent) 72%, transparent);
+}
+
+.tr-trace-split-model {
+	background: color-mix(in oklab, var(--fg) 36%, transparent);
+}
+
+/* Neither model nor tool: queueing, or waiting on a person. Left in the faint
+ * ink so the bar reads as a whole instead of a half-drawn one. */
+.tr-trace-split-rest {
+	background: color-mix(in oklab, var(--fg) 18%, transparent);
+}
+
+.tr-trace-legend {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 14px;
+	font-size: 11.5px;
+	color: var(--fg-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-trace-legend-tools,
+.tr-trace-legend-model {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.tr-trace-legend-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--accent) 72%, transparent);
+}
+
+.tr-trace-legend-model .tr-trace-legend-dot {
+	background: color-mix(in oklab, var(--fg) 36%, transparent);
+}
+
+.tr-trace-legend-rest .tr-trace-legend-dot {
+	background: color-mix(in oklab, var(--fg) 18%, transparent);
+}
+
+/* ── rounds: one request and the work it set off ── */
 .tr-trace-list {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 0;
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
+.tr-trace-round {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding-block: 8px;
+}
+
+.tr-trace-round + .tr-trace-round {
+	border-top: 1px solid var(--border);
+}
+
+.tr-trace-tools {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0 0 0 18px;
+	list-style: none;
+}
+
+/* ── one step ── */
 .tr-trace-row {
 	display: grid;
-	grid-template-columns: minmax(90px, 1.2fr) minmax(80px, 2fr) 64px;
+	grid-template-columns: 16px minmax(0, 1fr) minmax(48px, 34%) 62px;
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
+	line-height: 1.5;
 }
 
-.tr-trace-label {
+.tr-trace-lead {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--fg-faint);
+}
+
+.tr-trace-row--model .tr-trace-lead {
+	color: var(--accent);
+}
+
+.tr-trace-main {
 	display: flex;
 	align-items: baseline;
 	gap: 6px;
@@ -5466,16 +5596,33 @@ a.tr-tool-search-title:hover {
 }
 
 .tr-trace-name {
+	/* Never squeezed by a long path beside it: `read` must read as `read`, not
+	 * as `re…`. The detail is the part that gives way. */
+	flex: 0 0 auto;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--fg-muted);
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+}
+
+.tr-trace-row--model .tr-trace-name {
+	color: var(--fg);
+	font-family: var(--font-ui);
+	font-size: 12.5px;
+}
+
+.tr-trace-detail {
+	flex: 0 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	color: var(--fg);
-}
-
-.tr-trace-row[data-kind="tool"] .tr-trace-name {
+	color: var(--fg-faint);
+	font-size: 11px;
 	font-family: var(--font-mono);
-	font-size: 11.5px;
 }
 
 .tr-trace-failed {
@@ -5484,37 +5631,82 @@ a.tr-tool-search-title:hover {
 	color: var(--err, #f85149);
 }
 
-.tr-trace-axis {
+/* Bars carry magnitude only; the track is invisible so the row reads as text
+ * with a weight behind it rather than a table of rules. */
+.tr-trace-gauge {
+	/* No track. A filled track on every row turns the list into sixteen
+	 * "unfinished progress bars"; without it a short bar reads as a small
+	 * magnitude, which is what it is. */
 	position: relative;
 	display: block;
-	height: 8px;
+	height: 4px;
 	border-radius: var(--radius-full);
-	background: color-mix(in oklab, var(--fg) 7%, transparent);
-	overflow: hidden;
 }
 
-.tr-trace-bar {
+.tr-trace-gauge-fill {
 	position: absolute;
 	inset-block: 0;
+	inset-inline-start: 0;
 	border-radius: var(--radius-full);
-	background: color-mix(in oklab, var(--accent) 65%, transparent);
+	background: color-mix(in oklab, var(--fg) 28%, transparent);
 }
 
-.tr-trace-row[data-kind="model"] .tr-trace-bar {
-	background: color-mix(in oklab, var(--fg) 34%, transparent);
+.tr-trace-row--model .tr-trace-gauge-fill {
+	background: color-mix(in oklab, var(--accent) 60%, transparent);
 }
 
-.tr-trace-row[data-status="error"] .tr-trace-bar {
+.tr-trace-gauge-fill--failed {
 	background: var(--err, #f85149);
 }
 
 .tr-trace-duration {
 	font-variant-numeric: tabular-nums;
 	text-align: end;
+	color: var(--fg-muted);
+	font-size: 11.5px;
+}
+
+.tr-trace-row[data-status="error"] .tr-trace-duration {
+	color: var(--err, #f85149);
+}
+
+/* ── delegated members: indented, no gauge of their own ── */
+.tr-trace-row--sub {
+	grid-template-columns: 16px minmax(0, 1fr) minmax(48px, 34%) 62px;
+	padding-inline-start: 12px;
+}
+
+.tr-trace-row--sub .tr-trace-name {
+	color: var(--fg-muted);
+	font-family: var(--font-ui);
+	font-size: 11.5px;
+}
+
+.tr-trace-sub-mark {
 	color: var(--fg-faint);
 }
 
+.tr-trace-gauge-fill--sub {
+	background: color-mix(in oklab, var(--fg) 16%, transparent);
+}
+
+.tr-trace-row--sub .tr-trace-duration {
+	white-space: nowrap;
+}
+
+/* ── foot: the two facts that would otherwise be silent ── */
+.tr-trace-foot {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+}
+
 .tr-trace-note {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
 	margin: 0;
 	color: var(--fg-faint);
 	font-size: 11.5px;
@@ -5524,9 +5716,9 @@ a.tr-tool-search-title:hover {
 	color: var(--err, #f85149);
 }
 
-/* The header's way in: a quiet text button, never a second row of chrome. */
-/* Header + trace action on one line: the header flexes, the action keeps its
- * own width so a long summary never pushes it out of reach. */
+/* The header's way in: a quiet text button, never a second row of chrome.
+ * Header and action share one line: the header flexes, the action keeps its own
+ * width so a long summary never pushes it out of reach. */
 .tr-round-fold-wrap {
 	display: flex;
 	align-items: center;
@@ -5542,7 +5734,7 @@ a.tr-tool-search-title:hover {
 }
 
 .tr-round-fold-trace {
-	margin-inline-start: auto;
+	flex: 0 0 auto;
 	padding: 2px 6px;
 	border: 0;
 	border-radius: var(--radius-sm);
@@ -5561,33 +5753,4 @@ a.tr-tool-search-title:hover {
 .tr-round-fold-trace:focus-visible {
 	outline: 1.5px solid var(--ring);
 	outline-offset: 1px;
-}
-
-/* Delegated members under their `task` call: indented, no bar (their internal
- * steps are another session's, so there is no honest position to place them at
- * on this axis — only their own total duration). */
-.tr-trace-row--sub {
-	grid-template-columns: minmax(90px, 1.2fr) minmax(80px, 2fr) auto;
-	padding-inline-start: 14px;
-}
-
-.tr-trace-row--sub .tr-trace-name {
-	color: var(--fg-muted);
-	font-size: 12px;
-}
-
-.tr-trace-axis--empty {
-	background: none;
-	border-block-end: 1px dashed color-mix(in oklab, var(--fg) 14%, transparent);
-	height: 1px;
-}
-
-.tr-trace-sub-tokens {
-	margin-inline-end: 8px;
-	color: var(--fg-faint);
-	font-size: 11px;
-}
-
-.tr-trace-row--sub .tr-trace-duration {
-	white-space: nowrap;
 }

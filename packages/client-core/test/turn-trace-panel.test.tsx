@@ -48,30 +48,109 @@ const trace = (overrides: Partial<TurnTrace> = {}): TurnTrace => ({
 });
 
 describe("TurnTracePanel", () => {
-	it("draws one row per step with its own bar", () => {
+	it("draws one row per step, each with a magnitude bar", () => {
 		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
-		expect(html.match(/class="tr-trace-row"/g)?.length).toBe(2);
-		expect(html.match(/class="tr-trace-bar"/g)?.length).toBe(2);
+		expect(html.match(/<li class="tr-trace-row[ "]/g)?.length).toBe(2);
+		expect(html.match(/class="tr-trace-gauge-fill[ "]/g)?.length).toBe(2);
 	});
 
-	it("positions each bar from the step's own offset and width", () => {
+	it("scales each bar to the turn's longest step, not to the span", () => {
+		// 800ms model next to a 3s tool: the model bar is ~27% of the tool's, so
+		// both stay visible instead of collapsing into sub-pixel slivers.
 		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
-		expect(html).toContain("inset-inline-start:20%");
-		expect(html).toContain("width:30%");
+		expect(html).toContain("width:100%");
+		expect(html).toMatch(/width:26\.6/);
 	});
 
 	it("marks a failed step in words, not only in colour", () => {
 		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
 		expect(html).toContain('data-status="error"');
 		expect(html).toMatch(/失败|failed/);
+		expect(html).toContain("tr-trace-gauge-fill--failed");
 	});
 
-	it("shows the totals the header cannot: model time, tokens and cost", () => {
+	it("carries its own visible title, since the dialog shell has none", () => {
 		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
-		expect(html).toContain("3.0s");
-		expect(html).toContain("800ms");
+		expect(html).toContain("tr-trace-title-name");
+		expect(html).toMatch(/本轮轨迹|This turn/);
+	});
+
+	it("leads with the turn total and its split, then tokens and cost", () => {
+		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
+		expect(html).toContain("tr-trace-hero-total");
+		expect(html).toContain("10.0s");
+		expect(html).toContain("tr-trace-split-tools");
+		expect(html).toContain("tr-trace-split-model");
 		expect(html).toContain("1.5k");
 		expect(html).toContain("$0.03");
+	});
+
+	it("shows the unattributed remainder only when it is large enough to matter", () => {
+		// 10s span, 3s tools + 0.8s model: ~62% is neither, and a bar with a
+		// silent gap would look broken rather than informative.
+		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
+		expect(html).toContain("tr-trace-split-rest");
+		expect(html).toMatch(/其余|Elsewhere/);
+
+		// A turn that is almost entirely accounted for gets no third legend.
+		const tight = trace({
+			endedAt: 3_900,
+			totals: { ...trace().totals, toolMs: 3_000, modelMs: 800 },
+		});
+		const tightHtml = renderToStaticMarkup(<TurnTracePanel trace={tight} />);
+		expect(tightHtml).not.toContain("tr-trace-split-rest");
+	});
+
+	it("names the model once, then says Request while it stays the same", () => {
+		const twoRounds = trace({
+			steps: [
+				{
+					id: "m1",
+					kind: "model",
+					label: "group/a",
+					startedAt: 0,
+					durationMs: 900,
+					status: "ok",
+					offsetPct: 0,
+					widthPct: 9,
+				},
+				{
+					id: "m2",
+					kind: "model",
+					label: "group/a",
+					startedAt: 1_000,
+					durationMs: 800,
+					status: "ok",
+					offsetPct: 10,
+					widthPct: 8,
+				},
+				{
+					id: "m3",
+					kind: "model",
+					label: "group/b",
+					startedAt: 2_000,
+					durationMs: 700,
+					status: "ok",
+					offsetPct: 20,
+					widthPct: 7,
+				},
+			],
+		});
+		const html = renderToStaticMarkup(<TurnTracePanel trace={twoRounds} />);
+		expect(html).toContain(">a<");
+		expect(html).toMatch(/>Request<|>请求</);
+		// The switch to another model IS information, so it is named.
+		expect(html).toContain(">b<");
+	});
+
+	it("groups a request with the work it set off", () => {
+		const html = renderToStaticMarkup(<TurnTracePanel trace={trace()} />);
+		expect(html.match(/<li class="tr-trace-round[ "]/g)?.length).toBe(1);
+		expect(html).toContain("tr-trace-tools");
+		// The model row leads its round; the tool sits inside it.
+		expect(html.indexOf("tr-trace-row--model")).toBeLessThan(
+			html.indexOf("tr-trace-row--sub") === -1 ? Infinity : html.indexOf("tr-trace-row--sub"),
+		);
 	});
 
 	it("lists delegated members under their task call, indented and without a bar", () => {
