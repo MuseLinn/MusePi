@@ -5246,3 +5246,70 @@ describe("agentLoop kCursorExecResolved (issue #4348)", () => {
 		expect(executionStarts[0].toolName).toBe("echo");
 	});
 });
+
+describe("tool result timing", () => {
+	it("a call that ran records when it started and how long it took", async () => {
+		const schema = type({ value: "string" });
+		const slow: AgentTool<typeof schema, { value: string }> = {
+			name: "slow",
+			label: "Slow",
+			description: "Waits a moment",
+			parameters: schema,
+			async execute(_id, params) {
+				await Bun.sleep(12);
+				return { content: [{ type: "text", text: `ok ${params.value}` }], details: { value: params.value } };
+			},
+		};
+		const context: AgentContext = { systemPrompt: [""], messages: [], tools: [slow] };
+		const mock = createMockModel({
+			responses: [
+				{ content: [{ type: "toolCall", id: "tool-1", name: "slow", arguments: { value: "x" } }] },
+				{ content: ["done"] },
+			],
+		});
+		const config: AgentLoopConfig = { model: mock.model, convertToLlm: identityConverter };
+
+		const settled: any[] = [];
+		for await (const event of agentLoop([createUserMessage("go")], context, config, undefined, mock.stream)) {
+			if (event.type === "message_start" && event.message.role === "toolResult") settled.push(event.message);
+		}
+
+		expect(settled).toHaveLength(1);
+		const result = settled[0]!;
+		expect(typeof result.startedAt).toBe("number");
+		expect(typeof result.durationMs).toBe("number");
+		expect(result.durationMs).toBeGreaterThanOrEqual(10);
+		expect(result.startedAt).toBeLessThanOrEqual(result.timestamp);
+	});
+
+	it("a call that never ran records no timing (absent means unknown)", async () => {
+		// Invalid JSON never reaches the tool, so there is no execution to time —
+		// writing 0 here would understate every older journal's total.
+		const context: AgentContext = { systemPrompt: [""], messages: [], tools: [] };
+		const mock = createMockModel({
+			responses: [
+				{
+					content: [
+						{
+							type: "toolCall",
+							id: "tool-1",
+							name: "echo",
+							arguments: { __parseError: "boom", __rawJson: "{bad" },
+						},
+					],
+				},
+				{ content: ["done"] },
+			],
+		});
+		const config: AgentLoopConfig = { model: mock.model, convertToLlm: identityConverter };
+
+		const settled: any[] = [];
+		for await (const event of agentLoop([createUserMessage("go")], context, config, undefined, mock.stream)) {
+			if (event.type === "message_start" && event.message.role === "toolResult") settled.push(event.message);
+		}
+
+		expect(settled).toHaveLength(1);
+		expect(settled[0]!.startedAt).toBeUndefined();
+		expect(settled[0]!.durationMs).toBeUndefined();
+	});
+});

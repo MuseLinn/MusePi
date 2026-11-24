@@ -171,6 +171,8 @@ export interface RoundFold {
 	/** Failed calls inside the span (a failed result, or a non-zero shell run).
 	 *  They stay visible, and the header names how many there were. */
 	failedCount: number;
+	/** Summed tool execution time inside the span; 0 when no row recorded one. */
+	toolMs: number;
 	/** Absolute indexes of entries that must stay visible even while the
 	 *  fold is closed: (a) assistant messages carrying SUCCESSFUL artifact
 	 *  tool calls (widget/board/schedule_task — the card IS the turn's
@@ -274,6 +276,7 @@ function countWorkInside(
 	webCount: number;
 	subagentCount: number;
 	failedCount: number;
+	toolMs: number;
 	changes: { filesChanged: number; added: number; removed: number };
 	preview: string;
 	/** Rows that stay visible while the fold is closed: deliverable cards,
@@ -293,6 +296,7 @@ function countWorkInside(
 	// visible (see failedWorkRowSet) and count them for the header.
 	const failedRows = failedWorkRowSet(entries);
 	let failedCount = 0;
+	let toolMs = 0;
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
 		// A row whose card is the turn's deliverable never folds, whatever its
@@ -322,6 +326,9 @@ function countWorkInside(
 			commandCount++;
 		} else if (m.role === "toolResult") {
 			if (m.isError === true && !artifactRows.has(i)) failedCount++;
+			// Absent timing (older journals, never-started calls) is unknown: it
+			// contributes nothing rather than a zero that would understate.
+			if (typeof m.durationMs === "number" && Number.isFinite(m.durationMs)) toolMs += Math.max(0, m.durationMs);
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
 			if (m.toolName === "task") subagentCount++;
 			else if (WEB_TOOLS.has(m.toolName)) webCount++;
@@ -340,6 +347,7 @@ function countWorkInside(
 		webCount,
 		subagentCount,
 		failedCount,
+		toolMs,
 		changes: { filesChanged: changeState.files.size, added: changeState.added, removed: changeState.removed },
 		preview,
 		exempt,
@@ -482,6 +490,9 @@ export interface FoldSpan {
 	subagentCount: number;
 	/** Failed calls inside the span — they stay visible and the header names them. */
 	failedCount: number;
+	/** Summed execution time of the span's tool results that recorded one. Rows
+	 *  written before timing was recorded contribute nothing (unknown, not 0). */
+	toolMs: number;
 	filesChanged: number;
 	added: number;
 	removed: number;
@@ -511,8 +522,18 @@ export function foldSpan(
 	if (replyIdx <= startIdx) return null; // no reply → no anchor for the header
 	// Work is counted over the WHOLE turn (process rows may sit after the
 	// reply — that ordering used to count as "no activity" and produced no row).
-	const { toolCount, commandCount, exploreCount, webCount, subagentCount, failedCount, changes, preview, exempt } =
-		countWorkInside(entries, startIdx + 1, endIdx + 1);
+	const {
+		toolCount,
+		commandCount,
+		exploreCount,
+		webCount,
+		subagentCount,
+		failedCount,
+		toolMs,
+		changes,
+		preview,
+		exempt,
+	} = countWorkInside(entries, startIdx + 1, endIdx + 1);
 	if (toolCount === 0 && commandCount === 0) return null; // text-only round
 	// `foldedReplies: "all"` keeps every reply row visible; `"final"` (the
 	// default) folds intermediate replies with the process, so they need no
@@ -531,6 +552,7 @@ export function foldSpan(
 		webCount,
 		subagentCount,
 		failedCount,
+		toolMs,
 		filesChanged: changes.filesChanged,
 		added: changes.added,
 		removed: changes.removed,
@@ -563,6 +585,7 @@ export function roundFoldFromSpan(
 		webCount: span.webCount,
 		subagentCount: span.subagentCount,
 		failedCount: span.failedCount,
+		toolMs: span.toolMs,
 		filesChanged: span.filesChanged,
 		added: span.added,
 		removed: span.removed,

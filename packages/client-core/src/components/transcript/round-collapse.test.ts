@@ -647,3 +647,53 @@ describe("failure exemption (a failed call never hides behind the fold)", () => 
 		expect(runs[0]!.idxs.length).toBe(6);
 	});
 });
+
+describe("tool time inside a round", () => {
+	const timed = (toolCallId: string, durationMs: number | undefined, toolName = "bash"): SessionEntry =>
+		withId({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolCallId,
+				toolName,
+				content: [{ type: "text", text: "ok" }],
+				isError: false,
+				...(durationMs === undefined ? {} : { durationMs }),
+				timestamp: 1,
+			},
+		});
+
+	test("sums the durations the rows recorded", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("a"),
+			timed("a", 1_200),
+			assistantToolCall("b"),
+			timed("b", 300),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.toolMs).toBe(1_500);
+	});
+
+	test("treats a missing duration as unknown, never as zero", () => {
+		// A journal written before timing existed must not drag the total down
+		// as if that call had taken no time.
+		const entries = [
+			userMsg(),
+			assistantToolCall("a"),
+			timed("a", 1_200),
+			assistantToolCall("b"),
+			timed("b", undefined),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.toolMs).toBe(1_200);
+	});
+
+	test("reports zero when nothing was timed at all", () => {
+		const entries = [userMsg(), assistantToolCall("a"), timed("a", undefined), assistantText("done")];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.toolMs).toBe(0);
+	});
+});

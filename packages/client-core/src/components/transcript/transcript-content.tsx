@@ -922,6 +922,14 @@ export function RoundFoldHeader({
 			<span key="agents">{t("transcript.roundSubagentsWithCount", { count: String(fold.subagentCount) })}</span>,
 		);
 	}
+	// How long the tools actually ran, not how long the turn took: the two
+	// answer different questions, and only this one says where the minutes went.
+	// Under a second it is noise, so it stays out of the line.
+	if (fold.toolMs >= 1_000) {
+		segments.push(
+			<span key="tool-time">{t("transcript.roundToolTime", { duration: fmtDuration(fold.toolMs) })}</span>,
+		);
+	}
 	// A failure is never averaged into the counts: the closed header says how
 	// many there were, so the reader knows to open the round.
 	if (fold.failedCount > 0) {

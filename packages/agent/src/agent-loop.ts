@@ -2408,6 +2408,8 @@ async function executeToolCalls(
 			interruptible,
 			signal: interruptible ? interruptibleSignal : nonInterruptibleSignal,
 			started: false,
+			/** Set with `started`; the tool result's duration is measured from it. */
+			startedAtMs: 0,
 			result: undefined as AgentToolResult<any> | undefined,
 			isError: false,
 			skipped: false,
@@ -2495,6 +2497,7 @@ async function executeToolCalls(
 			isError,
 		});
 
+		const endedAt = Date.now();
 		const toolResultMessage: ToolResultMessage = {
 			role: "toolResult",
 			toolCallId: toolCall.id,
@@ -2504,7 +2507,13 @@ async function executeToolCalls(
 			providerMetadata: result.providerMetadata,
 			isError,
 			...(result.useless && !isError ? { useless: true } : {}),
-			timestamp: Date.now(),
+			/* Duration is measured around the tool's own run, so a call that never
+			 * started (validation failure, pre-start interrupt) records neither
+			 * field — absent means unknown, not zero. */
+			...(record.started
+				? { startedAt: record.startedAtMs, durationMs: Math.max(0, endedAt - record.startedAtMs) }
+				: {}),
+			timestamp: endedAt,
 		};
 		record.result = result;
 		record.isError = isError;
@@ -2570,6 +2579,7 @@ async function executeToolCalls(
 			return;
 		}
 		record.started = true;
+		record.startedAtMs = Date.now();
 		stream.push({
 			type: "tool_execution_start",
 			toolCallId: toolCall.id,
