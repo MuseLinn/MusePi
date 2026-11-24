@@ -1663,6 +1663,17 @@ export function ChatView({
 	 * nothing moves, and no reason is shown (the same silent-failure class as
 	 * the CSP-blocked copy button).
 	 */
+	const branchFailureText = useCallback(
+		(err: unknown): string => {
+			const message = err instanceof Error ? err.message : String(err);
+			// SESSION_BUSY is the daemon's retryable "the run has not finished
+			// stopping" answer: name the state instead of surfacing its internal
+			// English sentence (with a timeout) in a localized UI.
+			if (message.includes("SESSION_BUSY")) return t("general.branchBusy");
+			return `${t("general.branchFailed")}: ${message}`;
+		},
+		[t],
+	);
 	const jumpBackToMessage = async (messageId: string, text: string): Promise<boolean> => {
 		if (!store) return false;
 		// Kimi parity: undo restores the prompt AND its pictures. The entry is
@@ -1701,8 +1712,7 @@ export function ChatView({
 			pulseSwitch();
 			return true;
 		} catch (err) {
-			const reason = `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`;
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: branchFailureText(err) }));
 			return false;
 		}
 	};
@@ -1745,8 +1755,7 @@ export function ChatView({
 			setJumpBack(null);
 			pulseSwitch();
 		} catch (err) {
-			const reason = `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`;
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: branchFailureText(err) }));
 		}
 	};
 	// Map 重答 (branchTo): branch to the turn's user message and backfill the
@@ -1886,8 +1895,7 @@ export function ChatView({
 				setPinnedPathIds(null);
 				pulseSwitch();
 			} catch (err) {
-				const reason = `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`;
-				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: branchFailureText(err) }));
 			}
 		});
 	};
