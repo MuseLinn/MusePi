@@ -421,6 +421,8 @@ export interface AgentDefinition {
 	description: string;
 	systemPrompt: string;
 	tools?: string[];
+	/** Connector ids this agent may use; each expands to that connector's tools at spawn. */
+	connectors?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
 	thinkingLevel?: ConfiguredThinkingLevel;
@@ -449,6 +451,8 @@ export interface SubagentDefinition {
 	description: string;
 	systemPrompt?: string;
 	tools?: string[];
+	/** Connector ids this agent may use; each expands to that connector's tools at spawn. */
+	connectors?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
 	thinkingLevel?: ConfiguredThinkingLevel;
@@ -474,7 +478,7 @@ export function normalizeSubagentDefinition(def: SubagentDefinition): AgentDefin
 	if (!def.external && (typeof def.systemPrompt !== "string" || def.systemPrompt.trim() === "")) {
 		throw new Error(`registerSubagent "${name}" requires a non-empty systemPrompt`);
 	}
-	for (const key of ["tools", "model", "spawns"] as const) {
+	for (const key of ["tools", "connectors", "model", "spawns"] as const) {
 		const value = def[key];
 		if (value !== undefined && !Array.isArray(value) && !(key === "spawns" && value === "*")) {
 			throw new Error(`registerSubagent "${name}" field "${key}" must be an array`);

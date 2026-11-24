@@ -236,6 +236,14 @@ export interface ParsedAgentFields {
 	name: string;
 	description: string;
 	tools?: string[];
+	/**
+	 * Connector ids this agent may use, each standing for every tool that
+	 * connector mounts. Kept apart from `tools` because a connector's tool list
+	 * is not known until it connects: the id expands to `mcp__connector_<id>_*`
+	 * at spawn time, so the definition does not have to enumerate names that
+	 * change when the vendor adds one.
+	 */
+	connectors?: string[];
 	spawns?: string[] | "*";
 	model?: string[];
 	output?: unknown;
@@ -316,10 +324,14 @@ export function parseAgentFields(frontmatter: Record<string, unknown>): ParsedAg
 	const autoloadSkills = parseArrayOrCSV(frontmatter.autoloadSkills)
 		?.map(s => s.trim())
 		.filter(Boolean);
+	const connectors = parseArrayOrCSV(frontmatter.connectors)
+		?.map(id => id.trim())
+		.filter(Boolean);
 	return {
 		name,
 		description,
 		tools,
+		...(connectors && connectors.length > 0 ? { connectors } : {}),
 		spawns,
 		model,
 		output,

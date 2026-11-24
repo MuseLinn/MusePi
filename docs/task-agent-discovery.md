@@ -32,6 +32,7 @@ Parsing comes from frontmatter via `parseAgentFields()` (`src/discovery/helpers.
 
 - missing `name` or `description` => invalid (`null`), caller treats as parse failure
 - `tools` accepts CSV or array; if provided, `yield` is auto-added
+- `connectors` accepts CSV or array of catalog ids, and each id stands for every tool that connector currently mounts (`mcp__connector_<id>_*`). Resolution happens in `runSubprocess` against the live MCP manager, so a connector that is not connected grants nothing and a tool the vendor adds later is covered without editing the definition. Naming connectors narrows the agent to them: listing both `tools` and `connectors` grants the union, and listing only `connectors` grants nothing else.
 - `spawns` accepts `*`, CSV, or array
 - backward-compat behavior: if `spawns` missing but `tools` includes `task`, `spawns` becomes `*`
 - `output` is passed through as opaque schema data

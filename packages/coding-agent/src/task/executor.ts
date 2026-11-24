@@ -26,6 +26,7 @@ import type { PromptTemplate } from "../config/prompt-templates";
 import { buildServiceTierByFamily, resolveSubagentServiceTier } from "../config/service-tier";
 import { Settings } from "../config/settings";
 import { SETTINGS_SCHEMA, type SettingPath } from "../config/settings-schema";
+import { connectorServerNameForScope, toolsForConnectorScopes } from "../connectors/scope";
 import type { ToolPathWithSource } from "../extensibility/custom-tools";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { runExtensionCompact, runExtensionSetModel } from "../extensibility/extensions/compact-handler";
@@ -35,6 +36,7 @@ import { buildSkillPromptMessage, type Skill } from "../extensibility/skills";
 import type { HindsightSessionState } from "../hindsight/state";
 import type { LocalProtocolOptions } from "../internal-urls";
 import type { MCPManager } from "../mcp/manager";
+import { sanitizeMCPToolNamePart } from "../mcp/tool-bridge";
 import type { MnemopiSessionState } from "../mnemopi/state";
 import subagentAsyncPendingTemplate from "../prompts/system/subagent-async-pending.md" with { type: "text" };
 import subagentSystemPromptTemplate from "../prompts/system/subagent-system-prompt.md" with { type: "text" };
@@ -2851,6 +2853,20 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 		if (agent.spawns !== undefined && !toolNames.includes("task") && !atMaxDepth) {
 			toolNames = [...toolNames, "task"];
 		}
+	}
+	// A connector scope names catalog ids, not tools: the id stands for whatever
+	// that connector mounts right now. Resolving against the manager's live set
+	// means a connector that never connected grants nothing, and a tool the
+	// vendor adds later is covered without editing the definition.
+	if (agent.connectors && agent.connectors.length > 0) {
+		const servers = agent.connectors.map(id => sanitizeMCPToolNamePart(connectorServerNameForScope(id), "server"));
+		const available =
+			options.enableMCP === false ? [] : (options.mcpManager?.getTools() ?? []).map(tool => tool.name);
+		const scoped = toolsForConnectorScopes(available, servers);
+		// Naming connectors narrows the agent to them: an agent that lists both
+		// tools and connectors gets the union, and one that lists only connectors
+		// gets nothing else.
+		toolNames = [...new Set([...(toolNames ?? []), ...scoped])];
 	}
 
 	if (atMaxDepth && toolNames?.includes("task")) {

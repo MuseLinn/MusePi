@@ -334,14 +334,13 @@ async function reconnectWithAbort(
 }
 
 /**
- * Create a unique tool name for an MCP tool.
+ * Sanitize one half of a minted MCP tool name.
  *
- * Prefixes with server name to avoid conflicts. If the tool name already
- * starts with the server name (e.g., server "puppeteer" with tool
- * "puppeteer_screenshot"), strips the redundant prefix to produce
- * "mcp__puppeteer_screenshot" instead of "mcp__puppeteer_puppeteer_screenshot".
+ * Exported because a connector scope has to predict the prefix a server will
+ * mint (`connector:notion` → `connector_notion`) without connecting first;
+ * a second copy of these rules would drift from this one.
  */
-function sanitizeMCPToolNamePart(value: string, fallback: string): string {
+export function sanitizeMCPToolNamePart(value: string, fallback: string): string {
 	const sanitized = value
 		.toLowerCase()
 		.replace(/[^a-z_]+/g, "_")
@@ -374,6 +373,14 @@ function capMCPToolNameLength(name: string): string {
 	return `${name.slice(0, keep)}_${hash}`;
 }
 
+/**
+ * Create a unique tool name for an MCP tool.
+ *
+ * Prefixes with server name to avoid conflicts. If the tool name already
+ * starts with the server name (e.g., server "puppeteer" with tool
+ * "puppeteer_screenshot"), strips the redundant prefix to produce
+ * "mcp__puppeteer_screenshot" instead of "mcp__puppeteer_puppeteer_screenshot".
+ */
 export function createMCPToolName(serverName: string, toolName: string): string {
 	const sanitizedServerName = sanitizeMCPToolNamePart(serverName, "server");
 	const sanitizedToolName = sanitizeMCPToolNamePart(toolName, "tool");
