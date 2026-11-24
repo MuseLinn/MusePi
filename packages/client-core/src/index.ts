@@ -176,7 +176,16 @@ export {
 } from "./lib/async-jobs";
 export { type ComposerPlaceholderInput, composerPlaceholder } from "./lib/composer-placeholder";
 export * from "./lib/download";
-export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
+export {
+	compactAge,
+	fmtCost,
+	fmtDuration,
+	fmtPercent,
+	fmtTokens,
+	messageText,
+	relTime,
+	shortenPath,
+} from "./lib/format";
 export * from "./lib/modal-focus";
 export { motionDisabled } from "./lib/motion-tokens";
 export {

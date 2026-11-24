@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { compactAge, type TranslationKey, t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { tapFeedback } from "../lib/haptic";
@@ -73,15 +73,39 @@ const STATUS_COLOR: Record<SessionStatus, string | undefined> = {
  *  resolved through the same STATUS_COLOR map. (Logic inlined in the
  *  render — `const status = manualTags?.get(id) ?? statuses?.get(id)`) */
 
-/** Compact row time (openchamber: 0.72rem muted right-aligned). */
-function rowTime(ts: string): string {
-	const d = new Date(ts);
-	if (Number.isNaN(d.getTime())) return "";
-	const now = new Date();
-	const sameDay = d.toDateString() === now.toDateString();
-	return sameDay
-		? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-		: d.toLocaleDateString([], { month: "short", day: "numeric" });
+/** Shared wall clock for the compact row ages: `session.tree` only arrives on
+ *  events (turn end, create, select), so a row that idles would keep reading
+ *  "5m" forever. One interval for the whole list (30s granularity — the label
+ *  never changes faster), shared by every SessionList instance. */
+const AGE_TICK_MS = 30_000;
+let ageNow = Date.now();
+let ageTimer: number | null = null;
+const ageListeners = new Set<() => void>();
+
+function subscribeAgeClock(listener: () => void): () => void {
+	// Re-read the clock on subscribe: the module loaded earlier in the app's
+	// life, and useSyncExternalStore re-renders when the post-subscribe
+	// snapshot differs, so the first paint never shows a stale age.
+	ageNow = Date.now();
+	ageListeners.add(listener);
+	ageTimer ??= window.setInterval(() => {
+		ageNow = Date.now();
+		for (const notify of ageListeners) notify();
+	}, AGE_TICK_MS);
+	return () => {
+		ageListeners.delete(listener);
+		if (ageListeners.size === 0 && ageTimer !== null) {
+			window.clearInterval(ageTimer);
+			ageTimer = null;
+		}
+	};
+}
+
+/** Compact row age (Kimi Code parity): "5m", "12h", "2w" instead of a clock
+ *  time or a month/day date, so rows stay comparable at any distance back. */
+function rowTime(ts: string, now: number): string {
+	const ms = new Date(ts).getTime();
+	return Number.isNaN(ms) ? "" : compactAge(ms, now);
 }
 
 /** Full timestamp for the row tooltip — keeps both readings so the compact
@@ -401,6 +425,7 @@ const SessionRow = memo(function SessionRow({
 	forked,
 	timestamp,
 	updatedAt,
+	timeLabel,
 	selected,
 	unread,
 	failed,
@@ -437,6 +462,9 @@ const SessionRow = memo(function SessionRow({
 	timestamp: string;
 	/** Last-activity time; the row's compact label prefers it over `timestamp`. */
 	updatedAt?: string;
+	/** Compact age label ("5m", "12h", "2w"), computed by the list against
+	 *  the shared clock so an idle row keeps aging without a tree refresh. */
+	timeLabel: string;
 	selected: boolean;
 	unread: boolean;
 	/** Unread AND the latest completed turn failed (host read state) — the
@@ -732,7 +760,7 @@ const SessionRow = memo(function SessionRow({
 							: fullTime(timestamp)
 					}
 				>
-					{rowTime(updatedAt ?? timestamp)}
+					{timeLabel}
 				</span>
 			</div>
 		</li>
@@ -794,6 +822,11 @@ function SessionListComponent({
 	/** Active session-search query — matched title fragments are marked. */
 	searchQuery?: string;
 }): ReactNode {
+	const now = useSyncExternalStore(
+		subscribeAgeClock,
+		() => ageNow,
+		() => ageNow,
+	);
 	// Hierarchical sort FIRST (roots + each sibling group by last-activity,
 	// with a stable id tiebreak), THEN flatten. Sorting the flattened array
 	// instead would scatter forked children out of their parent subtrees and
@@ -886,6 +919,7 @@ function SessionListComponent({
 				// 分叉判定只在这里做一次({@link isUserFork});行标记与悬浮卡
 				// 文案读同一个结论,不给第二处留第二份规则。
 				const forked = isUserFork(node.entry);
+				const timeLabel = rowTime(node.entry.updatedAt ?? node.entry.timestamp, now);
 				return (
 					<SessionRow
 						key={node.entry.id}
@@ -897,6 +931,7 @@ function SessionListComponent({
 						forked={forked}
 						timestamp={node.entry.timestamp}
 						updatedAt={node.entry.updatedAt}
+						timeLabel={timeLabel}
 						selected={node.entry.id === selectedId}
 						unread={unread?.has(node.entry.id) ?? false}
 						failed={failed?.has(node.entry.id) ?? false}

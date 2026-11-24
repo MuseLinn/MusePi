@@ -45,6 +45,24 @@ export function relTime(tsMs: number): string {
 	return t("sessions.dAgoWithCount", { count: String(Math.floor(h / 24)) });
 }
 
+/** Session-row age, one compact unit (Kimi Code parity): "Just now", "42m",
+ *  "5h", "3d", "2w", "4mo", "1y". Input: epoch ms. `now` is a parameter so a
+ *  ticking caller keeps the label live and tests pin the reading. */
+export function compactAge(tsMs: number, now: number = Date.now()): string {
+	if (!Number.isFinite(tsMs)) return "";
+	const delta = Math.max(0, now - tsMs);
+	if (delta < 60_000) return t("sessions.now");
+	const minutes = Math.floor(delta / 60_000);
+	if (minutes < 60) return `${minutes}m`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	if (days < 7) return `${days}d`;
+	if (days < 30) return `${Math.floor(days / 7)}w`;
+	if (days < 365) return `${Math.floor(days / 30)}mo`;
+	return `${Math.floor(days / 365)}y`;
+}
+
 /** "73%" from a 0–100 percent; em dash for null/non-finite. */
 export function fmtPercent(p: number | null | undefined): string {
 	if (p === null || p === undefined || !Number.isFinite(p)) return "—";

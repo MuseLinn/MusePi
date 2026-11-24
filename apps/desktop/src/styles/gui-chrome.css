@@ -513,9 +513,16 @@
 }
 
 .gui-session-time {
+	/* Fixed right gutter (Kimi Code parity): the compact age changes unit and
+	 * width ("5m" → "12h" → "2w"), and without a pinned column every row
+	 * would truncate its title at a different x. Tabular digits keep the
+	 * right edge steady between values. */
 	flex-shrink: 0;
+	min-width: 3.4em;
+	text-align: right;
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
 }
 
 .gui-emoji-dialog {
