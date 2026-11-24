@@ -3,7 +3,7 @@
 	"name": "@musepi/client-ui-shell",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "UI seat contract for the ui-shell capability.",
 	"exports": {
 		".": "./src/index.ts",

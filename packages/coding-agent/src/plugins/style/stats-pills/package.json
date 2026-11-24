@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Per-turn performance and usage readout above the composer: token totals, spend and cache-hit rate.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

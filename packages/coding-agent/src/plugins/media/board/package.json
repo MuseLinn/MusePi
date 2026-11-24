@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Read and write the desktop board's card wall: list boards, edit cards, and query the widget schema.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

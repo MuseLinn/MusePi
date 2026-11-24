@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Prompt briefs for the built-in design systems and asset policy, rendered for the current selection.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

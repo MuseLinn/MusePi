@@ -5,7 +5,7 @@
 	"description": "Local observability dashboard for pi AI usage statistics",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/MuseLinn/MusePi.git",

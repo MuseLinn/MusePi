@@ -159,3 +159,7 @@ Windows 安装器先在 WebView2 向导中收集语言与安装选项，检查 M
 
 - [`docs/`](docs/)：产品与实现文档，按要求维护中英双语配对。
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md)：发布说明。
+
+## 许可证
+
+MusePi 以 [Apache License 2.0](LICENSE) 发布。它是 MIT 许可的 pi 项目的分支，上游声明保留在 [NOTICE](NOTICE) 与 [LICENSES/MIT-pi.txt](LICENSES/MIT-pi.txt)。MusePi 名称与标识不在 Apache-2.0 的授权范围内。

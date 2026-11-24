@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Open compaction summaries with before/after token counts in the right panel.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

@@ -159,3 +159,7 @@ Run the release workflow only for an explicit release request. Version and chang
 
 - [`docs/`](docs/): product and implementation documentation, with bilingual pairs where required.
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md): release notes.
+
+## License
+
+MusePi is released under the [Apache License 2.0](LICENSE). It is a fork of the MIT-licensed pi project, so the upstream notice is retained in [NOTICE](NOTICE) and [LICENSES/MIT-pi.txt](LICENSES/MIT-pi.txt). The MusePi name and logo are not licensed under Apache-2.0.

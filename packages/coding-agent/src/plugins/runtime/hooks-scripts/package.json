@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Declare command hooks under <root>/pre|post as one line of a preset: pre/<tool> maps PreToolUse, post/<tool> maps PostToolUse, and the file name is the tool name (* for every tool).",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

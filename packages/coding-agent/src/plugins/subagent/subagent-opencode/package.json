@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Run the native OpenCode CLI through the existing task tool without relaxing permissions.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

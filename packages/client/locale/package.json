@@ -3,7 +3,7 @@
 	"name": "@musepi/client-locale",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Locale plugin: typed dictionaries, locale preference and compile-time en parity.",
 	"exports": {
 		".": "./src/index.ts",

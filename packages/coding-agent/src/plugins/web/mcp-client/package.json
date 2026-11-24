@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Declare an MCP server as one line of a preset: stdio or HTTP/SSE; its tools join this session's tool surface and disconnect with the fiber when the preset unloads.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

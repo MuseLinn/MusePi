@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "First-party magic keywords: composer trigger words that append a hidden notice to the model.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

@@ -3,7 +3,7 @@
 	"name": "@musepi/client-ui-plugin-market",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Plugin market surfaces: catalog grid, cards, source segments and version rows.",
 	"exports": {
 		".": "./src/index.ts",

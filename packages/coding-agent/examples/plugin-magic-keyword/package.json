@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"private": true,
 	"description": "Example MusePi plugin package: contributes a custom magic keyword plus its own settings panel.",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"type": "module",
 	"musepi": {
 		"icon": "✨",

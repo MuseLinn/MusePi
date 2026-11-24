@@ -18,7 +18,7 @@ resolver = "3"
 [workspace.package]
 version = "0.7.7"
 edition = "2024"
-license = "MIT"
+license = "Apache-2.0"
 authors = ["Can Boluk"]
 repository = "https://github.com/can1357/oh-my-pi"
 

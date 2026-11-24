@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Draw live cards (calculator, quotes, metrics, charts) and self-contained HTML pages with the app's own look; pages can hand a choice back to the conversation.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

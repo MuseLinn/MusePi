@@ -5,7 +5,7 @@
 	"type": "module",
 	"homepage": "https://omp.sh",
 	"author": "Can Boluk",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/can1357/oh-my-pi.git",

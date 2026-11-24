@@ -3,7 +3,7 @@
 	"name": "@musepi/client-ui-charts",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Zero-dependency responsive charts: bar, line, donut, gauge, K-line and sparkline.",
 	"exports": {
 		".": "./src/index.ts",

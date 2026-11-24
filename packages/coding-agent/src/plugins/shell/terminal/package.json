@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "bun-pty and node-pty backends with automatic fallback, for the TUI and the GUI terminal.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Bridge an existing Claude Code hooks.json's command hooks into this session: SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

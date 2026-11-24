@@ -199,7 +199,7 @@ stdenv.mkDerivation {
     description = "Terminal-based coding agent with multi-model support";
     homepage = "https://omp.sh";
     changelog = "https://github.com/can1357/oh-my-pi/releases/tag/v${packageJson.version}";
-    license = lib.licenses.mit;
+    license = lib.licenses.asl20;
     mainProgram = "omp";
     platforms = [
       "aarch64-darwin"

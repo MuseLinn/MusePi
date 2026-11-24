@@ -115,3 +115,14 @@ and only apply suggestions you have checked.
 Pull requests may be closed when they skip required prior discussion, lack the
 human-written explanation, contain unreviewed agent output, or mix unrelated
 changes.
+
+## Licensing
+
+MusePi is released under the Apache License, Version 2.0. By submitting a pull
+request you agree that your contribution is licensed under the same terms
+(inbound = outbound); no separate contributor license agreement is required.
+
+Keep third-party code, assets and generated snippets compatible with
+Apache-2.0. Do not copy code from projects whose license forbids it, and keep
+existing copyright and attribution notices in place. The upstream pi project's
+MIT notice is reproduced in [`LICENSES/MIT-pi.txt`](LICENSES/MIT-pi.txt).

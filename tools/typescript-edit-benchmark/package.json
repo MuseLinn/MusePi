@@ -6,7 +6,7 @@
 	"description": "Edit benchmark suite using TypeScript source code mutations",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/MuseLinn/MusePi.git",

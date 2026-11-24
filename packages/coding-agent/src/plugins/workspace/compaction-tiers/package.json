@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Tighten the compaction trigger for providers that bill long context at a premium, without touching the global threshold.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

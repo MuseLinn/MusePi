@@ -3,7 +3,7 @@
 	"name": "@musepi/client-ui-conversation",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Conversation seats: composer, input, hero and session-info contracts.",
 	"exports": {
 		".": "./src/index.ts",

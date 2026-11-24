@@ -3,7 +3,7 @@
 	"name": "@musepi/client-ui-primitives",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Shared interaction primitives: fold tracks and scroll-edge feathering.",
 	"exports": {
 		".": "./src/index.ts",

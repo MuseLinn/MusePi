@@ -3,7 +3,7 @@
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Three resource readouts inside the session info card: process RSS and CPU, machine CPU, memory used of total. An unmeasured CPU reads as a dash.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",

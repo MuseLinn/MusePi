@@ -3,7 +3,7 @@
 	"name": "@musepi/client-ui-slots",
 	"version": "0.7.7",
 	"private": true,
-	"license": "MIT",
+	"license": "Apache-2.0",
 	"description": "Typed UI slot declarations shared by the desktop shell and Cordis contributions.",
 	"exports": {
 		".": "./src/index.ts",
