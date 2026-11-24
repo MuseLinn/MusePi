@@ -501,10 +501,29 @@ const SessionRow = memo(function SessionRow({
 }): ReactNode {
 	const fill = status ? STATUS_COLOR[status] : undefined;
 	const itemRef = useRef<HTMLLIElement | null>(null);
+	const titleRef = useRef<HTMLSpanElement | null>(null);
 	const [editingTitle, setEditingTitle] = useState(false);
 	const [titleDraft, setTitleDraft] = useState("");
 	const cancelTitleEdit = useRef(false);
 	const titleCommitted = useRef(false);
+	/** Long titles scroll on hover (kimi-code parity): measure how far the text
+	 *  runs past the column and publish the travel distance. CSS moves the inner
+	 *  span after a short delay; a title that fits gets no motion at all. */
+	const measureTitleScroll = (): void => {
+		const title = titleRef.current;
+		const inner = title?.firstElementChild as HTMLElement | null;
+		if (!title || !inner) return;
+		const over = inner.scrollWidth - title.clientWidth;
+		if (over <= 2) {
+			title.classList.remove("gui-session-title--scrollable");
+			return;
+		}
+		// A little air past the end so the last glyph clears the fade.
+		const distance = over + 24;
+		title.style.setProperty("--gui-title-shift", `${-distance}px`);
+		title.style.setProperty("--gui-title-dur", `${Math.round(distance * 25)}ms`);
+		title.classList.add("gui-session-title--scrollable");
+	};
 	const commitTitle = (): void => {
 		if (titleCommitted.current) return;
 		titleCommitted.current = true;
@@ -553,32 +572,157 @@ const SessionRow = memo(function SessionRow({
 			li.removeEventListener("transitionend", onEnd);
 		};
 	}, [anim]);
+	const rowMainContent = (
+		<>
+			{/* Lifecycle status square (TUI session-list parity): a
+			 * per-session color chip that survives without grouping —
+			 * interrupted (warning) / complete (success) / error /
+			 * aborted / pending, or the user's manual color. */}
+			<span
+				className="gui-session-status"
+				aria-hidden="true"
+				style={fill ? { background: fill } : undefined}
+				title={status ? t(SESSION_STATUS_KEY[status] ?? status) : undefined}
+			/>
+			{treeGuides(indent, continuations)}
+			{emoji && (
+				<span className="gui-session-emoji" aria-hidden="true">
+					{emoji}
+				</span>
+			)}
+			{editingTitle ? (
+				<input
+					className="gui-session-title gui-session-title-input"
+					value={titleDraft}
+					autoFocus
+					aria-label={t("settings.renameTask")}
+					placeholder={t("transcript.untitledSession")}
+					onClick={event => event.stopPropagation()}
+					onDoubleClick={event => event.stopPropagation()}
+					onDragStart={event => event.stopPropagation()}
+					onChange={event => setTitleDraft(event.target.value)}
+					onBlur={commitTitle}
+					onKeyDown={event => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							commitTitle();
+						} else if (event.key === "Escape") {
+							event.preventDefault();
+							cancelTitleEdit.current = true;
+							setEditingTitle(false);
+						}
+					}}
+				/>
+			) : (
+				<span
+					ref={titleRef}
+					className="gui-session-title"
+					title={onRename ? t("settings.renameTask") : undefined}
+					onDoubleClick={event => {
+						if (!onRename) return;
+						event.preventDefault();
+						event.stopPropagation();
+						beginTitleEdit();
+					}}
+				>
+					{/* The inner span is the travel surface: the column keeps its
+					 * width and mask, the text moves under it on hover. */}
+					<span className="gui-session-title-inner">
+						{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
+					</span>
+				</span>
+			)}
+			{failed && (
+				// Accessible marker: the row's dot is otherwise a ::after the
+				// screen reader never sees. Same reason as the working chip.
+				<span
+					className="gui-dot gui-dot-danger gui-session-failed"
+					role="img"
+					aria-label={t("general.sessionUnreadFailed")}
+					title={t("general.sessionUnreadFailed")}
+				/>
+			)}
+			{retitling && (
+				<span
+					className="gui-tree-working"
+					data-ai-retitling="1"
+					role="img"
+					aria-label={t("general.aiRenaming")}
+					title={t("general.aiRenaming")}
+				>
+					<Icon name="loader-4" className="gui-tree-working-spin" />
+				</span>
+			)}
+			{paused && (
+				<span className="gui-tree-pause" role="img" aria-label={t("tools.paused")} title={t("tools.paused")}>
+					<Icon name="pause" className="h-3 w-3" />
+				</span>
+			)}
+			{working && (
+				<span
+					className="gui-tree-working"
+					role="img"
+					aria-label={t("settings.inProgress")}
+					title={t("settings.inProgress")}
+				>
+					{/* ZCode parity: an 8-ray starburst spinning while the
+					 * agent turn runs (was a breathing dot) — opacity ramps
+					 * around the ring so the rotation reads at 12px. */}
+					<svg className="gui-tree-working-spin" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+						{WORKING_RAYS}
+					</svg>
+				</span>
+			)}
+			{forked && parentLabel && (
+				<span
+					className="gui-tree-fork"
+					role="img"
+					aria-label={t("general.forkedSession")}
+					title={t("general.forkedFromWithName", { name: parentLabel })}
+				>
+					<Icon name="git-branch" className="h-3 w-3" />
+				</span>
+			)}
+			{subagent && agentName ? (
+				<span className="gui-tree-agent" title={`${t("general.subagentSession")}: ${agentName}`}>
+					{agentName}
+				</span>
+			) : null}
+			{subagent && (
+				<span
+					className="gui-tree-fork"
+					role="img"
+					aria-label={agentName ? `${t("general.subagentSession")}: ${agentName}` : t("general.subagentSession")}
+					title={agentName ? `${t("general.subagentSession")}: ${agentName}` : t("general.subagentSession")}
+				>
+					<Icon name="ai-agent-fill" className="h-3 w-3" />
+				</span>
+			)}
+			{advisor && (
+				<span
+					className="gui-tree-advisor"
+					role="img"
+					aria-label={t("general.advisorSession")}
+					title={t("general.advisorSession")}
+				>
+					<Icon name="sparkling" className="h-3 w-3" />
+				</span>
+			)}
+		</>
+	);
 	return (
 		<li ref={itemRef}>
 			<div
-				role="button"
-				tabIndex={0}
 				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${
 					unread && !failed ? " gui-session-row--unread" : ""
 				}`}
-				onClick={() => {
-					tapFeedback();
-					clearSessionHover();
-					onSelect(id);
-				}}
-				onKeyDown={event => {
-					if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
-					event.preventDefault();
-					tapFeedback();
-					clearSessionHover();
-					onSelect(id);
-				}}
 				onContextMenu={e => {
 					e.preventDefault();
 					e.stopPropagation();
 					onContextMenu?.(id, e.clientX, e.clientY);
 				}}
-				onMouseEnter={e =>
+				onMouseEnter={e => {
+					measureTitleScroll();
 					reportSessionHover({
 						id,
 						label,
@@ -587,13 +731,9 @@ const SessionRow = memo(function SessionRow({
 						timestamp,
 						updatedAt,
 						anchor: e.currentTarget.getBoundingClientRect(),
-					})
-				}
+					});
+				}}
 				onMouseLeave={clearSessionHover}
-				// The rail marks its destination with aria-current="page"; the
-				// session row is the same "which one am I on" answer, so it says
-				// so too instead of relying on colour alone.
-				aria-current={selected ? "true" : undefined}
 				{...(untitled ? { "data-untitled": "1" } : {})}
 				aria-busy={retitling || undefined}
 				draggable
@@ -602,10 +742,8 @@ const SessionRow = memo(function SessionRow({
 					e.dataTransfer.effectAllowed = "copy";
 				}}
 			>
-				{/* Lifecycle status square (TUI session-list parity): a
-				 * per-session color chip that survives without grouping —
-				 * interrupted (warning) / complete (success) / error /
-				 * aborted / pending, or the user's manual color. */}
+				{/* Sub-session fold: its own control, beside the row's main
+				 * button — nested buttons are the shape this split removes. */}
 				{childCount > 0 ? (
 					<button
 						type="button"
@@ -626,132 +764,24 @@ const SessionRow = memo(function SessionRow({
 				) : (
 					<span className="gui-tree-fold gui-tree-fold--leaf" aria-hidden="true" />
 				)}
-				<span
-					className="gui-session-status"
-					aria-hidden="true"
-					style={fill ? { background: fill } : undefined}
-					title={status ? t(SESSION_STATUS_KEY[status] ?? status) : undefined}
-				/>
-				{treeGuides(indent, continuations)}
-				{emoji && (
-					<span className="gui-session-emoji" aria-hidden="true">
-						{emoji}
-					</span>
-				)}
 				{editingTitle ? (
-					<input
-						className="gui-session-title gui-session-title-input"
-						value={titleDraft}
-						autoFocus
-						aria-label={t("settings.renameTask")}
-						placeholder={t("transcript.untitledSession")}
-						onClick={event => event.stopPropagation()}
-						onDoubleClick={event => event.stopPropagation()}
-						onDragStart={event => event.stopPropagation()}
-						onChange={event => setTitleDraft(event.target.value)}
-						onBlur={commitTitle}
-						onKeyDown={event => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								commitTitle();
-							} else if (event.key === "Escape") {
-								event.preventDefault();
-								cancelTitleEdit.current = true;
-								setEditingTitle(false);
-							}
-						}}
-					/>
+					// Rename keeps a plain container: an <input> inside a <button> is
+					// nested interactive content, which is the shape this split exists
+					// to remove.
+					<div className="gui-session-row-main">{rowMainContent}</div>
 				) : (
-					<span
-						className="gui-session-title"
-						title={onRename ? t("settings.renameTask") : undefined}
-						onDoubleClick={event => {
-							if (!onRename) return;
-							event.preventDefault();
-							event.stopPropagation();
-							beginTitleEdit();
+					<button
+						type="button"
+						className="gui-session-row-main"
+						aria-current={selected ? "true" : undefined}
+						onClick={() => {
+							tapFeedback();
+							clearSessionHover();
+							onSelect(id);
 						}}
 					>
-						{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
-					</span>
-				)}
-				{failed && (
-					// Accessible marker: the row's dot is otherwise a ::after the
-					// screen reader never sees. Same reason as the working chip.
-					<span
-						className="gui-dot gui-dot-danger gui-session-failed"
-						role="img"
-						aria-label={t("general.sessionUnreadFailed")}
-						title={t("general.sessionUnreadFailed")}
-					/>
-				)}
-				{retitling && (
-					<span
-						className="gui-tree-working"
-						data-ai-retitling="1"
-						role="img"
-						aria-label={t("general.aiRenaming")}
-						title={t("general.aiRenaming")}
-					>
-						<Icon name="loader-4" className="gui-tree-working-spin" />
-					</span>
-				)}
-				{paused && (
-					<span className="gui-tree-pause" role="img" aria-label={t("tools.paused")} title={t("tools.paused")}>
-						<Icon name="pause" className="h-3 w-3" />
-					</span>
-				)}
-				{working && (
-					<span
-						className="gui-tree-working"
-						role="img"
-						aria-label={t("settings.inProgress")}
-						title={t("settings.inProgress")}
-					>
-						{/* ZCode parity: an 8-ray starburst spinning while the
-						 * agent turn runs (was a breathing dot) — opacity ramps
-						 * around the ring so the rotation reads at 12px. */}
-						<svg className="gui-tree-working-spin" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-							{WORKING_RAYS}
-						</svg>
-					</span>
-				)}
-				{forked && parentLabel && (
-					<span
-						className="gui-tree-fork"
-						role="img"
-						aria-label={t("general.forkedSession")}
-						title={t("general.forkedFromWithName", { name: parentLabel })}
-					>
-						<Icon name="git-branch" className="h-3 w-3" />
-					</span>
-				)}
-				{subagent && agentName ? (
-					<span className="gui-tree-agent" title={`${t("general.subagentSession")}: ${agentName}`}>
-						{agentName}
-					</span>
-				) : null}
-				{subagent && (
-					<span
-						className="gui-tree-fork"
-						role="img"
-						aria-label={
-							agentName ? `${t("general.subagentSession")}: ${agentName}` : t("general.subagentSession")
-						}
-						title={agentName ? `${t("general.subagentSession")}: ${agentName}` : t("general.subagentSession")}
-					>
-						<Icon name="ai-agent-fill" className="h-3 w-3" />
-					</span>
-				)}
-				{advisor && (
-					<span
-						className="gui-tree-advisor"
-						role="img"
-						aria-label={t("general.advisorSession")}
-						title={t("general.advisorSession")}
-					>
-						<Icon name="sparkling" className="h-3 w-3" />
-					</span>
+						{rowMainContent}
+					</button>
 				)}
 				{/* Last activity beats creation time: a session resumed today
 				 *  should not still read "3 days ago". The tooltip carries

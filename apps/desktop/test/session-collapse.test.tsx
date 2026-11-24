@@ -64,12 +64,41 @@ describe("session subtree collapse", () => {
 		expect(container.textContent).toContain("Child c1");
 	});
 
+	it("keeps the row's interactive controls siblings, never nested", async () => {
+		const container = await mount(<SessionList nodes={[parent("p1", "c1")]} selectedId={null} onSelect={() => {}} />);
+		const row = container.querySelector<HTMLElement>(".gui-session-row");
+		// The row is a container now: the click and the focus ring belong to one
+		// real button, so the fold control is not interactive content inside a
+		// role="button" wrapper.
+		expect(row?.getAttribute("role")).toBeNull();
+		const main = row?.querySelector<HTMLElement>(".gui-session-row-main");
+		expect(main?.tagName).toBe("BUTTON");
+		// Boolean forms on purpose: a failing toBeNull(<node>) makes Bun's
+		// reporter serialise the node and stall the run.
+		expect(main?.querySelectorAll("button").length).toBe(0);
+		expect(main?.querySelectorAll(".gui-tree-fold").length).toBe(0);
+		// The time gutter stays outside the control: clicking the age must not
+		// select the row.
+		expect(main?.querySelectorAll(".gui-session-time").length).toBe(0);
+		expect(row?.querySelectorAll(":scope > .gui-session-time").length).toBe(1);
+	});
+
+	it("keeps the whole title in the DOM so a long one can travel on hover", async () => {
+		const long = "A very long session title that cannot fit the sidebar column in one line at all";
+		const container = await mount(<SessionList nodes={[node("a", long)]} selectedId={null} onSelect={() => {}} />);
+		const inner = container.querySelector<HTMLElement>(".gui-session-title-inner");
+		expect(inner?.textContent).toBe(long);
+		expect(inner?.closest(".gui-session-row-main")?.tagName).toBe("BUTTON");
+	});
+
 	it("marks the open session as the current row, like the rail marks its destination", async () => {
 		const container = await mount(
 			<SessionList nodes={[node("a", "Alpha"), node("b", "Beta")]} selectedId="b" onSelect={() => {}} />,
 		);
-		const current = [...container.querySelectorAll<HTMLElement>(".gui-session-row")].filter(
-			row => row.getAttribute("aria-current") === "true",
+		// The row's control is the element that answers "which session am I on",
+		// the same way the app rail's button answers it for a destination.
+		const current = [...container.querySelectorAll<HTMLElement>(".gui-session-row-main")].filter(
+			control => control.getAttribute("aria-current") === "true",
 		);
 		expect(current.length).toBe(1);
 		expect(current[0]?.textContent).toContain("Beta");

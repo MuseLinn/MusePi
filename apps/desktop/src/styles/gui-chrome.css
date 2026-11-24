@@ -432,6 +432,27 @@
 	transition: background 120ms ease-out, border-color 120ms ease-out;
 }
 
+/* The row's ONE interactive control: a real button that carries the click and
+ * the keyboard focus, so the fold control and the inline indicators are no
+ * longer nested inside a role="button" container. */
+.gui-session-row-main {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
 .gui-session-row::before {
 	content: "";
 	position: absolute;
@@ -466,9 +487,10 @@
  * focusable controls, so the row doesn't fall back to the UA blue outline.
  * No background here: the `.gui-session-row-active` selected fill must
  * survive — the ring alone marks keyboard focus. */
-.gui-session-row:focus-visible {
+.gui-session-row-main:focus-visible {
 	outline: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
 	outline-offset: -1px;
+	border-radius: var(--radius-md);
 }
 
 /* Selected row keeps its fill while hovered: `.gui-session-row:hover` is
@@ -506,6 +528,56 @@
 	margin-left: 2px;
 	font-size: 12px;
 	line-height: 1;
+}
+
+/* Long titles travel on hover (kimi-code parity): the column keeps its width,
+ * the inner span slides by the measured overflow, and the edge fade appears
+ * only while it moves so the resting row still reads as a clipped label. */
+.gui-session-title-inner {
+	display: block;
+	width: max-content;
+	min-width: 100%;
+	transition: transform 160ms linear;
+}
+
+.gui-session-title--scrollable {
+	text-overflow: clip;
+}
+
+.gui-session-row:hover .gui-session-title--scrollable {
+	mask-image: linear-gradient(
+		to right,
+		transparent 0,
+		#000 12px,
+		#000 calc(100% - 34px),
+		transparent 100%
+	);
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent 0,
+		#000 12px,
+		#000 calc(100% - 34px),
+		transparent 100%
+	);
+}
+
+.gui-session-row:hover .gui-session-title--scrollable .gui-session-title-inner {
+	transform: translateX(var(--gui-title-shift, 0px));
+	transition-duration: var(--gui-title-dur, 0ms);
+	transition-delay: 300ms;
+}
+
+.gui-motion-off .gui-session-row:hover .gui-session-title--scrollable .gui-session-title-inner {
+	transform: none;
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-session-row:hover .gui-session-title--scrollable .gui-session-title-inner {
+		transform: none;
+		transition: none;
+		transition-delay: 0s;
+	}
 }
 
 .gui-session-title-input {
