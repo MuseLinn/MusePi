@@ -93,7 +93,7 @@ import {
 	panelTabId,
 	tabsInColumn,
 } from "../lib/panel-tabs";
-import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
+import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth, setPanelOccupancy } from "../lib/panel-width";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
@@ -834,6 +834,14 @@ export function ContextPanel({
 	// store for the labels/icon and tags its buttons with `data-panel-maximize`.
 	const maximized = useSyncExternalStore(subscribePanelMaximize, getPanelMaximized, getPanelMaximized);
 	maximizedRef.current = maximized;
+	// Publish the row footprint for the surfaces that budget beside this panel
+	// (the session info dock). The width here is the user's setting, so the
+	// reader gets the final answer in the same commit that opens the panel
+	// instead of a rect measured mid-animation.
+	useLayoutEffect(() => {
+		setPanelOccupancy({ open, maximized, width });
+	}, [open, maximized, width]);
+	useLayoutEffect(() => () => setPanelOccupancy({ open: false, maximized: false, width: 0 }), []);
 	// Width drag runs on the normalised pointer-drag primitive (capture +
 	// preventDefault + pointerId filtering) rather than window listeners: the
 	// ad-hoc version had no capture, so the pointer left the 4px strip and the

@@ -10,8 +10,11 @@ import { createRoot } from "react-dom/client";
 import { ChatView } from "../src/components/ChatView";
 import { CONNECTOR_STATUS_KEY } from "../src/components/composer/connector-panel";
 import {
+	SESSION_INFO_DOCK_MIN_ROW_PX,
 	SESSION_INFO_DOCK_WIDTH_PX,
+	SESSION_INFO_PANEL_ROW_PX,
 	SessionInfoCard,
+	sessionInfoSeat,
 	useSessionInfoCardVisibility,
 } from "../src/components/session-info-card";
 import { invalidateGitStatus } from "../src/lib/git-status-cache";
@@ -782,6 +785,77 @@ describe("会话信息卡层级与座位几何", () => {
 	});
 });
 
+describe("sessionInfoSeat 三层宽度判定", () => {
+	const base = {
+		rowWidth: 1400,
+		panelRowWidth: SESSION_INFO_PANEL_ROW_PX,
+		panelOpen: false,
+		open: true,
+		focusMode: false,
+		floatRequested: false,
+	};
+
+	it("未测量时不停靠：把「还不知道」当成够宽会挤出聊天列", () => {
+		const seat = sessionInfoSeat({ ...base, rowWidth: null });
+		expect(seat.dock).toBe(false);
+		expect(seat.narrow).toBe(true);
+		expect(seat.visible).toBe(false);
+	});
+
+	it("面板收起且行够宽：停靠列就是座位", () => {
+		const seat = sessionInfoSeat(base);
+		expect(seat.roomy).toBe(true);
+		expect(seat.dock).toBe(true);
+		expect(seat.visible).toBe(true);
+		expect(seat.narrow).toBe(false);
+	});
+
+	it("面板打开且整行放得下两者：仍然停靠，不换座位", () => {
+		const seat = sessionInfoSeat({
+			...base,
+			rowWidth: SESSION_INFO_DOCK_MIN_ROW_PX + SESSION_INFO_PANEL_ROW_PX,
+			panelOpen: true,
+		});
+		expect(seat.roomyBesidePanel).toBe(true);
+		expect(seat.dock).toBe(true);
+		expect(seat.visible).toBe(true);
+	});
+
+	it("面板打开但放不下两者：折叠让位给面板，且不自动浮出", () => {
+		const seat = sessionInfoSeat({
+			...base,
+			rowWidth: SESSION_INFO_DOCK_MIN_ROW_PX + SESSION_INFO_PANEL_ROW_PX - 1,
+			panelOpen: true,
+		});
+		// Still roomy on its own, so the row is not narrow — the column simply
+		// yields to the panel rather than switching seats.
+		expect(seat.roomy).toBe(true);
+		expect(seat.roomyBesidePanel).toBe(false);
+		expect(seat.dock).toBe(false);
+		expect(seat.float).toBe(false);
+		expect(seat.visible).toBe(false);
+	});
+
+	it("面板最大化时不再占行宽，并排判定按收起面板算", () => {
+		// A maximized panel floats over the chat column, so it spends no row width.
+		const seat = sessionInfoSeat({ ...base, panelOpen: true, panelRowWidth: 0 });
+		expect(seat.roomyBesidePanel).toBe(true);
+		expect(seat.dock).toBe(true);
+	});
+
+	it("窄行只有显式展开才浮出；焦点模式两个座位都不给", () => {
+		const narrow = { ...base, rowWidth: 600 };
+		expect(sessionInfoSeat(narrow).float).toBe(false);
+		const revealedInput = { ...narrow, floatRequested: true };
+		const revealed = sessionInfoSeat(revealedInput);
+		expect(revealed.narrow).toBe(true);
+		expect(revealed.float).toBe(true);
+		expect(revealed.visible).toBe(true);
+		expect(sessionInfoSeat({ ...revealedInput, focusMode: true }).visible).toBe(false);
+		expect(sessionInfoSeat({ ...base, open: false }).visible).toBe(false);
+	});
+});
+
 describe("ChatView 会话信息卡座位", () => {
 	function chatStore(): GuiSessionStore {
 		return new GuiSessionStore("session-1", { entries: [], cursor: 0 } as never, "C:/workspace");
@@ -830,34 +904,37 @@ describe("ChatView 会话信息卡座位", () => {
 		await view.unmount();
 	});
 
-	it("面板展开：信息卡不再占一列，也不自动浮出让位", async () => {
+	it("面板展开且整行放得下两者：信息卡留在原位，与聊天列、面板并排", async () => {
+		// 1400 leaves the dock (288 + gutters), the rail and the open panel
+		// (288 + gutters) room while the transcript keeps its minimum.
 		mockLayout({ rowWidth: 1400 });
 		const view = await mount(renderChat({ sessionInfoOpen: true, rightPanelOpen: true }));
-		// An open right panel owns the row's spare width: the card never takes a
-		// second column there (three columns squeeze the transcript into a strip
-		// too narrow to read code in), and it does not pop up by itself either —
-		// the float seat covers the conversation it is meant to summarize, so it
-		// waits for an explicit toggle.
-		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();
-		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
+		const card = view.host.querySelector<HTMLElement>(".gui-session-info--dock");
+		expect(card === null).toBe(false);
+		// It stays a column between the chat and the panel, never an overlay.
+		expect(card!.closest(".gui-chat-column") === null).toBe(true);
+		const rail = view.host.querySelector<HTMLElement>(".gui-right-rail")!;
+		expect(card!.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+		expect(view.host.querySelector(".gui-session-info--float") === null).toBe(true);
 		await view.unmount();
 	});
 
-	it("面板展开但行太窄：停靠列折叠让位，不自动浮出", async () => {
+	it("面板展开但整行放不下两者：停靠列折叠让位，不自动浮出", async () => {
+		// 1200 fits the dock beside the chat but not the open panel as well.
 		mockLayout({ rowWidth: 1200 });
 		const view = await mount(
 			renderChat({ sessionInfoOpen: true, rightPanelOpen: true, onToggleSessionInfo: () => {} }),
 		);
 		await act(async () => Bun.sleep(220));
-		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();
-		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
+		expect(view.host.querySelector(".gui-session-info--dock") === null).toBe(true);
+		expect(view.host.querySelector(".gui-session-info--float") === null).toBe(true);
 		const toggle = view.host.querySelector<HTMLButtonElement>(".gui-chat-info-toggle")!;
 		expect(toggle.getAttribute("aria-pressed")).toBe("false");
 
 		await act(async () => toggle.click());
 		const float = view.host.querySelector<HTMLElement>(".gui-session-info--float");
-		expect(float).not.toBeNull();
-		expect(float!.closest(".gui-chat-column")).not.toBeNull();
+		expect(float === null).toBe(false);
+		expect(float!.closest(".gui-chat-column") === null).toBe(false);
 		expect(toggle.getAttribute("aria-pressed")).toBe("true");
 		await view.unmount();
 	});
@@ -894,6 +971,49 @@ describe("ChatView 会话信息卡座位", () => {
 		);
 		await act(async () => Bun.sleep(260));
 		await waitFor(() => view.host.querySelector(".gui-session-info--float") === null);
+		await view.unmount();
+	});
+
+	it("浮卡像其他浮层一样点外部或按 Esc 收起，且不动每会话偏好", async () => {
+		mockLayout({ rowWidth: 600 });
+		let toggles = 0;
+		const view = await mount(
+			renderChat({ sessionInfoOpen: true, rightPanelOpen: false, onToggleSessionInfo: () => toggles++ }),
+		);
+		await waitFor(() => view.host.querySelector(".gui-session-info--dock") === null);
+		const toggle = view.host.querySelector<HTMLButtonElement>(".gui-chat-info-toggle")!;
+		await act(async () => toggle.click());
+		expect(view.host.querySelector(".gui-session-info--float") === null).toBe(false);
+
+		// A press inside the card is the card's own business.
+		await act(async () => {
+			view.host
+				.querySelector<HTMLElement>(".gui-session-info--float")!
+				.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+		});
+		expect(view.host.querySelector(".gui-session-info--float") === null).toBe(false);
+
+		// A press anywhere else dismisses the reveal only: the stored preference
+		// still says open, so the header toggle keeps reading "show".
+		await act(async () => {
+			document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+		});
+		await act(async () => Bun.sleep(240));
+		await waitFor(() => view.host.querySelector(".gui-session-info--float") === null);
+		expect(toggles).toBe(0);
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+
+		// Escape does the same, and claims the key so it cannot also stop a turn.
+		await act(async () => toggle.click());
+		expect(view.host.querySelector(".gui-session-info--float") === null).toBe(false);
+		const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+		await act(async () => {
+			document.dispatchEvent(escapeKey);
+		});
+		expect(escapeKey.defaultPrevented).toBe(true);
+		await act(async () => Bun.sleep(240));
+		await waitFor(() => view.host.querySelector(".gui-session-info--float") === null);
+		expect(toggles).toBe(0);
 		await view.unmount();
 	});
 

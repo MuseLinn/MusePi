@@ -36,7 +36,16 @@ import {
 import { Info as InfoIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { pushActionToast } from "../lib/action-toast";
 import { AGENT_AVATAR_TRANSITION, useAgentIdentity } from "../lib/agent-identity";
 import { type AgentOutcome, agentSignalsFromSnapshot } from "../lib/agent-signals";
@@ -65,6 +74,7 @@ import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { dispatchNotification } from "../lib/notify";
 import { toolPanelTabDescriptor } from "../lib/panel-tabs";
+import { getPanelOccupancy, panelRowWidth, subscribePanelOccupancy } from "../lib/panel-width";
 import { type PendingToolCallWire, pendingToolCallsNotice } from "../lib/pending-tool-calls";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
@@ -129,7 +139,7 @@ import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from
 import type { SessionComposerProps } from "./SessionComposer";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { SplitterGrip } from "./SplitterGrip";
-import { SESSION_INFO_DOCK_MIN_ROW_PX, SessionInfoCard } from "./session-info-card";
+import { SESSION_INFO_PANEL_ROW_PX, SessionInfoCard, sessionInfoSeat } from "./session-info-card";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
@@ -3133,27 +3143,16 @@ export function ChatView({
 	// so its width IS the chat column's push/pull. An open panel does not move
 	// the card: it keeps that column between the chat and the panel while the
 	// row still fits both, and folds to 0 (one spring, same as the panel) when
-	// it does not. Before the first measurement it docks, so a wide window never
-	// flashes a float card in the corner it is about to leave.
-	const sessionInfoDockMinRow = SESSION_INFO_DOCK_MIN_ROW_PX;
-	// `chatRowWidth === null` means "not measured yet", which is the common case
-	// on the welcome scene (`showChat` is false there, so the observer never
-	// runs). Treating it as "wide enough" docked a 304px column into a 771px
-	// row and squeezed the chat column to 451px, where tool cards wrapped one
-	// character per line — the width budget must admit it does not know yet.
-	// An open right panel owns the row's spare width, so the card floats over the
-	// transcript instead of taking its own column: three columns (chat, card,
-	// panel) squeeze the conversation into a strip too narrow to read code in.
-	// The dock is for the panel-closed layout, where the column is the card's
-	// permanent seat.
-	const sessionInfoDock = !rightPanelOpen && chatRowWidth !== null && chatRowWidth >= sessionInfoDockMinRow;
-	// The card stays mounted through its exit window so the seat folds instead
-	// of the row re-laying out in one frame.
-	const sessionInfoDockOpen = sessionInfoOpen && !focusMode && sessionInfoDock;
-	// A narrow row cannot dock, so the fallback seat floats OVER the transcript.
-	// Auto-showing it there covers the conversation the card is meant to
-	// summarize, so that seat waits for an explicit toggle.
-	const sessionInfoNarrowRow = !sessionInfoDock;
+	// it does not — the card never changes seats for it.
+	const panelOccupancy = useSyncExternalStore(subscribePanelOccupancy, getPanelOccupancy, getPanelOccupancy);
+	// A panel that is open but has not published yet (first render, or a
+	// different host) still spends its default footprint: budgeting 0 there
+	// would dock the column into a row that cannot hold both.
+	const sessionInfoPanelRowWidth = panelOccupancy.open
+		? panelRowWidth(panelOccupancy)
+		: rightPanelOpen
+			? SESSION_INFO_PANEL_ROW_PX
+			: 0;
 	const [sessionInfoFloatRequested, setSessionInfoFloatRequested] = useState(false);
 	const sessionInfoSessionId = store?.sessionId ?? null;
 	useEffect(() => {
@@ -3161,7 +3160,23 @@ export function ChatView({
 		// does not carry over.
 		setSessionInfoFloatRequested(false);
 	}, [sessionInfoSessionId]);
-	const sessionInfoFloatOpen = sessionInfoOpen && !focusMode && !sessionInfoDock && sessionInfoFloatRequested;
+	const sessionInfoSeatState = sessionInfoSeat({
+		rowWidth: chatRowWidth,
+		panelRowWidth: sessionInfoPanelRowWidth,
+		panelOpen: rightPanelOpen && !focusMode,
+		open: sessionInfoOpen,
+		focusMode,
+		floatRequested: sessionInfoFloatRequested,
+	});
+	const sessionInfoDock = sessionInfoSeatState.dock;
+	// The card stays mounted through its exit window so the seat folds instead
+	// of the row re-laying out in one frame.
+	const sessionInfoDockOpen = sessionInfoSeatState.visible && sessionInfoDock;
+	// A narrow row cannot dock, so the fallback seat floats OVER the transcript.
+	// Auto-showing it there covers the conversation the card is meant to
+	// summarize, so that seat waits for an explicit toggle.
+	const sessionInfoNarrowRow = sessionInfoSeatState.narrow;
+	const sessionInfoFloatOpen = sessionInfoSeatState.float;
 	// What the narrow-row toggle drives: the float seat needs BOTH the stored
 	// preference and an explicit request, so the click flips the pair instead of
 	// reading back the rendered seat — focus mode or a leftover request must not
@@ -3170,6 +3185,35 @@ export function ChatView({
 	const sessionInfoVisible = sessionInfoDockOpen || sessionInfoFloatOpen;
 	const sessionInfoDockPresence = useExitPresence(sessionInfoDockOpen, SESSION_INFO_SEAT_EXIT_MS);
 	const sessionInfoFloatPresence = useExitPresence(sessionInfoFloatOpen, SESSION_INFO_SEAT_EXIT_MS);
+	// The float covers the transcript it reports on, so it dismisses like the
+	// other overlays: a press outside it, or Escape. Both clear only the
+	// narrow-row reveal — the stored preference stays, so the header toggle
+	// still reads "show" and reopens it in one press instead of two. The header
+	// toggle is exempt: its own click owns the transition, and closing here
+	// first would swallow the reopen.
+	useEffect(() => {
+		if (!sessionInfoFloatOpen) return;
+		const onPointerDown = (event: PointerEvent): void => {
+			const target = event.target instanceof Element ? event.target : null;
+			const card = document.querySelector(".gui-session-info--float");
+			if (card?.contains(target)) return;
+			if (target?.closest(".gui-chat-info-toggle")) return;
+			setSessionInfoFloatRequested(false);
+		};
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			// Claim it: the window's bare Escape stops the running turn, and a
+			// key that dismissed this card was not aimed at the turn.
+			event.preventDefault();
+			setSessionInfoFloatRequested(false);
+		};
+		document.addEventListener("pointerdown", onPointerDown, true);
+		document.addEventListener("keydown", onKeyDown);
+		return () => {
+			document.removeEventListener("pointerdown", onPointerDown, true);
+			document.removeEventListener("keydown", onKeyDown);
+		};
+	}, [sessionInfoFloatOpen]);
 	// A draft session's connector pick was stored under the cwd while the
 	// welcome composer owned it; that composer unmounts the moment the first
 	// message creates a session, so the write-back is driven here instead.

@@ -83,6 +83,16 @@ const DOCK_MIN_CHAT_COLUMN_PX = 560;
 /** Workspace card gutter, matching gui-chat.css `--gui-card-gutter`. */
 const CARD_GUTTER_PX = 8;
 
+/** The right rail's own column (gui-chat.css `.gui-right-rail`). */
+const RAIL_WIDTH_PX = 44;
+
+/** The panel's default card width, used before the panel reports its own
+ *  (gui-chat.css `.gui-pane-right--inner`). */
+const PANEL_WIDTH_PX = 288;
+
+/** Panel footprint assumed when the panel has not reported its width yet. */
+export const SESSION_INFO_PANEL_ROW_PX = PANEL_WIDTH_PX + CARD_GUTTER_PX * 2;
+
 /**
  * Everything the shared row spends before the chat column sees a pixel: the
  * dock (288 + its gutters), the rail (44 + its gutters) and the folded right
@@ -90,7 +100,72 @@ const CARD_GUTTER_PX = 8;
  * instead of docking it.
  */
 export const SESSION_INFO_DOCK_MIN_ROW_PX =
-	SESSION_INFO_DOCK_WIDTH_PX + CARD_GUTTER_PX * 2 + 44 + CARD_GUTTER_PX * 2 + CARD_GUTTER_PX + DOCK_MIN_CHAT_COLUMN_PX;
+	SESSION_INFO_DOCK_WIDTH_PX +
+	CARD_GUTTER_PX * 2 +
+	RAIL_WIDTH_PX +
+	CARD_GUTTER_PX * 2 +
+	CARD_GUTTER_PX +
+	DOCK_MIN_CHAT_COLUMN_PX;
+
+export interface SessionInfoSeatInput {
+	/** Measured width of the shared workspace row; null before it is measured. */
+	rowWidth: number | null;
+	/** Panel footprint on that row (`panelRowWidth`), 0 while it is folded. */
+	panelRowWidth: number;
+	/** The panel is open and has an active tab (it renders something). */
+	panelOpen: boolean;
+	/** The session info preference for this session. */
+	open: boolean;
+	/** Focus mode hides both seats. */
+	focusMode: boolean;
+	/** The user asked for the float seat on a narrow row. */
+	floatRequested: boolean;
+}
+
+export interface SessionInfoSeat {
+	/** Row still leaves the chat column a readable width with the dock. */
+	roomy: boolean;
+	/** ... and still fits the open panel beside that dock. */
+	roomyBesidePanel: boolean;
+	/** The dock is this row's seat: roomy, and either the panel is closed or
+	 *  it fits beside the dock. Below that the column folds to 0 and the panel
+	 *  takes the row; the card never changes seats for it. */
+	dock: boolean;
+	/** Narrow row: only the explicit reveal floats the card. */
+	float: boolean;
+	visible: boolean;
+	/** The row is too narrow to dock at all (the float is the only seat). */
+	narrow: boolean;
+}
+
+/**
+ * Which seat the card takes on this row.
+ *
+ * Three width answers: the row must
+ * leave the transcript a readable column with the dock, the same must hold
+ * with the open panel beside it, and the dock only gives way when the second
+ * fails. An unmeasured row docks nothing — treating "not measured yet" as wide
+ * docked a 304px column into a 771px row and squeezed the transcript to 451px,
+ * where tool cards wrapped one character per line.
+ */
+export function sessionInfoSeat(input: SessionInfoSeatInput): SessionInfoSeat {
+	const rowWidth = input.rowWidth;
+	const roomy = rowWidth !== null && rowWidth >= SESSION_INFO_DOCK_MIN_ROW_PX;
+	const roomyBesidePanel =
+		roomy && (!input.panelOpen || (rowWidth ?? 0) >= SESSION_INFO_DOCK_MIN_ROW_PX + input.panelRowWidth);
+	const dock = roomy && (!input.panelOpen || roomyBesidePanel);
+	const narrow = !dock;
+	const float = input.open && !input.focusMode && narrow && input.floatRequested;
+	const dockOpen = input.open && !input.focusMode && dock;
+	return {
+		roomy,
+		roomyBesidePanel,
+		dock,
+		float,
+		visible: dockOpen || float,
+		narrow,
+	};
+}
 
 /** Same cadence as the other working-tree readouts — they describe one tree. */
 const POLL_MS = 15_000;
