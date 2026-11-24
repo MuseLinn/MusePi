@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
 import type { Settings } from "../../src/config/settings";
-import { browserEndpoint, browserTabs } from "../../src/daemon/browser-rpc";
+import { browserClearCache, browserEndpoint, browserExtensions, browserTabs } from "../../src/daemon/browser-rpc";
 import * as launchClient from "../../src/launch/client";
 
 /**
@@ -80,6 +80,19 @@ describe("browser status RPCs are read-only", () => {
 		vi.spyOn(launchClient, "daemonClientForProject").mockResolvedValue(fakeClient(undefined));
 
 		expect(await browserTabs(settings(), "/tmp/musepi-browser-status")).toEqual({ tabs: [], wsEndpoint: null });
+		expect(OPS).not.toContain("start");
+	});
+
+	test("maintenance reads the profile on disk instead of demanding a live browser", async () => {
+		vi.spyOn(launchClient, "daemonClientForProject").mockResolvedValue(fakeClient(undefined));
+
+		// No shared browser is running: the profile path is still a fact, so
+		// listing extensions and wiping caches work without spawning one.
+		const listed = await browserExtensions(settings(), "/tmp/musepi-browser-status");
+		expect(listed.extensions).toEqual([]);
+		expect(listed.profileDir).toContain("musepi.browser.headless.profile");
+
+		expect(await browserClearCache(settings(), "/tmp/musepi-browser-status")).toEqual({ ok: true });
 		expect(OPS).not.toContain("start");
 	});
 });

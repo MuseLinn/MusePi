@@ -146,6 +146,16 @@ async function cdpRequest(
 	}
 }
 
+/** The shared browser's profile directory, independent of whether it is
+ *  running. Mirrors `ensureSharedBrowser`'s layout (`<daemonName>.profile` under
+ *  the broker's project runtime dir), so maintenance RPCs can read or wipe a
+ *  profile without first starting a browser for it. */
+async function sharedBrowserProfileDir(settings: Settings, projectDir: string): Promise<string> {
+	const headless = (settings.get("browser.headless") as boolean | undefined) ?? true;
+	const { sharedBrowserDaemonName } = await import("../tools/browser/shared-daemon");
+	return path.join(await daemonRuntimeDirFor(projectDir), `${sharedBrowserDaemonName(headless)}.profile`);
+}
+
 /** Resolve the shared-browser endpoint honoring the headless setting.
  *  Read-only: `describeSharedBrowser` reports what the broker already has and
  *  never starts, replaces or stops a process. */
@@ -237,14 +247,15 @@ export async function browserScreenshot(
 	}
 }
 
-/** Scan the shared profile's Extensions dir for installed extensions. */
+/** Scan the shared profile's Extensions dir for installed extensions.
+ *  Reads the profile on disk: what is installed is a fact about the profile,
+ *  not about whether its browser happens to be running. */
 export async function browserExtensions(
 	settings: Settings,
 	projectDir: string,
 ): Promise<{ extensions: BrowserExtensionInfo[]; profileDir: string | null }> {
-	const ep = await sharedBrowserEndpoint(settings, projectDir);
-	if (!ep) return { extensions: [], profileDir: null };
-	const extensionsDir = path.join(ep.profileDir, "Extensions");
+	const profileDir = await sharedBrowserProfileDir(settings, projectDir);
+	const extensionsDir = path.join(profileDir, "Extensions");
 	const out: BrowserExtensionInfo[] = [];
 	try {
 		const entries = await fsReaddir(extensionsDir);
@@ -273,7 +284,7 @@ export async function browserExtensions(
 	} catch {
 		// no Extensions dir yet — nothing installed
 	}
-	return { extensions: out, profileDir: ep.profileDir };
+	return { extensions: out, profileDir };
 }
 
 /** Write the MusePi Browser Relay extension files (chrome.debugger bridge)
@@ -369,17 +380,17 @@ function fsCopyFileSync(src: string, dst: string): void {
 
 /** One-time import of Cookies + LocalStorage from the most recent Chrome
  *  profile into the shared browser profile.
- *  Copies the SQLite cookie DB and the Local Storage leveldb tree. */
+ *  Copies the SQLite cookie DB and the Local Storage leveldb tree.
+ *  Writes files, so it needs the profile path only — importing into a
+ *  not-yet-started profile is the normal case. */
 export async function browserImportChrome(
 	settings: Settings,
 	projectDir: string,
 ): Promise<{ ok: boolean; importedFrom?: string; error?: string }> {
-	const ep = await sharedBrowserEndpoint(settings, projectDir);
-	if (!ep) return { ok: false, error: "shared browser unavailable" };
+	const dst = await sharedBrowserProfileDir(settings, projectDir);
 	const profiles = chromeProfiles();
 	if (profiles.length === 0) return { ok: false, error: "no Chrome profile found" };
 	const src = profiles[0]!;
-	const dst = ep.profileDir;
 	fsCopyFileSync(`${src}/Cookies`, `${dst}/Cookies`);
 	fsCopyFileSync(`${src}/Network/Cookies`, `${dst}/Network/Cookies`);
 	const lsSrc = `${src}/Local Storage/leveldb`;
@@ -390,66 +401,75 @@ export async function browserImportChrome(
 	return { ok: true, importedFrom: src };
 }
 
-/** Clear HTTP cache / CacheStorage / Service Worker (keep cookies). */
+/** Clear HTTP cache / CacheStorage / Service Worker (keep cookies).
+ *  The disk wipe is the real work and needs only the profile path; the CDP
+ *  call runs only when a browser happens to be live. It must not start one —
+ *  clearing caches is no reason to spawn a browser. */
 export async function browserClearCache(
 	settings: Settings,
 	projectDir: string,
 ): Promise<{ ok: boolean; error?: string }> {
+	const profileDir = await sharedBrowserProfileDir(settings, projectDir);
 	const ep = await sharedBrowserEndpoint(settings, projectDir);
-	if (!ep) return { ok: false, error: "shared browser unavailable" };
-	try {
-		const conn = await cdpConnect(ep.wsEndpoint);
+	if (ep) {
 		try {
-			await cdpCall(conn, "Network.clearBrowserCache", undefined).catch(() => {});
-		} finally {
-			cdpClose(conn);
+			const conn = await cdpConnect(ep.wsEndpoint);
+			try {
+				await cdpCall(conn, "Network.clearBrowserCache", undefined).catch(() => {});
+			} finally {
+				cdpClose(conn);
+			}
+		} catch {
+			// CDP unreachable — the directory wipe below still clears the disk cache
 		}
-	} catch {
-		// CDP unreachable — the directory wipe below still clears the disk cache
 	}
 	for (const sub of ["Cache", "Code Cache", "GPUCache", "Service Worker", "CacheStorage"]) {
-		await fsp.rm(path.join(ep.profileDir, sub), { recursive: true, force: true }).catch(() => {});
+		await fsp.rm(path.join(profileDir, sub), { recursive: true, force: true }).catch(() => {});
 	}
 	return { ok: true };
 }
 
-/** Clear cookies + site data + cache (irreversible). */
+/** Clear cookies + site data + cache (irreversible).
+ *  Same split as `browserClearCache`: the wipe needs the profile path; the CDP
+ *  live-session cleanup only runs when a browser is already up. */
 export async function browserClearAll(
 	settings: Settings,
 	projectDir: string,
 ): Promise<{ ok: boolean; error?: string }> {
+	const profileDir = await sharedBrowserProfileDir(settings, projectDir);
 	const ep = await sharedBrowserEndpoint(settings, projectDir);
-	if (!ep) return { ok: false, error: "shared browser unavailable" };
-	try {
-		const conn = await cdpConnect(ep.wsEndpoint);
+	if (ep) {
 		try {
-			await cdpCall(conn, "Network.clearBrowserCache", undefined).catch(() => {});
-			const targets = (await cdpCall(conn, "Target.getTargets", undefined)) as {
-				targetInfos?: { targetId: string; type: string }[];
-			};
-			for (const t of targets.targetInfos ?? []) {
-				if (t.type !== "page") continue;
-				const attach = (await cdpCall(conn, "Target.attachToTarget", {
-					targetId: t.targetId,
-					flatten: true,
-				})) as { sessionId?: string };
-				if (!attach.sessionId) continue;
-				try {
-					await cdpCall(
-						conn,
-						"Storage.clearDataForOrigin",
-						{ origin: "*", storageTypes: "all" },
-						attach.sessionId,
-					).catch(() => {});
-				} finally {
-					await cdpCall(conn, "Target.detachFromTarget", { targetId: t.targetId }).catch(() => {});
+			const conn = await cdpConnect(ep.wsEndpoint);
+			try {
+				await cdpCall(conn, "Network.clearBrowserCache", undefined).catch(() => {});
+				const targets = (await cdpCall(conn, "Target.getTargets", undefined)) as {
+					targetInfos?: { targetId: string; type: string }[];
+				};
+				for (const t of targets.targetInfos ?? []) {
+					if (t.type !== "page") continue;
+					const attach = (await cdpCall(conn, "Target.attachToTarget", {
+						targetId: t.targetId,
+						flatten: true,
+					})) as { sessionId?: string };
+					if (!attach.sessionId) continue;
+					try {
+						await cdpCall(
+							conn,
+							"Storage.clearDataForOrigin",
+							{ origin: "*", storageTypes: "all" },
+							attach.sessionId,
+						).catch(() => {});
+					} finally {
+						await cdpCall(conn, "Target.detachFromTarget", { targetId: t.targetId }).catch(() => {});
+					}
 				}
+			} finally {
+				cdpClose(conn);
 			}
-		} finally {
-			cdpClose(conn);
+		} catch {
+			// directory wipe below still clears disk state
 		}
-	} catch {
-		// directory wipe below still clears disk state
 	}
 	for (const sub of [
 		"Cache",
@@ -462,7 +482,7 @@ export async function browserClearAll(
 		"IndexedDB",
 		"Session Storage",
 	]) {
-		await fsp.rm(path.join(ep.profileDir, sub), { recursive: true, force: true }).catch(() => {});
+		await fsp.rm(path.join(profileDir, sub), { recursive: true, force: true }).catch(() => {});
 	}
 	return { ok: true };
 }
