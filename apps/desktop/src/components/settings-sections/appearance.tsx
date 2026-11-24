@@ -314,7 +314,7 @@ export function AppearanceSection({
 				</Reveal>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("settings.accent")}</div>
-					<div className="gui-settings-field-hint">{t("settings.accentColor")}</div>
+					<div className="gui-settings-field-hint">{t("settings.accentThemeHint")}</div>
 					<div className="gui-settings-field-control">
 						<div className="flex items-center gap-2">
 							{Object.entries(ACCENT_SWATCH).map(([id, color]) => (
@@ -345,7 +345,6 @@ export function AppearanceSection({
 								}}
 							/>
 						</div>
-						<div className="gui-settings-field-hint">{t("settings.accentThemeHint")}</div>
 						{renderAccentPicker(
 							<ColorPickerPanel
 								value={pickerPreview ?? customAccent}

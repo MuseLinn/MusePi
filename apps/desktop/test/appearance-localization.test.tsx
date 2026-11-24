@@ -78,3 +78,24 @@ describe("appearance localization selects", () => {
 		expect(text).not.toContain("general.");
 	});
 });
+
+describe("accent row anatomy", () => {
+	it("keeps one explanation under the label, outside the swatch cluster", () => {
+		const scope = mount();
+		const label = [...scope.querySelectorAll(".gui-settings-field-label")].find(
+			n => n.textContent === t("settings.accent"),
+		);
+		const row = label?.closest(".gui-settings-field");
+		if (!row) throw new Error("accent row missing");
+
+		// `settings.accentColor` also reads "强调色", so using it as the hint
+		// printed the label twice and left the row without an explanation.
+		const hints = [...row.querySelectorAll(".gui-settings-field-hint")];
+		expect(hints).toHaveLength(1);
+		expect(hints[0].textContent).toBe(t("settings.accentThemeHint"));
+
+		// The hint column is the label grid area; the control column is the
+		// right-aligned cluster, where a hint renders beside the swatches.
+		expect(row.querySelector(".gui-settings-field-control .gui-settings-field-hint")).toBeNull();
+	});
+});
