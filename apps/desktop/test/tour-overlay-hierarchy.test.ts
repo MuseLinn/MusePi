@@ -306,6 +306,27 @@ describe("the appearance step uses the settings page's own controls", () => {
 		expect(tsx).toContain("setUnifiedTheme");
 	});
 
+	test("the two scheme palettes read as children of the mode choice", () => {
+		const tsx = read(ONBOARDING_TSX);
+		const css = read("apps/desktop/src/styles/gui-misc.css");
+		// Three equal rows made the light/dark picks look like peers of
+		// "separate/unified" instead of settings that only exist under it.
+		expect(tsx).toContain('className="gui-obo-appearance-dependent"');
+		const block = rule(css, ".gui-obo-appearance-dependent");
+		expect(block, "no .gui-obo-appearance-dependent block").not.toBeNull();
+		expect(declaration(block!, "border-left")).toContain("var(--accent)");
+		expect(declaration(block!, "grid-template-columns")).toBe("1fr 1fr");
+	});
+
+	test("every control in the appearance column spans the same width", () => {
+		const css = read("apps/desktop/src/styles/gui-misc.css");
+		// The segmented controls kept their settings-row 260px cap while the
+		// selects and the accent row ran full width, leaving a ragged edge.
+		expect(css).toContain(".gui-obo-appearance-group .gui-seg");
+		const widen = rule(css, ".gui-obo-appearance-group .gui-seg");
+		expect(declaration(widen!, "max-width")).toBe("none");
+	});
+
 	test("the accent chips keep their swatches, not a segmented control", () => {
 		// Segmented has no swatch slot: each accent chip carries the colour it
 		// applies, which a text segment cannot.

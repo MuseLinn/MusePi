@@ -1376,7 +1376,10 @@ function AppearanceSetup(): ReactNode {
 					/>
 				</div>
 			) : (
-				<>
+				/* The two picks are children of the mode above, not peers: one
+				 * rail and one row express that, where three equal rows made the
+				 * dependency read as three separate settings. */
+				<div className="gui-obo-appearance-dependent">
 					<div className="gui-obo-appearance-group">
 						<span className="gui-obo-quick-label">{t("settings.lightTheme")}</span>
 						<GuiSelect
@@ -1409,7 +1412,7 @@ function AppearanceSetup(): ReactNode {
 							}))}
 						/>
 					</div>
-				</>
+				</div>
 			)}
 			<div className="gui-obo-appearance-group">
 				<span className="gui-obo-quick-label">{t("settings.accentColor")}</span>

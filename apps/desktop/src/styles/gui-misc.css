@@ -289,6 +289,23 @@
 	display: flex;
 	flex-direction: column;
 	gap: 7px;
+	min-width: 0;
+}
+/* The page's controls share one column width: the segmented controls were
+ * capped at their settings-row 260px while the selects ran full width, so the
+ * right edge of the form was ragged. */
+.gui-obo-appearance-group .gui-seg {
+	max-width: none;
+}
+/* Light/dark picks hang off the "separate" choice above: one rail, one row,
+ * and a tighter gap than between independent groups. */
+.gui-obo-appearance-dependent {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+	padding-left: 13px;
+	border-left: 1px solid color-mix(in oklab, var(--accent) 28%, transparent);
+	margin-top: -4px;
 }
 .gui-obo-appearance-options {
 	display: flex;
