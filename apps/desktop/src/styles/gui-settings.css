@@ -8963,6 +8963,7 @@ body.gui-resizing {
 /* `保险库 · N` 列头：计数在左、搜索与两个动作在右，与下方列表同宽。 */
 .gui-secret-listhead {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2);
@@ -8976,9 +8977,10 @@ body.gui-resizing {
 	color: var(--color-text);
 }
 
-/* 保险库页的操作行：搜索靠右，两个动作成组；表单打开时二者都禁用。 */
+/* 保险库页的操作行：搜索靠右，两个动作成组；窄宽度时动作整组换行。 */
 .gui-secret-listhead .gui-secret-search {
-	flex: 0 1 220px;
+	flex: 1 1 180px;
+	max-width: 240px;
 	margin-left: auto;
 }
 
@@ -8986,6 +8988,14 @@ body.gui-resizing {
 	display: flex;
 	flex: none;
 	gap: var(--space-2);
+	margin-left: auto;
+}
+
+/* 搜索无结果：一行淡色文字，不占一张卡——它和「还没有保存任何内容」是两个状态。 */
+.gui-secret-none {
+	padding: var(--space-3) 0;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
 }
 
 .gui-secret-footnote {
@@ -9084,12 +9094,15 @@ body.gui-resizing {
 	overflow-wrap: anywhere;
 }
 
-/* 密钥行：同一张 L1 面，名字/范围在上、用途在中、行尾是最后使用与两个动作。
- * 行内不再自己画边框或底色。 */
+/* 密钥行：同一张 L1 面，名字在上、范围/用途/最后使用合成一条淡色元信息，
+ * 行尾是动作。列表本身用 ul/li，语义与视觉一致。 */
 .gui-secret-section .gui-secret-list {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .gui-secret-section .gui-secret-row {
@@ -9137,19 +9150,12 @@ body.gui-resizing {
 	color: var(--color-text);
 }
 
-.gui-secret-row-purpose {
+.gui-secret-row-meta-line {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: 12px;
 	color: var(--color-text-muted);
-}
-
-.gui-secret-row-meta {
-	flex: none;
-	font-size: 11px;
-	color: var(--color-text-faint);
-	white-space: nowrap;
 }
 
 /* 行内动作：常规与键盘焦点都可用，不靠悬停才出现——删除是不可逆操作，
@@ -9170,7 +9176,7 @@ body.gui-resizing {
 }
 
 /* 空态：不是一句灰字，而是说明请求卡片长什么样——标题 + 一段做法。列表为空
- * 时它替代列表位，仍与状态卡同宽。 */
+ * 时它替代列表位，占满正文。 */
 .gui-secret-empty {
 	padding: var(--space-4);
 	border-radius: var(--radius-lg);
@@ -9219,11 +9225,6 @@ body.gui-resizing {
 }
 
 @media (max-width: 760px) {
-	.gui-secret-facts {
-		grid-template-columns: minmax(0, 1fr);
-		gap: var(--space-3);
-	}
-
 	.gui-secret-form .gui-settings-field {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-areas: "label" "control" "hint";
@@ -9232,10 +9233,6 @@ body.gui-resizing {
 
 	.gui-secret-section .gui-secret-row {
 		flex-wrap: wrap;
-	}
-
-	.gui-secret-row-meta {
-		order: 3;
 	}
 }
 

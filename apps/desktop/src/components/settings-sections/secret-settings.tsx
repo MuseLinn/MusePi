@@ -63,7 +63,7 @@ function errorText(error: unknown): string {
 function lastUsedText(entry: SecretEntryView): string {
 	return entry.lastUsedAt && entry.lastUsedAt > 0
 		? t("settings.secretsLastUsed", { when: formatWhen(entry.lastUsedAt) })
-		: t("settings.secretsNeverUsed");
+		: "";
 }
 
 function scopeLabel(scope: SecretScope): string {
@@ -106,9 +106,16 @@ function SecretForm({
 		<form
 			className="gui-agent-card gui-secret-form"
 			data-secret-form={form.mode}
+			aria-busy={busy}
 			onSubmit={event => {
 				event.preventDefault();
 				onSubmit();
+			}}
+			onKeyDown={event => {
+				if (event.key !== "Escape" || busy) return;
+				event.preventDefault();
+				event.stopPropagation();
+				onCancel();
 			}}
 		>
 			<div className="gui-secret-form-head">
@@ -129,8 +136,9 @@ function SecretForm({
 							placeholder={t("settings.secretsNamePlaceholder")}
 							spellCheck={false}
 							autoComplete="off"
+							autoFocus
 							disabled={busy}
-							onChange={event => onChange({ name: event.target.value })}
+							onChange={event => onChange({ name: event.target.value.toUpperCase() })}
 						/>
 					</span>
 				</label>
@@ -148,6 +156,7 @@ function SecretForm({
 						placeholder={t("settings.secretsValuePlaceholder")}
 						spellCheck={false}
 						autoComplete="new-password"
+						autoFocus={form.mode === "replace"}
 						disabled={busy}
 						onChange={event => onChange({ value: event.target.value })}
 					/>
@@ -300,15 +309,18 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		setBusy(true);
 		setEnvError(null);
 		setEnvDone(null);
+		let saved = 0;
 		try {
 			for (const entry of entries) {
 				await rpc.request("secret.set", { name: entry.name, value: entry.value });
+				saved++;
 			}
 			setEnvDone(entries.length);
 			setEnvText("");
 			reload();
 		} catch (error) {
-			setEnvError(t("settings.secretsSetFailed", { error: errorText(error) }));
+			setEnvError(t("settings.secretsImportFailed", { done: saved, error: errorText(error) }));
+			if (saved > 0) reload();
 		} finally {
 			setBusy(false);
 		}
@@ -430,14 +442,16 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			{listKnown && (
 				<div className="gui-secret-listhead">
 					<span className="gui-secret-count">{t("settings.secretsStoredCount", { count: entries.length })}</span>
-					<input
-						className="gui-input gui-secret-search"
-						value={query}
-						placeholder={t("settings.secretsSearch")}
-						aria-label={t("settings.secretsSearch")}
-						spellCheck={false}
-						onChange={event => setQuery(event.target.value)}
-					/>
+					{entries.length > 0 && (
+						<input
+							className="gui-input gui-secret-search"
+							value={query}
+							placeholder={t("settings.secretsSearch")}
+							aria-label={t("settings.secretsSearch")}
+							spellCheck={false}
+							onChange={event => setQuery(event.target.value)}
+						/>
+					)}
 					<div className="gui-secret-listhead-actions">
 						<button type="button" className="gui-btn gui-btn-primary" disabled={bodyOpen} onClick={openAdd}>
 							<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
@@ -470,16 +484,26 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 					form={form}
 					busy={busy}
 					error={formError}
-					onChange={patch => setForm(current => (current ? { ...current, ...patch } : current))}
+					onChange={patch => {
+						setFormError(null);
+						setForm(current => (current ? { ...current, ...patch } : current));
+					}}
 					onCancel={closeForm}
 					onSubmit={() => void submitForm()}
 				/>
 			) : importing ? (
 				<form
 					className="gui-agent-card gui-secret-form"
+					aria-busy={busy}
 					onSubmit={event => {
 						event.preventDefault();
 						void importEnv();
+					}}
+					onKeyDown={event => {
+						if (event.key !== "Escape" || busy) return;
+						event.preventDefault();
+						event.stopPropagation();
+						closeImport();
 					}}
 				>
 					<div className="gui-secret-form-head">
@@ -498,8 +522,13 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 								autoComplete="off"
 								dir="ltr"
 								placeholder="STRIPE_SECRET_KEY=…"
+								autoFocus
 								disabled={busy}
-								onChange={event => setEnvText(event.target.value)}
+								onChange={event => {
+									setEnvError(null);
+									setEnvDone(null);
+									setEnvText(event.target.value);
+								}}
 							/>
 						</span>
 					</label>
@@ -519,9 +548,15 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 							<button type="button" className="gui-btn" onClick={closeImport} disabled={busy}>
 								{t("settings.cancel")}
 							</button>
-							<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
-								{busy ? t("settings.secretsSaving") : t("settings.secretsImportSubmit")}
-							</button>
+							{envDone !== null ? (
+								<button type="button" className="gui-btn gui-btn-primary" onClick={closeImport}>
+									{t("settings.secretsImportFinish")}
+								</button>
+							) : (
+								<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
+									{busy ? t("settings.secretsSaving") : t("settings.secretsImportSubmit")}
+								</button>
+							)}
 						</div>
 					</div>
 				</form>
@@ -531,62 +566,63 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 					<p className="gui-secret-empty-body">{t("settings.secretsEmptyBody")}</p>
 				</div>
 			) : visible.length === 0 ? (
-				<div className="gui-secret-empty">
-					<p className="gui-secret-empty-body">{t("settings.secretsNoMatch")}</p>
-				</div>
+				<div className="gui-secret-none">{t("settings.secretsNoMatch")}</div>
 			) : (
-				<div className="gui-secret-list">
-					{visible.map(entry => (
-						<section key={entry.name} className="gui-agent-card gui-secret-row" data-secret-name={entry.name}>
-							<span className="gui-secret-row-icon">
-								<KeyRound size={13} aria-hidden="true" />
-							</span>
-							<div className="gui-secret-row-main">
-								<div className="gui-secret-row-head">
-									<span className="gui-secret-name">{entry.name}</span>
+				<ul className="gui-secret-list">
+					{visible.map(entry => {
+						const meta = [
+							entry.scope === "all" ? null : scopeLabel(entry.scope),
+							entry.purpose || null,
+							entry.lastUsedAt ? lastUsedText(entry) : null,
+						]
+							.filter(Boolean)
+							.join(" · ");
+						return (
+							<li key={entry.name} className="gui-agent-card gui-secret-row" data-secret-name={entry.name}>
+								<span className="gui-secret-row-icon">
+									<KeyRound size={13} aria-hidden="true" />
+								</span>
+								<div className="gui-secret-row-main">
+									<div className="gui-secret-row-head">
+										<span className="gui-secret-name">{entry.name}</span>
+									</div>
+									{meta !== "" && <div className="gui-secret-row-meta-line">{meta}</div>}
 								</div>
-								<div className="gui-secret-row-purpose">
-									{[
-										scopeLabel(entry.scope),
-										entry.purpose || t("settings.secretsNoPurpose"),
-										lastUsedText(entry),
-									].join(" · ")}
-								</div>
-							</div>
-							<div className="gui-secret-row-actions">
-								{entry.scope !== "all" && (
+								<div className="gui-secret-row-actions">
+									{entry.scope !== "all" && (
+										<button
+											type="button"
+											className="gui-btn gui-btn-ghost"
+											data-secret-action="widen"
+											disabled={widening === entry.name}
+											onClick={() => void widen(entry)}
+										>
+											{t("settings.secretsAllowAll")}
+										</button>
+									)}
 									<button
 										type="button"
 										className="gui-btn gui-btn-ghost"
-										data-secret-action="widen"
-										disabled={widening === entry.name}
-										onClick={() => void widen(entry)}
+										data-secret-action="replace"
+										onClick={() => openReplace(entry)}
 									>
-										{t("settings.secretsAllowAll")}
+										{t("settings.secretsReplace")}
 									</button>
-								)}
-								<button
-									type="button"
-									className="gui-btn gui-btn-ghost"
-									data-secret-action="replace"
-									onClick={() => openReplace(entry)}
-								>
-									{t("settings.secretsReplace")}
-								</button>
-								<button
-									type="button"
-									className="gui-btn gui-btn-ghost gui-btn-icon"
-									data-secret-action="delete"
-									aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
-									disabled={deleting === entry.name}
-									onClick={() => void remove(entry)}
-								>
-									<Trash2 size={13} aria-hidden="true" />
-								</button>
-							</div>
-						</section>
-					))}
-				</div>
+									<button
+										type="button"
+										className="gui-btn gui-btn-ghost gui-btn-icon"
+										data-secret-action="delete"
+										aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
+										disabled={deleting === entry.name}
+										onClick={() => void remove(entry)}
+									>
+										<Trash2 size={13} aria-hidden="true" />
+									</button>
+								</div>
+							</li>
+						);
+					})}
+				</ul>
 			)}
 
 			<p className="gui-note gui-secret-footnote">{t("settings.secretsFootnote")}</p>

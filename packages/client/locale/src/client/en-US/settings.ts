@@ -7419,21 +7419,8 @@ export const settings = {
 	"settings.memoryBackends": "Backends",
 	"settings.memoryStatusDescription": "Live backend status and maintenance actions.",
 	"settings.secrets": "Vault",
-	"settings.secretsDescription":
-		"Passwords and keys your agent can use. Values reach only its bash environment, never the agent.",
-	"settings.secretsEncrypted": "Encrypted (local master key)",
-	"settings.secretsEncryptedDescription":
-		"Every value is an AES-256-GCM envelope under this machine's profile master key. There is no plaintext mode, and a value is only decrypted here.",
-	"settings.secretsWhereTitle": "On disk",
-	"settings.secretsWhereValue":
-		"agent-secrets/ under this profile's agent directory, written atomically with 0600 permissions where the platform has POSIX modes. On Windows those bits are not honoured, so protection there is the encryption plus the directory's access control. The vault holds name, purpose, scope and the encrypted value — never a readable value.",
-	"settings.secretsBashTitle": "In the shell",
-	"settings.secretsBashValue":
-		"Only a bash child process receives $MUSEPI_SECRET_<NAME>. Tool output that would print the value shows [secret:NAME] instead.",
-	"settings.secretsModelTitle": "What the model sees",
-	"settings.secretsModelValue":
-		"A keyed placeholder for provider requests (name plus a local hash, not reversible by the model), and name, purpose, scope and availability from list_secrets. Never the value.",
-	"settings.secretsStoredCount": "Vault · {count}",
+	"settings.secretsDescription": "Keys your agent can use.",
+	"settings.secretsStoredCount": "Saved · {count}",
 	"settings.secretsAdd": "Add secret",
 	"settings.secretsImport": "Import a .env",
 	"settings.secretsImportTitle": "Paste a .env",
@@ -7444,10 +7431,12 @@ export const settings = {
 	"settings.secretsImportEmpty": "No NAME=value lines to import.",
 	"settings.secretsImportInvalid": "Line {line} has an invalid name: {name}",
 	"settings.secretsImportDone": "Imported {count} secret(s).",
+	"settings.secretsImportFailed": "Imported {done}, then failed: {error}",
+	"settings.secretsImportFinish": "Done",
 	"settings.secretsSearch": "Search the vault",
 	"settings.secretsNoMatch": "No matching secrets.",
 	"settings.secretsFootnote":
-		"Values reach the agent only as bash environment variables. A saved value can be replaced, never viewed.",
+		"Values are encrypted on this machine and reach the agent only as bash environment variables. A saved value can be replaced, never viewed.",
 	"settings.secretsAddTitle": "New secret",
 	"settings.secretsReplaceTitle": "Replace value",
 	"settings.secretsName": "Name",
@@ -7464,8 +7453,6 @@ export const settings = {
 	"settings.secretsAllowAll": "Allow every session",
 	"settings.secretsUpdateFailed": "Could not update the secret scope: {error}",
 	"settings.secretsLastUsed": "Last used {when}",
-	"settings.secretsNeverUsed": "Never used",
-	"settings.secretsNoPurpose": "No purpose recorded",
 	"settings.secretsEmptyTitle": "Nothing saved yet.",
 	"settings.secretsEmptyBody":
 		"Keys the agent asks for land here; you can also add one directly or paste a .env file.",
