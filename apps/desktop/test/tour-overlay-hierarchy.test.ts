@@ -148,6 +148,57 @@ describe("the primer header shares its row with the icon", () => {
 	});
 });
 
+describe("primer controls answer the pointer and the keyboard", () => {
+	test("the shared button carries press and focus states", () => {
+		// base.css drops the global :focus-visible ring, so every control that
+		// wants one has to declare it. Without :active a click reads as a no-op
+		// until the handler's effect lands.
+		const css = read("apps/desktop/src/styles/gui-composer.css");
+		const body = rule(css, ".gui-btn");
+		expect(body, "no .gui-btn block").not.toBeNull();
+		expect(declaration(body!, "transition")).toContain("transform");
+		expect(css).toContain(".gui-btn:active:not(:disabled)");
+		expect(css).toContain(".gui-btn:focus-visible");
+		const focus = rule(css, ".gui-btn:focus-visible");
+		expect(declaration(focus!, "outline")).toContain("var(--color-accent)");
+	});
+
+	test("the close button and the segmented tabs answer the pointer too", () => {
+		const css = read(WIDGETS);
+		for (const selector of [".gui-onboarding-close", ".gui-obo-tab", ".gui-obo-branch-head"]) {
+			expect(css, `${selector} has no :active state`).toContain(`${selector}:active`);
+		}
+	});
+
+	test("appearance chips press in place instead of only lifting", () => {
+		const css = read("apps/desktop/src/styles/gui-misc.css");
+		expect(css).toContain(".gui-obo-appearance-card:active");
+		expect(css).toContain(".gui-obo-appearance-card:focus-visible");
+	});
+});
+
+describe("the voice step reads as icon, copy, action", () => {
+	test("the action keeps its own column so its label can change", () => {
+		const css = read("apps/desktop/src/styles/gui-misc.css");
+		const card = rule(css, ".gui-obo-voice-check");
+		expect(card, "no .gui-obo-voice-check block").not.toBeNull();
+		// icon | copy | action — a two-column card put the button under the
+		// status text, so its position drifted with the copy length.
+		expect(declaration(card!, "grid-template-columns")).toBe("32px minmax(0, 1fr) auto");
+		const button = rule(css, ".gui-obo-voice-check > .gui-btn");
+		expect(declaration(button!, "grid-column")).toBe("3");
+		expect(declaration(button!, "justify-self")).toBe("end");
+	});
+
+	test("the status tile carries the outcome colour, not only the border", () => {
+		const css = read("apps/desktop/src/styles/gui-misc.css");
+		// Reading the glyph is the first thing a person does; a green or red
+		// tile states the outcome without parsing the status sentence.
+		expect(css).toContain('.gui-obo-voice-check[data-state="ready"] .gui-obo-voice-check-icon');
+		expect(css).toContain('.gui-obo-voice-check[data-state="error"] .gui-obo-voice-check-icon');
+	});
+});
+
 describe("the announcement keyboard contract lets links open", () => {
 	test("Enter on a focused link does not dismiss the panel", () => {
 		const tsx = read(ANNOUNCEMENT_TSX);

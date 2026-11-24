@@ -1631,10 +1631,26 @@ button.gui-stats-pill {
 	font: inherit;
 	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		border-color 120ms ease-out,
+		transform 120ms ease-out;
 }
 
 .gui-btn:hover:not(:disabled) {
 	background: var(--color-surface-raised);
+}
+
+/* Press feedback: a scale, never a displacement (gui-design §5u). Without it
+ * a click reads as a no-op until the handler's effect lands. */
+.gui-btn:active:not(:disabled) {
+	transform: scale(0.97);
+}
+
+/* Focus: base.css drops the global ring so the control must carry it. */
+.gui-btn:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
 }
 
 .gui-btn:disabled {
@@ -1670,6 +1686,15 @@ button.gui-stats-pill {
 	background: var(--color-surface-sunken);
 	color: inherit;
 	font: inherit;
+	transition: border-color 120ms ease-out;
+}
+
+/* base.css drops the global ring, so a text field states focus with its own
+ * border — otherwise the caret is the only cue and it is invisible when the
+ * field is empty and unfocused-looking. */
+.gui-input:focus-visible {
+	outline: none;
+	border-color: var(--color-accent);
 }
 
 /* ── Connect page ───────────────────────────────────────────────────── */

@@ -17,10 +17,19 @@
 	font-family: inherit;
 	cursor: pointer;
 	min-width: 180px;
+	transition:
+		border-color 120ms ease-out,
+		background 120ms ease-out,
+		transform 120ms ease-out;
 }
 
 .gui-select-trigger:hover {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+}
+
+/* Press: same scale-not-shift rule as every other control. */
+.gui-select-trigger:active:not(:disabled) {
+	transform: scale(0.98);
 }
 
 .gui-select-trigger:focus-visible {

@@ -255,7 +255,7 @@ export function OnboardingVoiceSetup({
 					)}
 				</div>
 				{(model.phase === "missing" || model.phase === "error") && (
-					<button type="button" className="gui-btn" disabled={!rpc} onClick={download}>
+					<button type="button" className="gui-btn gui-btn-primary" disabled={!rpc} onClick={download}>
 						{model.phase === "error" ? t("settings.retry") : tLoose("Download recognition model")}
 					</button>
 				)}

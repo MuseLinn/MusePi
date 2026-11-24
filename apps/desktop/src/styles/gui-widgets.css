@@ -2534,11 +2534,21 @@
 	height: 28px;
 	border-radius: var(--radius-lg);
 	color: var(--fg-faint);
-	transition: background 120ms ease, color 120ms ease;
+	transition:
+		background 120ms ease,
+		color 120ms ease,
+		transform 120ms ease-out;
 }
 .gui-onboarding-close:hover {
 	background: color-mix(in oklab, var(--fg) 8%, transparent);
 	color: var(--fg);
+}
+.gui-onboarding-close:active {
+	transform: scale(0.94);
+}
+.gui-onboarding-close:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
 }
 .gui-onboarding-grid {
 	flex: 1;
@@ -2655,6 +2665,13 @@
 }
 .gui-obo-branch-head:hover {
 	background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.gui-obo-branch-head:active {
+	background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.gui-obo-branch-head:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
 }
 .gui-obo-branch-head .rotate-180 {
 	transform: rotate(180deg);
@@ -3625,7 +3642,20 @@
 	font-size: 12.5px;
 	font-weight: 500;
 	color: var(--fg-muted);
-	transition: background 120ms ease, color 120ms ease;
+	transition:
+		background 120ms ease,
+		color 120ms ease,
+		transform 120ms ease-out;
+}
+.gui-obo-tab:hover {
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+}
+.gui-obo-tab:active {
+	transform: scale(0.97);
+}
+.gui-obo-tab:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
 }
 .gui-obo-tab--active {
 	background: color-mix(in oklab, var(--accent) 16%, transparent);
@@ -3651,6 +3681,12 @@
 	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 	color: var(--fg-faint);
+	transition: border-color 120ms ease-out;
+}
+/* The wrapper owns the border, so it owns the focus state too. */
+.gui-obo-search:focus-within {
+	border-color: var(--color-accent);
+	color: var(--fg-muted);
 }
 .gui-obo-search .gui-input {
 	border: none;

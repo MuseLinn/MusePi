@@ -324,6 +324,14 @@
 	color: var(--fg);
 	transform: translateY(-1px);
 }
+/* Press: the lift collapses into a press, so the chip answers the pointer. */
+.gui-obo-appearance-card:active {
+	transform: translateY(0) scale(0.97);
+}
+.gui-obo-appearance-card:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
 .gui-obo-appearance-card--active {
 	border-color: var(--accent);
 	background: color-mix(in oklab, var(--accent) 12%, transparent);
@@ -431,7 +439,11 @@
 }
 .gui-obo-voice-check {
 	display: grid;
-	grid-template-columns: 32px minmax(0, 1fr);
+	/* icon | copy | action — the action keeps one column on the title row so
+	 * its label can change (Check / Recheck / Checking…) without reflowing the
+	 * status copy beneath it. */
+	grid-template-columns: 32px minmax(0, 1fr) auto;
+	align-items: start;
 	gap: 4px 10px;
 	padding: 12px;
 	border: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
@@ -451,18 +463,38 @@
 .gui-obo-voice-check-icon {
 	display: grid;
 	place-items: center;
+	grid-column: 1;
 	grid-row: 1 / span 2;
 	width: 32px;
 	height: 32px;
 	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--accent) 10%, transparent);
 	color: var(--accent);
+	transition:
+		background 200ms ease-out,
+		color 200ms ease-out;
+}
+/* The state colour lives on the tile, not only the card border: the glyph is
+ * what the reader looks at, and a green/red tile states the outcome at a
+ * glance instead of asking them to read the status line. */
+.gui-obo-voice-check[data-state="ready"] .gui-obo-voice-check-icon,
+.gui-obo-voice-check[data-state="granted"] .gui-obo-voice-check-icon {
+	background: color-mix(in oklab, var(--color-ok) 16%, transparent);
+	color: var(--color-ok);
+}
+.gui-obo-voice-check[data-state="denied"] .gui-obo-voice-check-icon,
+.gui-obo-voice-check[data-state="unavailable"] .gui-obo-voice-check-icon,
+.gui-obo-voice-check[data-state="error"] .gui-obo-voice-check-icon {
+	background: color-mix(in oklab, var(--color-danger) 16%, transparent);
+	color: var(--color-danger);
 }
 .gui-obo-voice-check-icon svg {
 	width: 16px;
 	height: 16px;
 }
 .gui-obo-voice-check-copy {
+	grid-column: 2;
+	grid-row: 1 / span 2;
 	min-width: 0;
 }
 .gui-obo-voice-check-title {
@@ -484,9 +516,11 @@
 	color: var(--fg-muted);
 }
 .gui-obo-voice-check > .gui-btn {
-	grid-column: 2;
-	justify-self: start;
-	margin-top: 4px;
+	grid-column: 3;
+	grid-row: 1;
+	align-self: start;
+	justify-self: end;
+	white-space: nowrap;
 }
 .gui-obo-voice-check progress {
 	display: block;
