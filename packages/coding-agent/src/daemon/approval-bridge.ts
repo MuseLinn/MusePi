@@ -63,6 +63,8 @@ export interface PendingSecret {
 	purpose: string;
 	/** `fill` collects a value; `allow` extends an existing entry to `workspace`. */
 	kind: "fill" | "allow";
+	/** Delivery a new save should use. */
+	delivery: "env" | "file";
 	/** Asking session's working directory, in the tool's own form. */
 	workspace?: string;
 	resolve(answer: AgentSecretAnswer): void;
@@ -74,8 +76,15 @@ export function secretRequestPayload(record: PendingSecret): {
 	name: string;
 	purpose: string;
 	kind: "fill" | "allow";
+	delivery: "env" | "file";
 } {
-	return { requestId: record.requestId, name: record.name, purpose: record.purpose, kind: record.kind };
+	return {
+		requestId: record.requestId,
+		name: record.name,
+		purpose: record.purpose,
+		kind: record.kind,
+		delivery: record.delivery,
+	};
 }
 
 /** Wire payload for an `approval-request` push. Shared by the live broadcast,
@@ -388,6 +397,7 @@ export function createApprovalBridge(
 				name: request.name,
 				purpose: request.purpose,
 				kind: request.kind,
+				delivery: request.delivery ?? "env",
 				...(request.workspace ? { workspace: request.workspace } : {}),
 				resolve: answer => {
 					if (!pendingSecrets.has(requestId)) return;

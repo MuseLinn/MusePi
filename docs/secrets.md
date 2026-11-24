@@ -137,27 +137,30 @@ the name but never the value.
 
 ### Tools
 
-| Tool             | Input                | Result                                                    |
-| ---------------- | -------------------- | --------------------------------------------------------- |
-| `request_secret` | `name`, `purpose`    | Environment variable name and a status; never the value   |
-| `list_secrets`   | none                 | Name, purpose, scope and availability; never the value    |
+| Tool             | Input                     | Result                                             |
+| ---------------- | ------------------------- | -------------------------------------------------- |
+| `request_secret` | `name`, `purpose`, `delivery?` | Environment variable name or private file path, and a status; never the value |
+| `list_secrets`   | none                      | Name, purpose, scope, delivery and availability; never the value |
 
 `name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. A stored value answers immediately
 only when it is readable and its scope covers the session's working directory. A
 value stored for other workspaces opens a `kind:"allow"` card: the answer extends
 the scope to that workspace without retyping the value. A missing or unreadable
-value opens `kind:"fill"`. A card times out as a cancel after ten minutes.
-Interactive collection requires a host that implements the `requestSecret` UI
-channel (the daemon approval bridge); a headless/TUI host returns an error
-telling the user to add the secret from Settings → Vault.
+value opens `kind:"fill"`. `delivery` is `"env"` by default; `"file"` is for a
+command that takes a path (a certificate, kubeconfig, service-account JSON). A
+stored entry keeps the delivery it was saved with. A card times out as a cancel
+after ten minutes. Interactive collection requires a host that implements the
+`requestSecret` UI channel (the daemon approval bridge); a headless/TUI host
+returns an error telling the user to add the secret from Settings → Vault.
 
 ### Storage
 
 ```
 <agentDir>/agent-secrets/
   secrets.json    # AES-256-GCM envelope per name (values only)
-  metadata.json   # name, purpose, scope, timestamps (0600, atomic write)
+  metadata.json   # name, purpose, scope, delivery, timestamps (0600, atomic write)
   .master.key     # per-profile master key (0600; optional MUSEPI_AGENT_SECRET_KEY override)
+  files/          # working copies for `file` delivery (0700; each file 0600)
 ```
 
 The store is always encrypted; there is no plaintext mode. Values are
@@ -173,14 +176,19 @@ stored value narrows to an empty list (nobody may use it), never widening to
 ### Bash injection
 
 Every bash child process receives `MUSEPI_SECRET_<NAME>`, for every decryptable
-stored entry whose scope covers the session's working directory. The value is
-only in that child's environment:
+**`env`** entry whose scope covers the session's working directory. A `file`
+entry is never exported to the environment: it is written to
+`agent-secrets/files/<NAME>` (directory 0700, file 0600 where the platform has
+POSIX modes) and the tool result names that path. The value is only in that
+child's environment:
 
 - `process.env` is never modified.
 - A model-supplied `env` entry of the same name is overridden by the stored
   value.
 - Tool output (foreground, timeout/cancel errors, streamed chunks, async job
-  text, ACP terminal polls) replaces the value with `[secret:NAME]`. Streamed
+  text, ACP terminal polls) replaces the value with `[secret:NAME]`. The raw
+  value, its JSON-escaped form and its URL-encoded form are all replaced, so a
+  token inside a query string or a JSON document does not survive. Streamed
   partials are redacted from the accumulated tail, so a value split across two
   chunks is still replaced.
 - If a command prints the variable, `[secret:NAME]` is the expected marker, not
@@ -189,12 +197,14 @@ only in that child's environment:
 ### Provider boundary
 
 At session start, stored agent secrets join the session's `SecretObfuscator` as
-plain obfuscate-mode entries with `friendlyName` = the secret name. Values
-shorter than 8 characters join as one-way, word-bounded replacements instead of
-reversible placeholders. A save mid-session registers the value into every live
-session's obfuscator immediately, including the session that performed the first
-save when the store was empty at startup. Provider requests therefore carry a
-reversible placeholder such as `#GITHUBTOKEN_AB12:L#`, never the value.
+plain obfuscate-mode entries with `friendlyName` = the secret name. Each value
+joins as its raw text, its JSON-escaped form and its URL-encoded form, so an
+encoded copy never reaches a provider either. Values shorter than 8 characters
+join as one-way, word-bounded replacements instead of reversible placeholders. A
+save mid-session registers the value into every live session's obfuscator
+immediately, including the session that performed the first save when the store
+was empty at startup. Provider requests therefore carry a reversible placeholder
+such as `#GITHUBTOKEN_AB12:L#`, never the value.
 
 Agent secrets are **always** covered: a value the user explicitly saved in the
 safety card is a separate grant from the generic scanning feature. The session
@@ -209,10 +219,10 @@ while agent-card values still are.
 | ---------------- | ------------------------------------------------ | ------------------------------------------ |
 | `secret.status`  | `{}`                                             | `{ mode: "encrypted", count }`             |
 | `secret.list`    | `{}`                                             | `{ entries: SecretEntryView[], count }`    |
-| `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace" }` | `{ entry }`                       |
+| `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ entry }`       |
 | `secret.update`  | `{ name, scope: "all" }`                         | `{ entry }`                                |
 | `secret.delete`  | `{ name }`                                       | `{ ok: true }` (idempotent)                |
-| `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace" }` | `{ ok: true }`                    |
+| `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ ok: true }` |
 
 Timestamps in `SecretEntryView` are epoch milliseconds. `secret.answer` saves
 the value in the daemon before resolving the tool's promise, so the tool only
@@ -231,6 +241,11 @@ push, log or transcript contains a value.
 - Scope is `"all"` or workspace directories. A session outside every scoped
   root gets the allow card; narrowing an entry again needs saving it with the
   "this workspace" choice, because the settings page only widens.
+- A `file` delivery's working copy persists until the entry is deleted or
+  replaced; there is no per-file TTL yet. It is a plain owner-only file, so an
+  administrator or another process running as the same user can read it. Binary
+  values are written as UTF-8 text, so certificates and JSON are supported but
+  binary blobs are not.
 - An entry whose envelope cannot be decrypted stays listed as unavailable.
   Save the value again through `request_secret` or Settings → Vault to repair
   it; do not edit the sidecar by hand.

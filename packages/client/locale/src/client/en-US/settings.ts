@@ -7436,7 +7436,7 @@ export const settings = {
 	"settings.secretsSearch": "Search the vault",
 	"settings.secretsNoMatch": "No matching secrets.",
 	"settings.secretsFootnote":
-		"Values are encrypted on this machine and reach the agent only as bash environment variables. A saved value can be replaced, never viewed.",
+		"Values are encrypted on this machine and reach the agent only as a bash environment variable or a private file path. A saved value can be replaced, never viewed.",
 	"settings.secretsAddTitle": "New secret",
 	"settings.secretsReplaceTitle": "Replace value",
 	"settings.secretsName": "Name",
@@ -7448,6 +7448,9 @@ export const settings = {
 	"settings.secretsPurpose": "Purpose",
 	"settings.secretsPurposePlaceholder": "What the agent uses it for",
 	"settings.secretsScope": "Scope",
+	"settings.secretsDelivery": "Delivery",
+	"settings.secretsDeliveryEnv": "Environment variable",
+	"settings.secretsDeliveryFile": "File",
 	"settings.secretsScopeAll": "Every session",
 	"settings.secretsScopeWorkspaces": "{count} workspace(s)",
 	"settings.secretsAllowAll": "Allow every session",

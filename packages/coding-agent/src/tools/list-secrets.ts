@@ -8,7 +8,7 @@ import { type as arkType } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import listSecretsDescription from "../prompts/tools/list-secrets.md" with { type: "text" };
 import { listAvailableAgentSecrets } from "../secrets/agent-runtime";
-import { agentSecretEnvName, type SecretScope } from "../secrets/agent-store";
+import { agentSecretEnvName, getAgentSecretStore, type SecretDelivery, type SecretScope } from "../secrets/agent-store";
 import type { ToolSession } from ".";
 import { toolResult } from "./tool-result";
 
@@ -18,6 +18,7 @@ export interface ListedSecret {
 	name: string;
 	purpose: string;
 	scope: SecretScope;
+	delivery: SecretDelivery;
 	available: boolean;
 	usable: boolean;
 }
@@ -40,11 +41,13 @@ export class ListSecretsTool implements AgentTool<typeof listSecretsSchema, List
 
 	async execute(): Promise<AgentToolResult<ListSecretsDetails>> {
 		const agentDir = this.session.settings.getAgentDir();
+		const store = getAgentSecretStore(agentDir);
 		const entries = (await listAvailableAgentSecrets(agentDir, this.session.cwd)).map(
 			({ entry, available, usable }) => ({
 				name: entry.name,
 				purpose: entry.purpose,
 				scope: entry.scope,
+				delivery: entry.delivery,
 				available,
 				usable,
 			}),
@@ -59,7 +62,9 @@ export class ListSecretsTool implements AgentTool<typeof listSecretsSchema, List
 			const reach = !entry.available
 				? "unavailable: value unreadable"
 				: entry.usable
-					? `available as $${agentSecretEnvName(entry.name)}`
+					? entry.delivery === "file"
+						? `available as a file at ${store.filePath(entry.name)}`
+						: `available as $${agentSecretEnvName(entry.name)}`
 					: "stored, but not usable in this workspace; ask with request_secret";
 			return `- ${entry.name} — ${entry.purpose || "(no purpose recorded)"} [scope: ${scope}; ${reach}]`;
 		});

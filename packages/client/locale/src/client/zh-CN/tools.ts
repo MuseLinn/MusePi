@@ -2125,6 +2125,7 @@ export const tools = {
 	"tools.secretScopeAllSessions": "所有会话",
 	"tools.secretScopeWorkspaceNote": "只在当前工作目录及其子目录的 bash 中可用；值仍加密保存在本机。",
 	"tools.secretAllowWorkspace": "允许后仅对当前工作目录及其子目录生效；密钥值不会展示给 Agent。",
+	"tools.secretFileNote": "值会写成一个仅你可读的私密文件；Agent 只拿到路径，看不到内容。",
 	"tools.secretLineLabel": "密钥",
 	"tools.secretLineSaved": "已保存",
 	"tools.secretLineAvailable": "已可用",

@@ -1,6 +1,7 @@
 /**
  * Agent secret store: user-supplied credentials the agent can only reach as
- * `$MUSEPI_SECRET_<NAME>` in a bash child process.
+ * `$MUSEPI_SECRET_<NAME>` (an `env` delivery) or as the path of a private
+ * owner-only file (a `file` delivery). The value itself is never returned.
  *
  * Values reuse the per-profile AES-256-GCM envelope in `encrypted-store`; the
  * descriptive metadata (name, purpose, scope, timestamps) lives in a 0600
@@ -14,19 +15,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
-import type { SecretEntryView, SecretScope, SecretStatus } from "@musepi/pi-wire";
+import type { SecretDelivery, SecretEntryView, SecretScope, SecretStatus } from "@musepi/pi-wire";
 import { writeFileAtomically } from "../utils/atomic-file";
 import { deleteSecret as deleteEnvelope, encryptedStore, mergeSecret, readSecret } from "./encrypted-store";
 
-export type { SecretEntryView, SecretScope, SecretStatus };
+export type { SecretDelivery, SecretEntryView, SecretScope, SecretStatus };
 
 export const AGENT_SECRET_DIR = "agent-secrets";
+export const AGENT_SECRET_FILES_DIR = "files";
 export const AGENT_SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
 export const AGENT_SECRET_ENV_PREFIX = "MUSEPI_SECRET_";
-/**
- * Matches the obfuscator's plain-secret floor: a saved value always enters the
- * provider-boundary obfuscator, so a shorter value would be silently skipped.
- */
 /** The shortest value the store accepts. Values this short are redacted only
  *  where they stand alone, so a PIN is usable without redacting inside words. */
 export const MIN_AGENT_SECRET_VALUE_LENGTH = 4;
@@ -42,6 +40,7 @@ interface SecretMetadata {
 		{
 			purpose: string;
 			scope: SecretScope;
+			delivery: SecretDelivery;
 			createdAt: number;
 			updatedAt: number;
 			lastUsedAt?: number;
@@ -64,6 +63,15 @@ export function validateSecretValue(value: unknown): string {
 		throw new Error(`Secret value must be at least ${MIN_AGENT_SECRET_VALUE_LENGTH} characters`);
 	}
 	return value;
+}
+
+/** Delivery from a card/page value. Omitted keeps the previous delivery. */
+export function normalizeSecretDelivery(delivery: unknown, fallback: SecretDelivery = "env"): SecretDelivery {
+	if (delivery === "env" || delivery === "file") return delivery;
+	if (delivery !== undefined && delivery !== null) {
+		logger.warn("Unknown agent secret delivery; keeping the previous value", { delivery: String(delivery) });
+	}
+	return fallback;
 }
 
 const MAX_SCOPE_ROOTS = 32;
@@ -161,12 +169,14 @@ async function withWriteLock<T>(file: string, action: () => Promise<T>): Promise
 export class AgentSecretStore {
 	readonly agentDir: string;
 	readonly dir: string;
+	readonly filesDir: string;
 	readonly metadataFile: string;
 	readonly #values;
 
 	constructor(agentDir: string) {
 		this.agentDir = path.resolve(agentDir);
 		this.dir = path.join(this.agentDir, AGENT_SECRET_DIR);
+		this.filesDir = path.join(this.dir, AGENT_SECRET_FILES_DIR);
 		this.metadataFile = path.join(this.dir, METADATA_FILE);
 		this.#values = encryptedStore(this.dir, {
 			file: "secrets.json",
@@ -202,6 +212,7 @@ export class AgentSecretStore {
 				entries[name] = {
 					purpose: typeof value.purpose === "string" ? value.purpose : "",
 					scope: parseStoredSecretScope(value.scope),
+					delivery: normalizeSecretDelivery(value.delivery, "env"),
 					createdAt: value.createdAt,
 					updatedAt: value.updatedAt,
 					...(typeof value.lastUsedAt === "number" ? { lastUsedAt: value.lastUsedAt } : {}),
@@ -245,7 +256,13 @@ export class AgentSecretStore {
 		return values?.[VALUE_KEY];
 	}
 
-	async set(name: string, value: string, purpose?: string, scope?: unknown): Promise<SecretEntryView> {
+	async set(
+		name: string,
+		value: string,
+		purpose?: string,
+		scope?: unknown,
+		delivery?: unknown,
+	): Promise<SecretEntryView> {
 		validateSecretName(name);
 		validateSecretValue(value);
 		return await withWriteLock(this.metadataFile, async () => {
@@ -256,6 +273,7 @@ export class AgentSecretStore {
 				purpose: typeof purpose === "string" ? purpose : (previous?.purpose ?? ""),
 				// Replacing a value must not widen an entry the user narrowed.
 				scope: normalizeSecretScope(scope, previous?.scope ?? "all"),
+				delivery: normalizeSecretDelivery(delivery, previous?.delivery ?? "env"),
 				createdAt: previous?.createdAt ?? now,
 				updatedAt: now,
 				...(previous?.lastUsedAt !== undefined ? { lastUsedAt: previous.lastUsedAt } : {}),
@@ -263,8 +281,34 @@ export class AgentSecretStore {
 			await mergeSecret(this.#values, name, { [VALUE_KEY]: value });
 			metadata.entries[name] = next;
 			await this.#writeMetadata(metadata);
+			if (next.delivery === "file") await this.#writeDeliveryFile(name, value);
+			else await this.removeDeliveryFile(name);
 			return this.#toView(name, next);
 		});
+	}
+
+	/** Rewrite a `file` delivery's working copy from the stored value; idempotent. */
+	async materializeFile(name: string): Promise<void> {
+		validateSecretName(name);
+		const value = await this.getValue(name);
+		if (value !== undefined) await this.#writeDeliveryFile(name, value);
+	}
+
+	/** The private working copy's path for a `file` delivery entry. */
+	filePath(name: string): string {
+		return path.join(this.filesDir, validateSecretName(name));
+	}
+
+	/** Remove a `file` working copy; idempotent. */
+	async removeDeliveryFile(name: string): Promise<void> {
+		await fs.promises.rm(this.filePath(name), { force: true }).catch(() => {});
+	}
+
+	async #writeDeliveryFile(name: string, value: string): Promise<void> {
+		await fs.promises.mkdir(this.filesDir, { recursive: true, mode: 0o700 });
+		// The umask may narrow the directory mode; restore the owner-only bits.
+		await fs.promises.chmod(this.filesDir, 0o700).catch(() => {});
+		await writeFileAtomically(this.filePath(name), value, 0o600);
 	}
 
 	/** Change who may use a stored value without touching the value itself. */
@@ -292,6 +336,7 @@ export class AgentSecretStore {
 			delete metadata.entries[name];
 			await this.#writeMetadata(metadata);
 			await deleteEnvelope(this.#values, name);
+			await this.removeDeliveryFile(name);
 		});
 	}
 
@@ -312,16 +357,25 @@ export class AgentSecretStore {
 	}
 
 	/** Every decryptable entry, for bash child environments and redaction. */
-	async values(): Promise<Array<{ name: string; purpose: string; scope: SecretScope; value: string }>> {
+	async values(): Promise<
+		Array<{ name: string; purpose: string; scope: SecretScope; delivery: SecretDelivery; value: string }>
+	> {
 		const metadata = await this.#readMetadata();
-		const out: Array<{ name: string; purpose: string; scope: SecretScope; value: string }> = [];
+		const out: Array<{ name: string; purpose: string; scope: SecretScope; delivery: SecretDelivery; value: string }> =
+			[];
 		for (const [name, entry] of Object.entries(metadata.entries)) {
 			const value = await this.getValue(name);
 			if (value === undefined) {
 				logger.warn("Agent secret could not be decrypted; skipping it", { name });
 				continue;
 			}
-			out.push({ name, purpose: entry.purpose, scope: entry.scope, value });
+			out.push({
+				name,
+				purpose: entry.purpose,
+				scope: entry.scope,
+				delivery: entry.delivery,
+				value,
+			});
 		}
 		return out.sort((a, b) => a.name.localeCompare(b.name));
 	}
@@ -336,6 +390,7 @@ export class AgentSecretStore {
 			name,
 			purpose: entry.purpose,
 			scope: entry.scope,
+			delivery: entry.delivery,
 			createdAt: entry.createdAt,
 			updatedAt: entry.updatedAt,
 			...(entry.lastUsedAt !== undefined ? { lastUsedAt: entry.lastUsedAt } : {}),
@@ -367,6 +422,8 @@ export interface AgentSecretRequest {
 	name: string;
 	purpose: string;
 	kind: AgentSecretRequestKind;
+	/** Proposed delivery for a new save; a stored entry keeps its own. */
+	delivery?: SecretDelivery;
 	/** The asking session's working directory; `allow` extends the scope to it. */
 	workspace?: string;
 }

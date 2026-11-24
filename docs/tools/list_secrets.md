@@ -24,10 +24,10 @@ The full contract lives in [`docs/secrets.md`](../secrets.md).
 None.
 
 ## Outputs
-- `content[0].text`: one line per entry with name, purpose, scope and whether it
-  is usable in the current workspace (`$MUSEPI_SECRET_<NAME>`), or an
-  empty-store sentence.
-- `details.entries`: `{ name, purpose, scope, available, usable }[]`.
+- `content[0].text`: one line per entry with name, purpose, scope, delivery and
+  whether it is usable in the current workspace (`$MUSEPI_SECRET_<NAME>` for
+  `env`, a private path for `file`), or an empty-store sentence.
+- `details.entries`: `{ name, purpose, scope, delivery, available, usable }[]`.
 - Values never appear in either field; `available` is a boolean derived from
   successful decryption, not the decrypted string, and `usable` means the entry
   is decryptable and its scope covers this session's working directory.

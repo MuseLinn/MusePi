@@ -146,20 +146,21 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
 
 ### 工具
 
-| 工具             | 输入                | 返回                                                     |
-| ---------------- | ------------------- | -------------------------------------------------------- |
-| `request_secret` | `name`、`purpose`   | 环境变量名与状态；永不包含值                             |
-| `list_secrets`   | 无                  | 名字、用途、scope 与可用性；永不包含值                   |
+| 工具             | 输入                       | 返回                                                     |
+| ---------------- | -------------------------- | -------------------------------------------------------- |
+| `request_secret` | `name`、`purpose`、`delivery?` | 环境变量名或私有文件路径，以及状态；永不包含值        |
+| `list_secrets`   | 无                         | 名字、用途、scope、交付方式与可用性；永不包含值         |
 
-`name` 必须匹配 `/^[A-Z][A-Z0-9_]{0,63}$/`。只有值可解密、且 scope 覆盖当前会话的工作目录时，才立即返回环境变量名。值已保存但只属于其他工作目录时，会推送 `kind:"allow"` 卡片：允许后把当前工作目录加入 scope，不必重新输入值。名字缺失或值不可解密时推送 `kind:"fill"`。卡片十分钟无应答按取消处理。交互式收集要求宿主实现 `requestSecret` UI 通道（daemon 的 approval bridge）；无头/TUI 宿主会返回错误，提示用户到「设置 → 智能体 → 保险库」添加。
+`name` 必须匹配 `/^[A-Z][A-Z0-9_]{0,63}$/`。只有值可解密、且 scope 覆盖当前会话的工作目录时，才立即返回。值已保存但只属于其他工作目录时，会推送 `kind:"allow"` 卡片：允许后把当前工作目录加入 scope，不必重新输入值。名字缺失或值不可解密时推送 `kind:"fill"`。`delivery` 默认 `"env"`；`"file"` 用于需要文件路径的命令（证书、kubeconfig、service-account JSON）。已存条目保留保存时的交付方式。卡片十分钟无应答按取消处理。交互式收集要求宿主实现 `requestSecret` UI 通道（daemon 的 approval bridge）；无头/TUI 宿主会返回错误，提示用户到「设置 → 智能体 → 保险库」添加。
 
 ### 存储
 
 ```
 <agentDir>/agent-secrets/
   secrets.json    # 每个名字一个 AES-256-GCM 信封（仅值）
-  metadata.json   # name、purpose、scope、时间戳（0600，原子写）
+  metadata.json   # name、purpose、scope、delivery、时间戳（0600，原子写）
   .master.key     # 每 profile 主密钥（0600；可用 MUSEPI_AGENT_SECRET_KEY 覆盖）
+  files/          # file 交付的工作副本（0700；每个文件 0600）
 ```
 
 存储恒为加密，不提供明文模式。值是以 profile 主密钥经 HKDF 派生的 AES-256-GCM 信封，复用 connector vault 的信封实现。元数据 sidecar 不含值，加密文件同样不含值。
@@ -168,16 +169,16 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
 
 ### Bash 注入
 
-每个可解密且 scope 覆盖当前会话工作目录的已存储条目，都会以 `MUSEPI_SECRET_<NAME>` 进入每个 bash 子进程。值只存在于该子进程的环境里：
+每个可解密、交付方式为 **`env`** 且 scope 覆盖当前会话工作目录的条目，都会以 `MUSEPI_SECRET_<NAME>` 进入每个 bash 子进程。`file` 条目**不会**进入环境变量：值写到 `agent-secrets/files/<NAME>`（目录 0700、文件 0600，适用于有 POSIX 权限的平台），工具结果给出该路径。值只存在于该子进程的环境里：
 
 - 从不修改 `process.env`。
 - 模型通过 `env` 参数传入同名变量时，已存储的值会覆盖它。
-- 工具输出（前台结果、超时/取消错误、流式分块、异步作业文本、ACP 终端轮询）会把值替换为 `[secret:NAME]`。流式分块按累计 tail 脱敏，因此被切成两半的值仍会被替换。
+- 工具输出（前台结果、超时/取消错误、流式分块、异步作业文本、ACP 终端轮询）会把值替换为 `[secret:NAME]`。原值、JSON 转义形态与 URL 编码形态都会被替换，因此出现在查询串或 JSON 文档里的令牌同样不会留存。流式分块按累计 tail 脱敏，因此被切成两半的值仍会被替换。
 - 命令打印该变量时，`[secret:NAME]` 是预期的脱敏标记，不是命令失败；模型会被告知不要因此重试或报错。
 
 ### Provider 边界
 
-会话启动时，已存储的 Agent 密钥以 plain、obfuscate 模式条目加入会话的 `SecretObfuscator`，`friendlyName` 为密钥名；短于 8 个字符的值以单向、整词替换加入，而不是可逆占位符。会话中途保存时，值会立即注册进每个活跃会话的 obfuscator，包括启动时存储为空、由这次保存第一次写入密钥的那个会话。因此 provider 请求只会携带可逆占位符（如 `#GITHUBTOKEN_AB12:L#`），永不携带值。
+会话启动时，已存储的 Agent 密钥以 plain、obfuscate 模式条目加入会话的 `SecretObfuscator`，`friendlyName` 为密钥名；每个值同时以原值、JSON 转义形态与 URL 编码形态加入，因此编码后的副本也不会到达 provider。短于 8 个字符的值以单向、整词替换加入，而不是可逆占位符。会话中途保存时，值会立即注册进每个活跃会话的 obfuscator，包括启动时存储为空、由这次保存第一次写入密钥的那个会话。因此 provider 请求只会携带可逆占位符（如 `#GITHUBTOKEN_AB12:L#`），永不携带值。
 
 Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值，与通用扫描特性是两份不同的授权。即使 `secrets.enabled=false`，会话也会构建 Agent 密钥 obfuscator。该开关只控制通用来源（环境变量扫描、`secrets.yml`、内置凭据模式）；关闭时这些来源不注册，但 Agent 卡片保存的值仍然注册。
 
@@ -187,10 +188,10 @@ Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值�
 | ---------------- | ------------------------------------------------ | ------------------------------------------ |
 | `secret.status`  | `{}`                                             | `{ mode: "encrypted", count }`             |
 | `secret.list`    | `{}`                                             | `{ entries: SecretEntryView[], count }`    |
-| `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace" }` | `{ entry }`                    |
+| `secret.set`     | `{ name, value, purpose?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ entry }`  |
 | `secret.update`  | `{ name, scope: "all" }`                         | `{ entry }`                                |
 | `secret.delete`  | `{ name }`                                       | `{ ok: true }`（幂等）                     |
-| `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace" }` | `{ ok: true }`                |
+| `secret.answer`  | `{ requestId, action, value?, scope?: "all" \| "workspace", delivery?: "env" \| "file" }` | `{ ok: true }` |
 
 `SecretEntryView` 中的时间戳是 epoch 毫秒。`secret.answer` 在 daemon 内先落盘再落定工具的 promise，因此工具只看得到最终动作。`"workspace"` 会解析为待决请求所属会话的工作目录；`secret.set` 不接受它（设置页没有会话上下文），`secret.update` 只把收窄的条目放宽为 `"all"`。未知或已过期的 request id 会报 `Unknown secret request: <id>`。任何响应、推送、日志或 transcript 都不包含值。
 
@@ -198,6 +199,7 @@ Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值�
 
 - 值至少 4 个字符。短于 8 个字符的值使用单向 marker，且只在独立出现时替换（两侧没有字母或数字）：它在显示上下文里不会被还原，出现在更长单词内部时会有意保留。低于 4 个字符会被拒绝。
 - scope 为 `"all"` 或工作目录。任何不在已覆盖根之内的会话都会收到 allow 卡片；若要再次收窄，只能以「仅本工作区」重新保存，因为设置页只提供放宽。
+- `file` 交付的工作副本会一直保留到条目被删除或替换；暂无按文件计的 TTL。它是普通的「仅本人可读」文件，管理员或同一用户下的其他进程可以读取。值按 UTF-8 文本写入，证书与 JSON 可用，二进制内容不支持。
 - 信封无法解密的条目仍会列为不可用。通过 `request_secret` 或「设置 → 智能体 → 保险库」重新保存该值来修复；不要手工编辑 sidecar。
 - 删除密钥会从磁盘和未来的 bash 注入中移除它，但运行中会话里已经存活的 obfuscator 会在该会话生命周期内继续替换这个旧值。这是有意为之：撤掉覆盖可能让已经出现过的值重新对 provider 可见。
 - Bash 的原始输出 artifact 由执行器在输出清洗之前写入，因此回显了值的命令可能把值留在该本地 artifact 文件里。值不会进入工具结果；若该 artifact 被读回模型上下文，provider 边界混淆（对 Agent 密钥始终生效）仍会替换它。

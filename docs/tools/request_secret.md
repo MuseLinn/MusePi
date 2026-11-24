@@ -25,18 +25,19 @@ The full contract — storage, scope, RPC, timeout and known limits — lives in
 
 ## Inputs
 
-| Field     | Type     | Required | Description                                                          |
-| --------- | -------- | -------- | -------------------------------------------------------------------- |
-| `name`    | `string` | Yes      | Environment suffix matching `/^[A-Z][A-Z0-9_]{0,63}$/`, e.g. `GITHUB_TOKEN` |
-| `purpose` | `string` | Yes      | One line explaining what the command needs the secret for             |
+| Field      | Type              | Required | Description                                                          |
+| ---------- | ----------------- | -------- | -------------------------------------------------------------------- |
+| `name`     | `string`          | Yes      | Environment suffix matching `/^[A-Z][A-Z0-9_]{0,63}$/`, e.g. `GITHUB_TOKEN` |
+| `purpose`  | `string`          | Yes      | One line explaining what the command needs the secret for             |
+| `delivery` | `"env" \| "file"` | No       | `"env"` (default) gives `$MUSEPI_SECRET_<NAME>`; `"file"` gives a private path |
 
 ## Outputs
-- `content[0].text` names the environment variable, e.g.
-  `Secret GITHUB_TOKEN is available to bash as $MUSEPI_SECRET_GITHUB_TOKEN.`
-  It never contains the value.
-- `details`: `{ name, envName, purpose, scope, status }`, where `status` is
-  `"available"`, `"saved"` or `"cancelled"` and `scope` is `"all"` or the
-  workspace roots the entry covers.
+- `content[0].text` names the environment variable (e.g.
+  `Secret GITHUB_TOKEN is available to bash as $MUSEPI_SECRET_GITHUB_TOKEN.`)
+  or the private file path. It never contains the value.
+- `details`: `{ name, purpose, scope, delivery, envName?, filePath?, status }`,
+  where `status` is `"available"`, `"saved"` or `"cancelled"` and `scope` is
+  `"all"` or the workspace roots the entry covers.
 - A host with no interactive secret channel throws instead of returning a
   placeholder result; the message suggests Settings → Vault or `secrets.yml`.
 
@@ -51,15 +52,17 @@ The full contract — storage, scope, RPC, timeout and known limits — lives in
 4. Otherwise the card is `kind:"fill"`. The user types (or replaces) the value
    and may scope it to this workspace or every session; the daemon persists a
    `save` before the tool's promise settles and the tool only learns the action.
-5. On success the value is available only as `$MUSEPI_SECRET_<NAME>` in bash
-   child processes in a covered workspace, and is registered into the session
-   obfuscator. The tool result never carries it.
+5. On success an `env` value is available only as `$MUSEPI_SECRET_<NAME>` in
+   bash child processes in a covered workspace; a `file` value is written to a
+   private owner-only file and the result names its path. Both are registered
+   into the session obfuscator. The tool result never carries the value.
 6. If a command prints the variable, the output shows `[secret:<NAME>]`. That
    marker is expected redaction, not a failure; the model is told not to retry
    or report an error because of it.
 
 ## Side Effects
-- Persists an encrypted value (save) and/or its scope (allow).
+- Persists an encrypted value (save), its delivery and/or its scope (allow).
+- Writes or removes the private working copy for a `file` delivery.
 - Registers the value with live session obfuscators.
 - Cancelling and timeouts write nothing.
 - A value already allowed in this workspace needs no further grant: later calls

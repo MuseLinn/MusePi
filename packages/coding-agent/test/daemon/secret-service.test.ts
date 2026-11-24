@@ -32,12 +32,14 @@ async function startRequest(
 	bridge: ApprovalBridge,
 	kind: "fill" | "allow" = "fill",
 	workspace?: string,
+	delivery: "env" | "file" = "env",
 ): Promise<{ requestId: string; pending: Promise<{ action: string } | undefined> }> {
 	const ui = bridge.uiContext as unknown as AgentSecretUIContext;
 	const pending = ui.requestSecret!({
 		name: "API_TOKEN",
 		purpose: "curl the API",
 		kind,
+		delivery,
 		...(workspace ? { workspace } : {}),
 	});
 	const requestId = [...bridge.pendingSecrets.keys()][0]!;
@@ -77,6 +79,7 @@ describe("SecretService RPC", () => {
 				name: "API_TOKEN",
 				purpose: "curl the API",
 				kind: "fill",
+				delivery: "env",
 			},
 		]);
 		expect(JSON.stringify(replay)).not.toContain(VALUE);
@@ -174,6 +177,15 @@ describe("SecretService RPC", () => {
 		const result = await service.update({ name: "API_TOKEN", scope: "all" });
 		expect(result.entry.scope).toBe("all");
 		expect((await store.getEntry("API_TOKEN"))?.scope).toBe("all");
+	});
+
+	it("answer save with file delivery writes the private file", async () => {
+		const { bridge, service, store } = setup();
+		const { requestId } = await startRequest(bridge, "fill", undefined, "file");
+
+		expect(await service.answer({ requestId, action: "save", value: VALUE })).toEqual({ ok: true });
+		expect((await store.getEntry("API_TOKEN"))?.delivery).toBe("file");
+		expect(await Bun.file(store.filePath("API_TOKEN")).text()).toBe(VALUE);
 	});
 
 	it("times out a parked request as cancel", async () => {

@@ -12,6 +12,10 @@
 
 export type SecretScope = "all" | string[];
 
+/** How a saved value reaches the agent: a bash environment variable, or a
+ *  private file whose path it is told. `file` values are never exported. */
+export type SecretDelivery = "env" | "file";
+
 /** What the user picked in the card: every session, or the asking workspace. */
 export type SecretScopeChoice = "all" | "workspace";
 
@@ -20,6 +24,7 @@ export interface SecretEntryView {
 	name: string;
 	purpose: string;
 	scope: SecretScope;
+	delivery: SecretDelivery;
 	/** Epoch ms. */
 	createdAt: number;
 	/** Epoch ms. */
@@ -44,6 +49,8 @@ export interface SecretSetParams {
 	purpose?: string;
 	/** Omitted keeps the stored scope (or `"all"` for a new entry). */
 	scope?: SecretScopeChoice;
+	/** Omitted keeps the stored delivery (or `"env"` for a new entry). */
+	delivery?: SecretDelivery;
 }
 
 export interface SecretSetResult {
@@ -75,6 +82,7 @@ export interface SecretRequestPayload {
 	purpose: string;
 	/** `fill` asks for a value; `allow` asks to extend an existing entry's scope. */
 	kind: "fill" | "allow";
+	delivery: SecretDelivery;
 }
 
 /** Settlement broadcast so other cards clear after the first answer. */
@@ -89,6 +97,8 @@ export interface SecretAnswerParams {
 	value?: string;
 	/** `save` records this scope; `allow` ignores it and uses the request's workspace. */
 	scope?: SecretScopeChoice;
+	/** `save` records this delivery; `allow` keeps the entry's own. */
+	delivery?: SecretDelivery;
 	/** Optional when request ids are already unique across live sessions. */
 	sessionId?: string;
 }

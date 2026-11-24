@@ -493,6 +493,7 @@ export function ChatView({
 					name: payload.name,
 					purpose: payload.purpose,
 					kind: payload.kind,
+					delivery: payload.delivery === "file" ? "file" : "env",
 				};
 				// A subscribe replay of a request already on screen keeps one card.
 				setSecretRequests(current =>

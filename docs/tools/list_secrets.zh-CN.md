@@ -24,9 +24,9 @@ scope:
 无。
 
 ## 输出
-- `content[0].text`：每个条目一行，包含名字、用途、scope 与是否在当前工作目录可用
-  （`$MUSEPI_SECRET_<NAME>`）；存储为空时给出一句空态说明。
-- `details.entries`：`{ name, purpose, scope, available, usable }[]`。
+- `content[0].text`：每个条目一行，包含名字、用途、scope、交付方式与是否在当前工作目录可用
+  （`env` 为 `$MUSEPI_SECRET_<NAME>`，`file` 为私有路径）；存储为空时给出一句空态说明。
+- `details.entries`：`{ name, purpose, scope, delivery, available, usable }[]`。
 - 两个字段都不含值；`available` 是由解密是否成功得出的布尔值，`usable` 表示该条目可解密且 scope 覆盖当前会话的工作目录。
 
 ## 流程

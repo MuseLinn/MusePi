@@ -26,11 +26,13 @@ import type { RpcClient } from "../../lib/rpc";
 
 /** Wire contract for the daemon's `secret.*` methods. Timestamps are epoch ms. */
 type SecretScope = "all" | string[];
+type SecretDelivery = "env" | "file";
 
 interface SecretEntryView {
 	name: string;
 	purpose: string;
 	scope: SecretScope;
+	delivery: SecretDelivery;
 	createdAt: number;
 	updatedAt: number;
 	lastUsedAt?: number;
@@ -54,6 +56,7 @@ interface SecretFormState {
 	name: string;
 	purpose: string;
 	value: string;
+	delivery: SecretDelivery;
 }
 
 function errorText(error: unknown): string {
@@ -181,6 +184,10 @@ function SecretForm({
 				<span className="gui-settings-field-hint">
 					{t("settings.secretsScope")}: {t("settings.secretsScopeAll")}
 				</span>
+				<span className="gui-settings-field-hint">
+					{t("settings.secretsDelivery")}:{" "}
+					{form.delivery === "file" ? t("settings.secretsDeliveryFile") : t("settings.secretsDeliveryEnv")}
+				</span>
 				<div className="gui-secret-form-actions">
 					<button type="button" className="gui-btn" onClick={onCancel} disabled={busy}>
 						{t("settings.cancel")}
@@ -258,14 +265,20 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		tapFeedback();
 		setFormError(null);
 		setActionError(null);
-		setForm({ mode: "add", name: "", purpose: "", value: "" });
+		setForm({ mode: "add", name: "", purpose: "", value: "", delivery: "env" });
 	};
 
 	const openReplace = (entry: SecretEntryView): void => {
 		tapFeedback();
 		setFormError(null);
 		setActionError(null);
-		setForm({ mode: "replace", name: entry.name, purpose: entry.purpose, value: "" });
+		setForm({
+			mode: "replace",
+			name: entry.name,
+			purpose: entry.purpose,
+			value: "",
+			delivery: entry.delivery,
+		});
 	};
 
 	const closeForm = (): void => {
@@ -571,6 +584,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 				<ul className="gui-secret-list">
 					{visible.map(entry => {
 						const meta = [
+							entry.delivery === "file" ? t("settings.secretsDeliveryFile") : null,
 							entry.scope === "all" ? null : scopeLabel(entry.scope),
 							entry.purpose || null,
 							entry.lastUsedAt ? lastUsedText(entry) : null,

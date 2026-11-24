@@ -15,6 +15,7 @@ import {
 	type AgentSecretUIContext,
 	agentSecretEnvName,
 	getAgentSecretStore,
+	type SecretDelivery,
 	type SecretScope,
 	secretScopeIncludes,
 	validateSecretName,
@@ -26,15 +27,26 @@ import { toolResult } from "./tool-result";
 const requestSecretSchema = arkType({
 	name: arkType("string").describe("environment suffix in A-Z, 0-9 and _, e.g. GITHUB_TOKEN"),
 	purpose: arkType("string").describe("one line explaining what the command needs the secret for"),
+	delivery: arkType("string")
+		.describe('"env" (default) to receive $MUSEPI_SECRET_<NAME>, or "file" for a private path')
+		.optional(),
 });
 
 type RequestSecretParams = typeof requestSecretSchema.infer;
 
+function requestedDelivery(raw: unknown): SecretDelivery {
+	if (raw === undefined || raw === null || raw === "") return "env";
+	if (raw === "env" || raw === "file") return raw;
+	throw new ToolError('delivery must be "env" or "file"');
+}
+
 export interface RequestSecretDetails {
 	name: string;
-	envName: string;
 	purpose: string;
 	scope: SecretScope;
+	delivery: SecretDelivery;
+	envName?: string;
+	filePath?: string;
 	status: "available" | "saved" | "cancelled";
 	meta?: import("./output-meta").OutputMeta;
 }
@@ -43,7 +55,7 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 	readonly name = "request_secret";
 	readonly approval = "read" as const;
 	readonly label = "Request secret";
-	readonly summary = "Ask the user for a secret; only its environment variable name is returned";
+	readonly summary = "Ask the user for a secret; only its environment variable name or file path is returned";
 	readonly description = requestSecretDescription.trim();
 	readonly parameters = requestSecretSchema;
 	readonly strict = true;
@@ -54,6 +66,7 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		const name = validateSecretName(params.name);
 		const purpose = params.purpose.trim();
 		if (purpose.length === 0) throw new ToolError("Purpose must not be empty");
+		const delivery = requestedDelivery(params.delivery);
 
 		const agentDir = this.session.settings.getAgentDir();
 		const store = getAgentSecretStore(agentDir);
@@ -67,7 +80,10 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		const existing = await store.getEntry(name);
 		const readable = existing !== undefined && (await store.available(name));
 		if (existing && readable && secretScopeIncludes(existing.scope, cwd)) {
-			return this.#success(name, envName, purpose, existing.scope, "available");
+			// A file delivery's working copy can be removed outside the store; the
+			// path the model is about to receive must exist.
+			if (existing.delivery === "file") await store.materializeFile(name);
+			return this.#success(name, purpose, existing.scope, existing.delivery, "available", store.filePath(name));
 		}
 
 		const ui = this.session.uiContext as (ExtensionUIContext & AgentSecretUIContext) | undefined;
@@ -77,25 +93,29 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 			);
 		}
 
+		const requestDelivery = existing?.delivery ?? delivery;
 		const request: AgentSecretRequest = {
 			name,
 			purpose,
 			// A readable value outside this workspace asks to extend its scope; a
-			// missing or unreadable one needs a fresh fill.
+			// missing or unreadable one needs a fresh fill. A stored value keeps the
+			// delivery it was saved with; this request only proposes one for a new save.
 			kind: existing && readable ? "allow" : "fill",
+			delivery: requestDelivery,
 			workspace: cwd,
 		};
 		const answer: AgentSecretAnswer | undefined = await ui.requestSecret(request);
 		if (!answer || answer.action === "cancel") {
 			return toolResult<RequestSecretDetails>({
 				name,
-				envName,
 				purpose,
 				scope: existing?.scope ?? "all",
+				delivery: requestDelivery,
+				...(requestDelivery === "env" ? { envName } : {}),
 				status: "cancelled",
 			})
 				.text(
-					`Secret request for ${envName} was cancelled by the user. Nothing was saved or injected for this session.`,
+					`Secret request for ${name} was cancelled by the user. Nothing was saved or injected for this session.`,
 				)
 				.done();
 		}
@@ -108,21 +128,31 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		if (!secretScopeIncludes(saved.scope, cwd)) {
 			throw new ToolError(`The secret ${name} is not allowed in this workspace.`);
 		}
-		return this.#success(name, envName, purpose, saved.scope, "saved");
+		return this.#success(name, purpose, saved.scope, saved.delivery, "saved", store.filePath(name));
 	}
 
 	#success(
 		name: string,
-		envName: string,
 		purpose: string,
 		scope: SecretScope,
+		delivery: SecretDelivery,
 		status: RequestSecretDetails["status"],
+		filePath: string,
 	): AgentToolResult<RequestSecretDetails> {
 		const where = scope === "all" ? "" : " in this workspace";
-		return toolResult<RequestSecretDetails>({ name, envName, purpose, scope, status })
-			.text(
-				`Secret ${name} is available to bash as $${envName}${where}. The value stays on this machine and is never returned to the model.`,
-			)
-			.done();
+		const envName = agentSecretEnvName(name);
+		const details: RequestSecretDetails = {
+			name,
+			purpose,
+			scope,
+			delivery,
+			status,
+			...(delivery === "env" ? { envName } : { filePath }),
+		};
+		const text =
+			delivery === "env"
+				? `Secret ${name} is available to bash as $${envName}${where}. The value stays on this machine and is never returned to the model.`
+				: `Secret ${name} is available as a file at ${filePath}${where}. Give that path to any command that reads one; the value stays on this machine and is never returned to the model.`;
+		return toolResult<RequestSecretDetails>(details).text(text).done();
 	}
 }

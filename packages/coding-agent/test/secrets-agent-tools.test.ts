@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionUIContext } from "../src/extensibility/extensions/types";
 import { buildSecretObfuscator } from "../src/secrets";
-import { notifyAgentSecretSaved, registerAgentSecretObfuscator } from "../src/secrets/agent-runtime";
+import {
+	agentSecretSnapshot,
+	notifyAgentSecretSaved,
+	registerAgentSecretObfuscator,
+} from "../src/secrets/agent-runtime";
 import {
 	type AgentSecretAnswer,
 	type AgentSecretRequest,
@@ -168,6 +172,31 @@ describe("request_secret tool", () => {
 		expect(JSON.stringify(result)).not.toContain("1234");
 	});
 
+	it("a file delivery returns the private path, never the value", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		const tool = new RequestSecretTool(
+			makeSession(
+				dir,
+				secretUi(async request => {
+					expect(request.delivery).toBe("file");
+					await store.set(request.name, VALUE, request.purpose, undefined, "file");
+					return { action: "save" };
+				}),
+			),
+		);
+		const result = await tool.execute("call-file", { name: "CERT", purpose: "tls handshake", delivery: "file" });
+		const text = textOf(result);
+		expect(text).toContain(store.filePath("CERT"));
+		expect(text).not.toContain(VALUE);
+		expect(result.details?.delivery).toBe("file");
+
+		// The working copy can vanish outside the store; asking again restores it.
+		await store.removeDeliveryFile("CERT");
+		await tool.execute("call-file-again", { name: "CERT", purpose: "tls handshake", delivery: "file" });
+		expect(await Bun.file(store.filePath("CERT")).text()).toBe(VALUE);
+	});
+
 	it("refuses a host with no interactive secret channel", async () => {
 		const dir = makeDir();
 		const tool = new RequestSecretTool(makeSession(dir));
@@ -193,7 +222,7 @@ describe("list_secrets tool", () => {
 		expect(text).not.toContain(VALUE);
 		expect(JSON.stringify(result)).not.toContain(VALUE);
 		expect(result.details?.entries).toEqual([
-			{ name: "API_TOKEN", purpose: "curl the API", scope: "all", available: true, usable: true },
+			{ name: "API_TOKEN", purpose: "curl the API", scope: "all", delivery: "env", available: true, usable: true },
 		]);
 	});
 
@@ -207,6 +236,52 @@ describe("list_secrets tool", () => {
 });
 
 describe("dynamic obfuscator registration", () => {
+	it("redacts the URL-encoded and JSON-escaped forms in bash output", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		const value = 'sk-abc/def+"ghi"';
+		await store.set("API_TOKEN", value, "curl");
+		const snapshot = await agentSecretSnapshot(dir, dir);
+		const encoded = encodeURIComponent(value).replace(
+			/[!'()*]/g,
+			char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+		);
+		const escaped = JSON.stringify(value).slice(1, -1);
+		for (const form of [value, encoded, escaped]) {
+			const output = snapshot.redact(`prefix ${form} suffix`);
+			expect(output).not.toContain(form);
+			expect(output).toContain("[secret:API_TOKEN]");
+		}
+	});
+
+	it("obfuscates encoded forms at the provider boundary", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		const value = "tok/with+slash";
+		await store.set("API_TOKEN", value, "curl");
+		const obfuscator = await buildSecretObfuscator(dir, dir, dir);
+		const encoded = encodeURIComponent(value).replace(
+			/[!'()*]/g,
+			char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+		);
+		const output = obfuscator?.obfuscate(`url?t=${encoded}`) ?? "";
+		expect(output).not.toContain(encoded);
+		expect(obfuscator?.deobfuscate(output)).toContain(encoded);
+	});
+
+	it("a file delivery stays out of the environment but is still redacted", async () => {
+		const dir = makeDir();
+		const store = new AgentSecretStore(dir);
+		await store.set("CERT", VALUE, "tls", "all", "file");
+		const file = store.filePath("CERT");
+		expect(await Bun.file(file).text()).toBe(VALUE);
+		const snapshot = await agentSecretSnapshot(dir, dir);
+		expect(snapshot.env.MUSEPI_SECRET_CERT).toBeUndefined();
+		expect(snapshot.redact(`value ${VALUE}`)).toContain("[secret:CERT]");
+		await store.delete("CERT");
+		expect(await Bun.file(file).exists()).toBe(false);
+	});
+
 	it("session startup loads stored agent secrets into the obfuscator", async () => {
 		const dir = makeDir();
 		const store = new AgentSecretStore(dir);

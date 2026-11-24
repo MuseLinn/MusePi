@@ -91,6 +91,7 @@ export class SecretService implements DaemonService {
 			value,
 			p.purpose,
 			p.scope === "all" ? "all" : undefined,
+			p.delivery,
 		);
 		// Immediate provider-boundary coverage for every live session.
 		notifyAgentSecretSaved(this.#deps.agentDir(), name, value);
@@ -125,7 +126,7 @@ export class SecretService implements DaemonService {
 			const scope = resolveScopeChoice(p.scope, pending.workspace);
 			// `undefined` keeps what the entry already had; a new entry defaults to
 			// every session, which is the pre-scope behaviour.
-			await store.set(pending.name, value, pending.purpose, scope);
+			await store.set(pending.name, value, pending.purpose, scope, p.delivery ?? pending.delivery);
 			notifyAgentSecretSaved(this.#deps.agentDir(), pending.name, value);
 		} else if (action === "allow") {
 			const entry = await store.getEntry(pending.name);
@@ -136,6 +137,7 @@ export class SecretService implements DaemonService {
 				if (!pending.workspace) throw new Error("This secret request has no workspace to allow.");
 				await store.setScope(pending.name, normalizeSecretScope([...entry.scope, pending.workspace]));
 			}
+			if (entry.delivery === "file") await store.materializeFile(pending.name);
 			await store.touch(pending.name);
 		}
 		// Resolve only after a save is durable: the tool verifies the entry on

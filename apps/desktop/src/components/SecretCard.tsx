@@ -17,6 +17,8 @@ export interface SecretRequest {
 	purpose: string;
 	/** "fill" asks for a new value, "allow" re-confirms an already saved one. */
 	kind: "fill" | "allow";
+	/** How the value will reach the agent: env var or a private file. */
+	delivery?: "env" | "file";
 }
 
 type SecretAction = "save" | "allow" | "cancel";
@@ -262,6 +264,7 @@ export function SecretCard({
 					</div>
 				) : null}
 				<p className="gui-note">{scopeNote}</p>
+				{isFill && request.delivery === "file" ? <p className="gui-note">{t("tools.secretFileNote")}</p> : null}
 				{error ? (
 					<p className="gui-error" role="alert">
 						{error}

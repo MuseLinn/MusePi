@@ -22,6 +22,7 @@ import {
 	type SecretScope,
 	secretScopeIncludes,
 } from "./agent-store";
+import { secretForms } from "./forms";
 import type { SecretEntry, SecretObfuscator } from "./obfuscator";
 
 /** A live obfuscator per session, weakly held so a disposed session is collectable. */
@@ -38,12 +39,14 @@ function agentKey(agentDir: string): string {
 export async function loadAgentSecretEntries(agentDir: string): Promise<SecretEntry[]> {
 	try {
 		const values = await getAgentSecretStore(agentDir).values();
-		return values.map(({ name, value }) => ({
-			type: "plain" as const,
-			content: value,
-			mode: "obfuscate" as const,
-			friendlyName: name,
-		}));
+		return values.flatMap(({ name, value }) =>
+			secretForms(value).map(form => ({
+				type: "plain" as const,
+				content: form,
+				mode: "obfuscate" as const,
+				friendlyName: name,
+			})),
+		);
 	} catch (error) {
 		// A failed load is a degraded security control, not a normal empty store.
 		// Startup must continue, but the failure has to be observable.
@@ -82,7 +85,7 @@ function liveObfuscators(agentDir: string): SecretObfuscator[] {
 /** Register a just-saved value into every live session for this agent dir. */
 export function notifyAgentSecretSaved(agentDir: string, name: string, value: string): void {
 	for (const obfuscator of liveObfuscators(agentDir)) {
-		obfuscator.addSecret(value, name);
+		for (const form of secretForms(value)) obfuscator.addSecret(form, name);
 	}
 }
 
@@ -111,14 +114,15 @@ function escapeRegExp(value: string): string {
 function buildSecretRedactor(entries: ReadonlyArray<{ name: string; value: string }>): (text: string) => string {
 	const pairs = entries
 		.filter(({ value }) => value.length > 0)
-		.sort((a, b) => b.value.length - a.value.length)
-		.map(({ name, value }) => ({
-			value,
-			marker: `[secret:${name}]`,
-			short: value.length < WHOLE_VALUE_SECRET_LEN,
-		}));
+		.flatMap(({ name, value }) => {
+			const marker = `[secret:${name}]`;
+			const short = value.length < WHOLE_VALUE_SECRET_LEN;
+			return secretForms(value).map(form => ({ value: form, marker, short }));
+		})
+		.sort((a, b) => b.value.length - a.value.length);
 	if (pairs.length === 0) return text => text;
-	const byValue = new Map(pairs.map(pair => [pair.value, pair.marker]));
+	const byValue = new Map<string, string>();
+	for (const pair of pairs) if (!byValue.has(pair.value)) byValue.set(pair.value, pair.marker);
 	const alternatives = pairs.map(pair => {
 		const escaped = escapeRegExp(pair.value);
 		return pair.short ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])` : escaped;
@@ -145,12 +149,14 @@ export async function agentSecretSnapshot(agentDir: string, cwd: string): Promis
 		touched.set(key, touchedNames);
 	}
 	const env: Record<string, string> = {};
-	// P0 scope is `"all"`; the filter is the single seam a future workspace/bot
-	// scope extends, rather than every injection path re-deciding.
+	// The scope filter is the single seam that decides which entries this session
+	// may use. A `file` entry is redacted but never exported: its consumer reads
+	// the private path, so it must not also sit in every child's environment.
 	const sorted = values
 		.filter(({ scope }) => scopeMatches(scope, cwd))
 		.sort((a, b) => b.value.length - a.value.length);
-	for (const { name, value } of sorted) {
+	for (const { name, value, delivery } of sorted) {
+		if (delivery !== "env") continue;
 		env[agentSecretEnvName(name)] = value;
 		// lastUsedAt is best-effort: a metadata failure must not break the command.
 		void store.touch(name, touchedNames).catch(() => {});

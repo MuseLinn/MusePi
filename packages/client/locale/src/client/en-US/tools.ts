@@ -2184,6 +2184,8 @@ export const tools = {
 		"Only bash in this working directory and its subdirectories can use it; the value stays local and encrypted.",
 	"tools.secretAllowWorkspace":
 		"Allowing extends the secret to this working directory and its subdirectories; the value is never shown to the agent.",
+	"tools.secretFileNote":
+		"The value is written to a private file only you can read; the agent receives its path, never the content.",
 	"tools.secretLineLabel": "Secret",
 	"tools.secretLineSaved": "Saved",
 	"tools.secretLineAvailable": "Available",
