@@ -223,6 +223,16 @@ describe("the voice step reuses the shared voice controls", () => {
 		expect(tsx).not.toContain("Check microphone");
 	});
 
+	test("ready states are announced, not repeated on screen", () => {
+		const tsx = read("apps/desktop/src/components/OnboardingVoiceSetup.tsx");
+		// "Microphone permission granted" / "Speech model ready" repeated the
+		// green tile, the border and the select's own value, and the closing
+		// sentence repeated the step body — three lines of scroll for nothing.
+		expect(tsx).not.toContain("gui-obo-voice-note");
+		expect(tsx).toContain('className={microphone === "granted" ? "sr-only" : undefined}');
+		expect(tsx).toContain('className={model.phase === "ready" ? "sr-only" : undefined}');
+	});
+
 	test("the voiceprint card opens the shared enrollment dialog", () => {
 		const tsx = read("apps/desktop/src/components/OnboardingVoiceSetup.tsx");
 		expect(tsx).toContain("<SpeakerEnrollment");

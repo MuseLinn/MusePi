@@ -447,7 +447,7 @@
 .gui-obo-voice-setup {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 8px;
 	width: 100%;
 	/* Same heading→content gap as the appearance and provider steps; without
 	 * it this step started 14px higher than its neighbours. */
@@ -556,11 +556,6 @@
 	height: 4px;
 	margin-top: 8px;
 	accent-color: var(--accent);
-}
-.gui-obo-voice-note {
-	font-size: 12px;
-	line-height: 1.5;
-	color: var(--fg-faint);
 }
 .gui-obo-voice-preview {
 	display: flex;

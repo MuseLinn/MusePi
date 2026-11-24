@@ -203,7 +203,12 @@ export function OnboardingVoiceSetup({
 				</span>
 				<div className="gui-obo-voice-check-copy">
 					<div className="gui-obo-voice-check-title">{tLoose("Microphone")}</div>
-					<p role="status">{microphoneCopy}</p>
+					{/* Ready is already stated by the green tile and the border; the
+					 * sentence still lives in the live region so the change is
+					 * announced instead of silently appearing. */}
+					<p role="status" className={microphone === "granted" ? "sr-only" : undefined}>
+						{microphoneCopy}
+					</p>
 					{/* The settings page's own control: device menu + live level meter
 					 * + inline permission error. It opens the selected microphone
 					 * while mounted, so there is no separate detection button. */}
@@ -250,7 +255,7 @@ export function OnboardingVoiceSetup({
 							)}
 						</>
 					)}
-					<p role="status">
+					<p role="status" className={model.phase === "ready" ? "sr-only" : undefined}>
 						{model.phase === "loading" && tLoose("Checking recognition model…")}
 						{model.phase === "missing" && tLoose("Recognition model required", { model: model.label })}
 						{model.phase === "ready" && tLoose("Speech model ready", { model: model.label })}
@@ -307,7 +312,6 @@ export function OnboardingVoiceSetup({
 				hasProfile={hasVoiceProfile}
 				onChanged={() => void refreshSpeaker()}
 			/>
-			<p className="gui-obo-voice-note">{tLoose("Voice setup can be finished later")}</p>
 		</div>
 	);
 }
