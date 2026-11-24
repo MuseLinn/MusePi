@@ -225,6 +225,26 @@ describe("BrowserControlOverlay pointer blocking", () => {
 		expect(document.querySelector(".gui-browser-control-summary")?.textContent).toContain("example.com");
 	});
 
+	it("keeps the refusal up through a burst of clicks", async () => {
+		act(() => root.render(<BrowserControlOverlay activity={running} now={2_000} onTakeover={() => {}} />));
+		const blocker = document.querySelector<HTMLElement>("[data-browser-control-blocker]")!;
+		const frame = document.querySelector<HTMLElement>("[data-browser-control]")!;
+
+		act(() => {
+			blocker.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+		});
+		await act(async () => Bun.sleep(900));
+		act(() => {
+			blocker.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+		});
+		// 900ms into the second refusal: the first timer would already have
+		// expired here, so this only passes when a click re-arms the window.
+		await act(async () => Bun.sleep(900));
+		expect(frame.getAttribute("data-blocked")).toBe("true");
+		await act(async () => Bun.sleep(700));
+		expect(frame.getAttribute("data-blocked")).toBeNull();
+	});
+
 	it("never blocks while the user owns the tab", () => {
 		act(() =>
 			root.render(<BrowserControlOverlay activity={null} userOwned onTakeover={() => {}} onHandBack={() => {}} />),

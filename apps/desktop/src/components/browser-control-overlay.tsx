@@ -66,7 +66,10 @@ export function BrowserControlOverlay({
 	// The page is not the user's to operate while the agent drives it: the
 	// blocker swallows the interaction and the capsule answers, so a click is
 	// refused visibly instead of being acted on behind the agent's back.
+	// `denyAt` re-arms the timer, so a burst of clicks keeps the refusal up
+	// instead of expiring 1.4s after the first one.
 	const [denied, setDenied] = useState(false);
+	const [denyAt, setDenyAt] = useState(0);
 
 	useEffect(() => {
 		if (active) {
@@ -97,7 +100,7 @@ export function BrowserControlOverlay({
 		if (!denied) return;
 		const timer = window.setTimeout(() => setDenied(false), DENY_MS);
 		return () => window.clearTimeout(timer);
-	}, [denied]);
+	}, [denied, denyAt]);
 
 	// The agent holds this tab: nothing on the page is the user's to operate —
 	// not even while a takeover request is still in flight. A background tab
@@ -110,6 +113,7 @@ export function BrowserControlOverlay({
 		event.preventDefault();
 		event.stopPropagation();
 		setDenied(true);
+		setDenyAt(Date.now());
 	};
 
 	// User-owned: the agent no longer controls this tab. Keep the handoff
