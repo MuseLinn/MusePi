@@ -2579,26 +2579,42 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 60px;
-	height: 60px;
+	width: 48px;
+	height: 48px;
+	flex: none;
 	border-radius: var(--radius-2xl);
 	background: color-mix(in oklab, var(--accent) 14%, transparent);
 	color: var(--accent);
 }
+/* Icon + heading share one row: the icon anchors the step identity instead of
+ * taking its own line, and the copy column absorbs the freed height. */
+.gui-onboarding-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	width: 100%;
+}
+.gui-onboarding-head-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
 .gui-onboarding-title {
-	margin-top: 16px;
+	margin-top: 0;
 	font-size: 20px;
 	font-weight: 650;
 	letter-spacing: -0.01em;
+	line-height: 1.25;
 	color: var(--fg);
 	/* Element-level morph (spring): heading + body translate/scale in on
 	 * step change, matching the right preview's content language. */
 	animation: gui-obo-content-in 420ms var(--spring) 60ms both;
 }
 .gui-onboarding-body {
-	margin-top: 8px;
+	margin-top: 4px;
 	font-size: 13.5px;
-	line-height: 1.7;
+	line-height: 1.6;
 	color: var(--fg-muted);
 	max-width: 34em;
 	animation: gui-obo-content-in 420ms var(--spring) 150ms both;

@@ -62,6 +62,7 @@ import type { BrandIconStyle } from "../../lib/brand-icon-style";
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
+import { THEME_PRESET_LABEL } from "../../lib/theme-preset-labels";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
@@ -173,29 +174,6 @@ export function AppearanceSection({
 	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot);
 	// Custom appearance (persisted, applied on the root element).
 
-	/** Theme-preset labels are keyed per preset id; the ids come from
-	 *  client-core's preset tables, so the lookup is closed over that set. */
-	const THEME_PRESET_KEY: Record<string, TranslationKey> = {
-		default: "settings.themePresetDefault",
-		warm: "settings.themePresetWarm",
-		cool: "settings.themePresetCool",
-		midnight: "settings.themePresetMidnight",
-		graphite: "settings.themePresetGraphite",
-		anthro: "settings.themePresetAnthro",
-		openchamber: "settings.themePresetOpenchamber",
-		catppuccin: "settings.themePresetCatppuccin",
-		nord: "settings.themePresetNord",
-		tokyonight: "settings.themePresetTokyonight",
-		aura: "settings.themePresetAura",
-		ayu: "settings.themePresetAyu",
-		dracula: "settings.themePresetDracula",
-		gruvbox: "settings.themePresetGruvbox",
-		kanagawa: "settings.themePresetKanagawa",
-		monokai: "settings.themePresetMonokai",
-		solarized: "settings.themePresetSolarized",
-		vesper: "settings.themePresetVesper",
-	};
-
 	const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
@@ -296,7 +274,7 @@ export function AppearanceSection({
 								onChange={v => setUnifiedTheme(v as UiThemeId)}
 								options={UNIFIED_THEME_PRESETS.map(p => ({
 									value: p.id,
-									label: t(THEME_PRESET_KEY[p.id] ?? p.id),
+									label: t(THEME_PRESET_LABEL[p.id]),
 								}))}
 							/>
 						</div>
@@ -313,7 +291,7 @@ export function AppearanceSection({
 								onChange={v => setLightTheme(v as UiThemeId)}
 								options={LIGHT_THEME_PRESETS.map(p => ({
 									value: p.id,
-									label: t(THEME_PRESET_KEY[p.id] ?? p.id),
+									label: t(THEME_PRESET_LABEL[p.id]),
 								}))}
 							/>
 						</div>
@@ -328,7 +306,7 @@ export function AppearanceSection({
 								onChange={v => setDarkTheme(v as UiThemeId)}
 								options={DARK_THEME_PRESETS.map(p => ({
 									value: p.id,
-									label: t(THEME_PRESET_KEY[p.id] ?? p.id),
+									label: t(THEME_PRESET_LABEL[p.id]),
 								}))}
 							/>
 						</div>

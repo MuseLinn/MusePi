@@ -103,6 +103,51 @@ describe("both tour cards share one close affordance and one motion switch", () 
 	});
 });
 
+describe("the appearance step exposes every theme axis", () => {
+	test("the primer offers the palette axis, not just light/dark", () => {
+		// Scheme (dark/light/system) and palette (the ui-themes) are separate
+		// axes in the product: collapsing them left the primer unable to pick
+		// any of the 18 presets the settings page offers.
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain("UNIFIED_THEME_PRESETS");
+		expect(tsx).toContain("setLightTheme");
+		expect(tsx).toContain("setDarkTheme");
+		expect(tsx).toContain('className="gui-obo-palette-select"');
+	});
+
+	test("the primer and the settings page read one preset label table", () => {
+		const labels = read("apps/desktop/src/lib/theme-preset-labels.ts");
+		expect(labels).toContain("THEME_PRESET_LABEL");
+		// Both surfaces import the shared table instead of keeping a copy.
+		for (const file of [ONBOARDING_TSX, "apps/desktop/src/components/settings-sections/appearance.tsx"]) {
+			expect(read(file), `${file} must use the shared label table`).toContain("THEME_PRESET_LABEL");
+		}
+	});
+
+	test("a scheme-only preset stays selectable instead of rendering a raw id", () => {
+		// midnight is dark-only and warm is light-only; neither is in the
+		// unified list, so the trigger appends the current pick rather than
+		// showing an untranslated id.
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain("paletteOptions");
+		expect(tsx).toContain("...UNIFIED_THEME_PRESETS, { id: schemePalette, label: schemePalette }");
+	});
+});
+
+describe("the primer header shares its row with the icon", () => {
+	test("the icon and the heading sit in one flex row", () => {
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain('className="gui-onboarding-head"');
+		expect(tsx).toContain('className="gui-onboarding-head-copy"');
+		const css = read(WIDGETS);
+		const head = rule(css, ".gui-onboarding-head");
+		expect(head, "no .gui-onboarding-head block").not.toBeNull();
+		expect(declaration(head!, "display")).toBe("flex");
+		// The title no longer pushes itself down off the icon's baseline.
+		expect(declaration(rule(css, ".gui-onboarding-title")!, "margin-top")).toBe("0");
+	});
+});
+
 describe("the announcement keyboard contract lets links open", () => {
 	test("Enter on a focused link does not dismiss the panel", () => {
 		const tsx = read(ANNOUNCEMENT_TSX);

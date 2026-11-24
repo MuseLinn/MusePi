@@ -294,6 +294,11 @@
 	display: flex;
 	gap: 8px;
 }
+/* Palette row: the 18-preset list needs the full column width, so it uses the
+ * settings page's own select trigger rather than a third button row. */
+.gui-obo-palette-select {
+	width: 100%;
+}
 .gui-obo-appearance-card {
 	display: flex;
 	flex-direction: column;

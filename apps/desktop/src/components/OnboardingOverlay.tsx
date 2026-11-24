@@ -21,9 +21,12 @@ import {
 	setLocale,
 	type TranslationKey,
 	t,
+	type UiThemeId,
+	UNIFIED_THEME_PRESETS,
 	useAccentPreference,
 	useModalFocus,
 	useThemePreference,
+	useUiThemePreferences,
 } from "@musepi/client-core";
 import { KeyRound, Languages, Layers, Mic, Sparkles } from "lucide";
 import { MorphIcon } from "morphicons/react";
@@ -34,6 +37,7 @@ import { usePrompt } from "../lib/prompt-dialog";
 import { reportRequestFailure } from "../lib/report-request-failure";
 import { addProviderModels, cancelProviderLogin, logoutProvider, submitProviderLoginInput } from "../lib/rpc-commands";
 import { readSessionTabsEnabled, setSessionTabsEnabled } from "../lib/session-tabs";
+import { THEME_PRESET_LABEL } from "../lib/theme-preset-labels";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
 import {
@@ -43,6 +47,7 @@ import {
 	emptyCustomProviderDraft,
 } from "./CustomProviderForm";
 import { FadeScroll } from "./FadeScroll";
+import { GuiSelect } from "./GuiSelect";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { MenuPopup } from "./MenuPopup";
 import { ModelBrandIcon } from "./model-brand-icon";
@@ -1267,13 +1272,19 @@ const ACCENT_OPTIONS = [
 	{ id: "custom", key: "settings.customAccent" },
 ] as const;
 
-/** Step 2 — appearance: theme (dark/light/system) + accent (follow-theme /
- *  brand/mono/ocean/jade + custom), applied live through guest-client's theme module so
- *  the data-theme × data-color-scheme × data-ui-theme × data-accent axes all
- *  stay in sync (same path as the settings toggle). The right-pane window
- *  preview recolors through the same CSS vars. */
+/** Step 2 — appearance: scheme (dark/light/system), palette (the 18
+ *  ui-themes), and accent (follow-theme / brand/mono/ocean/jade + custom),
+ *  applied live through guest-client's theme module so the data-theme ×
+ *  data-color-scheme × data-ui-theme × data-accent axes all stay in sync
+ *  (same path as the settings page). The right-pane window preview recolors
+ *  through the same CSS vars.
+ *
+ *  The palette row writes BOTH scheme slots: the primer offers one pick (the
+ *  settings page still owns the split-light/dark mode). Only the paired
+ *  presets are offered, so the id is valid under either scheme. */
 function AppearanceSetup(): ReactNode {
-	const { preference, setPreference } = useThemePreference();
+	const { preference, resolved, setPreference } = useThemePreference();
+	const { lightThemeId, darkThemeId, setLightTheme, setDarkTheme } = useUiThemePreferences();
 	const { accent, setAccent, customAccent, applyCustomAccent } = useAccentPreference();
 	// Custom-accent picker popover (same app-styled panel as the settings).
 	// No className — the panel root owns the card surface (see SettingsView).
@@ -1282,6 +1293,15 @@ function AppearanceSetup(): ReactNode {
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [pickerPreview, setPickerPreview] = useState<string | null>(null);
 	const { anchorRef: customAccentRef, renderMenu: renderAccentMenu } = useFloatingMenu(pickerOpen, setPickerOpen);
+	// The palette on screen right now — the resolved scheme's pick. Picking a
+	// preset unifies both slots, so a split configuration collapses to one.
+	const schemePalette = resolved === "light" ? lightThemeId : darkThemeId;
+	// A scheme-only preset (midnight under light, warm under dark…) is not in
+	// the unified list; it stays selectable so the trigger never renders a raw
+	// id, and picking a unified preset replaces it.
+	const paletteOptions = UNIFIED_THEME_PRESETS.some(p => p.id === schemePalette)
+		? UNIFIED_THEME_PRESETS
+		: [...UNIFIED_THEME_PRESETS, { id: schemePalette, label: schemePalette }];
 
 	return (
 		<div className="gui-obo-appearance">
@@ -1302,6 +1322,23 @@ function AppearanceSetup(): ReactNode {
 						</button>
 					))}
 				</div>
+			</div>
+			<div className="gui-obo-appearance-group">
+				<span className="gui-obo-quick-label">{t("settings.unifiedTheme")}</span>
+				<GuiSelect
+					className="gui-obo-palette-select"
+					ariaLabel={t("settings.unifiedTheme")}
+					value={schemePalette}
+					onChange={next => {
+						tapFeedback();
+						setLightTheme(next as UiThemeId);
+						setDarkTheme(next as UiThemeId);
+					}}
+					options={paletteOptions.map(p => ({
+						value: p.id,
+						label: t(THEME_PRESET_LABEL[p.id]),
+					}))}
+				/>
 			</div>
 			<div className="gui-obo-appearance-group">
 				<span className="gui-obo-quick-label">{t("settings.accentColor")}</span>
@@ -1533,19 +1570,25 @@ export function OnboardingOverlay({
 					</button>
 				</div>
 				<div className="gui-onboarding-grid">
-					{/* NOTE: the pane itself must NOT remount on step change —
-					 * key={step} would unmount MorphIcon and kill the morph
-					 * transition (icon snaps). Children that need re-entry
-					 * animations carry their own step keys. */}
 					<div className="gui-onboarding-pane">
-						<div className="gui-onboarding-icon">
-							<MorphIcon icon={current.icon} size={30} spring="snappy" />
-						</div>
-						<div className="gui-onboarding-title" key={`title-${step}`}>
-							{t(STEP_TITLES[current.key])}
-						</div>
-						<div className="gui-onboarding-body" key={`body-${step}`}>
-							{t(STEP_BODIES[current.key])}
+						{/* Icon and heading share one row: the icon is an anchor, not a
+						 * masthead, so the vertical budget goes to the step content.
+						 * NOTE: the pane itself must NOT remount on step change —
+						 * key={step} would unmount MorphIcon and kill the morph
+						 * transition (icon snaps). Children that need re-entry
+						 * animations carry their own step keys. */}
+						<div className="gui-onboarding-head">
+							<div className="gui-onboarding-icon">
+								<MorphIcon icon={current.icon} size={26} spring="snappy" />
+							</div>
+							<div className="gui-onboarding-head-copy">
+								<div className="gui-onboarding-title" key={`title-${step}`}>
+									{t(STEP_TITLES[current.key])}
+								</div>
+								<div className="gui-onboarding-body" key={`body-${step}`}>
+									{t(STEP_BODIES[current.key])}
+								</div>
+							</div>
 						</div>
 						{/* Step content scrolls inside the pane (provider config is
 						 * tall); dots + actions stay pinned. Main spine = 5 steps;
