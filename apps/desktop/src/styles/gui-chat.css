@@ -7912,6 +7912,42 @@ html.gui-view-transition .gui-pane-right--inner > :not(.gui-pane-resize-x, .gui-
 	margin: 0;
 }
 
+/* Paired right column: while the session info card shares this row, the card
+ * column and the panel are ONE column and move on one width motion. Left to
+ * their own rules they ran on different schedules — the panel snapped its
+ * width open (`0s`), then the card's 220ms fold handed the column back — so a
+ * single toggle narrowed the chat and widened it again. The panel keeps its
+ * opacity/transform fold; only the box now rides the seat's spring, and the
+ * close delay (which exists to fade the contents out at full width) is
+ * dropped because it would hold the panel wide while the card column grows
+ * back. The per-frame layout cost the panel's own rule avoids returns for
+ * these 220ms, and only while the card is in the row; the motion-off and
+ * reduced-motion blocks below drop it entirely. */
+[data-session-info-paired] .gui-pane-right--inner,
+[data-session-info-paired] .gui-pane-right--inner--closed {
+	transition:
+		width 220ms var(--spring),
+		margin 220ms var(--spring),
+		transform 220ms var(--spring),
+		opacity 160ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-session-info-paired] .gui-pane-right--inner,
+	[data-session-info-paired] .gui-pane-right--inner--closed {
+		transition: none;
+	}
+}
+.gui-motion-off [data-session-info-paired] .gui-pane-right--inner,
+.gui-motion-off [data-session-info-paired] .gui-pane-right--inner--closed {
+	transition: none;
+}
+/* A width drag owns the seam: the panel must follow the pointer, not ease
+ * towards it. The body-level guard predates this rule, so it is restated at
+ * the paired rule's specificity. */
+body.gui-resizing [data-session-info-paired] .gui-pane-right--inner {
+	transition: none;
+}
+
 @keyframes gui-session-info-in {
 	from {
 		opacity: 0;
