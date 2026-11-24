@@ -45,6 +45,7 @@ import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { IrcCard, ircPairKeyOf } from "./irc-message";
+import { livePhraseFor } from "./live-phrase";
 import { type TranscriptPresentationPolicy, transcriptPresentationPolicy } from "./presentation-policy.js";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
@@ -72,6 +73,7 @@ import {
 	StickyUserMessage,
 	visibleEntryRange,
 } from "./sticky-user-message";
+import { TailPresence } from "./TailPresence";
 import { ToolCard } from "./ToolCard";
 import {
 	AdvisorBlock,
@@ -81,8 +83,8 @@ import {
 	isBranchFormingEntry,
 	lastUserMessageTs,
 	MsgContent,
-	modelLevelMeta,
 	msgText,
+	quietSince,
 	RoundFoldHeader,
 	readLiveCustomMessage,
 	ToolRunLine,
@@ -90,7 +92,6 @@ import {
 	TtsrBlock,
 	transcriptNodeKind,
 	UserMsgContent,
-	WorkingLine,
 } from "./transcript-content";
 import { TRANSCRIPT_PREFS_CHANGED_EVENT } from "./transcript-prefs.js";
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
@@ -242,6 +243,19 @@ export interface TranscriptProps {
 	 *  auto-classified or user-picked effort). Shown beside the per-round
 	 *  work timer as `model · level` (auto-thinking transparency). */
 	thinkingLevel?: string;
+	/** Host-injected agent mark for the tail presence row. Omitted on surfaces
+	 *  without one (mobile, the subagent panel); the row then drops the avatar
+	 *  instead of reserving an empty column. */
+	tailAvatar?: ReactNode;
+	/** The expandable body under the tail presence: what this turn is running.
+	 *  Omitted means the row is not a button. */
+	tailDetail?: ReactNode;
+	/** Pending approvals, so the presence line can say it is waiting on the
+	 *  person. The transcript does not otherwise receive this; hosts that do
+	 *  not pass it keep the tool/thinking states only. */
+	approvals?: number;
+	/** Session pause, same story as {@link approvals}. */
+	paused?: boolean;
 
 	compact?: boolean; // dense variant for the agent drawer
 	/** Sub-session drill-down capabilities forwarded to tool renderers. */
@@ -1471,6 +1485,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		working,
 		roundDurations,
 		thinkingLevel,
+		tailAvatar,
+		tailDetail,
+		approvals = 0,
+		paused = false,
 		compact,
 		host,
 		userGutter,
@@ -3101,7 +3119,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			{working && stream === null && lastUserTs !== undefined && !lastAssistantInRound && (
 				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""} rail={tailRail}>
 					<div className="tr-ghost-working">
-						<WorkingLine start={lastUserTs} meta={modelLevelMeta(undefined, thinkingLevel)} />
+						<TailPresence
+							visible={working}
+							phrase={livePhraseFor({
+								working,
+								streaming: stream !== null,
+								approvals,
+								paused,
+								toolName: tailTools.at(-1)?.toolName,
+							})}
+							seed={sessionKey ?? ""}
+							since={lastUserTs}
+							quietMs={quietSince(entries)}
+							avatar={tailAvatar}
+							detail={tailDetail}
+						/>
 					</div>
 				</Row>
 			)}

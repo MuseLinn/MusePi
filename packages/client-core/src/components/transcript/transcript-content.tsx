@@ -16,6 +16,7 @@ import type {
 	ToolResultMessage,
 	VideoContent,
 } from "@musepi/pi-wire";
+import { entryStartMs } from "@musepi/pi-wire";
 import { ChevronRight } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { createElement, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -850,6 +851,16 @@ export function lastUserMessageTs(entries: readonly SessionEntry[]): number | un
 		if (e.type === "message" && e.message.role === "user") return e.message.timestamp;
 	}
 	return undefined;
+}
+
+/** How long since anything new arrived, for the presence line's quiet notice.
+ *  Anchored on the newest entry's own timestamp so the row can say "no new
+ *  output for N minutes" without a per-row clock. */
+export function quietSince(entries: readonly SessionEntry[], now = Date.now()): number | undefined {
+	const last = entries.at(-1);
+	if (!last) return undefined;
+	const at = entryStartMs(last);
+	return Number.isFinite(at) ? Math.max(0, now - at) : undefined;
 }
 
 /** Completed-round fold header (openchamber 活动 header parity): an activity

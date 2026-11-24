@@ -127,18 +127,23 @@ function renderTranscript(props: {
 	entries?: readonly SessionEntry[];
 	activeTools?: ReadonlyMap<string, ActiveTool>;
 	working: boolean;
+	streaming?: boolean;
 	roundDurations?: ReadonlyMap<number, number>;
 	hideToolActivity?: boolean;
 	showTokenUsage?: boolean;
 	collapseCompacted?: boolean;
 	colorBlind?: boolean;
 	defaultRoundFoldExpanded?: boolean;
+	tailAvatar?: ReactNode;
+	tailDetail?: ReactNode;
+	approvals?: number;
+	paused?: boolean;
 }): string {
 	return renderToStaticMarkup(
 		<Transcript
 			entries={props.entries ?? []}
-			stream={null}
-			streamDone={true}
+			stream={props.streaming ? streamingMessage() : null}
+			streamDone={!props.streaming}
 			activeTools={props.activeTools ?? new Map()}
 			working={props.working}
 			roundDurations={props.roundDurations}
@@ -147,8 +152,25 @@ function renderTranscript(props: {
 			collapseCompacted={props.collapseCompacted}
 			colorBlind={props.colorBlind}
 			defaultRoundFoldExpanded={props.defaultRoundFoldExpanded}
+			tailAvatar={props.tailAvatar}
+			tailDetail={props.tailDetail}
+			approvals={props.approvals}
+			paused={props.paused}
 		/>,
 	);
+}
+
+/** The minimal in-flight assistant message: enough for the transcript to treat
+ *  the turn as streaming without committing an entry. */
+function streamingMessage(): AssistantMessage {
+	return {
+		role: "assistant",
+		content: [{ type: "text", text: "…" }],
+		model: "test/model",
+		usage: assistantUsage(),
+		stopReason: "stop",
+		timestamp: 2,
+	};
 }
 
 function countElements(html: string, selector: string): number {
@@ -955,13 +977,14 @@ describe("Transcript work-timer round anchoring", () => {
 	it("keeps the live ticker off the previous round's message while the model is responding", () => {
 		// Old round assistant(100), then user(200) sent, model not replying yet:
 		// the last assistant entry does NOT belong to the current round, so no
-		// "已用时 X 秒" under the wrong message — the standalone ghost row shows it.
+		// "已用时 X 秒" under the wrong message — the standalone tail presence
+		// row shows it instead.
 		const html = renderTranscript({
 			entries: [assistantEntry({ timestamp: 100 }), userEntry(200)],
 			working: true,
 		});
 		expect(countElements(html, ".tr-ghost-working")).toBe(1);
-		expect(countElements(html, ".tr-working")).toBe(1);
+		expect(countElements(html, ".presence")).toBe(1);
 	});
 
 	it("mounts the ticker inside the current round's assistant message once it exists", () => {
@@ -970,6 +993,7 @@ describe("Transcript work-timer round anchoring", () => {
 			working: true,
 		});
 		expect(countElements(html, ".tr-ghost-working")).toBe(0);
+		expect(countElements(html, ".presence")).toBe(0);
 		expect(countElements(html, ".tr-working")).toBe(1);
 	});
 
@@ -979,6 +1003,30 @@ describe("Transcript work-timer round anchoring", () => {
 			working: false,
 		});
 		expect(countElements(html, ".tr-working")).toBe(0);
+		expect(countElements(html, ".presence")).toBe(0);
+	});
+
+	it("renders the tail presence without an avatar or detail when the host supplies none", () => {
+		const html = renderTranscript({
+			entries: [userEntry(200)],
+			working: true,
+			activeTools: new Map([[TOOL_CALL_ID, activeTool()]]),
+		});
+		expect(countElements(html, ".presence")).toBe(1);
+		expect(countElements(html, ".presence-avatar")).toBe(0);
+		expect(countElements(html, ".presence-toggle")).toBe(0);
+	});
+
+	it("drops the tail presence the moment a reply starts streaming", () => {
+		// Streaming begins: the tail row leaves and the timer appears exactly
+		// once, under the reply — never in both places.
+		const html = renderTranscript({
+			entries: [userEntry(200)],
+			working: true,
+			streaming: true,
+		});
+		expect(countElements(html, ".presence")).toBe(0);
+		expect(countElements(html, ".tr-working")).toBe(1);
 	});
 });
 
