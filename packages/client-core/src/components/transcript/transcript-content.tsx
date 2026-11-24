@@ -922,6 +922,15 @@ export function RoundFoldHeader({
 			<span key="agents">{t("transcript.roundSubagentsWithCount", { count: String(fold.subagentCount) })}</span>,
 		);
 	}
+	// A failure is never averaged into the counts: the closed header says how
+	// many there were, so the reader knows to open the round.
+	if (fold.failedCount > 0) {
+		segments.push(
+			<span key="failed" className="tr-round-fold-failed">
+				{t("transcript.roundFailedWithCount", { count: String(fold.failedCount) })}
+			</span>,
+		);
+	}
 	if (segments.length === 0 && fold.toolCount > 0) {
 		segments.push(
 			<span key="tools">
@@ -996,6 +1005,15 @@ export function ToolRunLine({
 	}
 	if (run.plugins > 0) {
 		segments.push(<span key="plugins">{t("transcript.runPluginWithCount", { count: String(run.plugins) })}</span>);
+	}
+	// The run still counts a failed action, but the line says so: "运行了 3 个
+	// 命令" over one that exited non-zero reads as three successes.
+	if (run.failed > 0) {
+		segments.push(
+			<span key="failed" className="tr-run-failed">
+				{t("transcript.runFailedWithCount", { count: String(run.failed) })}
+			</span>,
+		);
 	}
 	if (run.browser) {
 		const order: BrowserOperationAction[] = [

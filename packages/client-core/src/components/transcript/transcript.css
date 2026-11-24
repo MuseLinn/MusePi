@@ -4478,6 +4478,13 @@ a.tr-tool-search-title:hover {
 	font-family: var(--font-mono, ui-monospace, monospace);
 	font-size: 10.5px;
 }
+
+/* A failure in the closed header / the run summary: the same red as a diff's
+ * removed lines, so "1 个失败" reads as an alarm rather than a tally. */
+.tr-round-fold-failed,
+.tr-run-failed {
+	color: var(--err, #f85149);
+}
 .gui-motion-off .tr-round-fold-chevron {
 	transition: none;
 }

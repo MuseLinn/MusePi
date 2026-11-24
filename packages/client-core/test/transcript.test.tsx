@@ -1607,3 +1607,51 @@ describe("synthetic row list (header is its own row)", () => {
 		expect(countElements(html, ".tr-round-fold")).toBe(1);
 	});
 });
+
+describe("a failed call stays visible in a folded round", () => {
+	const failedRound = (): SessionEntry[] => [
+		userEntry(200),
+		{
+			type: "message",
+			id: "a-call",
+			parentId: null,
+			timestamp: "2026-07-09T00:00:00Z",
+			message: {
+				role: "assistant",
+				content: [{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "false" } }],
+				model: "test/model",
+				usage: assistantUsage(),
+				stopReason: "stop",
+				timestamp: 201,
+			},
+		} as SessionEntry,
+		{
+			type: "message",
+			id: "r-fail",
+			parentId: null,
+			timestamp: "2026-07-09T00:00:01Z",
+			message: {
+				role: "toolResult",
+				toolCallId: "c1",
+				toolName: "bash",
+				content: [{ type: "text", text: "exit 1: command failed" }],
+				isError: true,
+				timestamp: 202,
+			},
+		} as unknown as SessionEntry,
+		assistantEntry({ timestamp: 300, text: "它失败了。" }),
+	];
+
+	it("names the failure in the closed 活动 header", () => {
+		const html = renderTranscript({ entries: failedRound(), working: false });
+		expect(html).toContain("tr-round-fold-failed");
+		expect(html).toMatch(/1 个失败|1 failed/);
+	});
+
+	it("keeps the failed call out of the fold's hidden span", () => {
+		const html = renderTranscript({ entries: failedRound(), working: false });
+		// The exempt row renders, so the card's own failure text is present even
+		// while the round is collapsed.
+		expect(html).toContain("command failed");
+	});
+});

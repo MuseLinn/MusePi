@@ -164,7 +164,12 @@ describe("buildRoundFolds output exemption (artifact cards and produced pictures
 		expect(isInsideFold(folds, 1)).toBe(false);
 	});
 
-	test("an ERRORED generating call still folds (nothing was produced)", () => {
+	test("an ERRORED generating call stays visible: the failure outranks the output rule", () => {
+		// This used to fold, on the reasoning that a failed generator produced no
+		// picture, so there was nothing to keep. That rule decides what counts as
+		// OUTPUT; a failure is EVIDENCE, and hiding it leaves a tidy header with
+		// no way to learn that the image never arrived. ToolView renders a proper
+		// error card for it (`tv-card--error`), so the row is not a broken frame.
 		const entries = [
 			userMsg(),
 			assistantToolCall("c1", "generate_image"),
@@ -172,8 +177,9 @@ describe("buildRoundFolds output exemption (artifact cards and produced pictures
 			assistantText("failed"),
 		];
 		const folds = buildRoundFolds(entries, false);
-		expect(folds[0]!.exempt).not.toContain(1);
-		expect(isInsideFold(folds, 1)).toBe(true);
+		expect(folds[0]!.exempt).toContain(1);
+		expect(isInsideFold(folds, 1)).toBe(false);
+		expect(folds[0]!.failedCount).toBe(1);
 	});
 
 	test("a plain text result still folds (the exemption is not every tool row)", () => {
@@ -557,5 +563,87 @@ describe("buildToolRuns artifact boundary (deliverables are not process)", () =>
 			expect(run.idxs).not.toContain(5);
 			expect(run.idxs).not.toContain(6);
 		}
+	});
+});
+
+describe("failure exemption (a failed call never hides behind the fold)", () => {
+	const failedResult = (toolCallId: string, toolName = "bash"): SessionEntry =>
+		withId({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolCallId,
+				toolName,
+				content: [{ type: "text", text: "exit 1" }],
+				isError: true,
+				timestamp: 1,
+			},
+		});
+
+	test("the failed call's row and its result stay visible while the fold is closed", () => {
+		const entries = [userMsg(), assistantToolCall("c1"), failedResult("c1"), assistantText("it broke")];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.exempt).toContain(1);
+		expect(folds[0]!.exempt).toContain(2);
+		expect(isInsideFold(folds, 1)).toBe(false);
+		expect(isInsideFold(folds, 2)).toBe(false);
+	});
+
+	test("a successful sibling in the same round still folds", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("ok1"),
+			toolResult("ok1"),
+			assistantToolCall("bad1"),
+			failedResult("bad1"),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(isInsideFold(folds, 1)).toBe(true);
+		expect(isInsideFold(folds, 3)).toBe(false);
+	});
+
+	test("a failed bash execution stays visible", () => {
+		const exited: SessionEntry = withId({
+			type: "message",
+			message: {
+				role: "bashExecution",
+				command: "false",
+				output: "",
+				exitCode: 1,
+				cancelled: false,
+				truncated: false,
+				timestamp: 1,
+			},
+		});
+		const entries = [userMsg(), exited, assistantText("done")];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.exempt).toContain(1);
+	});
+
+	test("counts the failures so the header can say so", () => {
+		const entries = [userMsg(), assistantToolCall("c1"), failedResult("c1"), assistantText("done")];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.failedCount).toBe(1);
+	});
+
+	test("a summary counts the failure and names it instead of averaging it away", () => {
+		// The action still counts (it happened) — but a run that absorbed a
+		// failure without saying so would turn a broken step into a tidy line.
+		const entries = [
+			userMsg(),
+			assistantToolCall("ok1"),
+			toolResult("ok1"),
+			assistantToolCall("bad1"),
+			failedResult("bad1"),
+			assistantToolCall("ok2"),
+			toolResult("ok2"),
+			assistantText("done"),
+		];
+		const runs = buildToolRuns(entries, false);
+		expect(runs.length).toBe(1);
+		expect(runs[0]!.failed).toBe(1);
+		// All three calls still count toward the run.
+		expect(runs[0]!.idxs.length).toBe(6);
 	});
 });

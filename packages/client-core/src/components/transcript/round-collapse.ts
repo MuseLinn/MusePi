@@ -81,6 +81,49 @@ export function artifactRowSet(entries: readonly SessionEntry[]): Set<number> {
 	return rows;
 }
 
+/**
+ * Rows a failure lives on: the assistant row carrying the failed call, the
+ * failed result row itself, and a direct shell run that exited non-zero.
+ *
+ * The fold collects a round's PROCESS, and a failure is not process — it is the
+ * reason the turn went the way it did. Folding it away leaves the reader with a
+ * tidy "活动" header and no way to learn what broke without expanding the whole
+ * round, so these rows are exempt from the hidden span (OpenMausBot gets the
+ * same outcome differently: its fold predicate only accepts `tool.ok === true`,
+ * so a failure never enters the fold at all).
+ *
+ * A failed ARTIFACT call is the one exception, and it is handled by
+ * {@link artifactRowSet}: the card never arrives, so the row is process after
+ * all.
+ */
+export function failedWorkRowSet(entries: readonly SessionEntry[]): Set<number> {
+	const rows = new Set<number>();
+	const failedCalls = new Set<string>();
+	entries.forEach((entry, index) => {
+		if (entry.type !== "message") return;
+		const message = entry.message;
+		if (message.role === "toolResult" && message.isError === true) {
+			failedCalls.add(message.toolCallId);
+			rows.add(index);
+			return;
+		}
+		if (message.role === "bashExecution" && typeof message.exitCode === "number" && message.exitCode !== 0) {
+			rows.add(index);
+		}
+	});
+	if (failedCalls.size === 0) return rows;
+	entries.forEach((entry, index) => {
+		if (entry.type !== "message" || entry.message.role !== "assistant") return;
+		for (const block of entry.message.content) {
+			if (block.type === "toolCall" && failedCalls.has(block.id)) {
+				rows.add(index);
+				return;
+			}
+		}
+	});
+	return rows;
+}
+
 /** One completed round's fold descriptor. */
 export interface RoundFold {
 	/** Absolute entry index of the round's user message. */
@@ -125,6 +168,9 @@ export interface RoundFold {
 	userId: string | null;
 	/** Fold-preview text: last non-empty working snippet, else "completed". */
 	preview: string;
+	/** Failed calls inside the span (a failed result, or a non-zero shell run).
+	 *  They stay visible, and the header names how many there were. */
+	failedCount: number;
 	/** Absolute indexes of entries that must stay visible even while the
 	 *  fold is closed: (a) assistant messages carrying SUCCESSFUL artifact
 	 *  tool calls (widget/board/schedule_task — the card IS the turn's
@@ -227,11 +273,11 @@ function countWorkInside(
 	exploreCount: number;
 	webCount: number;
 	subagentCount: number;
+	failedCount: number;
 	changes: { filesChanged: number; added: number; removed: number };
 	preview: string;
-	/** Assistant-message indexes whose successful tool call produced
-	 *  artifact OR picture content — those rows stay visible while the fold
-	 *  is closed. */
+	/** Rows that stay visible while the fold is closed: deliverable cards,
+	 *  pictures, tail/hook rows, and failures. */
 	exempt: number[];
 } {
 	let toolCount = 0;
@@ -243,11 +289,16 @@ function countWorkInside(
 	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
 	const exempt: number[] = [];
 	const artifactRows = artifactRowSet(entries);
+	// A failure is the reason the turn went wrong, not process: keep its rows
+	// visible (see failedWorkRowSet) and count them for the header.
+	const failedRows = failedWorkRowSet(entries);
+	let failedCount = 0;
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
 		// A row whose card is the turn's deliverable never folds, whatever its
 		// position in the span (see artifactRowSet).
 		if (artifactRows.has(i) && !exempt.includes(i)) exempt.push(i);
+		if (failedRows.has(i) && !exempt.includes(i)) exempt.push(i);
 		// Design doc §C: tail rows (retry_failure / async-result) and hook
 		// rows are turn accompaniment, not working process — they stay
 		// visible even while the fold is closed. Non-message entries are
@@ -270,6 +321,7 @@ function countWorkInside(
 		if (m.role === "bashExecution") {
 			commandCount++;
 		} else if (m.role === "toolResult") {
+			if (m.isError === true && !artifactRows.has(i)) failedCount++;
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
 			if (m.toolName === "task") subagentCount++;
 			else if (WEB_TOOLS.has(m.toolName)) webCount++;
@@ -287,6 +339,7 @@ function countWorkInside(
 		exploreCount,
 		webCount,
 		subagentCount,
+		failedCount,
 		changes: { filesChanged: changeState.files.size, added: changeState.added, removed: changeState.removed },
 		preview,
 		exempt,
@@ -427,6 +480,8 @@ export interface FoldSpan {
 	exploreCount: number;
 	webCount: number;
 	subagentCount: number;
+	/** Failed calls inside the span — they stay visible and the header names them. */
+	failedCount: number;
 	filesChanged: number;
 	added: number;
 	removed: number;
@@ -456,11 +511,8 @@ export function foldSpan(
 	if (replyIdx <= startIdx) return null; // no reply → no anchor for the header
 	// Work is counted over the WHOLE turn (process rows may sit after the
 	// reply — that ordering used to count as "no activity" and produced no row).
-	const { toolCount, commandCount, exploreCount, webCount, subagentCount, changes, preview, exempt } = countWorkInside(
-		entries,
-		startIdx + 1,
-		endIdx + 1,
-	);
+	const { toolCount, commandCount, exploreCount, webCount, subagentCount, failedCount, changes, preview, exempt } =
+		countWorkInside(entries, startIdx + 1, endIdx + 1);
 	if (toolCount === 0 && commandCount === 0) return null; // text-only round
 	// `foldedReplies: "all"` keeps every reply row visible; `"final"` (the
 	// default) folds intermediate replies with the process, so they need no
@@ -478,6 +530,7 @@ export function foldSpan(
 		exploreCount,
 		webCount,
 		subagentCount,
+		failedCount,
 		filesChanged: changes.filesChanged,
 		added: changes.added,
 		removed: changes.removed,
@@ -509,6 +562,7 @@ export function roundFoldFromSpan(
 		exploreCount: span.exploreCount,
 		webCount: span.webCount,
 		subagentCount: span.subagentCount,
+		failedCount: span.failedCount,
 		filesChanged: span.filesChanged,
 		added: span.added,
 		removed: span.removed,
@@ -651,6 +705,10 @@ export interface ToolRunSummary {
 	other: number;
 	/** Structured browser operations; browser calls are not counted in other. */
 	browser: BrowserActivitySummary | null;
+	/** Failed calls inside the run. The action still COUNTS (it happened), but
+	 *  the line names the failures so a broken step is not silently averaged
+	 *  into "运行了 3 个命令". */
+	failed: number;
 }
 
 /**
@@ -718,13 +776,16 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 			let commands = 0;
 			let plugins = 0;
 			let other = 0;
+			let failed = 0;
 			const browserCalls = browserCallsOf(entries, idxs);
 			for (const i of idxs) {
 				const e = entries[i];
 				if (e?.type !== "message") continue;
 				const m = e.message;
-				if (m.role === "bashExecution") commands++;
-				else if (m.role === "toolResult") {
+				if (m.role === "bashExecution") {
+					commands++;
+					if (typeof m.exitCode === "number" && m.exitCode !== 0) failed++;
+				} else if (m.role === "toolResult") {
 					// A device dispatch is categorized by the tool it actually ran;
 					// the wire name is always `write`, which would read as a file edit.
 					const toolName = xdevDeviceOf(m) ?? m.toolName;
@@ -735,6 +796,7 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 					//  not "other" — the summary's 命令 segment owns it.
 					else if (toolName === "bash") commands++;
 					else if (toolName !== "browser") other++;
+					if (m.isError === true) failed++;
 				}
 			}
 			if (reads + edits + commands + plugins + other + browserCalls.length >= 2) {
@@ -749,6 +811,7 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 					plugins,
 					other,
 					browser: browserCalls.length > 0 ? summarizeBrowserOperations(browserCalls) : null,
+					failed,
 				});
 			}
 		}
