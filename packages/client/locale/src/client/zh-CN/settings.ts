@@ -1201,7 +1201,7 @@ export const settings = {
 	"settings.dotMatrixBackground": "点阵品牌背景",
 	"settings.agentAvatarStyle": "Agent 头像样式",
 	"settings.agentAvatarStyleDescription":
-		"会话顶部胶囊里的 Agent 头像动画样式（orbs 为默认的思考光球，也可换成桌宠小球、几何六边形或星光）；侧边会话转录使用同一套样式。",
+		"会话与侧边转录里 Agent 头像的动画样式：默认是随思考状态变化的思考光球，也可以换成桌宠小球、六边形、星光、像素朋克或 Aora。",
 	"settings.avatarOrbs": "光球",
 	"settings.avatarPet": "桌宠小球",
 	"settings.avatarHex": "六边形",
@@ -6750,6 +6750,20 @@ export const settings = {
 	"Output Limits": "输出限制",
 	"Parakeet TDT v3 (SoTA)": "Parakeet TDT v3（SoTA）",
 	"Plain unscii square cell, single-printed lines, black ink.": "纯 unscii 方形单元格，单行打印，黑色墨水。",
+	Power: "电源",
+	"Prevent sleep with the lid open": "开盖时防止休眠",
+	"Choose sleep and display behavior when your computer is idle with the lid open": "设置开盖且闲置时的休眠与息屏方式",
+	"Follow system sleep settings. Agent pauses tasks when your computer sleeps":
+		"遵循系统休眠设置；电脑休眠后，智能体会暂停执行任务",
+	"Prevent sleep, allow display sleep": "防止休眠，允许息屏",
+	"Plugged in, Agent keeps running tasks. On battery, sleep may still pause tasks":
+		"接通电源时，智能体可持续执行任务；使用电池时，任务仍可能因电脑休眠而暂停",
+	"Prevent sleep and display sleep": "防止休眠和息屏",
+	"Agent keeps running on battery or AC power. The display stays on, using more energy":
+		"接通电源或使用电池时，智能体都可持续执行任务；屏幕保持常亮，耗电量较高",
+	"Prevent sleep after closing the lid": "合盖后防止休眠",
+	"Agent keeps working with the lid closed. Open-lid settings stay unchanged. Keep it plugged in. Windows asks for administrator approval the first time":
+		"合盖后智能体继续执行任务，不改变开盖时的设置；持续耗电，建议接通电源。Windows 首次启用需要管理员授权",
 	"Release with complete sentence": "句子完整时松开触发",
 	"Remote Compaction": "远程压缩",
 	"Render Mermaid fenced code blocks as ASCII diagrams": "将 Mermaid 围栏代码块渲染为 ASCII 图表",

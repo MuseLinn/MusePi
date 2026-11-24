@@ -1265,7 +1265,7 @@ export const settings = {
 	"settings.dotMatrixBackground": "Dot matrix brand background",
 	"settings.agentAvatarStyle": "Agent avatar style",
 	"settings.agentAvatarStyleDescription":
-		"Animation style for the agent avatar in the capsule above the conversation (orbs is the default thinking orb; swap in the desktop pet orb, a hexagon or spark glyph). Side-session transcripts use the same style.",
+		"Animation style for the agent avatar in the conversation and side-session transcripts: a thinking orb by default, or the desktop pet orb, a hexagon, a spark glyph, a pixel punk face or Aora.",
 	"settings.avatarOrbs": "Orbs",
 	"settings.avatarPet": "Pet orb",
 	"settings.avatarHex": "Hexagon",
@@ -7057,6 +7057,21 @@ export const settings = {
 	"Parakeet TDT v3 (SoTA)": "Parakeet TDT v3 (SoTA)",
 	"Plain unscii square cell, single-printed lines, black ink.":
 		"Plain unscii square cell, single-printed lines, black ink.",
+	Power: "Power",
+	"Prevent sleep with the lid open": "Prevent sleep with the lid open",
+	"Choose sleep and display behavior when your computer is idle with the lid open":
+		"Choose sleep and display behavior when your computer is idle with the lid open",
+	"Follow system sleep settings. Agent pauses tasks when your computer sleeps":
+		"Follow system sleep settings. Agent pauses tasks when your computer sleeps",
+	"Prevent sleep, allow display sleep": "Prevent sleep, allow display sleep",
+	"Plugged in, Agent keeps running tasks. On battery, sleep may still pause tasks":
+		"Plugged in, Agent keeps running tasks. On battery, sleep may still pause tasks",
+	"Prevent sleep and display sleep": "Prevent sleep and display sleep",
+	"Agent keeps running on battery or AC power. The display stays on, using more energy":
+		"Agent keeps running on battery or AC power. The display stays on, using more energy",
+	"Prevent sleep after closing the lid": "Prevent sleep after closing the lid",
+	"Agent keeps working with the lid closed. Open-lid settings stay unchanged. Keep it plugged in. Windows asks for administrator approval the first time":
+		"Agent keeps working with the lid closed. Open-lid settings stay unchanged. Keep it plugged in. Windows asks for administrator approval the first time",
 	"Release with complete sentence": "Release with complete sentence",
 	"Remote Compaction": "Remote Compaction",
 	"Render Mermaid fenced code blocks as ASCII diagrams": "Render Mermaid fenced code blocks as ASCII diagrams",

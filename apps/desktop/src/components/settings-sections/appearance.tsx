@@ -59,6 +59,16 @@ import {
 	type WeekStartPref,
 } from "../../lib/appearance";
 import type { BrandIconStyle } from "../../lib/brand-icon-style";
+import { activeCompanionArt, BUILTIN_VECTOR_ART_ID } from "../../lib/companion";
+import {
+	COMPANION_ACCESSORIES,
+	COMPANION_DECOR_FLAGS,
+	type CompanionAccessory,
+	type CompanionDecor,
+	companionDecor,
+	setCompanionAccessory,
+	setCompanionDecorFlag,
+} from "../../lib/companion-decor";
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
@@ -66,6 +76,14 @@ import { THEME_PRESET_LABEL } from "../../lib/theme-preset-labels";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
+import {
+	AVATAR_PRESETS,
+	avatarPresetId,
+	PunkAvatar,
+	randomPunkSeed,
+	setPunkSeed,
+	userPunkSeed,
+} from "../avatar-presets";
 import { ColorPickerPanel } from "../ColorPicker";
 import { GuiSelect } from "../GuiSelect";
 import { MockConversationPreview } from "../MockConversationPreview";
@@ -122,6 +140,98 @@ const TYPE_THEME_SEGMENTS: SegmentedOption<ThemePreference>[] = [
 	{ value: "light", label: t("settings.light"), icon: SunIcon },
 	{ value: "dark", label: t("settings.dark"), icon: MoonIcon },
 ];
+
+/** 桌宠小球's own detail (球面光泽 / 配饰), rendered only while the pet
+ *  preset owns the conversation avatar. The decoration set lives in
+ *  lib/companion-decor.ts as a flag record; mapping over
+ *  COMPANION_DECOR_FLAGS keeps "add an accessory" a one-line change there plus
+ *  two i18n keys — never a new hand-written row here.
+ *
+ *  Self-contained on purpose: it resolves its own decor state and re-resolves
+ *  on the shared `omp-pet-changed` broadcast (the companion page's pick,
+ *  import and size sliders all fire it), so it works wherever it mounts.
+ *
+ *  An imported petdex spritesheet is a baked bitmap, so none of these layers
+ *  exist to toggle; the rows disable and the description says why. */
+function CompanionDecorSection(): ReactNode {
+	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
+	const [activeArtId, setActivePetId] = useState<string>(() => {
+		const pet = activeCompanionArt();
+		return pet.kind === "builtin" ? pet.id : "";
+	});
+	const builtinSelected = activeArtId === BUILTIN_VECTOR_ART_ID;
+	const decorDescription = builtinSelected
+		? t("settings.petDecorDescription")
+		: t("settings.petDecorDescriptionImported");
+	useEffect(() => {
+		const refresh = (): void => {
+			setDecor(companionDecor());
+			const pet = activeCompanionArt();
+			setActivePetId(pet.kind === "builtin" ? pet.id : "");
+		};
+		window.addEventListener("omp-pet-changed", refresh);
+		window.addEventListener("storage", refresh);
+		return () => {
+			window.removeEventListener("omp-pet-changed", refresh);
+			window.removeEventListener("storage", refresh);
+		};
+	}, []);
+	return (
+		<div className="gui-settings-section">
+			<div className="gui-settings-section-title">{t("settings.petDecor")}</div>
+			<div className="gui-settings-section-desc">{decorDescription}</div>
+			{COMPANION_DECOR_FLAGS.map(flag => (
+				<div className="gui-settings-row" key={flag.key}>
+					<div>
+						<div className="gui-settings-row-label">{t(flag.labelKey as TranslationKey)}</div>
+						<div className="gui-settings-row-desc">{t(flag.descKey as TranslationKey)}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={decor[flag.key]}
+						className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
+						disabled={!builtinSelected}
+						title={builtinSelected ? undefined : decorDescription}
+						onClick={() => {
+							setDecor({ ...decor, [flag.key]: !decor[flag.key] });
+							setCompanionDecorFlag(flag.key, !decor[flag.key]);
+						}}
+						aria-label={t(flag.labelKey as TranslationKey)}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+			))}
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("settings.petAccessory")}</div>
+					<div className="gui-settings-row-desc">{t("settings.petAccessoryDescription")}</div>
+				</div>
+				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("settings.petAccessory")}>
+					{COMPANION_ACCESSORIES.map((value: CompanionAccessory) => (
+						<button
+							key={value}
+							type="button"
+							role="radio"
+							aria-checked={decor.accessory === value}
+							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
+							disabled={!builtinSelected}
+							title={builtinSelected ? undefined : decorDescription}
+							onClick={() => {
+								setDecor({ ...decor, accessory: value });
+								setCompanionAccessory(value);
+							}}
+						>
+							{t(`pet accessory ${value}` as TranslationKey)}
+						</button>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export function AppearanceSection({
 	showAvatars,
 	onToggleAvatars,
@@ -211,6 +321,8 @@ export function AppearanceSection({
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",
 	);
+	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
+	const [punkSeedInput, setPunkSeedInput] = useState<string>(userPunkSeed() ?? "");
 	const [lightCodeTheme, setLightCodeTheme] = useState<string>(
 		() => localStorage.getItem(CODE_THEME_LIGHT_KEY) ?? DEFAULT_LIGHT_CODE_THEME.id,
 	);
@@ -571,6 +683,84 @@ export function AppearanceSection({
 						</button>
 					</div>
 				) : null}
+			</div>
+
+			{/* ── Agent 头像 — the conversation avatar's animation style. The
+			 * 效果 section above owns whether avatars show at all; this owns
+			 * which one, and the ball-only detail rides under its preset. ── */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("settings.agentAvatarStyle")}</div>
+				<div className="gui-settings-section-desc">{t("settings.agentAvatarStyleDescription")}</div>
+				{/* Preset picker as a labelled card grid: each card carries a live
+				 * preview at a size the preset can actually be judged at, its name,
+				 * and the selected state. The pet card previews through
+				 * BuiltinCompanionArt directly, so a gloss / accessory change reads
+				 * back instantly in the card. */}
+				<div className="gui-avatar-grid" role="radiogroup" aria-label={t("settings.agentAvatarStyle")}>
+					{AVATAR_PRESETS.map(p => {
+						const selected = avatarId === p.id;
+						return (
+							<button
+								key={p.id}
+								type="button"
+								role="radio"
+								aria-checked={selected}
+								className={`gui-avatar-card${selected ? " gui-avatar-card--active" : ""}`}
+								onClick={() => {
+									setAvatarId(p.id);
+									localStorage.setItem("musepi-gui-avatar", p.id);
+									window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+								}}
+							>
+								<span className="gui-avatar-card__stage">{p.render("working", 32)}</span>
+								<span className="gui-avatar-card__name">
+									{t(p.labelKey as TranslationKey)}
+									{selected && <Icon name="check" className="gui-avatar-card__check" />}
+								</span>
+							</button>
+						);
+					})}
+				</div>
+				{avatarId === "pet" && <CompanionDecorSection />}
+				{avatarId === "punk" && (
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("settings.pixelFace")}</div>
+							<div className="gui-settings-row-desc">{t("settings.pixelFaceDescription")}</div>
+						</div>
+						<div className="flex items-center gap-2">
+							<PunkAvatar size={40} />
+							<button
+								type="button"
+								className="gui-btn gui-btn--secondary"
+								onClick={() => {
+									setPunkSeedInput("");
+									setPunkSeed(randomPunkSeed());
+								}}
+							>
+								{t("settings.changeFace")}
+							</button>
+							<input
+								className="gui-input w-[150px]"
+								value={punkSeedInput}
+								placeholder={t("settings.faceSeed")}
+								aria-label={t("settings.faceSeed")}
+								onChange={e => setPunkSeedInput(e.target.value)}
+								onKeyDown={e => {
+									if (e.key === "Enter" && punkSeedInput.trim()) setPunkSeed(punkSeedInput.trim());
+								}}
+							/>
+							<button
+								type="button"
+								className="gui-btn gui-btn--secondary"
+								disabled={!punkSeedInput.trim()}
+								onClick={() => setPunkSeed(punkSeedInput.trim())}
+							>
+								{t("tools.apply")}
+							</button>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{/* ── 效果预览 — the shared simulated conversation view (voice-test

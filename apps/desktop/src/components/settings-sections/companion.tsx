@@ -405,11 +405,9 @@ export function CompanionMarket({
 	);
 }
 
-/** Appearance detail (球面光泽 / 配饰) moved to the GENERAL page's agent
- *  avatar area (2026-09-21, user: 「这个小球的定制放到常规Agent头像那里去」) —
- *  it now lives next to the avatar cards that preview the ball. See
- *  general.tsx CompanionDecorSection; this page keeps the pick + size + market
- *  concerns. */
+/** The ball's gloss / accessory editing lives with the avatar-style cards in
+ *  the appearance page (appearance.tsx CompanionDecorSection), where the pet
+ *  preset previews it; this page keeps the pick + size + market concerns. */
 export function CompanionSection(): ReactNode {
 	const [enabled, setEnabled] = useState<boolean>(() => companionEnabled());
 	const [mode, setMode] = useState<CompanionPlacement>(() => companionPlacement());

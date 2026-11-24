@@ -1,18 +1,8 @@
-import { DotMatrixMark, Markdown, type TranslationKey, t, useLocale } from "@musepi/client-core";
+import { DotMatrixMark, Markdown, t, useLocale } from "@musepi/client-core";
 import { ToolView } from "@musepi/client-core/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/client-core/src/tool-render/tools/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { activeCompanionArt, BUILTIN_VECTOR_ART_ID } from "../../lib/companion";
-import {
-	COMPANION_ACCESSORIES,
-	COMPANION_DECOR_FLAGS,
-	type CompanionAccessory,
-	type CompanionDecor,
-	companionDecor,
-	setCompanionAccessory,
-	setCompanionDecorFlag,
-} from "../../lib/companion-decor";
 import { projectRuntimeVersions } from "../../lib/daemon-version";
 import {
 	checkAppUpdates,
@@ -32,117 +22,8 @@ import { localizeUpdateNotes } from "../../lib/update-notes";
 import { UPDATE_ERROR_BODY_KEYS } from "../../lib/update-ux";
 import { readWelcomeGreeting, writeWelcomeGreeting } from "../../lib/welcome-greeting";
 import { Icon } from "../../vendor/oc-icons";
-import {
-	AVATAR_PRESETS,
-	avatarPresetId,
-	PunkAvatar,
-	randomPunkSeed,
-	setPunkSeed,
-	userPunkSeed,
-} from "../avatar-presets";
 import { GuiSelect } from "../GuiSelect";
 import { SchemaTabSection } from "./schema";
-
-/** Appearance detail (设置 → 常规, under the agent avatar grid). Moved here
- *  from the companion page (2026-09-21, user: 「这个小球的定制放到常规Agent
- *  头像那里去」): the customization belongs next to the avatar cards that
- *  PREVIEW the ball — the pet card is a live BuiltinCompanionArt, so a gloss /
- *  accessory change reads back instantly in the grid above.
- *
- *  Self-contained on purpose: it resolves its own decor state and re-resolves
- *  on the shared `omp-pet-changed` broadcast (the companion page's pick,
- *  import and size sliders all fire it), so it works wherever it mounts.
- *  The decoration set lives in lib/companion-decor.ts as a flag record; mapping
- *  over COMPANION_DECOR_FLAGS keeps "add an accessory" a one-line change there
- *  plus two i18n keys — never a new hand-written row here.
- *
- *  Scoped to the builtin vector companion: an imported petdex spritesheet is
- *  a baked bitmap, so none of these layers exist to toggle. The rows say so
- *  instead of silently doing nothing. */
-function CompanionDecorSection(): ReactNode {
-	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
-	// Decoration only exists on the builtin sphere — an imported spritesheet
-	// is a baked bitmap. Drives both the disabled state and the explainer
-	// copy.
-	const [activeArtId, setActivePetId] = useState<string>(() => {
-		const pet = activeCompanionArt();
-		return pet.kind === "builtin" ? pet.id : "";
-	});
-	const builtinSelected = activeArtId === BUILTIN_VECTOR_ART_ID;
-	const decorDescription = builtinSelected
-		? t("settings.petDecorDescription")
-		: t("settings.petDecorDescriptionImported");
-	useEffect(() => {
-		const refresh = (): void => {
-			setDecor(companionDecor());
-			const pet = activeCompanionArt();
-			setActivePetId(pet.kind === "builtin" ? pet.id : "");
-		};
-		window.addEventListener("omp-pet-changed", refresh);
-		window.addEventListener("storage", refresh);
-		return () => {
-			window.removeEventListener("omp-pet-changed", refresh);
-			window.removeEventListener("storage", refresh);
-		};
-	}, []);
-	return (
-		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{t("settings.petDecor")}</div>
-			<div className="gui-settings-section-desc">{decorDescription}</div>
-			{COMPANION_DECOR_FLAGS.map(flag => (
-				<div className="gui-settings-row" key={flag.key}>
-					<div>
-						<div className="gui-settings-row-label">{t(flag.labelKey as TranslationKey)}</div>
-						<div className="gui-settings-row-desc">{t(flag.descKey as TranslationKey)}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={decor[flag.key]}
-						className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
-						disabled={!builtinSelected}
-						title={builtinSelected ? undefined : decorDescription}
-						onClick={() => {
-							setDecor({ ...decor, [flag.key]: !decor[flag.key] });
-							setCompanionDecorFlag(flag.key, !decor[flag.key]);
-						}}
-						aria-label={t(flag.labelKey as TranslationKey)}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-			))}
-			{/* Accessory pick (blobstudio's accessory slot, minimized to one
-			 * wear): a segmented control, not another boolean row — the options
-			 * are mutually exclusive by design (one state one look). */}
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("settings.petAccessory")}</div>
-					<div className="gui-settings-row-desc">{t("settings.petAccessoryDescription")}</div>
-				</div>
-				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("settings.petAccessory")}>
-					{COMPANION_ACCESSORIES.map((value: CompanionAccessory) => (
-						<button
-							key={value}
-							type="button"
-							role="radio"
-							aria-checked={decor.accessory === value}
-							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
-							disabled={!builtinSelected}
-							title={builtinSelected ? undefined : decorDescription}
-							onClick={() => {
-								setDecor({ ...decor, accessory: value });
-								setCompanionAccessory(value);
-							}}
-						>
-							{t(`pet accessory ${value}` as TranslationKey)}
-						</button>
-					))}
-				</div>
-			</div>
-		</div>
-	);
-}
 
 /** Shared fixture feeding both preview cards — the SAME settled-batch shape
  *  the transcript renders (results with per-agent stats/errors). */
@@ -315,8 +196,6 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			})
 			.finally(() => setAutostartBusy(false));
 	};
-	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
-	const [punkSeedInput, setPunkSeedInput] = useState<string>(userPunkSeed() ?? "");
 	// Busy-state plain-Enter behavior: steer (TUI default) or
 	// queue; Cmd/Ctrl+Enter uses the opposite.
 	const [busyEnter, setBusyEnterState] = useState<"steer" | "queue">("steer");
@@ -430,88 +309,6 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					]}
 				/>
 			</div>
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("settings.agentAvatarStyle")}</div>
-					<div className="gui-settings-row-desc">{t("settings.agentAvatarStyleDescription")}</div>
-				</div>
-			</div>
-			{/* Preset picker as a labelled card grid (2026-09-20). It used to be
-			 * a row of five 38px glyph buttons with only a `title` tooltip —
-			 * the avatar identities were indistinguishable until you hovered,
-			 * and the selected one was a hairline ring (user: 「这个头像处只能
-			 * 进行切换」). Each card now carries a live preview at a size the
-			 * preset can actually be judged at, its name, and the selected
-			 * state. The pet card previews through BuiltinCompanionArt directly:
-			 * an IMPERATIVE render() at 20px would be unreadable at card size
-			 * and would not react to the decor pref. */}
-			<div className="gui-avatar-grid" role="radiogroup" aria-label={t("settings.agentAvatarStyle")}>
-				{AVATAR_PRESETS.map(p => {
-					const selected = avatarId === p.id;
-					return (
-						<button
-							key={p.id}
-							type="button"
-							role="radio"
-							aria-checked={selected}
-							className={`gui-avatar-card${selected ? " gui-avatar-card--active" : ""}`}
-							onClick={() => {
-								setAvatarId(p.id);
-								localStorage.setItem("musepi-gui-avatar", p.id);
-								window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
-							}}
-						>
-							<span className="gui-avatar-card__stage">{p.render("working", 32)}</span>
-							<span className="gui-avatar-card__name">
-								{t(p.labelKey as TranslationKey)}
-								{selected && <Icon name="check" className="gui-avatar-card__check" />}
-							</span>
-						</button>
-					);
-				})}
-			</div>
-			{/* The ball's own customization, next to the cards that preview it
-			 * (2026-09-21 move from the companion page). */}
-			<CompanionDecorSection />
-			{avatarId === "punk" && (
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.pixelFace")}</div>
-						<div className="gui-settings-row-desc">{t("settings.pixelFaceDescription")}</div>
-					</div>
-					<div className="flex items-center gap-2">
-						<PunkAvatar size={40} />
-						<button
-							type="button"
-							className="gui-btn gui-btn--secondary"
-							onClick={() => {
-								setPunkSeedInput("");
-								setPunkSeed(randomPunkSeed());
-							}}
-						>
-							{t("settings.changeFace")}
-						</button>
-						<input
-							className="gui-input w-[150px]"
-							value={punkSeedInput}
-							placeholder={t("settings.faceSeed")}
-							aria-label={t("settings.faceSeed")}
-							onChange={e => setPunkSeedInput(e.target.value)}
-							onKeyDown={e => {
-								if (e.key === "Enter" && punkSeedInput.trim()) setPunkSeed(punkSeedInput.trim());
-							}}
-						/>
-						<button
-							type="button"
-							className="gui-btn gui-btn--secondary"
-							disabled={!punkSeedInput.trim()}
-							onClick={() => setPunkSeed(punkSeedInput.trim())}
-						>
-							{t("tools.apply")}
-						</button>
-					</div>
-				</div>
-			)}
 			{autostartSupported && (
 				<div className="gui-settings-row">
 					<div>
