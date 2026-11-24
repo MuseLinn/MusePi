@@ -5,12 +5,21 @@ import { resolveEffectiveSubagentPolicy } from "./structured-subagent";
 
 /**
  * Extension-registered subagent types: registration validation on the real
- * runner (constructed with null collaborators — registration touches none
- * of them), plus resolution precedence through
+ * runner, plus resolution precedence through
  * `resolveEffectiveSubagentPolicy` with a stub session.
+ *
+ * The constructor installs three runtime hooks (`eventErrorSink`,
+ * `awaitPendingRegistrations`, `handlerExecutor`), so the runner takes a
+ * minimal object that carries those fields; registration itself touches no
+ * other collaborator.
  */
 function testRunner(): ExtensionRunner {
-	return new ExtensionRunner([], null as never, "/tmp", null as never, null as never);
+	const runtime = {
+		eventErrorSink: undefined as unknown,
+		awaitPendingRegistrations: undefined as unknown,
+		handlerExecutor: undefined as unknown,
+	};
+	return new ExtensionRunner([], runtime as never, "/tmp", null as never, null as never);
 }
 
 function def(name: string): { name: string; description: string; systemPrompt: string } {

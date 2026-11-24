@@ -44,7 +44,7 @@ export function syncLidSleepToShell(rpc: RpcClient): () => void {
 			// claiming a state the machine rejected, which the failure names.
 			applied = state.enabled;
 			if (state.error) {
-				pushActionToast({ kind: "error", message: t("settings.lidSleepFailed"), detail: state.error });
+				pushActionToast({ kind: "error", message: t("settings.lidSleepFailed"), details: state.error });
 			}
 		});
 		void queue.catch(() => {});

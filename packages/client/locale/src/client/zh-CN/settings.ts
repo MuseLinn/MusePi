@@ -3862,20 +3862,6 @@ export const settings = {
 	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting MusePi-owned dialogs does not count":
 		"扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 MusePi 自有对话框的时间不计入",
 	Powerline: "Powerline",
-	"Prevent sleep with the lid open": "开盖时防止休眠",
-	"Choose sleep and display behavior when your computer is idle with the lid open": "设置开盖且闲置时的休眠与息屏方式",
-	"Follow system sleep settings. Agent pauses tasks when your computer sleeps":
-		"遵循系统休眠设置；电脑休眠后，智能体会暂停执行任务",
-	"Prevent sleep, allow display sleep": "防止休眠，允许息屏",
-	"Plugged in, Agent keeps running tasks. On battery, sleep may still pause tasks":
-		"接通电源时，智能体可持续执行任务；使用电池时，任务仍可能因电脑休眠而暂停",
-	"Prevent sleep and display sleep": "防止休眠和息屏",
-	"Agent keeps running on battery or AC power. The display stays on, using more energy":
-		"接通电源或使用电池时，智能体都可持续执行任务；屏幕保持常亮，耗电量较高",
-	"Prevent sleep after closing the lid": "合盖后防止休眠",
-	"Agent keeps working with the lid closed. Open-lid settings stay unchanged. Keep it plugged in. Windows asks for administrator approval the first time":
-		"合盖后智能体继续执行任务，不改变开盖时的设置；持续耗电，建议接通电源。Windows 首次启用需要管理员授权",
-	"Couldn't change sleep settings. Try again": "更改休眠设置失败，请重试",
 	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice":
 		"自动上下文维护的首选回退顺序；不可用或失败的方式自动前进到下一项",
 	"Private scratchpad; not shown to user. Disables supported GPT, Claude, and Gemini reasoning":
