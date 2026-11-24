@@ -139,6 +139,8 @@ marketplace/<dir>/
 
 Token 值保存在 `<agentDir>/connectors/secrets.json`：每个连接器一个 AES-256-GCM 信封，密钥由 `<agentDir>/connectors/.master.key` 的 32 字节主密钥经 HKDF-SHA256 派生（托管部署可用 `MUSEPI_CONNECTOR_MASTER_KEY`）。文件不含明文；解密失败时保持文件不变并把连接器视为未配置；`disconnect` 会删除对应条目。
 
+这把密钥跟随保险库的口令。在「设置 → 保险库」设了口令后，连接器的密钥同样被包裹成 `connectors/.master.key.wrapped`、明文密钥文件被删除，已存 token 在本进程解锁之前不可读——所以「保险库已锁定」意味着连接器凭据也一起锁上了，而不是把它们留在一个用户以为受保护的本机密钥文件上。移除口令会恢复明文密钥；修改口令只重新包裹同一把密钥，不重写任何值。锁定状态下每个目录行报告 `locked` 而不是「未配置」，因为让用户重输一个其实已经保存的 token 是错的。`agent.db` 里的 OAuth 授权使用自己的 `mcp-oauth.key`，目前还不受这个口令覆盖。
+
 OAuth 授权仍落在 AuthStorage。MCP 客户端拥有的行（`mcp_oauth:` 与旧前缀 `mcp_oauth_`）在 `agent.db` 中加密：`data` 列保留标记与明文哈希供 compare-and-swap 刷新使用，密文放在 `secret` 列，密钥位于数据库旁的 `mcp-oauth.key`（或 `MUSEPI_MCP_OAUTH_KEY`）。其他供应商在各自迁移设计完成前保持原有存储路径。
 
 `connector-catalog` 发现 provider（priority 40）把每个已启用条目投影为名为 `connector:<id>` 的规范 MCP 服务器。该命名空间避免目录条目遮蔽手写的 `mcp.json` 服务器，也让 `/mcp` 输出能区分两者。声明了静态 header 时标记为 `origin-locked`；凭据由 auth storage 按服务器 URL 解析。

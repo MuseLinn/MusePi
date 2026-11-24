@@ -10,12 +10,18 @@
 import * as path from "node:path";
 import { getAgentDir } from "@musepi/pi-utils";
 import {
+	decryptMasterKey,
 	deleteSecret,
 	type EncryptedStore,
 	encryptedStore,
+	encryptMasterKey,
 	hasSecret,
+	type MasterKeyState,
+	masterKeyState,
 	mergeSecret,
 	readSecret,
+	rephraseMasterKey,
+	unlockMasterKey,
 } from "../secrets/encrypted-store";
 import { CONNECTOR_DIR_NAME } from "./types";
 
@@ -76,4 +82,57 @@ export async function hasConnectorSecrets(
 	agentDir: string = getAgentDir(),
 ): Promise<boolean> {
 	return hasSecret(connectorSecretStore(agentDir), id, requiredKeys);
+}
+
+/**
+ * How the connector master key is protected.
+ *
+ * The vault's passphrase settings drive this store too: one passphrase wraps
+ * both keys, so a locked vault makes connector tokens unreadable rather than
+ * leaving them on a plain key file the user believes is protected.
+ */
+export async function connectorKeyState(agentDir: string = getAgentDir()): Promise<MasterKeyState> {
+	return masterKeyState(connectorSecretStore(agentDir));
+}
+
+/** True when a passphrase is required and this process has not unlocked it. */
+export async function connectorKeyLocked(agentDir: string = getAgentDir()): Promise<boolean> {
+	const state = await connectorKeyState(agentDir);
+	return state.mode === "passphrase" && state.locked;
+}
+
+/** Wrap the connector key under `passphrase`; already-wrapped is a no-op. */
+export async function encryptConnectorKey(passphrase: string, agentDir: string = getAgentDir()): Promise<void> {
+	const store = connectorSecretStore(agentDir);
+	const state = await masterKeyState(store);
+	if (state.mode === "passphrase") return;
+	await encryptMasterKey(store, passphrase);
+}
+
+/** Restore the connector's plain key file after proving `passphrase`. */
+export async function decryptConnectorKey(passphrase: string, agentDir: string = getAgentDir()): Promise<void> {
+	const store = connectorSecretStore(agentDir);
+	const state = await masterKeyState(store);
+	if (state.mode !== "passphrase") return;
+	await decryptMasterKey(store, passphrase);
+}
+
+/** Unlock the connector store for this process; nothing is written. */
+export async function unlockConnectorKey(passphrase: string, agentDir: string = getAgentDir()): Promise<void> {
+	const store = connectorSecretStore(agentDir);
+	const state = await masterKeyState(store);
+	if (state.mode !== "passphrase") return;
+	await unlockMasterKey(store, passphrase);
+}
+
+/** Replace the passphrase that wraps the connector key. */
+export async function rephraseConnectorKey(
+	current: string,
+	next: string,
+	agentDir: string = getAgentDir(),
+): Promise<void> {
+	const store = connectorSecretStore(agentDir);
+	const state = await masterKeyState(store);
+	if (state.mode !== "passphrase") return;
+	await rephraseMasterKey(store, current, next);
 }

@@ -7163,6 +7163,8 @@ export const settings = {
 	"settings.secretsProtection": "静态加密",
 	"settings.secretsProtectionKeyFile": "本机密钥文件",
 	"settings.secretsProtectionPassphrase": "口令保护",
+	"settings.secretsProtectionConnectors": "连接器凭据使用同一口令",
+	"settings.secretsProtectionConnectorsPlain": "连接器凭据使用独立的本机密钥文件",
 	"settings.secretsProtectWithPassphrase": "用口令保护",
 	"settings.secretsRemovePassphrase": "关闭口令",
 	"settings.secretsUnlock": "解锁",

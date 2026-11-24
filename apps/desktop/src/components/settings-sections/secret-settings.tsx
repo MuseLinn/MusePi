@@ -48,6 +48,8 @@ interface SecretStatusResult {
 	/** A passphrase is required and this daemon process has not unlocked the store. */
 	locked?: boolean;
 	reason?: "missing-passphrase" | "wrong-passphrase" | "passphrase-source";
+	/** The connector token store, which follows the same passphrase as the vault. */
+	connectors?: { protectedBy: "key-file" | "passphrase"; locked: boolean };
 }
 
 interface SecretListResult {
@@ -689,6 +691,19 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 										? t("settings.secretsProtectionPassphrase")
 										: t("settings.secretsProtectionKeyFile")}
 							</span>
+							{/* The same passphrase wraps the connector tokens, so the row
+							 * names both rather than letting the user believe one store is
+							 * protected while the other is not. */}
+							{status.connectors && (
+								<span
+									className="gui-secret-protection-meta"
+									data-secret-connectors={status.connectors.protectedBy}
+								>
+									{status.connectors.protectedBy === "passphrase"
+										? t("settings.secretsProtectionConnectors")
+										: t("settings.secretsProtectionConnectorsPlain")}
+								</span>
+							)}
 						</div>
 						{!protection && (
 							<div className="gui-secret-protection-actions">

@@ -38,6 +38,7 @@ import {
 } from "../../connectors/cli";
 import { collectImportCandidates, importConnectors, readCustomEntries } from "../../connectors/import";
 import {
+	connectorKeyLocked,
 	deleteConnectorSecrets,
 	hasConnectorSecrets,
 	mergeConnectorSecrets,
@@ -96,6 +97,8 @@ export interface ConnectorCatalogItem {
 	tokenSchema?: ConnectorTokenSchema;
 	/** Token connectors: every required field already has a stored value. */
 	tokenSet: boolean;
+	/** The connector key store is passphrase-locked, so stored tokens cannot be read yet. */
+	locked?: boolean;
 	enabled: boolean;
 	/** Mount only the tools the server marks read-only. */
 	readOnly: boolean;
@@ -171,6 +174,10 @@ async function hasPastedToken(entry: ConnectorCatalogEntry): Promise<boolean> {
 }
 
 async function tokenReady(entry: ConnectorCatalogEntry): Promise<boolean> {
+	// A locked store cannot answer, and reporting "not configured" would send the
+	// user to retype a token that is already saved. The row says it is locked
+	// instead, which is what `locked` on the item carries.
+	if (await connectorKeyLocked()) return true;
 	if (entry.auth.mode === "oauth") {
 		const client = entry.tokenSchema?.oauthClient;
 		const pat = entry.tokenSchema?.personalAccessToken;
@@ -196,6 +203,7 @@ async function toItem(
 	status: ConnectorCatalogItem["status"],
 	readOnly = false,
 ): Promise<ConnectorCatalogItem> {
+	const locked = await connectorKeyLocked();
 	const item: ConnectorCatalogItem = {
 		id: entry.id,
 		name: entry.name,
@@ -214,6 +222,7 @@ async function toItem(
 		deviceAuth:
 			entry.auth.mode === "oauth" && entry.oauth?.clientId !== undefined && entry.oauth?.clientSecret === undefined,
 		tokenSet: await tokenReady(entry),
+		...(locked ? { locked: true } : {}),
 		enabled,
 		readOnly,
 		status,

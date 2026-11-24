@@ -41,6 +41,15 @@ export interface SecretStatus {
 	/** True when a passphrase is required and this process has not unlocked the store. */
 	locked?: boolean;
 	reason?: "missing-passphrase" | "wrong-passphrase" | "passphrase-source";
+	/**
+	 * The connector token store, which follows the same passphrase as the vault.
+	 * A locked vault leaves connector tokens unreadable, so the page can say the
+	 * protection covers both instead of implying it covers only one.
+	 */
+	connectors?: {
+		protectedBy: "key-file" | "passphrase";
+		locked: boolean;
+	};
 }
 
 /** Set, unlock, or remove the optional passphrase protection. */

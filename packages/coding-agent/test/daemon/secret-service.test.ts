@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { mergeConnectorSecrets, readConnectorSecrets } from "../../src/connectors/secrets";
 import { type ApprovalBridge, createApprovalBridge, secretRequestPayload } from "../../src/daemon/approval-bridge";
 import { SecretService } from "../../src/daemon/services/secret-service";
 import { redactMemorySecrets } from "../../src/memory-backend/redact";
@@ -57,6 +58,7 @@ describe("SecretService RPC", () => {
 			count: 0,
 			protectedBy: "key-file",
 			locked: false,
+			connectors: { protectedBy: "key-file", locked: false },
 		});
 		expect(await service.list()).toEqual({ entries: [], count: 0 });
 	});
@@ -77,6 +79,7 @@ describe("SecretService RPC", () => {
 			count: 1,
 			protectedBy: "key-file",
 			locked: false,
+			connectors: { protectedBy: "key-file", locked: false },
 		});
 	});
 
@@ -239,6 +242,7 @@ describe("SecretService RPC", () => {
 			protectedBy: "passphrase",
 			locked: true,
 			reason: "missing-passphrase",
+			connectors: { protectedBy: "passphrase", locked: true },
 		});
 		await expect(service.unlock({ passphrase: "not the passphrase" })).rejects.toThrow(/did not unlock/u);
 		expect(await service.unlock({ passphrase: "correct horse battery" })).toMatchObject({ locked: false });
@@ -268,6 +272,30 @@ describe("SecretService RPC", () => {
 		clearUnlockedMasterKeysForTests();
 		await expect(service.unlock({ passphrase: "correct horse battery" })).rejects.toThrow(/did not unlock/u);
 		expect(await service.unlock({ passphrase: "another passphrase" })).toMatchObject({ locked: false });
+	});
+
+	it("locks connector tokens with the same passphrase as the vault", async () => {
+		const { service, dir } = setup();
+		await service.set({ name: "API_TOKEN", value: VALUE });
+		await mergeConnectorSecrets("alpha", { API_KEY: "connector-secret" }, dir);
+
+		// One passphrase protects both stores: the user sets it once.
+		expect(await service.encrypt({ passphrase: "correct horse battery" })).toMatchObject({
+			connectors: { protectedBy: "passphrase", locked: false },
+		});
+		clearUnlockedMasterKeysForTests();
+		expect(await service.status()).toMatchObject({
+			locked: true,
+			connectors: { protectedBy: "passphrase", locked: true },
+		});
+		// The connector token is unreadable until the same passphrase unlocks it.
+		expect(await readConnectorSecrets("alpha", dir)).toBeUndefined();
+
+		await service.unlock({ passphrase: "correct horse battery" });
+		expect(await readConnectorSecrets("alpha", dir)).toEqual({ API_KEY: "connector-secret" });
+
+		await service.decrypt({ passphrase: "correct horse battery" });
+		expect(await service.status()).toMatchObject({ connectors: { protectedBy: "key-file", locked: false } });
 	});
 
 	it("grants vault access per MCP server and endpoint", async () => {

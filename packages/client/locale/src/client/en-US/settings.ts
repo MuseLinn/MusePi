@@ -7485,6 +7485,8 @@ export const settings = {
 	"settings.secretsProtection": "Encryption at rest",
 	"settings.secretsProtectionKeyFile": "Local key file",
 	"settings.secretsProtectionPassphrase": "Passphrase",
+	"settings.secretsProtectionConnectors": "Connector tokens use the same passphrase",
+	"settings.secretsProtectionConnectorsPlain": "Connector tokens use a separate local key file",
 	"settings.secretsProtectWithPassphrase": "Use a passphrase",
 	"settings.secretsRemovePassphrase": "Remove passphrase",
 	"settings.secretsUnlock": "Unlock",

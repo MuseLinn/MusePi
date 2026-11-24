@@ -17,6 +17,13 @@ import type {
 	SecretUpdateParams,
 	SecretUpdateResult,
 } from "@musepi/pi-wire";
+import {
+	connectorKeyState,
+	decryptConnectorKey,
+	encryptConnectorKey,
+	rephraseConnectorKey,
+	unlockConnectorKey,
+} from "../../connectors/secrets";
 import { notifyAgentSecretSaved } from "../../secrets/agent-runtime";
 import {
 	getAgentSecretStore,
@@ -87,7 +94,17 @@ export class SecretService implements DaemonService {
 	}
 
 	async status(): Promise<SecretStatus> {
-		return await getAgentSecretStore(this.#deps.agentDir()).status();
+		const [status, connector] = await Promise.all([
+			getAgentSecretStore(this.#deps.agentDir()).status(),
+			connectorKeyState(this.#deps.agentDir()),
+		]);
+		return {
+			...status,
+			connectors: {
+				protectedBy: connector.mode === "passphrase" ? "passphrase" : "key-file",
+				locked: connector.mode === "passphrase" && connector.locked,
+			},
+		};
 	}
 
 	async list(): Promise<SecretListResult> {
@@ -169,8 +186,12 @@ export class SecretService implements DaemonService {
 	/** Unlock a passphrase-protected store for this process; nothing is written. */
 	async unlock(params: SecretPassphraseParams): Promise<SecretStatus> {
 		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
+		const passphrase = String(p.passphrase ?? "");
 		const store = getAgentSecretStore(this.#deps.agentDir());
-		await store.unlock(String(p.passphrase ?? ""));
+		await store.unlock(passphrase);
+		// Connector tokens follow the same passphrase; unlocking only the vault
+		// would leave them unreadable while the page claimed the store was open.
+		await unlockConnectorKey(passphrase, this.#deps.agentDir());
 		// A session that started while the store was locked registered no value,
 		// so register what just became readable before a tool call can show it.
 		for (const entry of await store.values()) {
@@ -182,21 +203,28 @@ export class SecretService implements DaemonService {
 	/** Wrap the master key under a passphrase and delete the plain key file. */
 	async encrypt(params: SecretPassphraseParams): Promise<SecretStatus> {
 		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
-		await getAgentSecretStore(this.#deps.agentDir()).encrypt(String(p.passphrase ?? ""));
+		const passphrase = String(p.passphrase ?? "");
+		await getAgentSecretStore(this.#deps.agentDir()).encrypt(passphrase);
+		await encryptConnectorKey(passphrase, this.#deps.agentDir());
 		return await this.status();
 	}
 
 	/** Prove the passphrase and restore the plain key file. */
 	async decrypt(params: SecretPassphraseParams): Promise<SecretStatus> {
 		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
-		await getAgentSecretStore(this.#deps.agentDir()).decrypt(String(p.passphrase ?? ""));
+		const passphrase = String(p.passphrase ?? "");
+		await getAgentSecretStore(this.#deps.agentDir()).decrypt(passphrase);
+		await decryptConnectorKey(passphrase, this.#deps.agentDir());
 		return await this.status();
 	}
 
 	/** Replace the passphrase without ever writing the plain master key. */
 	async rephrase(params: SecretRephraseParams): Promise<SecretStatus> {
 		const p = (params ?? {}) as Partial<SecretRephraseParams>;
-		await getAgentSecretStore(this.#deps.agentDir()).rephrase(String(p.current ?? ""), String(p.next ?? ""));
+		const current = String(p.current ?? "");
+		const next = String(p.next ?? "");
+		await getAgentSecretStore(this.#deps.agentDir()).rephrase(current, next);
+		await rephraseConnectorKey(current, next, this.#deps.agentDir());
 		return await this.status();
 	}
 
