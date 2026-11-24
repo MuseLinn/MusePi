@@ -491,6 +491,45 @@ describe("保险库静态加密", () => {
 		expect(scope.textContent).not.toContain("correct horse battery");
 	});
 
+	test("MCP 授权：按 server 与端点勾选，只写真正变化的 server", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 1, protectedBy: "key-file", locked: false });
+		fake.responses.set("secret.list", { entries: [secretEntry()], count: 1 });
+		fake.responses.set("mcp.servers.list", {
+			servers: [
+				{ name: "github", target: "url:https://mcp.github.example/api", transport: "http" },
+				{ name: "local", target: 'stdio:["node","server.js"]', transport: "stdio" },
+			],
+		});
+		fake.responses.set("secret.mcpGrants", {
+			servers: [{ server: "local", target: 'stdio:["node","server.js"]', keys: ["GITHUB_TOKEN", "OTHER_TOKEN"] }],
+		});
+		fake.responses.set("secret.setMcpGrant", { servers: [] });
+
+		const scope = await mount(fake);
+		const row = scope.querySelector<HTMLElement>('[data-secret-name="GITHUB_TOKEN"]')!;
+		await act(async () => row.querySelector<HTMLButtonElement>('[data-secret-action="mcp"]')?.click());
+		await waitFor(() => scope.querySelector("[data-secret-grant-form]") !== null, "grant form");
+
+		const local = scope.querySelector<HTMLElement>('[data-mcp-server="local"]')!;
+		const github = scope.querySelector<HTMLElement>('[data-mcp-server="github"]')!;
+		// The already-granted endpoint starts checked; the other does not.
+		expect(local.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+		expect(github.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(false);
+		// The endpoint is the thing being approved, so it is visible.
+		expect(github.textContent).toContain("https://mcp.github.example/api");
+
+		await act(async () => github.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+		await act(async () => scope.querySelector<HTMLFormElement>("[data-secret-grant-form]")?.requestSubmit());
+		await waitFor(() => fake.calls("secret.setMcpGrant").length === 1, "setMcpGrant");
+
+		// `local` learned nothing new, so only `github` is written.
+		expect(fake.calls("secret.setMcpGrant")).toEqual([
+			{ server: "github", target: "url:https://mcp.github.example/api", keys: ["GITHUB_TOKEN"] },
+		]);
+		expect(scope.querySelector("[data-secret-grant-form]")).toBeNull();
+	});
+
 	test("关闭口令走 secret.decrypt，失败原因留在卡里可重试", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("secret.status", {

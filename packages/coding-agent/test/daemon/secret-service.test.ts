@@ -12,7 +12,7 @@ import { clearUnlockedMasterKeysForTests } from "../../src/secrets/encrypted-sto
 const VALUE = "sk-super-secret-123";
 const noop = (): void => {};
 
-function setup(): {
+function setup(mcpServers?: Array<{ name: string; target: string }>): {
 	dir: string;
 	store: AgentSecretStore;
 	bridge: ApprovalBridge;
@@ -26,6 +26,7 @@ function setup(): {
 		agentDir: () => dir,
 		get: sessionId => (sessionId === "session-1" ? live : undefined),
 		allSessions: () => [live][Symbol.iterator](),
+		...(mcpServers ? { mcpServers: async () => mcpServers } : {}),
 	});
 	return { dir, store, bridge, service };
 }
@@ -267,6 +268,24 @@ describe("SecretService RPC", () => {
 		clearUnlockedMasterKeysForTests();
 		await expect(service.unlock({ passphrase: "correct horse battery" })).rejects.toThrow(/did not unlock/u);
 		expect(await service.unlock({ passphrase: "another passphrase" })).toMatchObject({ locked: false });
+	});
+
+	it("grants vault access per MCP server and endpoint", async () => {
+		const target = "url:https://mcp.example/api";
+		const { service } = setup([{ name: "demo", target }]);
+		await service.set({ name: "MCP_TOKEN", value: VALUE });
+
+		await expect(
+			service.setMcpGrant({ server: "demo", target: "url:https://evil.example/api", keys: ["MCP_TOKEN"] }),
+		).rejects.toThrow(/not configured/u);
+
+		const granted = await service.setMcpGrant({ server: "demo", target, keys: ["MCP_TOKEN"] });
+		expect(granted.servers).toEqual([{ server: "demo", target, keys: ["MCP_TOKEN"] }]);
+		expect(await service.mcpGrants()).toEqual(granted);
+		expect(JSON.stringify(granted)).not.toContain(VALUE);
+
+		// Revoking the server empties the list.
+		expect((await service.setMcpGrant({ server: "demo", target, keys: [] })).servers).toEqual([]);
 	});
 
 	it("unknown request ids and invalid names are refused", async () => {

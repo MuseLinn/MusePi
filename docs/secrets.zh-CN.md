@@ -161,6 +161,7 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
   metadata.json         # name、purpose、scope、delivery、时间戳（0600，原子写）
   .master.key           # 每 profile 主密钥（0600）——明文形态
   .master.key.wrapped   # 同一把主密钥、由口令包裹（0600）——受保护形态
+  mcp-grants.json       # server + 端点 → 允许的密钥名（0600）
   files/                # file 交付的工作副本（0700；每个文件 0600）
 ```
 
@@ -202,6 +203,8 @@ Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值�
 
 MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连接时 daemon 会按该 server 的工作区读取条目，因此配置文件永不包含值；条目缺失、不可解密或不在范围内时，该 env/header 会被省略。这是让 MCP 使用保险库值、而不把值写进 `mcp.json` 或进程环境的路径。
 
+引用只是请求，不是许可。用户按 server、按端点授权——在「设置 → 智能体 → 保险库」的密钥行点「MCP」，把「这个 server、连这个地址 / 跑这个命令，可以读这个名字」记入 `agent-secrets/mcp-grants.json`。端点属于授权内容（http/sse 是 URL，stdio 是命令加参数），因此工作区 `.mcp.json` 不能靠声明一个同名但指向别处的 server 复用授权，必须重新允许。未授权的引用会被省略，server 照常启动但不带该 env/header；没有任何自动授权，配置里删掉一个 server 后它的授权会留到下次编辑。
+
 ### Daemon RPC
 
 | RPC              | 参数                                             | 结果                                       |
@@ -216,6 +219,8 @@ MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连�
 | `secret.encrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.decrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.rephrase`| `{ current, next }`                              | `SecretStatus`                             |
+| `secret.mcpGrants` | `{}`                                           | `{ servers: McpGrantView[] }`               |
+| `secret.setMcpGrant` | `{ server, target, keys: string[] }`         | `{ servers: McpGrantView[] }`               |
 
 `SecretEntryView` 中的时间戳是 epoch 毫秒。`secret.answer` 在 daemon 内先落盘再落定工具的 promise，因此工具只看得到最终动作。`"workspace"` 会解析为待决请求所属会话的工作目录；`secret.set` 不接受它（设置页没有会话上下文），`secret.update` 只把收窄的条目放宽为 `"all"`。未知或已过期的 request id 会报 `Unknown secret request: <id>`。任何响应、推送、日志或 transcript 都不包含值。口令同样不会出现在结果与错误里：口令错误与包裹文件损坏时 `secret.unlock` 返回同一句话，长度限定 8–1024 个字符。
 

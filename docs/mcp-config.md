@@ -404,7 +404,7 @@ Example:
 
 Before MusePi launches a stdio server or makes an HTTP/SSE request, it resolves stdio `env` values and HTTP/SSE `headers` values like this:
 
-1. If the whole value is `${vault:NAME}` (NAME matching `/^[A-Z][A-Z0-9_]{0,63}$/`), MusePi reads that entry from the agent secret store for this workspace and uses its value. The config file never holds the value; a missing, unreadable or out-of-scope entry drops that env/header entry.
+1. If the whole value is `${vault:NAME}` (NAME matching `/^[A-Z][A-Z0-9_]{0,63}$/`), MusePi reads that entry from the agent secret store for this workspace and uses its value. The config file never holds the value; a missing, unreadable or out-of-scope entry drops that env/header entry. A vault reference also needs the user's grant for **this exact endpoint**: Settings → Vault → the key's MCP action records "this server, at this URL/command, may read this name". A server entry that changes its URL, command or arguments does not inherit an older grant, so a workspace `.mcp.json` cannot reuse a grant by declaring a same-named server that points somewhere else. An ungranted reference is dropped, and the connection starts without it.
 2. If a value starts with `!`, MusePi runs the rest as a shell command with a 10s timeout and uses trimmed stdout.
 3. If the command fails, times out, or prints only whitespace, that `env`/`headers` entry is omitted.
 4. Otherwise MusePi checks whether the value names an environment variable.

@@ -9272,6 +9272,57 @@ body.gui-resizing {
 	gap: var(--space-3);
 }
 
+/* MCP 授权行：复选框 + server 名 + 端点指纹。端点就是被批准的对象，所以它
+ * 直接显示（过长省略，悬停可看全），而不是藏在 title 里当装饰。行本身是一个
+ * label，点名字也能勾选。 */
+.gui-secret-grant-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.gui-secret-grant-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+	padding: 6px 8px;
+	border-radius: var(--radius-lg);
+	cursor: pointer;
+}
+
+.gui-secret-grant-row:hover {
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.gui-secret-grant-row input[type="checkbox"] {
+	flex: none;
+	margin: 0;
+	accent-color: var(--color-accent);
+}
+
+.gui-secret-grant-name {
+	flex: none;
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+	color: var(--color-text);
+}
+
+.gui-secret-grant-target {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	text-align: right;
+}
+
 /* 两个动作成组靠右：更换口令是常规操作、关闭口令是降级保护，主次由按钮样式
  * 区分，不另加文字说明。 */
 .gui-secret-protection-actions {

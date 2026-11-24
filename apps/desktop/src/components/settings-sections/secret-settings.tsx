@@ -55,6 +55,27 @@ interface SecretListResult {
 	count: number;
 }
 
+/** One configured server as the vault page sees it (`mcp.servers.list`). */
+interface McpServerOption {
+	name: string;
+	target: string;
+}
+
+/** A recorded grant (`secret.mcpGrants`). */
+interface McpGrant {
+	server: string;
+	target: string;
+	keys: string[];
+}
+
+/** Which servers may use one stored key; `checked` holds server names. */
+interface GrantFormState {
+	entry: SecretEntryView;
+	servers: McpServerOption[];
+	grants: McpGrant[];
+	checked: string[];
+}
+
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const MIN_SECRET_VALUE_LENGTH = 4;
 const MIN_PASSPHRASE_LENGTH = 8;
@@ -255,6 +276,9 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const [widening, setWidening] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
 	const [importing, setImporting] = useState(false);
+	const [grantForm, setGrantForm] = useState<GrantFormState | null>(null);
+	const [grantBusy, setGrantBusy] = useState(false);
+	const [grantError, setGrantError] = useState<string | null>(null);
 	const [envText, setEnvText] = useState("");
 	const [envError, setEnvError] = useState<string | null>(null);
 	const [envDone, setEnvDone] = useState<number | null>(null);
@@ -310,6 +334,79 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const closeProtection = (): void => {
 		setProtection(null);
 		setProtectionError(null);
+	};
+
+	/**
+	 * Read both halves the form needs: the servers this machine has, and the
+	 * grants already recorded. A box is checked only when the stored grant
+	 * names the same endpoint, so a moved server shows unchecked.
+	 */
+	const openGrant = async (entry: SecretEntryView): Promise<void> => {
+		if (!rpc || grantBusy) return;
+		tapFeedback();
+		setActionError(null);
+		setGrantError(null);
+		setGrantBusy(true);
+		try {
+			const [configured, recorded] = await Promise.all([
+				rpc.request<{ servers?: McpServerOption[] }>("mcp.servers.list", {}),
+				rpc.request<{ servers?: McpGrant[] }>("secret.mcpGrants", {}),
+			]);
+			const servers = (Array.isArray(configured?.servers) ? configured.servers : []).filter(
+				(server): server is McpServerOption =>
+					typeof server?.name === "string" && typeof server?.target === "string",
+			);
+			const grants = Array.isArray(recorded?.servers) ? recorded.servers : [];
+			const checked = servers
+				.filter(server =>
+					grants.some(
+						grant =>
+							grant.server === server.name && grant.target === server.target && grant.keys.includes(entry.name),
+					),
+				)
+				.map(server => server.name);
+			setGrantForm({ entry, servers, grants, checked });
+		} catch (error) {
+			setActionError(t("settings.secretsMcpLoadFailed", { error: errorText(error) }));
+		} finally {
+			setGrantBusy(false);
+		}
+	};
+
+	const toggleGrant = (server: string, allowed: boolean): void => {
+		setGrantError(null);
+		setGrantForm(current => {
+			if (!current) return current;
+			const checked = allowed
+				? [...current.checked.filter(name => name !== server), server]
+				: current.checked.filter(name => name !== server);
+			return { ...current, checked };
+		});
+	};
+
+	/** Write only the servers whose key set for this secret actually changed. */
+	const saveGrant = async (): Promise<void> => {
+		if (!rpc || !grantForm || grantBusy) return;
+		const name = grantForm.entry.name;
+		setGrantBusy(true);
+		setGrantError(null);
+		try {
+			for (const server of grantForm.servers) {
+				const recorded = grantForm.grants.find(
+					grant => grant.server === server.name && grant.target === server.target,
+				);
+				const current = recorded ? [...recorded.keys].sort() : [];
+				const base = current.filter(key => key !== name);
+				const wanted = grantForm.checked.includes(server.name) ? [...base, name].sort() : base;
+				if (wanted.length === current.length && wanted.every((key, index) => key === current[index])) continue;
+				await rpc.request("secret.setMcpGrant", { server: server.name, target: server.target, keys: wanted });
+			}
+			setGrantForm(null);
+		} catch (error) {
+			setGrantError(t("settings.secretsMcpSaveFailed", { error: errorText(error) }));
+		} finally {
+			setGrantBusy(false);
+		}
 	};
 
 	/**
@@ -543,7 +640,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const visible = normalizedQuery
 		? entries.filter(entry => `${entry.name} ${entry.purpose}`.toLowerCase().includes(normalizedQuery))
 		: entries;
-	const bodyOpen = form !== null || importing;
+	const bodyOpen = form !== null || importing || grantForm !== null;
 	const locked = status?.locked === true;
 	const passphraseProtected = status?.protectedBy === "passphrase";
 	const protectionAction = locked
@@ -873,6 +970,70 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 						</div>
 					</div>
 				</form>
+			) : grantForm ? (
+				<form
+					className="gui-agent-card gui-secret-form"
+					data-secret-grant-form={grantForm.entry.name}
+					aria-busy={grantBusy}
+					onSubmit={event => {
+						event.preventDefault();
+						void saveGrant();
+					}}
+					onKeyDown={event => {
+						if (event.key !== "Escape" || grantBusy) return;
+						event.preventDefault();
+						event.stopPropagation();
+						setGrantForm(null);
+					}}
+				>
+					<div className="gui-secret-form-head">
+						<span className="gui-secret-form-title">
+							{t("settings.secretsMcpTitle", { name: grantForm.entry.name })}
+						</span>
+					</div>
+					{grantForm.servers.length === 0 ? (
+						<p className="gui-note">{t("settings.secretsMcpNoServers")}</p>
+					) : (
+						<ul className="gui-secret-grant-list">
+							{grantForm.servers.map(server => (
+								<li key={server.name}>
+									<label className="gui-secret-grant-row" data-mcp-server={server.name}>
+										<input
+											type="checkbox"
+											checked={grantForm.checked.includes(server.name)}
+											disabled={grantBusy}
+											onChange={event => toggleGrant(server.name, event.target.checked)}
+										/>
+										<span className="gui-secret-grant-name">{server.name}</span>
+										<span className="gui-secret-grant-target" title={server.target}>
+											{server.target}
+										</span>
+									</label>
+								</li>
+							))}
+						</ul>
+					)}
+					<div className="gui-secret-form-foot">
+						<span className="gui-settings-field-hint">{t("settings.secretsMcpHint")}</span>
+						<div className="gui-secret-form-actions">
+							<button type="button" className="gui-btn" onClick={() => setGrantForm(null)} disabled={grantBusy}>
+								{t("settings.cancel")}
+							</button>
+							<button
+								type="submit"
+								className="gui-btn gui-btn-primary"
+								disabled={grantBusy || grantForm.servers.length === 0}
+							>
+								{grantBusy ? t("settings.secretsSaving") : t("general.save")}
+							</button>
+						</div>
+					</div>
+					{grantError && (
+						<div className="gui-secret-form-error" role="alert">
+							{grantError}
+						</div>
+					)}
+				</form>
 			) : !listKnown ? null : entries.length === 0 ? (
 				<div className="gui-secret-empty">
 					<div className="gui-secret-empty-title">{t("settings.secretsEmptyTitle")}</div>
@@ -914,6 +1075,15 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 											{t("settings.secretsAllowAll")}
 										</button>
 									)}
+									<button
+										type="button"
+										className="gui-btn gui-btn-ghost"
+										data-secret-action="mcp"
+										disabled={locked || grantBusy}
+										onClick={() => void openGrant(entry)}
+									>
+										{t("settings.secretsMcpAccess")}
+									</button>
 									<button
 										type="button"
 										className="gui-btn gui-btn-ghost"

@@ -5,10 +5,12 @@ import type {
 	SecretDeleteParams,
 	SecretDeleteResult,
 	SecretListResult,
+	SecretMcpGrantsResult,
 	SecretPassphraseParams,
 	SecretRephraseParams,
 	SecretScope,
 	SecretScopeChoice,
+	SecretSetMcpGrantParams,
 	SecretSetParams,
 	SecretSetResult,
 	SecretStatus,
@@ -22,6 +24,7 @@ import {
 	validateSecretName,
 	validateSecretValue,
 } from "../../secrets/agent-store";
+import { listMcpGrants, setMcpGrant, validateMcpServerName } from "../../secrets/mcp-grants";
 import type { ApprovalBridge, PendingSecret } from "../approval-bridge";
 import type { DaemonService } from "./types";
 
@@ -30,7 +33,9 @@ import type { DaemonService } from "./types";
  *
  * 能力缝声明：
  * - 输入：RPC `secret.status` / `secret.list` / `secret.set` / `secret.delete`
- *   （设置页的半静默管理路径），以及 `secret.answer`（应答
+ *   （设置页的半静默管理路径），`secret.unlock` / `encrypt` / `decrypt` /
+ *   `rephrase`（主密钥的口令保护），`secret.mcpGrants` / `setMcpGrant`（哪些
+ *   MCP server 可以读保险库值），以及 `secret.answer`（应答
  *   `request_secret` 推送的待决卡片）。
  * - 输出：`AgentSecretStore` 的加密落盘（值 AES-256-GCM，元数据 0600
  *   sidecar），`notifyAgentSecretSaved` 把新值动态注册进所有活跃会话的
@@ -51,6 +56,11 @@ export interface SecretServiceHostAccess {
 	agentDir(): string;
 	get(sessionId: string): SecretLiveSession | undefined;
 	allSessions(): Iterable<SecretLiveSession>;
+	/**
+	 * Configured MCP servers, so a grant can only be pinned to an endpoint that
+	 * actually exists. Absent (tests, headless hosts) skips that check.
+	 */
+	mcpServers?(): Promise<Array<{ name: string; target: string }>>;
 }
 
 export class SecretService implements DaemonService {
@@ -66,6 +76,8 @@ export class SecretService implements DaemonService {
 		"secret.encrypt": "encrypt",
 		"secret.decrypt": "decrypt",
 		"secret.rephrase": "rephrase",
+		"secret.mcpGrants": "mcpGrants",
+		"secret.setMcpGrant": "setMcpGrant",
 	} as const;
 
 	readonly #deps: SecretServiceHostAccess;
@@ -186,6 +198,30 @@ export class SecretService implements DaemonService {
 		const p = (params ?? {}) as Partial<SecretRephraseParams>;
 		await getAgentSecretStore(this.#deps.agentDir()).rephrase(String(p.current ?? ""), String(p.next ?? ""));
 		return await this.status();
+	}
+
+	/** Which MCP servers may read vault entries, and for which endpoints. */
+	async mcpGrants(): Promise<SecretMcpGrantsResult> {
+		return { servers: await listMcpGrants(this.#deps.agentDir()) };
+	}
+
+	/**
+	 * Replace one server's allowed names. The endpoint must be one the daemon
+	 * has configured: a grant for a target nobody can connect to would only
+	 * become usable after a config points there, which is exactly the case the
+	 * grant is meant to gate.
+	 */
+	async setMcpGrant(params: SecretSetMcpGrantParams): Promise<SecretMcpGrantsResult> {
+		const p = (params ?? {}) as Partial<SecretSetMcpGrantParams>;
+		const server = validateMcpServerName(p.server);
+		const target = typeof p.target === "string" ? p.target : "";
+		const keys = Array.isArray(p.keys) ? p.keys : [];
+		const known = await this.#deps.mcpServers?.();
+		if (known && !known.some(entry => entry.name === server && entry.target === target)) {
+			throw new Error(`${server} is not configured with that endpoint.`);
+		}
+		await setMcpGrant(this.#deps.agentDir(), server, target, keys);
+		return { servers: await listMcpGrants(this.#deps.agentDir()) };
 	}
 
 	#findPending(

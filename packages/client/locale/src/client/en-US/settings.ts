@@ -7495,6 +7495,14 @@ export const settings = {
 	"settings.secretsPassphraseNote": "The passphrase is used by this process only and is never written to disk.",
 	"settings.secretsPassphraseTooShort": "Use at least 8 characters.",
 	"settings.secretsPassphraseMismatch": "The two passphrases do not match.",
+	"settings.secretsMcpAccess": "MCP",
+	"settings.secretsMcpTitle": "MCP access · {name}",
+	"settings.secretsMcpNoServers":
+		"No MCP server is configured yet. Add one under Integrations, then come back to allow it.",
+	"settings.secretsMcpHint":
+		"Grants are recorded per endpoint: a server that changes its address or command must be allowed again.",
+	"settings.secretsMcpLoadFailed": "Could not read the MCP configuration: {error}",
+	"settings.secretsMcpSaveFailed": "Could not save MCP access: {error}",
 	"settings.secretsChangePassphrase": "Change passphrase",
 	"settings.secretsPassphraseCurrent": "Current passphrase",
 	"settings.secretsPassphraseNext": "New passphrase",

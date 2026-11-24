@@ -8,9 +8,11 @@ import * as path from "node:path";
 import * as url from "node:url";
 import { isDefinitiveOAuthFailure, type TSchema } from "@musepi/pi-ai";
 import { logger } from "@musepi/pi-utils";
+import { getAgentDir } from "@musepi/pi-utils/dirs";
 import type { SourceMeta } from "../capability/types";
 import { resolveConfigValue } from "../config/resolve-config-value";
 import type { CustomTool } from "../extensibility/custom-tools/types";
+import { mcpGrantedKeys, mcpServerTarget } from "../secrets/mcp-grants";
 import { type AuthStorage, REMOTE_REFRESH_SENTINEL } from "../session/auth-storage";
 import {
 	connectToServer,
@@ -554,7 +556,7 @@ export class MCPManager {
 
 			// Resolve auth config before connecting, but do so per-server in parallel.
 			const connectionPromise = (async () => {
-				const resolvedConfig = await this.#resolveAuthConfig(config);
+				const resolvedConfig = await this.#resolveAuthConfig(config, { serverName: name });
 				return connectToServer(name, resolvedConfig, {
 					onNotification: (method, params) => {
 						this.#handleServerNotification(name, method, params);
@@ -591,7 +593,7 @@ export class MCPManager {
 						lookupMcpOAuthCredential(this.#authStorage, config)
 					) {
 						connection.transport.onAuthError = async () => {
-							const refreshed = await this.#resolveAuthConfig(config, { forceRefresh: true });
+							const refreshed = await this.#resolveAuthConfig(config, { forceRefresh: true, serverName: name });
 							if (refreshed.type === "http" || refreshed.type === "sse") {
 								return refreshed.headers ?? null;
 							}
@@ -935,7 +937,10 @@ export class MCPManager {
 	 * Pass `oauth: false` to skip OAuth credential injection (used by reauth's
 	 * unauthenticated probe, which must observe the server's bare 401).
 	 */
-	async prepareConfig(config: MCPServerConfig, options?: { oauth?: boolean }): Promise<MCPServerConfig> {
+	async prepareConfig(
+		config: MCPServerConfig,
+		options?: { oauth?: boolean; serverName?: string },
+	): Promise<MCPServerConfig> {
 		return this.#resolveAuthConfig(config, options);
 	}
 
@@ -1299,7 +1304,7 @@ export class MCPManager {
 		source: SourceMeta | undefined,
 		reconnectEpoch: number,
 	): Promise<MCPServerConnection> {
-		const resolvedConfig = await this.#resolveAuthConfig(config);
+		const resolvedConfig = await this.#resolveAuthConfig(config, { serverName: name });
 		const connection = await connectToServer(name, resolvedConfig, {
 			onNotification: (method, params) => {
 				this.#handleServerNotification(name, method, params);
@@ -1326,7 +1331,7 @@ export class MCPManager {
 		// Same gate as connectServers: any resolvable managed credential.
 		if (isAuthRefreshableMCPTransport(connection.transport) && lookupMcpOAuthCredential(this.#authStorage, config)) {
 			connection.transport.onAuthError = async () => {
-				const refreshed = await this.#resolveAuthConfig(config, { forceRefresh: true });
+				const refreshed = await this.#resolveAuthConfig(config, { forceRefresh: true, serverName: name });
 				if (refreshed.type === "http" || refreshed.type === "sse") {
 					return refreshed.headers ?? null;
 				}
@@ -1590,7 +1595,7 @@ export class MCPManager {
 	 */
 	async #resolveAuthConfig(
 		config: MCPServerConfig,
-		opts?: { forceRefresh?: boolean; oauth?: boolean },
+		opts?: { forceRefresh?: boolean; oauth?: boolean; serverName?: string },
 	): Promise<MCPServerConfig> {
 		let resolved: MCPServerConfig = { ...config };
 
@@ -1697,13 +1702,21 @@ export class MCPManager {
 			}
 		}
 
+		// A `${vault:NAME}` reference is a request; the user's grant for this exact
+		// endpoint is the permission. Without a server name nothing can be granted,
+		// so the reference resolves to nothing rather than to a stored value.
+		const vaultAllow =
+			opts?.serverName === undefined
+				? []
+				: await mcpGrantedKeys(getAgentDir(), opts.serverName, mcpServerTarget(config));
+
 		if (resolved.type !== "http" && resolved.type !== "sse") {
 			// Literal env values (Agent Plugins §§4.1/9.2) are opaque package data:
 			// no env-name lookup, no `!command` execution, no dropping empty values.
 			if (resolved.env && resolved.envPolicy !== "literal") {
 				const nextEnv: Record<string, string> = {};
 				for (const [key, value] of Object.entries(resolved.env)) {
-					const resolvedValue = await resolveConfigValue(value, { cwd: this.cwd });
+					const resolvedValue = await resolveConfigValue(value, { cwd: this.cwd, vaultAllow });
 					if (resolvedValue) nextEnv[key] = resolvedValue;
 				}
 				resolved = { ...resolved, env: nextEnv };
@@ -1714,7 +1727,7 @@ export class MCPManager {
 			if (resolved.headers && resolved.headerPolicy !== "origin-locked") {
 				const nextHeaders: Record<string, string> = {};
 				for (const [key, value] of Object.entries(resolved.headers)) {
-					const resolvedValue = await resolveConfigValue(value, { cwd: this.cwd });
+					const resolvedValue = await resolveConfigValue(value, { cwd: this.cwd, vaultAllow });
 					if (resolvedValue) nextHeaders[key] = resolvedValue;
 				}
 				resolved = { ...resolved, headers: nextHeaders };

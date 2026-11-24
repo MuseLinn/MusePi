@@ -33,6 +33,7 @@ import { type MCPServer, mcpCapability } from "../../capability/mcp";
 import { type MCPProbeResult, probeServer } from "../../mcp/client";
 import { addMCPServer, readMCPConfigFile, removeMCPServer, validateServerName } from "../../mcp/config-writer";
 import type { MCPAuthConfig, MCPConfigFile, MCPServerConfig } from "../../mcp/types";
+import { mcpServerTarget } from "../../secrets/mcp-grants";
 // The discovery providers that read the other agents' configurations.
 import "../../discovery/builtin";
 import type { DaemonService } from "./types";
@@ -41,6 +42,12 @@ import type { DaemonService } from "./types";
 export interface McpServerSummary {
 	name: string;
 	transport: "stdio" | "http" | "sse";
+	/**
+	 * Fingerprint of what this server connects to. A vault grant is approved
+	 * for one target, so a same-named entry that points elsewhere does not
+	 * inherit it.
+	 */
+	target: string;
 	url?: string;
 	command?: string;
 	auth?: MCPAuthConfig["type"];
@@ -59,7 +66,7 @@ export interface MCPProbeManager {
 	/** Config as discovered (pre-auth), or undefined for an unknown name. */
 	getServerConfig(name: string): MCPServerConfig | undefined;
 	/** Inject stored tokens/OAuth into a copy of the config. */
-	prepareConfig(config: MCPServerConfig): Promise<MCPServerConfig>;
+	prepareConfig(config: MCPServerConfig, options?: { serverName?: string }): Promise<MCPServerConfig>;
 }
 
 export interface McpServersServiceDeps {
@@ -154,7 +161,7 @@ function transportOf(config: MCPServerConfig): McpServerSummary["transport"] {
 
 /** Project a stored config onto the wire summary — headers/tokens stay on disk. */
 function summarize(name: string, config: MCPServerConfig): McpServerSummary {
-	const summary: McpServerSummary = { name, transport: transportOf(config) };
+	const summary: McpServerSummary = { name, transport: transportOf(config), target: mcpServerTarget(config) };
 	if ("url" in config && config.url) summary.url = config.url;
 	if ("command" in config && config.command) summary.command = config.command;
 	if (config.auth) summary.auth = config.auth.type;
@@ -253,6 +260,7 @@ export class McpServersService implements DaemonService {
 					return {
 						name: server.name,
 						transport: transport === "sse" || transport === "http" ? transport : "stdio",
+						target: mcpServerTarget(server),
 						...(server.url ? { url: server.url } : {}),
 						...(server.command ? { command: server.command } : {}),
 						...(server.auth?.type ? { auth: server.auth.type } : {}),
@@ -358,7 +366,7 @@ export class McpServersService implements DaemonService {
 			};
 		}
 		try {
-			return await probeServer(name, await manager.prepareConfig(config));
+			return await probeServer(name, await manager.prepareConfig(config, { serverName: name }));
 		} catch (error) {
 			return { name, ok: false, error: error instanceof Error ? error.message : String(error) };
 		}

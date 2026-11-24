@@ -161,6 +161,7 @@ returns an error telling the user to add the secret from Settings → Vault.
   metadata.json         # name, purpose, scope, delivery, timestamps (0600, atomic write)
   .master.key           # per-profile master key (0600) — plain form
   .master.key.wrapped   # same key wrapped by a passphrase (0600) — protected form
+  mcp-grants.json       # server + endpoint → allowed names (0600)
   files/                # working copies for `file` delivery (0700; each file 0600)
 ```
 
@@ -266,6 +267,16 @@ config file never holds the value; a missing, unreadable or out-of-scope entry
 drops that env/header. This is the path that lets MCP use a vault value without
 writing it into `mcp.json` or the process environment.
 
+A reference is a request, not a permission. The user grants it per server and
+per endpoint — Settings → Vault → MCP on a key records "this server, connecting
+to this URL / running this command, may read this name" in
+`agent-secrets/mcp-grants.json`. The endpoint is part of the grant (URL for
+http/sse, command plus arguments for stdio), so a workspace `.mcp.json` cannot
+reuse a grant by declaring a same-named server that points elsewhere; it must
+be granted again. An ungranted reference is dropped, so the server starts
+without that env/header; nothing is granted automatically, and a server removed
+from the config leaves its grant behind until it is edited.
+
 ### Daemon RPC
 
 | RPC              | Params                                           | Result                                     |
@@ -280,6 +291,8 @@ writing it into `mcp.json` or the process environment.
 | `secret.encrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.decrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.rephrase`| `{ current, next }`                              | `SecretStatus`                             |
+| `secret.mcpGrants` | `{}`                                           | `{ servers: McpGrantView[] }`               |
+| `secret.setMcpGrant` | `{ server, target, keys: string[] }`         | `{ servers: McpGrantView[] }`               |
 
 Timestamps in `SecretEntryView` are epoch milliseconds. `secret.answer` saves
 the value in the daemon before resolving the tool's promise, so the tool only

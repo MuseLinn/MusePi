@@ -59,6 +59,25 @@ export interface SecretListResult {
 	count: number;
 }
 
+/** One MCP server's permission to read vault entries. */
+export interface McpGrantView {
+	server: string;
+	/** Fingerprint of the endpoint the user approved; a changed endpoint does not inherit it. */
+	target: string;
+	keys: string[];
+}
+
+export interface SecretMcpGrantsResult {
+	servers: McpGrantView[];
+}
+
+/** Replace one server's key list; an empty list revokes the server. */
+export interface SecretSetMcpGrantParams {
+	server: string;
+	target: string;
+	keys: string[];
+}
+
 export interface SecretSetParams {
 	name: string;
 	value: string;

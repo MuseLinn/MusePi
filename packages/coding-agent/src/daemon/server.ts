@@ -46,6 +46,7 @@ import type {
 	SecretDeleteParams,
 	SecretPassphraseParams,
 	SecretRephraseParams,
+	SecretSetMcpGrantParams,
 	SecretSetParams,
 	SecretUpdateParams,
 	SessionEntry,
@@ -755,6 +756,7 @@ export class DaemonServer {
 				agentDir: () => this.#host.settings()?.getAgentDir() ?? getAgentDir(),
 				get: sessionId => this.#host.get(sessionId),
 				allSessions: () => this.#host.allSessions(),
+				mcpServers: async () => (await this.#services.get<McpServersService>("mcpServers").list()).servers,
 			}),
 		);
 		this.#services.register(
@@ -6720,6 +6722,12 @@ export class DaemonServer {
 			}
 			case "secret.rephrase": {
 				return this.#services.get<SecretService>("secrets").rephrase((params ?? {}) as SecretRephraseParams);
+			}
+			case "secret.mcpGrants": {
+				return this.#services.get<SecretService>("secrets").mcpGrants();
+			}
+			case "secret.setMcpGrant": {
+				return this.#services.get<SecretService>("secrets").setMcpGrant((params ?? {}) as SecretSetMcpGrantParams);
 			}
 			case "usage.reports": {
 				// 委托 UsageService（P1 服务抽取；原实现整体搬移至

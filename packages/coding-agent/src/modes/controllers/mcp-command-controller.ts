@@ -1611,11 +1611,11 @@ export class MCPCommandController {
 			// Resolve auth config if needed
 			let resolvedConfig: MCPServerConfig;
 			if (this.ctx.mcpManager) {
-				resolvedConfig = await this.ctx.mcpManager.prepareConfig(config);
+				resolvedConfig = await this.ctx.mcpManager.prepareConfig(config, { serverName: name });
 			} else {
 				const tempManager = new MCPManager(getProjectDir());
 				tempManager.setAuthStorage(this.ctx.session.modelRegistry.authStorage);
-				resolvedConfig = await tempManager.prepareConfig(config);
+				resolvedConfig = await tempManager.prepareConfig(config, { serverName: name });
 			}
 
 			// Create temporary connection

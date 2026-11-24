@@ -1,5 +1,5 @@
 # Consistency record for mcp-config.md / mcp-config.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/mcp-config
-mcp-config.md: 7d871c42a67790a840d574750bcab88c75675378
-mcp-config.zh-CN.md: d0c9e511486bc541b0148571f9cd760d2291a523
+mcp-config.md: a96e8693be15101d8bcf90b92efc2bae4a2a9f24
+mcp-config.zh-CN.md: 02cff6f3ff2a89dc0b660336c918eeafe1f8b7e4

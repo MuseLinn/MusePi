@@ -5,7 +5,7 @@
  */
 
 import { executeShell } from "@musepi/pi-natives";
-import { $envExact } from "@musepi/pi-utils";
+import { $envExact, logger } from "@musepi/pi-utils";
 import { getAgentDir } from "@musepi/pi-utils/dirs";
 import { getAgentSecretStore, secretScopeIncludes } from "../secrets/agent-store";
 
@@ -21,6 +21,12 @@ const commandInFlight = new Map<string, Promise<string | undefined>>();
 export interface ResolveConfigValueOptions {
 	/** The workspace the config belongs to, for a scoped vault entry. */
 	cwd?: string;
+	/**
+	 * Names a `${vault:…}` reference may read. Absent allows any stored entry
+	 * (provider keys and other non-MCP callers); present restricts to exactly
+	 * these names, so an MCP server only receives what the user granted it.
+	 */
+	vaultAllow?: readonly string[];
 }
 
 /**
@@ -34,7 +40,15 @@ export async function resolveConfigValue(
 	options: ResolveConfigValueOptions = {},
 ): Promise<string | undefined> {
 	const vault = VAULT_REFERENCE.exec(config);
-	if (vault) return await readVaultValue(vault[1]!, options.cwd);
+	if (vault) {
+		if (options.vaultAllow !== undefined && !options.vaultAllow.includes(vault[1]!)) {
+			// A dropped header is the visible half of a refused grant; the value
+			// never leaves the store, so the server simply starts without it.
+			logger.warn("Vault reference is not granted to this consumer", { name: vault[1] });
+			return undefined;
+		}
+		return await readVaultValue(vault[1]!, options.cwd);
+	}
 	if (config.startsWith("!")) {
 		return await executeCommand(config);
 	}

@@ -62,7 +62,13 @@ describe("McpServersService", () => {
 		// The list also carries the servers other agents on this machine
 		// declare, so this asserts on the entry this service owns.
 		expect(listed.servers.filter(server => server.source === "mcp.json")).toEqual([
-			{ name: "github", transport: "http", url: "https://api.githubcopilot.com/mcp/", source: "mcp.json" },
+			{
+				name: "github",
+				transport: "http",
+				target: "url:https://api.githubcopilot.com/mcp/",
+				url: "https://api.githubcopilot.com/mcp/",
+				source: "mcp.json",
+			},
 		]);
 		expect(JSON.stringify(listed)).not.toContain("ghp_exampleToken");
 		// The token does live in the local config, which is user-scope state —
@@ -84,7 +90,14 @@ describe("McpServersService", () => {
 		const listed = await service.list();
 
 		expect(listed.servers.filter(server => server.source === "mcp.json")).toEqual([
-			{ name: "local-tools", transport: "stdio", command: "bunx", auth: "apikey", source: "mcp.json" },
+			{
+				name: "local-tools",
+				transport: "stdio",
+				target: 'stdio:["bunx","@scope/server"]',
+				command: "bunx",
+				auth: "apikey",
+				source: "mcp.json",
+			},
 		]);
 	});
 
