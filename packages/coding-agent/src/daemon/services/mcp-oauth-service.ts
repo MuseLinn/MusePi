@@ -91,6 +91,15 @@ interface McpOAuthFlowRecord {
 	cancelled?: boolean;
 	controller: AbortController;
 	flow?: MCPOAuthFlow;
+	/** Resolves at the terminal transition. A parked tool call waits here; the
+	 *  record itself stays queryable through `status` for late clients. */
+	settled: McpOAuthSettlement;
+}
+
+/** Promise pair for one flow's terminal state. */
+interface McpOAuthSettlement {
+	promise: Promise<McpOAuthStatus>;
+	resolve(value: McpOAuthStatus): void;
 }
 
 /**
@@ -216,7 +225,14 @@ export class McpOAuthService implements DaemonService {
 		);
 
 		const flowId = randomUUID();
-		const record: McpOAuthFlowRecord = { flowId, server: name, status: "pending", controller, flow };
+		const record: McpOAuthFlowRecord = {
+			flowId,
+			server: name,
+			status: "pending",
+			controller,
+			flow,
+			settled: Promise.withResolvers<McpOAuthStatus>(),
+		};
 		this.#cancelPendingFor(name, "superseded by a newer OAuth login");
 		this.#register(record);
 
@@ -262,6 +278,29 @@ export class McpOAuthService implements DaemonService {
 	status(params: { flowId?: unknown }): McpOAuthStatus {
 		const record = this.#record(params);
 		return this.#project(record);
+	}
+
+	/**
+	 * Wait for one flow's terminal state. The session-host auth challenge uses
+	 * this: its tool call is parked until the grant lands, so it cannot poll.
+	 * With no deadline the wait ends when the grant lands, the flow fails, or a
+	 * caller cancels it; a deadline also cancels the flow so no callback listener
+	 * outlives the wait.
+	 */
+	async whenSettled(flowId: string, options: { timeoutMs?: number } = {}): Promise<McpOAuthStatus> {
+		const record = this.#record({ flowId });
+		if (record.status !== "pending") return this.#project(record);
+		if (options.timeoutMs === undefined) return await record.settled.promise;
+		try {
+			return await withTimeout(
+				record.settled.promise,
+				options.timeoutMs,
+				`MCP OAuth login did not finish within ${Math.round(options.timeoutMs / 1000)}s`,
+			);
+		} catch (error) {
+			if (record.status === "pending") this.cancel({ flowId });
+			throw error;
+		}
 	}
 
 	/**
@@ -425,6 +464,7 @@ export class McpOAuthService implements DaemonService {
 			record.status = "error";
 			record.error = "MCP OAuth login cancelled";
 			record.controller.abort("MCP OAuth login cancelled");
+			record.settled.resolve(this.#project(record));
 			logger.info("MCP OAuth flow cancelled", { server: record.server, flowId: record.flowId });
 		}
 		return { ok: true, ...this.#project(record) };
@@ -479,6 +519,7 @@ export class McpOAuthService implements DaemonService {
 			if (cancelled) record.cancelled = true;
 		}
 		record.controller.abort(reason);
+		record.settled.resolve(this.#project(record));
 	}
 
 	#fail(record: McpOAuthFlowRecord, error: unknown): void {
@@ -487,6 +528,7 @@ export class McpOAuthService implements DaemonService {
 		if (record.cancelled || record.status === "error") return;
 		record.status = "error";
 		record.error = describeError(error);
+		record.settled.resolve(this.#project(record));
 		logger.warn("MCP OAuth flow failed", {
 			server: record.server,
 			flowId: record.flowId,
@@ -531,6 +573,7 @@ export class McpOAuthService implements DaemonService {
 		}
 		record.status = "success";
 		record.error = undefined;
+		record.settled.resolve(this.#project(record));
 		logger.info("MCP OAuth login completed", { server: record.server, flowId: record.flowId });
 	}
 

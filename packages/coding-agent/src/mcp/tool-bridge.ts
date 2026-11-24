@@ -31,8 +31,15 @@ import type {
 	MCPToolDefinition,
 } from "./types";
 
-/** Reconnect callback: tears down a stale connection, optionally authorizing first. */
-export type MCPReconnect = (options?: { authChallenge?: MCPAuthChallenge }) => Promise<MCPServerConnection | null>;
+/** Reconnect callback: tears down a stale connection, optionally authorizing first.
+ *  `sessionId` rides along with an auth challenge so a daemon handler can park
+ *  the conversation that hit it on one authorization card. */
+export type MCPReconnect = (options?: {
+	authChallenge?: MCPAuthChallenge;
+	sessionId?: string;
+	/** The parked tool call's abort signal, so stopping the turn abandons the flow. */
+	signal?: AbortSignal;
+}) => Promise<MCPServerConnection | null>;
 
 /**
  * Network-level and stale-session errors that warrant a reconnect + single retry.
@@ -279,6 +286,7 @@ async function callToolWithAuthRetry(
 	args: MCPToolArgs,
 	reconnect: MCPReconnect | undefined,
 	signal?: AbortSignal,
+	sessionId?: string,
 ): Promise<MCPToolCallAttempt> {
 	const result = await callTool(connection, toolName, args, { signal });
 	const authChallenge = getMcpAuthChallenge(result);
@@ -286,7 +294,7 @@ async function callToolWithAuthRetry(
 
 	let newConnection: MCPServerConnection | null;
 	try {
-		newConnection = await reconnectWithAbort(reconnect, signal, { authChallenge });
+		newConnection = await reconnectWithAbort(reconnect, signal, { authChallenge, sessionId, signal });
 	} catch (error) {
 		rethrowIfAborted(error, signal);
 		return { connection, error };
@@ -314,7 +322,7 @@ function rethrowIfAborted(error: unknown, signal?: AbortSignal): void {
 async function reconnectWithAbort(
 	reconnect: MCPReconnect,
 	signal?: AbortSignal,
-	options?: { authChallenge?: MCPAuthChallenge },
+	options?: { authChallenge?: MCPAuthChallenge; sessionId?: string; signal?: AbortSignal },
 ): Promise<MCPServerConnection | null> {
 	try {
 		return await untilAborted(signal, () => reconnect(options));
@@ -521,7 +529,14 @@ export class MCPTool implements CustomTool<TSchema, MCPToolDetails> {
 		const providerName = this.connection._source?.providerName;
 
 		try {
-			const attempt = await callToolWithAuthRetry(this.connection, this.tool.name, args, this.reconnect, signal);
+			const attempt = await callToolWithAuthRetry(
+				this.connection,
+				this.tool.name,
+				args,
+				this.reconnect,
+				signal,
+				_ctx.sessionManager.getSessionId(),
+			);
 			if (attempt.error !== undefined) {
 				return buildErrorResult(attempt.error, this.connection.name, this.tool.name, provider, providerName);
 			}
@@ -644,7 +659,14 @@ export class DeferredMCPTool implements CustomTool<TSchema, MCPToolDetails> {
 			const connection = await untilAborted(signal, () => this.getConnection());
 			throwIfAborted(signal);
 			try {
-				const attempt = await callToolWithAuthRetry(connection, this.tool.name, args, this.reconnect, signal);
+				const attempt = await callToolWithAuthRetry(
+					connection,
+					this.tool.name,
+					args,
+					this.reconnect,
+					signal,
+					_ctx.sessionManager.getSessionId(),
+				);
 				if (attempt.error !== undefined) {
 					return buildErrorResult(
 						attempt.error,

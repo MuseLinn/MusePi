@@ -846,6 +846,18 @@ export const general = {
 	"general.sessionRequired": "Create a session first",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).
 	"general.addNote": "Add a note (optional)",
+	"mcpAuth.serverLabel": "MCP server",
+	"mcpAuth.requiresAuth": "Needs browser authorization before its tools can run.",
+	"mcpAuth.autoRetry": "The failed call resumes automatically once you authorize.",
+	"mcpAuth.waitingDesc": "The authorization page is open in your browser. Waiting for you to finish.",
+	"mcpAuth.waiting": "Waiting for the browser…",
+	"mcpAuth.authorize": "Authorize in browser",
+	"mcpAuth.reopen": "Reopen page",
+	"mcpAuth.cancel": "Cancel",
+	"mcpAuth.dismiss": "Dismiss",
+	"mcpAuth.success": "Authorized. Continuing the tool call that was paused.",
+	"mcpAuth.failed": "Authorization did not complete: {error}",
+	"mcpAuth.cancelled": "Cancelled",
 	// 技能市场 · 发现（能力中心 → 技能 tab）:SkillHub + skills.sh。
 	"general.prevPage": "Prev",
 	"general.nextPage": "Next",

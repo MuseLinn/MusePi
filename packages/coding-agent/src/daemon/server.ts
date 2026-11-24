@@ -910,6 +910,24 @@ export class DaemonServer {
 				reloadConnectors: () => this.#host.reloadMcpConnectors(),
 			}),
 		);
+		// A tool call that hits an MCP server's 401 parks on a session card. The
+		// flow lives in McpOAuthService; the card is the requesting session's.
+		this.#host.setMcpAuthFlow({
+			start: async serverName => {
+				return await this.#services.get<McpOAuthService>("mcpOAuth").startFlow({ name: serverName });
+			},
+			settle: async (flowId): Promise<{ status: "success" | "error" | "cancelled"; error?: string }> => {
+				const settled = await this.#services.get<McpOAuthService>("mcpOAuth").whenSettled(flowId);
+				if (settled.status === "success") return { status: "success" };
+				return {
+					status: settled.cancelled ? "cancelled" : "error",
+					...(settled.error ? { error: settled.error } : {}),
+				};
+			},
+			cancel: flowId => {
+				this.#services.get<McpOAuthService>("mcpOAuth").cancel({ flowId });
+			},
+		});
 		// Catalog discovery and enablement: connecting an entry writes the
 		// connector state file, the connector-catalog provider turns it into an
 		// MCP server, and mcp.oauth.* performs the browser grant for it.

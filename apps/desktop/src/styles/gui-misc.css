@@ -3216,3 +3216,135 @@
 	color: var(--color-text-faint);
 	pointer-events: none;
 }
+
+/* MCP authorization card (McpAuthCard.tsx): a tool call parked on an MCP
+ * server's browser grant. Content only — the session container owns the slot
+ * above the composer, shared with approval/ask/secret. Same visual family as
+ * the ask card (raised surface, radius-lg, hairline border). */
+.gui-mcp-auth-wrap {
+	margin: 8px 14px 0;
+}
+
+.gui-mcp-auth {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 400px;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+}
+
+/* The tint is the phase signal: only a blocking prompt is warm, success is
+ * green, failure is red. One coloured card at a time keeps the hierarchy. */
+.gui-mcp-auth--ok {
+	border-color: color-mix(in oklab, var(--color-ok) 34%, var(--border));
+	background: color-mix(in oklab, var(--color-ok) 10%, var(--color-surface-raised));
+}
+
+.gui-mcp-auth--failed {
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 34%, var(--border));
+	background: color-mix(in oklab, var(--color-danger, #e5484d) 10%, var(--color-surface-raised));
+}
+
+.gui-mcp-auth-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.gui-mcp-auth-icon {
+	flex: 0 0 auto;
+	margin-top: 2px;
+	color: var(--color-warning);
+}
+
+.gui-mcp-auth--ok .gui-mcp-auth-icon {
+	color: var(--color-ok);
+}
+
+.gui-mcp-auth--failed .gui-mcp-auth-icon {
+	color: var(--color-danger, #e5484d);
+}
+
+.gui-mcp-auth-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-mcp-auth-title {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+/* The server id is a code identifier: mono carries the title weight. */
+.gui-mcp-auth-server {
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-mcp-auth-kind {
+	flex: 0 0 auto;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-mcp-auth-desc {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+.gui-mcp-auth-hint {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-faint);
+}
+
+.gui-mcp-auth-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-mcp-auth-grow {
+	flex: 1;
+}
+
+.gui-mcp-auth-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-mcp-auth-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--color-warning);
+	animation: gui-mcp-auth-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes gui-mcp-auth-pulse {
+	0%,
+	100% {
+		opacity: 0.35;
+	}
+	50% {
+		opacity: 1;
+	}
+}

@@ -19,6 +19,7 @@ import "./components/Composer";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { AppRail, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
+import type { McpAuthRequest } from "./components/McpAuthCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
 import { ChatBootPlaceholder } from "./components/ChatBootPlaceholder";
@@ -118,7 +119,7 @@ import {
 	shouldRestartForMissingExtensions,
 	shouldRestartForMissingMethods,
 } from "./lib/daemon-version";
-import { copyToClipboard, openMiniChat } from "./lib/electron";
+import { copyToClipboard, openExternalUrl, openMiniChat } from "./lib/electron";
 import { escapeStopsTurn } from "./lib/escape-stop";
 import { invalidateGitStatuses } from "./lib/git-status-cache";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
@@ -1170,6 +1171,12 @@ function AppInner(): ReactNode {
 	// envelope reachable without rebuilding the callback.
 	const pendingAskRef = useRef<(AskRequest & { sessionId?: string }) | null>(null);
 	pendingAskRef.current = pendingAsk;
+	// MCP authorization card: one parked browser grant per session. It stays
+	// until the daemon reports a terminal state, so the settling frame carries
+	// the reason the call failed instead of the card vanishing silently.
+	const [pendingMcpAuth, setPendingMcpAuth] = useState<
+		(McpAuthRequest & { sessionId?: string; state?: "pending" | "success" | "error" | "cancelled"; error?: string }) | null
+	>(null);
 	// daimon-canvas jump from chat: board id to open after the view swap.
 	const [boardJumpId, setBoardJumpId] = useState<string | null>(null);
 	/** 任务中心跳转目标任务 id（会话内 schedule_task 卡片 → 任务中心）。 */
@@ -1975,6 +1982,37 @@ function AppInner(): ReactNode {
 					const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
 					if (typeof requestId === "string") {
 						setPendingAsk(current => (current && current.requestId === requestId ? null : current));
+					}
+					return;
+				}
+				// MCP authorization lives in the same slot with the same lifecycle:
+				// record it with its owning session even while another session is
+				// displayed (the daemon replays it on subscribe).
+				if (event.kind === "mcp-auth-request") {
+					setPendingMcpAuth({
+						...(event.payload as McpAuthRequest),
+						sessionId: event.sessionId,
+						state: "pending",
+					});
+					return;
+				}
+				if (event.kind === "mcp-auth-request-end") {
+					const payload = event.payload as { requestId?: unknown; status?: unknown; error?: unknown };
+					if (typeof payload.requestId !== "string") return;
+					const requestId = payload.requestId;
+					const state =
+						payload.status === "success" ? "success" : payload.status === "cancelled" ? "cancelled" : "error";
+					setPendingMcpAuth(current =>
+						current && current.requestId === requestId
+							? { ...current, state, error: typeof payload.error === "string" ? payload.error : undefined }
+							: current,
+					);
+					// A landed grant resolves the parked tool call; keep the confirmation
+					// on screen briefly, then let the transcript take over.
+					if (state === "success") {
+						window.setTimeout(() => {
+							setPendingMcpAuth(current => (current?.requestId === requestId ? null : current));
+						}, 1500);
 					}
 					return;
 				}
@@ -2839,11 +2877,14 @@ function AppInner(): ReactNode {
 							agentsProgress?: SubagentProgressPayload[];
 							pendingApprovals?: Array<{ requestId: string; tool: string; prompt?: string }>;
 							pendingAsks?: AskRequest[];
+							pendingMcpAuth?: McpAuthRequest[];
 						};
 					}>("session.resume", { sessionId });
 					initial = res.snapshot;
 					const firstPendingAsk = res.snapshot.pendingAsks?.[0];
 					if (firstPendingAsk) setPendingAsk({ ...firstPendingAsk, sessionId });
+					const firstPendingMcpAuth = res.snapshot.pendingMcpAuth?.[0];
+					if (firstPendingMcpAuth) setPendingMcpAuth({ ...firstPendingMcpAuth, sessionId, state: "pending" });
 				} catch {
 					// Defensive fallback: explicit stream attach (activates the
 					// session — reserved for paths where resume is unavailable).
@@ -2866,11 +2907,14 @@ function AppInner(): ReactNode {
 							agentsProgress?: SubagentProgressPayload[];
 							pendingApprovals?: Array<{ requestId: string; tool: string; prompt?: string }>;
 							pendingAsks?: AskRequest[];
+							pendingMcpAuth?: McpAuthRequest[];
 						};
 					}>("session.subscribe", { sessionId });
 					initial = res.initial;
 					const firstPendingAsk = res.initial.pendingAsks?.[0];
 					if (firstPendingAsk) setPendingAsk({ ...firstPendingAsk, sessionId });
+					const firstPendingMcpAuth = res.initial.pendingMcpAuth?.[0];
+					if (firstPendingMcpAuth) setPendingMcpAuth({ ...firstPendingMcpAuth, sessionId, state: "pending" });
 				}
 				// A newer user action (another session opened while this RPC was
 				// in flight) supersedes this result: mounting the stale session's
@@ -3798,6 +3842,32 @@ function AppInner(): ReactNode {
 	 *  on subscribe) but must not surface over the displayed one. */
 	const activeAsk =
 		pendingAsk && (pendingAsk.sessionId === undefined || pendingAsk.sessionId === selectedId) ? pendingAsk : null;
+
+	/** MCP authorization: open the flow's URL in the user's browser. The daemon
+	 *  owns the callback listener, so the card never handles the grant itself. */
+	const authorizeMcp = useCallback((request: McpAuthRequest): void => {
+		void openExternalUrl(request.authorizationUrl).catch(() => {});
+	}, []);
+
+	/** Abandon the grant. The daemon cancels the flow, settles the card and lets
+	 *  the parked tool call fail with the server's own 401. */
+	const cancelMcpAuth = useCallback((request: McpAuthRequest): void => {
+		setPendingMcpAuth(current => (current?.requestId === request.requestId ? null : current));
+		const client = rpcRef.current;
+		if (!client) return;
+		void client.request("mcp.oauth.cancel", { flowId: request.flowId }).catch(() => {});
+	}, []);
+
+	/** Terminal-state acknowledgement: the flow already ended, so this only
+	 *  clears the card. */
+	const dismissMcpAuth = useCallback((request: McpAuthRequest): void => {
+		setPendingMcpAuth(current => (current?.requestId === request.requestId ? null : current));
+	}, []);
+
+	const activeMcpAuth =
+		pendingMcpAuth && (pendingMcpAuth.sessionId === undefined || pendingMcpAuth.sessionId === selectedId)
+			? pendingMcpAuth
+			: null;
 
 	const switchHost = useCallback(
 		(host: RemoteHost | null): void => {
@@ -4996,6 +5066,10 @@ function AppInner(): ReactNode {
 							waitSeconds,
 							ask: activeAsk,
 							onAskAnswer: answerAsk,
+							mcpAuth: activeMcpAuth,
+							onMcpAuthAuthorize: authorizeMcp,
+							onMcpAuthCancel: cancelMcpAuth,
+							onMcpAuthDismiss: dismissMcpAuth,
 						}}
 					/>
 				</div>
@@ -5492,6 +5566,10 @@ function AppInner(): ReactNode {
 												waitSeconds,
 												ask: activeAsk,
 												onAskAnswer: answerAsk,
+												mcpAuth: activeMcpAuth,
+												onMcpAuthAuthorize: authorizeMcp,
+												onMcpAuthCancel: cancelMcpAuth,
+												onMcpAuthDismiss: dismissMcpAuth,
 											}}
 										/>
 									);

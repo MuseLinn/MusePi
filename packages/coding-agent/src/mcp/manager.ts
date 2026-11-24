@@ -205,8 +205,16 @@ export interface MCPDiscoverOptions {
 	onStatus?: (event: McpConnectionStatusEvent) => void;
 }
 
-/** Handles an MCP `WWW-Authenticate` challenge and returns refreshed config. */
-export type MCPAuthHandler = (serverName: string, challenge: MCPAuthChallenge) => Promise<MCPServerConfig | undefined>;
+/** Handles an MCP `WWW-Authenticate` challenge and returns refreshed config.
+ *  `sessionId` identifies the session whose tool call hit the challenge, so a
+ *  daemon-hosted handler can park that conversation on one authorization card
+ *  instead of broadcasting to every session sharing the manager. */
+export type MCPAuthHandler = (
+	serverName: string,
+	challenge: MCPAuthChallenge,
+	sessionId?: string,
+	signal?: AbortSignal,
+) => Promise<MCPServerConfig | undefined>;
 
 /**
  * MCP Server Manager.
@@ -1060,7 +1068,14 @@ export class MCPManager {
 	 */
 	async reconnectServer(
 		name: string,
-		options?: { manual?: boolean; authChallenge?: MCPAuthChallenge },
+		options?: {
+			manual?: boolean;
+			authChallenge?: MCPAuthChallenge;
+			sessionId?: string;
+			/** The parked tool call's abort signal: stopping the turn must also
+			 *  abandon the browser grant the handler is waiting on. */
+			signal?: AbortSignal;
+		},
 	): Promise<MCPServerConnection | null> {
 		if (options?.manual) {
 			this.#reconnectHistory.delete(name);
@@ -1073,7 +1088,7 @@ export class MCPManager {
 			return null;
 		}
 
-		const attempt = this.#doReconnect(name, options?.authChallenge);
+		const attempt = this.#doReconnect(name, options?.authChallenge, options?.sessionId, options?.signal);
 		this.#pendingReconnections.set(name, attempt);
 		// A successful reconnect (manual `/mcp reconnect`, tool retry, or the
 		// onClose path) satisfies any pending background probe; leave it armed
@@ -1201,7 +1216,12 @@ export class MCPManager {
 		this.#quietReconnects.clear();
 	}
 
-	async #doReconnect(name: string, authChallenge?: MCPAuthChallenge): Promise<MCPServerConnection | null> {
+	async #doReconnect(
+		name: string,
+		authChallenge?: MCPAuthChallenge,
+		sessionId?: string,
+		signal?: AbortSignal,
+	): Promise<MCPServerConnection | null> {
 		const oldConnection = this.#connections.get(name);
 		let config = oldConnection?.config ?? this.#serverConfigs.get(name);
 		const source = this.#sources.get(name) ?? oldConnection?._source;
@@ -1221,7 +1241,7 @@ export class MCPManager {
 				return null;
 			}
 			try {
-				const refreshedConfig = await this.#authHandler(name, authChallenge);
+				const refreshedConfig = await this.#authHandler(name, authChallenge, sessionId, signal);
 				if (!refreshedConfig) return null;
 				config = refreshedConfig;
 				this.#serverConfigs.set(name, config);

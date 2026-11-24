@@ -365,6 +365,65 @@ describe("McpOAuthService", () => {
 		expect(harness.reloads).toBe(0);
 	});
 
+	it("parks a caller on whenSettled until the browser returns, then resolves the grant", async () => {
+		const provider = startProvider();
+		providers.push(provider);
+		const harness = await createHarness({
+			"oauth-server": { type: "http", url: provider.serverUrl },
+		});
+
+		const started = await harness.service.startFlow({ name: "oauth-server" });
+		let resolved: { status: string } | null = null;
+		const waiting = harness.service.whenSettled(started.flowId).then(status => {
+			resolved = status;
+			return status;
+		});
+
+		await Bun.sleep(20);
+		expect(resolved === null).toBe(true);
+
+		expect(await completeBrowserCallback(started.authorizationUrl, "parked-code")).toBe(200);
+		const status = await waiting;
+		expect(status.status).toBe("success");
+		expect(harness.storage.get(mcpOAuthCredentialId(provider.serverUrl))).toMatchObject({
+			access: "access-token-value",
+		});
+	});
+
+	it("settles a parked wait as cancelled instead of hanging when the user backs out", async () => {
+		const provider = startProvider();
+		providers.push(provider);
+		const harness = await createHarness({
+			"oauth-server": { type: "http", url: provider.serverUrl },
+		});
+
+		const started = await harness.service.startFlow({ name: "oauth-server" });
+		const waiting = harness.service.whenSettled(started.flowId);
+		harness.service.cancel({ flowId: started.flowId });
+
+		const status = await waiting;
+		expect(status.status).toBe("error");
+		expect(status.cancelled).toBe(true);
+	});
+
+	it("times an unanswered wait out and cancels the flow so no listener outlives it", async () => {
+		const provider = startProvider();
+		providers.push(provider);
+		const harness = await createHarness({
+			"oauth-server": { type: "http", url: provider.serverUrl },
+		});
+
+		const started = await harness.service.startFlow({ name: "oauth-server" });
+		await expect(harness.service.whenSettled(started.flowId, { timeoutMs: 25 })).rejects.toThrow(/did not finish/);
+
+		const status = harness.service.status({ flowId: started.flowId });
+		expect(status.status).toBe("error");
+		expect(status.cancelled).toBe(true);
+		// Nobody was signed in, so nothing was stored and no reload ran.
+		expect(harness.storage.get(mcpOAuthCredentialId(provider.serverUrl))).toBeUndefined();
+		expect(harness.reloads).toBe(0);
+	});
+
 	it("rejects unknown, stdio, and no-auth servers without leaving a pending flow", async () => {
 		const provider = startProvider({ metadata: false, allowAnonymous: true });
 		providers.push(provider);

@@ -66,6 +66,8 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("ask-request"),
 		Type.Literal("secret-request"),
 		Type.Literal("secret-request-end"),
+		Type.Literal("mcp-auth-request"),
+		Type.Literal("mcp-auth-request-end"),
 		Type.Literal("agent-lifecycle"),
 		Type.Literal("agent-progress"),
 		Type.Literal("pause-state"),
@@ -130,6 +132,22 @@ export type SessionStreamEvent =
 	| { kind: "secret-request"; seq: number; payload: SecretRequestPayload }
 	// Settlement broadcast for a secret card (including timeout/cancel).
 	| { kind: "secret-request-end"; seq: number; payload: SecretRequestEndPayload }
+	// A tool call hit an MCP server's 401 challenge and is parked on a browser
+	// grant. The URL carries the CSRF state and PKCE challenge, so it rides only
+	// this session's stream — never a broadcast, a log, or the transcript. The
+	// client opens it and the flow settles on its own callback; `mcp.oauth.cancel`
+	// abandons it.
+	| {
+			kind: "mcp-auth-request";
+			seq: number;
+			payload: { requestId: string; serverName: string; flowId: string; authorizationUrl: string };
+	  }
+	// The grant finished (or the wait timed out / was cancelled): clear the card.
+	| {
+			kind: "mcp-auth-request-end";
+			seq: number;
+			payload: { requestId: string; status: "success" | "error" | "cancelled"; error?: string };
+	  }
 	| { kind: "agent-lifecycle"; seq: number; payload: SubagentLifecyclePayload }
 	// Daemon forwards the EventBus wrapper (SubagentProgressPayload), not the
 	// bare AgentProgress — the AgentProgress lives at `payload.progress`.

@@ -105,6 +105,7 @@ import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
+import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
 import { AskPopover } from "./AskPopover";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatDropAnchor } from "./ChatDropAnchor";
@@ -308,6 +309,10 @@ export function ChatView({
 	waitSeconds,
 	ask,
 	onAskAnswer,
+	mcpAuth,
+	onMcpAuthAuthorize,
+	onMcpAuthCancel,
+	onMcpAuthDismiss,
 	sessionTitle,
 	sessionInfoOpen = false,
 	onToggleSessionInfo,
@@ -428,6 +433,13 @@ export function ChatView({
 	 *  via onAskAnswer (session.askAnswer). */
 	ask?: AskRequest | null;
 	onAskAnswer?(answer: AskAnswer): void;
+	/** Pending MCP authorization: a tool call parked on a server's browser
+	 *  grant. Same slot as the ask card — placement belongs to this container,
+	 *  not to the card. */
+	mcpAuth?: (McpAuthRequest & { state?: McpAuthCardState; error?: string }) | null;
+	onMcpAuthAuthorize?(request: McpAuthRequest): void;
+	onMcpAuthCancel?(request: McpAuthRequest): void;
+	onMcpAuthDismiss?(request: McpAuthRequest): void;
 	/** Session title shown in the floating session info card (app.tsx owns the
 	 *  session label; the card is the collapsed right panel's stand-in). */
 	sessionTitle?: string | null;
@@ -4040,6 +4052,18 @@ export function ChatView({
 										}}
 									/>
 								))}
+								{mcpAuth && onMcpAuthAuthorize && onMcpAuthCancel && onMcpAuthDismiss && (
+									<div className="gui-mcp-auth-wrap">
+										<McpAuthCard
+											request={mcpAuth}
+											state={mcpAuth.state}
+											error={mcpAuth.error}
+											onAuthorize={onMcpAuthAuthorize}
+											onCancel={onMcpAuthCancel}
+											onDismiss={onMcpAuthDismiss}
+										/>
+									</div>
+								)}
 								{ask && onAskAnswer && (
 									<div className="gui-ask-float" ref={askFloatRef}>
 										<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />

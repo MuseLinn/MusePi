@@ -827,6 +827,18 @@ export const general = {
 	"general.sessionRequired": "需要先创建会话",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).
 	"general.addNote": "添加备注（可选）",
+	"mcpAuth.serverLabel": "MCP 服务器",
+	"mcpAuth.requiresAuth": "需要浏览器授权，才能继续调用它的工具。",
+	"mcpAuth.autoRetry": "授权完成后会自动重试刚刚失败的那次调用。",
+	"mcpAuth.waitingDesc": "已在浏览器打开授权页，等待你完成。",
+	"mcpAuth.waiting": "等待浏览器完成授权…",
+	"mcpAuth.authorize": "在浏览器中授权",
+	"mcpAuth.reopen": "重新打开",
+	"mcpAuth.cancel": "取消",
+	"mcpAuth.dismiss": "关闭",
+	"mcpAuth.success": "已授权，正在继续执行刚才的工具调用。",
+	"mcpAuth.failed": "授权未完成：{error}",
+	"mcpAuth.cancelled": "已取消",
 	// 技能市场 · 发现（能力中心 → 技能 tab）:SkillHub + skills.sh。
 	"general.prevPage": "上一页",
 	"general.nextPage": "下一页",

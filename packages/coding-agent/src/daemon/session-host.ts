@@ -43,7 +43,7 @@ import type { Skill } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
 import { GoalContinuationController } from "../goals/continuation-controller";
-import type { MCPManager } from "../mcp";
+import type { MCPManager, MCPServerConfig } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { initializeExtensions } from "../modes/runtime-init";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
@@ -311,6 +311,7 @@ import {
 } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal, catchupPlan, catchupRecordsPlan } from "./journal";
+import { type McpAuthFlowPort, type McpAuthRequest, runMcpAuthorization } from "./mcp-auth-bridge";
 import { acquireSessionOwnerLock, type SessionOwnerLock, sessionLocksDir } from "./session-owner-lock";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 
@@ -873,6 +874,9 @@ export interface LiveSession {
 	editorDraft: boolean;
 	/** GUI tool-approval gate (approval-select UI context + pending table). */
 	approvals: ApprovalBridge;
+	/** Parked MCP authorization cards, keyed by requestId. The live push is the
+	 *  fast path; this map is the snapshot hydration path for a reconnect. */
+	pendingMcpAuth: Map<string, McpAuthRequest>;
 	/** Send idempotency for this live session: request identity → content
 	 *  fingerprint. The index is rebuilt from persisted user-message fields on
 	 *  the first send after a daemon restart. */
@@ -1124,6 +1128,14 @@ export class DaemonSessionHost {
 	 *  subagent progress/lifecycle channels (task tool) are observable here
 	 *  and can ride the GUI stream. */
 	readonly #eventBus = new EventBus();
+	/** Browser-grant runner for parked MCP 401 challenges. `DaemonServer` wires
+	 *  it to `McpOAuthService`; absent in SDK/TUI-style hosts, where the auth
+	 *  handler stays unset and the challenge fails as before. */
+	#mcpAuthFlow: McpAuthFlowPort | null = null;
+
+	setMcpAuthFlow(port: McpAuthFlowPort | null): void {
+		this.#mcpAuthFlow = port;
+	}
 	/** TTL cache of the SDK session-dir scan (history rows the view-store
 	 *  never journaled) + the two-level sub-agent transcript scan. Refreshed
 	 *  on demand; 10s covers GUI list refreshes without re-scanning the whole
@@ -1247,11 +1259,84 @@ export class DaemonSessionHost {
 		const cacheStorage = settings.getStorage();
 		const manager = new MCPManager(cwd, cacheStorage ? new MCPToolCache(cacheStorage) : null);
 		manager.setAuthStorage(discovery.modelRegistry.authStorage);
+		// A tool call that hits an OAuth server's 401 parks here: the GUI shows one
+		// card for the requesting session, the browser grant settles the flow, and
+		// the config returned by the handler lets the reconnect retry the call.
+		manager.setAuthHandler((serverName, _challenge, sessionId, signal) =>
+			this.#authorizeMcpServer(manager, serverName, sessionId, signal),
+		);
 		if (settings.get("mcp.notifications")) {
 			manager.setNotificationsEnabled(true);
 		}
 		manager.setOnToolsChanged(tools => this.#refreshMcpToolsOnSessions(tools));
 		return manager;
+	}
+
+	/**
+	 * A tool call hit an MCP server's `401` challenge. Park that session on one
+	 * authorization card, wait for the browser grant, and hand the manager back
+	 * its raw config: `#doReconnect` re-resolves credentials from auth storage,
+	 * so the parked call retries with the fresh Bearer token.
+	 *
+	 * `undefined` means the call stays failed with the server's own 401 — the
+	 * existing behaviour for hosts with no authorization surface.
+	 */
+	async #authorizeMcpServer(
+		manager: MCPManager,
+		serverName: string,
+		sessionId?: string,
+		signal?: AbortSignal,
+	): Promise<MCPServerConfig | undefined> {
+		const port = this.#mcpAuthFlow;
+		const live = sessionId === undefined ? undefined : this.#sessions.get(sessionId);
+		if (!port || !live) {
+			logger.warn("MCP authorization cannot be shown; no authorization surface", {
+				path: `mcp:${serverName}`,
+				...(sessionId ? { sessionId } : {}),
+			});
+			return undefined;
+		}
+		try {
+			const outcome = await runMcpAuthorization({
+				serverName,
+				port,
+				...(signal ? { signal } : {}),
+				emitRequest: record => {
+					live.pendingMcpAuth.set(record.requestId, record);
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "mcp-auth-request", seq: 0, payload: record });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				},
+				emitEnd: (requestId, settled) => {
+					live.pendingMcpAuth.delete(requestId);
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "mcp-auth-request-end", seq: 0, payload: { requestId, ...settled } });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				},
+			});
+			if (outcome.status !== "success") {
+				logger.info("MCP authorization did not complete", {
+					path: `mcp:${serverName}`,
+					error: outcome.error,
+				});
+				return undefined;
+			}
+			return manager.getServerConfig(serverName);
+		} catch (error) {
+			logger.warn("MCP authorization could not start", {
+				path: `mcp:${serverName}`,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return undefined;
+		}
 	}
 
 	/**
@@ -1883,6 +1968,7 @@ export class DaemonSessionHost {
 			idleTimer: null,
 			editorDraft: false,
 			approvals,
+			pendingMcpAuth: new Map(),
 			clientRequests: new Map(),
 			clientRequestIndexBuilt: false,
 			ownerLock: null,
@@ -2680,6 +2766,12 @@ export class DaemonSessionHost {
 		}
 		this.#sessions.delete(sessionId);
 		this.#dynamicRegistries.delete(sessionId);
+		// A tool call parked on a browser grant must not outlive its session: the
+		// flow's callback listener would keep a dead conversation waiting.
+		for (const record of live.pendingMcpAuth.values()) {
+			void this.#mcpAuthFlow?.cancel(record.flowId);
+		}
+		live.pendingMcpAuth.clear();
 		live.dispose();
 	}
 
@@ -2697,6 +2789,7 @@ export class DaemonSessionHost {
 				pendingApprovals?: ReturnType<typeof approvalRequestPayload>[];
 				pendingAsks?: ReturnType<typeof askRequestPayload>[];
 				pendingSecrets?: ReturnType<typeof secretRequestPayload>[];
+				pendingMcpAuth?: McpAuthRequest[];
 				state: {
 					goalMode?: unknown;
 					planMode?: unknown;
@@ -2744,6 +2837,7 @@ export class DaemonSessionHost {
 			snap.pendingApprovals = [...live.approvals.pending.values()].map(approvalRequestPayload);
 			snap.pendingAsks = [...live.approvals.pendingAsks.values()].map(askRequestPayload);
 			snap.pendingSecrets = [...live.approvals.pendingSecrets.values()].map(secretRequestPayload);
+			snap.pendingMcpAuth = [...live.pendingMcpAuth.values()];
 			return snap;
 		}
 		// History path: no running session — serve the persisted materialized
