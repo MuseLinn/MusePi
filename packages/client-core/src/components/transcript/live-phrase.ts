@@ -11,8 +11,9 @@
  *     turn reads the same way and a test can assert it — random picks would
  *     also make every row on screen switch at once.
  */
-import { toolActivityKind, type StructuredToolKind, type ToolActivityKind } from "../../lib/tool-activity";
+
 import { t } from "../../i18n/index.js";
+import { type StructuredToolKind, type ToolActivityKind, toolActivityKind } from "../../lib/tool-activity";
 
 /** The facts the presence line reads. `Transcript` owns `working` / `streaming`;
  *  the host supplies `approvals` and `paused` because the transcript itself

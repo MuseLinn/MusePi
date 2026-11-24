@@ -30,7 +30,17 @@ export type ToolActivityKind =
 
 /** A structured kind a caller may already know: MusePi's `ToolKind`, or an
  *  ACP tool call's own `kind`. Anything else is ignored. */
-export type StructuredToolKind = "diff" | "search" | "image" | "edit" | "delete" | "move" | "execute" | "read" | "fetch" | "other";
+export type StructuredToolKind =
+	| "diff"
+	| "search"
+	| "image"
+	| "edit"
+	| "delete"
+	| "move"
+	| "execute"
+	| "read"
+	| "fetch"
+	| "other";
 
 const STRUCTURED: Record<string, ToolActivityKind> = {
 	diff: "writing",
@@ -67,7 +77,10 @@ const FAMILIES: ReadonlyArray<readonly [RegExp, ToolActivityKind]> = [
 	// using-computer
 	[/^(?:computer|screenshot|screencapture|mouse|keyboard|click|type|keypress|press|scroll)$/, "using-computer"],
 	// messaging
-	[/^(?:message|messageperson|sendmessage|chat|reply|notifyuser|posttoroom|posttogroup|messagebot|askbot)$/, "messaging"],
+	[
+		/^(?:message|messageperson|sendmessage|chat|reply|notifyuser|posttoroom|posttogroup|messagebot|askbot)$/,
+		"messaging",
+	],
 	// waiting on the person
 	[/^(?:ask|askuser|askuserquestion|approval|requestsecret|requestapproval|todo)$/, "waiting"],
 ];
@@ -85,7 +98,10 @@ function bareName(toolName: string): string {
  * both spellings collapse to `webfetch` before matching.
  */
 function normalized(toolName: string): string {
-	return bareName(toolName).trim().toLowerCase().replace(/[_\-\s]+/g, "");
+	return bareName(toolName)
+		.trim()
+		.toLowerCase()
+		.replace(/[_\-\s]+/g, "");
 }
 
 /**
