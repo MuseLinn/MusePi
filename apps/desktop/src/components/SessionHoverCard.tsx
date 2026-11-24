@@ -155,10 +155,11 @@ export function SessionHoverCard({
 		};
 	}, []);
 
-	// 滚动即收卡:锚点矩形随滚动失效,卡会钉在错误位置。scroll 不冒泡,
-	// 捕获阶段挂 window 才能覆盖侧栏内层滚动容器。
+	// 滚动或改变窗口尺寸即收卡:锚点矩形随之失效,卡会钉在错误位置。scroll
+	// 不冒泡,捕获阶段挂 window 才能覆盖侧栏内层滚动容器;resize 走同一段
+	// 收卡逻辑（kimi-code 的 workspace 卡同样在 resize 时关闭）。
 	useEffect(() => {
-		const onScroll = (): void => {
+		const dismiss = (): void => {
 			if (showTimer.current !== null) {
 				window.clearTimeout(showTimer.current);
 				showTimer.current = null;
@@ -171,8 +172,12 @@ export function SessionHoverCard({
 			visibleRef.current = false;
 			setHover(null);
 		};
-		window.addEventListener("scroll", onScroll, true);
-		return () => window.removeEventListener("scroll", onScroll, true);
+		window.addEventListener("scroll", dismiss, true);
+		window.addEventListener("resize", dismiss);
+		return () => {
+			window.removeEventListener("scroll", dismiss, true);
+			window.removeEventListener("resize", dismiss);
+		};
 	}, []);
 
 	if (!hover) return null;

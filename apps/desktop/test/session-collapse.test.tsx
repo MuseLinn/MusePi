@@ -64,6 +64,17 @@ describe("session subtree collapse", () => {
 		expect(container.textContent).toContain("Child c1");
 	});
 
+	it("marks the open session as the current row, like the rail marks its destination", async () => {
+		const container = await mount(
+			<SessionList nodes={[node("a", "Alpha"), node("b", "Beta")]} selectedId="b" onSelect={() => {}} />,
+		);
+		const current = [...container.querySelectorAll<HTMLElement>(".gui-session-row")].filter(
+			row => row.getAttribute("aria-current") === "true",
+		);
+		expect(current.length).toBe(1);
+		expect(current[0]?.textContent).toContain("Beta");
+	});
+
 	it("keeps row selection off the fold control's keyboard event", async () => {
 		let selected = "";
 		const container = await mount(

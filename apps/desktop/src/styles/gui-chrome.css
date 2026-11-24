@@ -471,7 +471,13 @@
 	outline-offset: -1px;
 }
 
-.gui-session-row-active {
+/* Selected row keeps its fill while hovered: `.gui-session-row:hover` is
+ * class+pseudo-class (0,2,0) and would otherwise WIN over this single-class
+ * rule, so the current session visibly lost its highlight the moment the
+ * pointer entered it. Kimi-code orders `.on` after `.se:hover` for the same
+ * reason. */
+.gui-session-row-active,
+.gui-session-row-active:hover {
 	/* Stronger selected state than hover (openchamber: bg-primary/10 + accent). */
 	background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised));
 	border-color: color-mix(in oklab, var(--color-accent) 22%, transparent);

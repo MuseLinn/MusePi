@@ -590,6 +590,10 @@ const SessionRow = memo(function SessionRow({
 					})
 				}
 				onMouseLeave={clearSessionHover}
+				// The rail marks its destination with aria-current="page"; the
+				// session row is the same "which one am I on" answer, so it says
+				// so too instead of relying on colour alone.
+				aria-current={selected ? "true" : undefined}
 				{...(untitled ? { "data-untitled": "1" } : {})}
 				aria-busy={retitling || undefined}
 				draggable
