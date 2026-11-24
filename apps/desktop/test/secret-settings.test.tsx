@@ -453,6 +453,44 @@ describe("保险库静态加密", () => {
 		expect(scope.innerHTML).not.toContain("correct horse battery");
 	});
 
+	test("更换口令：当前与新口令都要输齐才提交 secret.rephrase", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", {
+			mode: "encrypted",
+			count: 0,
+			protectedBy: "passphrase",
+			locked: false,
+		});
+		fake.responses.set("secret.list", { entries: [], count: 0 });
+		fake.responses.set("secret.rephrase", {
+			mode: "encrypted",
+			count: 0,
+			protectedBy: "passphrase",
+			locked: false,
+		});
+
+		const scope = await mount(fake);
+		await act(async () => buttonByText(scope, "更换口令").click());
+		const form = scope.querySelector<HTMLFormElement>('[data-secret-protection-form="change"]');
+		expect(form).not.toBeNull();
+		expect(scope.querySelectorAll('input[type="password"]')).toHaveLength(3);
+
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="passphrase"]')!, "correct horse battery");
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="next"]')!, "another passphrase");
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="confirm"]')!, "another passphras");
+		await act(async () => form?.requestSubmit());
+		await waitFor(() => (scope.textContent ?? "").includes("两次输入的口令不一致。"), "new mismatch");
+		expect(fake.calls("secret.rephrase")).toEqual([]);
+
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="confirm"]')!, "another passphrase");
+		await act(async () => form?.requestSubmit());
+		await waitFor(() => fake.calls("secret.rephrase").length === 1, "secret.rephrase");
+		expect(fake.calls("secret.rephrase")).toEqual([{ current: "correct horse battery", next: "another passphrase" }]);
+		// The form closes on success and no passphrase is left in any text node.
+		expect(scope.querySelector("[data-secret-protection-form]")).toBeNull();
+		expect(scope.textContent).not.toContain("correct horse battery");
+	});
+
 	test("关闭口令走 secret.decrypt，失败原因留在卡里可重试", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("secret.status", {

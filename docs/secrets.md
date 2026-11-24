@@ -195,7 +195,10 @@ can still list what is stored. Unlocking never writes the key to disk:
 `secret.unlock` keeps the unwrapped key in this process's memory, registers the
 values it made readable into every live session's obfuscator, and leaves the
 wrapped file in place. `secret.decrypt` proves the passphrase, restores
-`.master.key` and removes the wrapped file.
+`.master.key` and removes the wrapped file. `secret.rephrase` replaces the
+passphrase in one step: it unwraps with the current passphrase and re-wraps the
+same key, so the master key never lands in a plain file — removing and adding a
+passphrase in two calls would leave it unprotected if the second call never ran.
 
 Unattended starts read the passphrase from `MUSEPI_AGENT_SECRET_PASSPHRASE`, or
 from the file named by `MUSEPI_AGENT_SECRET_PASSPHRASE_FILE` (one trailing
@@ -276,6 +279,7 @@ writing it into `mcp.json` or the process environment.
 | `secret.unlock`  | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.encrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.decrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
+| `secret.rephrase`| `{ current, next }`                              | `SecretStatus`                             |
 
 Timestamps in `SecretEntryView` are epoch milliseconds. `secret.answer` saves
 the value in the daemon before resolving the tool's promise, so the tool only
@@ -305,8 +309,9 @@ and a damaged wrapped key, and requires 8–1024 characters.
   profile backup or folder sync still copies `agent-secrets/` as-is, including
   `.master.key` or `.master.key.wrapped`. A wrapped key is useless without its
   passphrase, so copy the profile and the passphrase separately. There is no
-  master-key rotation and no re-wrap: changing the passphrase means decrypting
-  with the old one first, and a forgotten passphrase cannot be recovered.
+  master-key rotation: changing the passphrase re-wraps the same key, so a key
+  that may already be known stays in use, and a forgotten passphrase cannot be
+  recovered.
 - Unlocking is per process and in memory. Another process using the same agent
   directory (a second daemon, a TUI run) starts locked again, and an application
   restart asks for the passphrase again unless it comes from the environment.

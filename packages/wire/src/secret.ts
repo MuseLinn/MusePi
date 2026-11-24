@@ -48,6 +48,12 @@ export interface SecretPassphraseParams {
 	passphrase: string;
 }
 
+/** Replace the passphrase that wraps the master key; the old one proves the change. */
+export interface SecretRephraseParams {
+	current: string;
+	next: string;
+}
+
 export interface SecretListResult {
 	entries: SecretEntryView[];
 	count: number;

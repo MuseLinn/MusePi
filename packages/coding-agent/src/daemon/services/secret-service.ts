@@ -6,6 +6,7 @@ import type {
 	SecretDeleteResult,
 	SecretListResult,
 	SecretPassphraseParams,
+	SecretRephraseParams,
 	SecretScope,
 	SecretScopeChoice,
 	SecretSetParams,
@@ -64,6 +65,7 @@ export class SecretService implements DaemonService {
 		"secret.unlock": "unlock",
 		"secret.encrypt": "encrypt",
 		"secret.decrypt": "decrypt",
+		"secret.rephrase": "rephrase",
 	} as const;
 
 	readonly #deps: SecretServiceHostAccess;
@@ -176,6 +178,13 @@ export class SecretService implements DaemonService {
 	async decrypt(params: SecretPassphraseParams): Promise<SecretStatus> {
 		const p = (params ?? {}) as Partial<SecretPassphraseParams>;
 		await getAgentSecretStore(this.#deps.agentDir()).decrypt(String(p.passphrase ?? ""));
+		return await this.status();
+	}
+
+	/** Replace the passphrase without ever writing the plain master key. */
+	async rephrase(params: SecretRephraseParams): Promise<SecretStatus> {
+		const p = (params ?? {}) as Partial<SecretRephraseParams>;
+		await getAgentSecretStore(this.#deps.agentDir()).rephrase(String(p.current ?? ""), String(p.next ?? ""));
 		return await this.status();
 	}
 

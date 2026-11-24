@@ -45,6 +45,7 @@ import type {
 	SecretAnswerParams,
 	SecretDeleteParams,
 	SecretPassphraseParams,
+	SecretRephraseParams,
 	SecretSetParams,
 	SecretUpdateParams,
 	SessionEntry,
@@ -6716,6 +6717,9 @@ export class DaemonServer {
 			}
 			case "secret.decrypt": {
 				return this.#services.get<SecretService>("secrets").decrypt((params ?? {}) as SecretPassphraseParams);
+			}
+			case "secret.rephrase": {
+				return this.#services.get<SecretService>("secrets").rephrase((params ?? {}) as SecretRephraseParams);
 			}
 			case "usage.reports": {
 				// 委托 UsageService（P1 服务抽取；原实现整体搬移至

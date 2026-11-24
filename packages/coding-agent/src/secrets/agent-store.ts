@@ -25,6 +25,7 @@ import {
 	masterKeyState,
 	mergeSecret,
 	readSecret,
+	rephraseMasterKey,
 	unlockMasterKey,
 } from "./encrypted-store";
 
@@ -273,6 +274,11 @@ export class AgentSecretStore {
 	/** Remove passphrase protection after proving it; the plain key file returns. */
 	async decrypt(passphrase: string): Promise<void> {
 		await decryptMasterKey(this.#values, passphrase);
+	}
+
+	/** Replace the passphrase that wraps the same master key. */
+	async rephrase(current: string, next: string): Promise<void> {
+		await rephraseMasterKey(this.#values, current, next);
 	}
 
 	async getEntry(name: string): Promise<SecretEntryView | undefined> {

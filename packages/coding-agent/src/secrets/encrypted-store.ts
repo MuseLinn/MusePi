@@ -340,6 +340,25 @@ export async function decryptMasterKey(store: EncryptedStore, passphrase: unknow
 	unlockedKeys.delete(store.wrappedKeyFile);
 }
 
+/**
+ * Replace the passphrase that wraps the same master key. The plain key never
+ * touches the disk here: removing the old passphrase and adding a new one in
+ * two calls would leave it unprotected if the second call never ran.
+ */
+export async function rephraseMasterKey(store: EncryptedStore, current: unknown, next: unknown): Promise<void> {
+	const wrapped = await readWrappedKey(store);
+	if (wrapped === undefined) throw new Error("The secret store is not protected by a passphrase.");
+	if (wrapped === "malformed") throw new Error("The wrapped master key is damaged.");
+	const key = unwrapMasterKey(wrapped, cleanMasterKeyPassphrase(current));
+	const passphrase = cleanMasterKeyPassphrase(next);
+	await writeFileAtomically(
+		store.wrappedKeyFile,
+		`${JSON.stringify(wrapMasterKey(key, passphrase), null, 2)}\n`,
+		0o600,
+	);
+	unlockedKeys.set(store.wrappedKeyFile, key);
+}
+
 async function writeMasterKeyFile(store: EncryptedStore, key: Buffer): Promise<void> {
 	await fs.promises.mkdir(path.dirname(store.masterKeyFile), { recursive: true });
 	const temp = `${store.masterKeyFile}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;

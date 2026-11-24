@@ -67,12 +67,15 @@ interface SecretFormState {
 	delivery: SecretDelivery;
 }
 
-/** `unlock` opens a locked store; `protect` and `remove` change how the key is stored. */
-type ProtectionMode = "unlock" | "protect" | "remove";
+/** `unlock` opens a locked store; `protect`, `change` and `remove` change how the key is stored. */
+type ProtectionMode = "unlock" | "protect" | "change" | "remove";
 
 interface ProtectionState {
 	mode: ProtectionMode;
+	/** The passphrase typed in the first field: to prove, or the new one when protecting. */
 	passphrase: string;
+	/** Only for `change`: the replacement passphrase. */
+	next: string;
 	confirm: string;
 }
 
@@ -301,7 +304,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const openProtection = (mode: ProtectionMode): void => {
 		tapFeedback();
 		setProtectionError(null);
-		setProtection({ mode, passphrase: "", confirm: "" });
+		setProtection({ mode, passphrase: "", next: "", confirm: "" });
 	};
 
 	const closeProtection = (): void => {
@@ -316,7 +319,16 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const submitProtection = async (): Promise<void> => {
 		if (!rpc || !protection || protectionBusy) return;
 		const passphrase = protection.passphrase;
-		if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
+		if (protection.mode === "change") {
+			if (passphrase.length < MIN_PASSPHRASE_LENGTH || protection.next.length < MIN_PASSPHRASE_LENGTH) {
+				setProtectionError(t("settings.secretsPassphraseTooShort"));
+				return;
+			}
+			if (protection.next !== protection.confirm) {
+				setProtectionError(t("settings.secretsPassphraseMismatch"));
+				return;
+			}
+		} else if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
 			setProtectionError(t("settings.secretsPassphraseTooShort"));
 			return;
 		}
@@ -329,12 +341,17 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 				? "secret.encrypt"
 				: protection.mode === "remove"
 					? "secret.decrypt"
-					: "secret.unlock";
+					: protection.mode === "change"
+						? "secret.rephrase"
+						: "secret.unlock";
 		setProtectionBusy(true);
 		setProtectionError(null);
 		try {
-			const next = await rpc.request<SecretStatusResult>(method, { passphrase });
-			setStatus(next ?? null);
+			const nextStatus = await rpc.request<SecretStatusResult>(
+				method,
+				protection.mode === "change" ? { current: passphrase, next: protection.next } : { passphrase },
+			);
+			setStatus(nextStatus ?? null);
 			// Drop the typed passphrase on success; keep the form on failure so the
 			// user can correct a typo instead of retyping from scratch.
 			setProtection(null);
@@ -528,9 +545,10 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		: entries;
 	const bodyOpen = form !== null || importing;
 	const locked = status?.locked === true;
+	const passphraseProtected = status?.protectedBy === "passphrase";
 	const protectionAction = locked
 		? t("settings.secretsUnlock")
-		: status?.protectedBy === "passphrase"
+		: passphraseProtected
 			? t("settings.secretsRemovePassphrase")
 			: t("settings.secretsProtectWithPassphrase");
 
@@ -576,18 +594,28 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 							</span>
 						</div>
 						{!protection && (
-							<button
-								type="button"
-								className="gui-btn"
-								data-secret-action="protection"
-								onClick={() =>
-									openProtection(
-										locked ? "unlock" : status.protectedBy === "passphrase" ? "remove" : "protect",
-									)
-								}
-							>
-								{protectionAction}
-							</button>
+							<div className="gui-secret-protection-actions">
+								{passphraseProtected && !locked && (
+									<button
+										type="button"
+										className="gui-btn gui-btn-ghost"
+										data-secret-action="rephrase"
+										onClick={() => openProtection("change")}
+									>
+										{t("settings.secretsChangePassphrase")}
+									</button>
+								)}
+								<button
+									type="button"
+									className="gui-btn"
+									data-secret-action="protection"
+									onClick={() =>
+										openProtection(locked ? "unlock" : passphraseProtected ? "remove" : "protect")
+									}
+								>
+									{protectionAction}
+								</button>
+							</div>
 						)}
 					</div>
 					{protection && (
@@ -607,12 +635,18 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 							}}
 						>
 							<label className="gui-settings-field">
-								<span className="gui-settings-field-label">{t("settings.secretsPassphrase")}</span>
+								<span className="gui-settings-field-label">
+									{protection.mode === "change"
+										? t("settings.secretsPassphraseCurrent")
+										: t("settings.secretsPassphrase")}
+								</span>
 								{protection.mode !== "unlock" && (
 									<span className="gui-settings-field-hint">
 										{protection.mode === "protect"
 											? t("settings.secretsPassphraseHint")
-											: t("settings.secretsPassphraseRemoveHint")}
+											: protection.mode === "change"
+												? t("settings.secretsPassphraseChangeHint")
+												: t("settings.secretsPassphraseRemoveHint")}
 									</span>
 								)}
 								<span className="gui-settings-field-control">
@@ -621,7 +655,11 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 										className="gui-secret-input"
 										data-secret-field="passphrase"
 										value={protection.passphrase}
-										autoComplete={protection.mode === "unlock" ? "current-password" : "new-password"}
+										autoComplete={
+											protection.mode === "unlock" || protection.mode === "change"
+												? "current-password"
+												: "new-password"
+										}
 										autoFocus
 										disabled={protectionBusy}
 										onChange={event => {
@@ -633,9 +671,34 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 									/>
 								</span>
 							</label>
-							{protection.mode === "protect" && (
+							{protection.mode === "change" && (
 								<label className="gui-settings-field">
-									<span className="gui-settings-field-label">{t("settings.secretsPassphraseConfirm")}</span>
+									<span className="gui-settings-field-label">{t("settings.secretsPassphraseNext")}</span>
+									<span className="gui-settings-field-control">
+										<input
+											type="password"
+											className="gui-secret-input"
+											data-secret-field="next"
+											value={protection.next}
+											autoComplete="new-password"
+											disabled={protectionBusy}
+											onChange={event => {
+												setProtectionError(null);
+												setProtection(current =>
+													current ? { ...current, next: event.target.value } : current,
+												);
+											}}
+										/>
+									</span>
+								</label>
+							)}
+							{(protection.mode === "protect" || protection.mode === "change") && (
+								<label className="gui-settings-field">
+									<span className="gui-settings-field-label">
+										{protection.mode === "change"
+											? t("settings.secretsPassphraseNextConfirm")
+											: t("settings.secretsPassphraseConfirm")}
+									</span>
 									<span className="gui-settings-field-control">
 										<input
 											type="password"
@@ -666,7 +729,11 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 										{t("settings.cancel")}
 									</button>
 									<button type="submit" className="gui-btn gui-btn-primary" disabled={protectionBusy}>
-										{protectionBusy ? t("settings.secretsSaving") : protectionAction}
+										{protectionBusy
+											? t("settings.secretsSaving")
+											: protection.mode === "change"
+												? t("settings.secretsChangePassphrase")
+												: protectionAction}
 									</button>
 								</div>
 							</div>

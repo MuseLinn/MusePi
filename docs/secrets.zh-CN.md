@@ -174,7 +174,7 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
 
 `secret.encrypt` 用 scrypt（N=2^15、r=8、p=1）在 16 字节随机盐上派生密钥加密密钥，再用 AES-256-GCM（AAD `musepi-agent-master-key v1`）包裹 32 字节主密钥，写出 `.master.key.wrapped` 并删除 `.master.key`。已有信封不会重写：主密钥本身没有变，变的只是它的存放形式。
 
-存在包裹文件而本进程拿不到口令时，保险库处于**锁定**状态：读取一律报告无可用值，写入失败，`secret.status` 返回 `protectedBy: "passphrase"`、`locked: true` 以及原因（`missing-passphrase`、`wrong-passphrase` 或 `passphrase-source`）。元数据仍可读，因此设置页仍能列出已存条目。解锁从不把密钥写回磁盘：`secret.unlock` 把解包后的主密钥留在本进程内存里，把刚变得可读的值注册进每个活跃会话的 obfuscator，包裹文件保持不变。`secret.decrypt` 验证口令后恢复 `.master.key` 并删除包裹文件。
+存在包裹文件而本进程拿不到口令时，保险库处于**锁定**状态：读取一律报告无可用值，写入失败，`secret.status` 返回 `protectedBy: "passphrase"`、`locked: true` 以及原因（`missing-passphrase`、`wrong-passphrase` 或 `passphrase-source`）。元数据仍可读，因此设置页仍能列出已存条目。解锁从不把密钥写回磁盘：`secret.unlock` 把解包后的主密钥留在本进程内存里，把刚变得可读的值注册进每个活跃会话的 obfuscator，包裹文件保持不变。`secret.decrypt` 验证口令后恢复 `.master.key` 并删除包裹文件。`secret.rephrase` 一步更换口令：用旧口令解包、再用新口令重包裹同一把密钥，明文主密钥从不落盘——分两次「关闭再启用」若第二步没执行，保险库会停在无保护状态。
 
 无人值守启动可把口令放在 `MUSEPI_AGENT_SECRET_PASSPHRASE`，或放在 `MUSEPI_AGENT_SECRET_PASSPHRASE_FILE` 指向的文件里（尾部一个换行会被去掉）。`MUSEPI_AGENT_SECRET_KEY` 的优先级仍高于这三者：设置了它的部署会按设计绕过口令。
 
@@ -215,6 +215,7 @@ MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连�
 | `secret.unlock`  | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.encrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
 | `secret.decrypt` | `{ passphrase }`                                 | `SecretStatus`                             |
+| `secret.rephrase`| `{ current, next }`                              | `SecretStatus`                             |
 
 `SecretEntryView` 中的时间戳是 epoch 毫秒。`secret.answer` 在 daemon 内先落盘再落定工具的 promise，因此工具只看得到最终动作。`"workspace"` 会解析为待决请求所属会话的工作目录；`secret.set` 不接受它（设置页没有会话上下文），`secret.update` 只把收窄的条目放宽为 `"all"`。未知或已过期的 request id 会报 `Unknown secret request: <id>`。任何响应、推送、日志或 transcript 都不包含值。口令同样不会出现在结果与错误里：口令错误与包裹文件损坏时 `secret.unlock` 返回同一句话，长度限定 8–1024 个字符。
 
@@ -223,7 +224,7 @@ MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连�
 - 值至少 4 个字符。短于 8 个字符的值使用单向 marker，且只在独立出现时替换（两侧没有字母或数字）：它在显示上下文里不会被还原，出现在更长单词内部时会有意保留。低于 4 个字符会被拒绝。
 - scope 为 `"all"` 或工作目录。任何不在已覆盖根之内的会话都会收到 allow 卡片；若要再次收窄，只能以「仅本工作区」重新保存，因为设置页只提供放宽。
 - `file` 交付的工作副本会一直保留到条目被删除或替换；暂无按文件计的 TTL。它是普通的「仅本人可读」文件，管理员或同一用户下的其他进程可以读取。值按 UTF-8 文本写入，证书与 JSON 可用，二进制内容不支持。
-- 保险库不参与会话导出与工作区文件操作，但 profile 备份或目录同步会把 `agent-secrets/` 连同 `.master.key` 或 `.master.key.wrapped` 原样复制。包裹文件离开口令不可用，因此请把 profile 与口令分开备份。目前没有主密钥轮换，也没有重新包裹：更换口令需要先解密、再以新口令加密，忘记口令则无法恢复。
+- 保险库不参与会话导出与工作区文件操作，但 profile 备份或目录同步会把 `agent-secrets/` 连同 `.master.key` 或 `.master.key.wrapped` 原样复制。包裹文件离开口令不可用，因此请把 profile 与口令分开备份。目前没有主密钥轮换：更换口令只是重新包裹同一把密钥，可能已经外泄的密钥仍在使用；忘记口令则无法恢复。
 - 解锁是按进程、只在内存中生效的。同一 agent 目录上的另一个进程（第二个 daemon、一次 TUI 运行）会重新处于锁定；应用重启也会再次询问口令，除非口令来自环境变量。该进程一旦解锁，bash 注入立即可用，不需要重启。
 - 信封无法解密的条目仍会列为不可用。通过 `request_secret` 或「设置 → 智能体 → 保险库」重新保存该值来修复；不要手工编辑 sidecar。
 - 删除密钥会从磁盘和未来的 bash 注入中移除它，但运行中会话里已经存活的 obfuscator 会在该会话生命周期内继续替换这个旧值。这是有意为之：撤掉覆盖可能让已经出现过的值重新对 provider 可见。

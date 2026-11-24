@@ -118,6 +118,28 @@ describe("agent secret store passphrase", () => {
 		expect(await lockedStore(agentDir).getValue("API_TOKEN")).toBe(VALUE);
 	});
 
+	it("changes the passphrase without ever writing the plain key", async () => {
+		const agentDir = makeAgentDir();
+		const store = new AgentSecretStore(agentDir);
+		await store.set("API_TOKEN", VALUE, "test");
+		await store.encrypt(PASSPHRASE);
+
+		const locked = lockedStore(agentDir);
+		await expect(locked.rephrase("not the passphrase", "another passphrase")).rejects.toBeInstanceOf(
+			SecretStoreLockedError,
+		);
+		await expect(locked.rephrase(PASSPHRASE, "another passphrase")).resolves.toBeUndefined();
+		// The two-step alternative would leave the key unprotected here.
+		expect(existsSync(keyPaths(agentDir).plain)).toBe(false);
+		expect(await locked.getValue("API_TOKEN")).toBe(VALUE);
+
+		const next = lockedStore(agentDir);
+		expect(await next.status()).toMatchObject({ protectedBy: "passphrase", locked: true });
+		await expect(next.unlock(PASSPHRASE)).rejects.toBeInstanceOf(SecretStoreLockedError);
+		await next.unlock("another passphrase");
+		expect(await next.getValue("API_TOKEN")).toBe(VALUE);
+	});
+
 	it("rejects short, repeated and empty passphrases", async () => {
 		const agentDir = makeAgentDir();
 		const store = new AgentSecretStore(agentDir);

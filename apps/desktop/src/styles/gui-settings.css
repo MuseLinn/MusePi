@@ -9272,6 +9272,15 @@ body.gui-resizing {
 	gap: var(--space-3);
 }
 
+/* 两个动作成组靠右：更换口令是常规操作、关闭口令是降级保护，主次由按钮样式
+ * 区分，不另加文字说明。 */
+.gui-secret-protection-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex: none;
+}
+
 /* 与添加/替换表单同理：清掉共享字段行自带的行距，由卡片 gap 统一。 */
 .gui-secret-protection .gui-settings-field {
 	padding: 0;

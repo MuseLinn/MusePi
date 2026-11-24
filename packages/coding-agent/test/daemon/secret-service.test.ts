@@ -251,6 +251,24 @@ describe("SecretService RPC", () => {
 		});
 	});
 
+	it("rephrases the passphrase and keeps the store protected", async () => {
+		const { service } = setup();
+		await service.set({ name: "API_TOKEN", value: VALUE });
+		await service.encrypt({ passphrase: "correct horse battery" });
+
+		await expect(service.rephrase({ current: "not the passphrase", next: "another passphrase" })).rejects.toThrow(
+			/did not unlock/u,
+		);
+		expect(await service.rephrase({ current: "correct horse battery", next: "another passphrase" })).toMatchObject({
+			protectedBy: "passphrase",
+			locked: false,
+		});
+
+		clearUnlockedMasterKeysForTests();
+		await expect(service.unlock({ passphrase: "correct horse battery" })).rejects.toThrow(/did not unlock/u);
+		expect(await service.unlock({ passphrase: "another passphrase" })).toMatchObject({ locked: false });
+	});
+
 	it("unknown request ids and invalid names are refused", async () => {
 		const { service } = setup();
 		await expect(service.answer({ requestId: "missing", action: "cancel" })).rejects.toThrow(
