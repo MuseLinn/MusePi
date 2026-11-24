@@ -61,6 +61,16 @@
    └────────────────────────────┘
 ```
 
+### 已评估但未采用的扫光实现
+
+| 实现 | 做法 | 为什么不用 |
+|---|---|---|
+| **ds-bot `styles.js:1523`** | `background-clip: text` + 动画 `background-position` | 文字确实不动，但每帧重绘字形。它的 `steps(60)` 只是把重绘压到 60 步，长回合仍在持续绘制。我们这一行会跑几分钟 |
+| 单向平移亮色副本 | 亮色副本自己横向滑动 | 就是文字走马灯：字形每帧换位置。预览实测屏幕位移跨度 221px |
+| 呼吸 / 逐字点亮 | 只做透明度起伏，或逐字延迟提亮 | 可用，但没有「光扫过」的方向感；逐字方案还要给每个字包一层 span，长句与截断更难处理 |
+
+选择 OpenMausBot 的「遮罩窗口 + 反向副本」：只走合成层、步进 + 停顿、文字在屏幕上恒为同一位置（预览实测跨度 0px）。
+
 ### 已评估但只借动效语言的件
 
 `packages/client/ui-status` 的 `StatusText` 已经实现「两段文案共用一个格子、交叉淡入、`role=status`、motion-off 瞬时切换」。它的语义是**替换**（旧句离场、新句入场），而尾部需要的是**轮换**（同一阶段内来回换同义句、且不能被屏幕阅读器反复播报），两者对 live region 的要求相反。因此不直接复用它，但沿用它的两个做法：同一格承载新旧两句、motion-off 时不播放离场层。
@@ -112,14 +122,60 @@ seed 用 `sessionKey + phase`，保证不同会话、不同阶段的节奏互相
 
 ### 3. 扫光动效
 
-文案之上叠一层静态遮罩 + `transform` 位移的亮带，只走合成层，不重绘文字：
+**算法（与 OpenMausBot `styles.css:2484-2491` 一致）：遮罩窗口向一侧扫，窗口内的亮色副本反向位移同样多，两者在屏幕坐标上抵消，字母钉在原地，只有亮度滑过。**
 
-- 结构：文案本体 + `aria-hidden` 的遮罩层，遮罩层内一个位移元素，`mask-image: linear-gradient(90deg, transparent 30%, #000 50%, transparent 70%)`，内部用 `transform: translateX()` 扫过。
-- 周期 2200ms，线性无限循环。
-- 文档不可见时 `animation-play-state: paused`。
-- `.gui-motion-off` 与 `prefers-reduced-motion: reduce` 下整层 `display: none`，文案保持常规颜色。
+```css
+:root { --presence-sheen-period: 2200ms; }
 
-不使用 `background-clip: text` 的位移方案：它每帧重绘文字，长回合（数分钟）下代价明显。
+.presence-phrase { position: relative; display: inline-block; padding: .3em .1em; margin: -.3em -.1em; }
+.presence-sheen  { position: absolute; inset: 0; overflow: hidden; pointer-events: none; user-select: none; }
+
+/* 遮罩窗口：向右扫 */
+.presence-band {
+  position: absolute; inset: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 50%, transparent 70%);
+          mask-image: linear-gradient(90deg, transparent 30%, #000 50%, transparent 70%);
+  animation: presence-band var(--presence-sheen-period) linear infinite;
+  animation-delay: var(--presence-sheen-delay);
+}
+/* 窗口内的亮色副本：向左补同样多 */
+.presence-band::before {
+  content: attr(data-text) / "";
+  position: absolute; inset: 0;
+  padding: .3em .1em;
+  color: var(--color-text);
+  animation: presence-bright var(--presence-sheen-period) linear infinite;
+  animation-delay: var(--presence-sheen-delay);
+}
+
+@keyframes presence-band {
+  from { transform: translateX(-70%); animation-timing-function: steps(12, jump-none); }
+  35%, to { transform: translateX(70%); }
+}
+@keyframes presence-bright {
+  from { transform: translateX(70%); animation-timing-function: steps(12, jump-none); }
+  35%, to { transform: translateX(-70%); }
+}
+```
+
+四条不可省的约束：
+
+1. **必须反向抵消。** 只让亮色副本自己平移就是文字走马灯——字形每帧都在换位置。这一条是这类动效唯一的正确性条件，预览里用「屏幕位移跨度」验证过：单向平移跨度 221px，反向抵消跨度 0px。
+2. **位移只用 `steps(12, jump-none)` 走完周期前 35%，其余 65% 静止。** 平滑连续位移会每帧绘制整个页面；步进 + 停顿把一次长回合的重绘压到个位数帧。
+3. **只走 `transform`，不碰 `background-position`、`background-clip`。** 后者虽然同样能让文字不动，但会每帧重绘字形（OpenMausBot 源码注释与 `docs/gui-design.md` 的长时间指示器约束都指向这一点）。
+4. **`--presence-sheen-delay` 用 `-${Date.now() % period}ms` 初始化**，让同屏多行（bot lane）的扫光互相错开而不是整齐划一地同步。
+
+减弱动效与关闭动效（`.gui-motion-off`、`prefers-reduced-motion: reduce`）：整层 `display: none`，文案保持常规颜色。
+
+### 3a. 单行截断
+
+这一行是状态提醒，不是正文：**永远单行，超出用 `text-overflow: ellipsis` 截断**，不在行内换行。
+
+- `white-space: nowrap` + `overflow: hidden` + `text-overflow: ellipsis` 落在文案槽上，与顶部胶囊的截断行为一致。
+- 不做多行。多行会让「遮罩 + 反向副本」这套结构失效（副本无法按行对齐），也会把状态行变成需要阅读的正文。
+- 完整内容（具体文件、命令、查询词）走 `title` 属性与展开卡，不挤在这一行里。
+
+`aria-label` / live region 使用**未截断的规范句**，所以读屏拿到的是完整语义，视觉上截断不影响可访问性。
 
 ### 4. 安静态
 
@@ -200,3 +256,4 @@ export function TailPresence(props: {
 3. **不新增用户设置项。** 这一行替换的是已有的计时行，没有额外噪音需要关闭；如果实测有人嫌轮换文案吵，再加开关（那会牵动 daemon settings-def，单独做）。
 4. **轮换不发散到随机。** 用确定性哈希而非 `Math.random()`，这样同一回合重放一致、测试可断言，也避免同一屏多个 bot 的行同时换句。
 5. **头像尺寸 28px。** 与顶部胶囊一致；行高按 36px 预留，避免出现时推动转录。
+6. **动效采用 OpenMausBot 的「遮罩窗口 + 反向副本」，文案单行截断。** 用户确认：这一行只是状态提醒，不需要承载那么多文字信息，因此不换行、不做多行扫光。

@@ -172,3 +172,6 @@ system-downloads/
 
 # Plugin build output (per-package tsc emit)
 packages/coding-agent/src/plugins/**/lib/
+
+# Superpowers brainstorm mockups and session state
+.superpowers/
