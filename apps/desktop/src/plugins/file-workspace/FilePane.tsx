@@ -2017,6 +2017,7 @@ export function FilePane({
 								{preview.docxBytes && <DocxPreview data={preview.docxBytes} path={preview.path} />}
 								{preview.office && edit && (
 									<FileOfficePreview
+										key={preview.path}
 										bytes={preview.office.bytes}
 										draft={parseOfficeDraft(edit.text) ?? preview.office.draft}
 										restore={
