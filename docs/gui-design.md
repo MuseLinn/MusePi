@@ -603,7 +603,7 @@ Judgment rule: heavy glass when the user must keep perceiving the covered conten
 | compact | `--radius-xl` | max-width 380px, auto height, 22×24 padding | confirm / prompt / update decision cards (`gui-dialog--confirm`) |
 | standard | `--radius-2xl` | 600×420 (`min(600px, 90vw)` × `min(420px, 80vh)`) | settings/form dialogs (`gui-dialog` base) |
 | wide | `--radius-2xl` | content-defined (SaveImage 760px, palette 620px, Connect wizard, skill drawer 480px side drawer) | preview / multi-column / wizard / side drawer |
-| tour | `--radius-2xl` | `min(1000px, vw−160)` × `min(620px, vh−160)`, centered float with ≥80px glass margin on all four sides | Onboarding / Announcement / Reward |
+| tour | `--radius-2xl` | one centered float with ≥80px glass margin on all four sides; each card sets its own reading width: Onboarding `min(1000px, vw−160)` × `min(620px, vh−160)`, Announcement `min(680px, vw−160)` × `min(560px, vh−160)`, Reward `min(520px, vw−120)` × auto | Onboarding / Announcement / Reward |
 
 ### z-index bands
 

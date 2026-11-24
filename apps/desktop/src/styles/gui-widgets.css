@@ -2468,7 +2468,13 @@
 .gui-motion-off .gui-onboarding-backdrop--entered,
 .gui-motion-off .gui-onboarding-backdrop--closing,
 .gui-motion-off .gui-onboarding-card,
-.gui-motion-off .gui-onboarding-card.gui-onboarding-card--closing {
+.gui-motion-off .gui-onboarding-card.gui-onboarding-card--closing,
+/* The two persistent pulses (current-step dot, latest-version pill) loop
+ * forever; prefers-reduced-motion collapses them through the global
+ * 0.01ms rule in gui-base.css, but the in-app motion switch only matches
+ * selectors listed here. Same set as the reward overlay's idle loops. */
+.gui-motion-off .gui-onboarding-dot--active,
+.gui-motion-off .gui-announcement-latest {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2696,21 +2702,35 @@
 	 * a release entry + the new-version badge. */
 	width: min(680px, calc(100vw - 160px));
 	height: min(560px, calc(100vh - 160px));
+	/* Same L3 recipe as the primer (sheen + translucent strong fill). The
+	 * accent wash rides above both as a third image layer; an opaque
+	 * background-color here would erase the glass on macOS while the
+	 * win32/Linux fallback in overlay-fallback.css re-adds it, so the two
+	 * platforms would stop reading as the same material. */
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--accent) 5%, transparent), transparent 180px),
-		var(--bg-raised);
+		var(--glass-sheen),
+		var(--glass-bg-strong);
 }
 .gui-announcement-title {
 	display: flex;
 	align-items: center;
 	gap: 10px;
 	padding: 14px 24px 10px;
-	font-size: 18px;
+	font-size: 20px;
 	font-weight: 650;
 	letter-spacing: -0.01em;
 	color: var(--fg);
 	border-bottom: 1px solid var(--border);
 	animation: gui-obo-item-in 320ms var(--spring) 60ms both;
+}
+/* The structured header's release title: the same heading step as the
+ * primer's .gui-onboarding-title, so both tour cards read at one weight. */
+.gui-announcement-heading {
+	font-size: 20px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	color: var(--fg);
 }
 .gui-announcement-latest {
 	display: inline-flex;
@@ -2741,6 +2761,7 @@
  * padding + a hairline turns it into a standard dialog footer. */
 .gui-announcement-card .gui-onboarding-actions {
 	flex-shrink: 0;
+	justify-content: flex-end;
 	margin-top: 0;
 	padding: 12px 24px 16px;
 	border-top: 1px solid var(--border);

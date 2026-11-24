@@ -341,9 +341,10 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	// Keyboard priority: Escape closes and Enter confirms (= close, the
 	// confirm-dialog contract) — the page behind must not keep focus/keys
 	// while this overlay is up. Enter is skipped when the focus already
-	// sits on a button (that click fires natively). Declared BEFORE the
-	// early return (hooks rule: no hook may follow a conditional return,
-	// or the hook count flips between renders).
+	// sits on a button, link or text field (that element owns its own
+	// activation: a changelog link must open, not dismiss the panel).
+	// Declared BEFORE the early return (hooks rule: no hook may follow a
+	// conditional return, or the hook count flips between renders).
 	useEffect(() => {
 		if (!open || (!markdown && !reward)) return;
 		const onKey = (e: KeyboardEvent): void => {
@@ -358,6 +359,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 			if (
 				e.key === "Enter" &&
 				!(e.target instanceof HTMLButtonElement) &&
+				!(e.target instanceof HTMLAnchorElement) &&
 				!(e.target instanceof HTMLInputElement) &&
 				!(e.target instanceof HTMLTextAreaElement)
 			) {
@@ -410,7 +412,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 							{t("settings.whatSNew")}
 						</div>
 						<button
-							className="gui-btn gui-btn-icon"
+							className="gui-onboarding-close"
 							type="button"
 							onClick={requestClose}
 							aria-label={t("settings.close")}
@@ -461,7 +463,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 						{t("settings.whatSNew")}
 					</div>
 					<button
-						className="gui-btn gui-btn-icon"
+						className="gui-onboarding-close"
 						type="button"
 						onClick={requestClose}
 						aria-label={t("settings.close")}
@@ -481,7 +483,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 						/>
 					)}
 					<div style={{ minWidth: 0, display: "grid", gap: 4 }}>
-						<div style={{ fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em", color: "var(--fg)" }}>
+						<div className="gui-announcement-heading">
 							{t("announcement.announcementUpdatedtoversionwithversion", { version: current.version })}
 						</div>
 						<div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

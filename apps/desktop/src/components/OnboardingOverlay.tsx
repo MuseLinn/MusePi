@@ -42,6 +42,7 @@ import {
 	type CustomProviderPayload,
 	emptyCustomProviderDraft,
 } from "./CustomProviderForm";
+import { FadeScroll } from "./FadeScroll";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { MenuPopup } from "./MenuPopup";
 import { ModelBrandIcon } from "./model-brand-icon";
@@ -1550,7 +1551,7 @@ export function OnboardingOverlay({
 						 * tall); dots + actions stay pinned. Main spine = 5 steps;
 						 * the optional branches (import/personalize/feature tour)
 						 * live in the done step's accordion and never block Enter. */}
-						<div className="gui-obo-step-body">
+						<FadeScroll className="gui-obo-step-body">
 							{step === 0 && (
 								<>
 									<LanguageSetup />
@@ -1716,7 +1717,7 @@ export function OnboardingOverlay({
 									</div>
 								</div>
 							)}
-						</div>
+						</FadeScroll>
 						<div className="gui-onboarding-dots">
 							{STEPS.map((s, i) => (
 								<span

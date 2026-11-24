@@ -1,0 +1,111 @@
+import "./happy-dom-shim"; // MUST be first: client-core defines HTMLElement subclasses at evaluation time.
+import { describe, expect, test } from "bun:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+/**
+ * Tour-overlay hierarchy contract (2026-11-24).
+ *
+ * The primer and the what's-new panel are the same L3 tour surface: one
+ * scrim, one card shell, one enter/exit ladder. The what's-new card had
+ * drifted on four axes — it painted an opaque fill (killing the glass on
+ * macOS while the win32/Linux fallback re-added it), set a smaller heading,
+ * swapped the borderless close button for a bordered one, and left its
+ * footer left-aligned with no way to tell the primary action apart.
+ *
+ * These assertions pin the shared hierarchy so the two cards cannot drift
+ * apart again without a visible failure here.
+ */
+
+const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
+const read = (rel: string): string => fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
+
+const WIDGETS = "apps/desktop/src/styles/gui-widgets.css";
+const ANNOUNCEMENT_TSX = "apps/desktop/src/components/AnnouncementOverlay.tsx";
+const ONBOARDING_TSX = "apps/desktop/src/components/OnboardingOverlay.tsx";
+
+/** Extract a declaration body from a selector block (single-level braces). */
+function rule(css: string, selector: string): string | null {
+	const at = css.indexOf(`${selector} {`);
+	if (at < 0) return null;
+	const open = css.indexOf("{", at);
+	const close = css.indexOf("}", open);
+	return open < 0 || close < 0 ? null : css.slice(open + 1, close);
+}
+
+function declaration(body: string, name: string): string {
+	const match = new RegExp(`(?:^|[;{\\s])${name}\\s*:\\s*([^;]+);`).exec(body);
+	return match?.[1]?.trim() ?? "";
+}
+
+describe("both tour cards paint the same L3 glass", () => {
+	test("the what's-new card keeps the sheen and the translucent strong fill", () => {
+		const body = rule(read(WIDGETS), ".gui-announcement-card");
+		expect(body, "no .gui-announcement-card block").not.toBeNull();
+		const background = declaration(body!, "background");
+		expect(background).toContain("var(--glass-sheen)");
+		expect(background).toContain("var(--glass-bg-strong)");
+		// An opaque fill would erase the glass on macOS only: the platform
+		// fallback in overlay-fallback.css re-adds sheen on win32/Linux.
+		expect(background).not.toContain("var(--bg-raised)");
+		expect(declaration(body!, "background-color")).toBe("");
+	});
+
+	test("the what's-new heading uses the primer's heading step", () => {
+		const css = read(WIDGETS);
+		const primer = rule(css, ".gui-onboarding-title");
+		const title = rule(css, ".gui-announcement-title");
+		const heading = rule(css, ".gui-announcement-heading");
+		for (const [name, body] of [
+			[".gui-onboarding-title", primer],
+			[".gui-announcement-title", title],
+			[".gui-announcement-heading", heading],
+		] as const) {
+			expect(body, `no ${name} block`).not.toBeNull();
+			expect(declaration(body!, "font-size"), `${name} heading step`).toBe("20px");
+			expect(declaration(body!, "font-weight"), `${name} heading weight`).toBe("650");
+		}
+	});
+
+	test("the announcement footer is a right-aligned dialog footer", () => {
+		const body = rule(read(WIDGETS), ".gui-announcement-card .gui-onboarding-actions");
+		expect(body, "no announcement footer block").not.toBeNull();
+		expect(declaration(body!, "justify-content")).toBe("flex-end");
+		expect(declaration(body!, "border-top")).toContain("var(--border)");
+	});
+});
+
+describe("both tour cards share one close affordance and one motion switch", () => {
+	test("the announcement uses the primer's borderless close button", () => {
+		const tsx = read(ANNOUNCEMENT_TSX);
+		expect(tsx).toContain('className="gui-onboarding-close"');
+		// The bordered .gui-btn-icon close read as a different control family
+		// than the primer's at the same corner.
+		expect(tsx).not.toContain('className="gui-btn gui-btn-icon"');
+	});
+
+	test("the in-app motion switch stops the two persistent pulses", () => {
+		const css = read(WIDGETS);
+		// The current-step dot and the latest-version pill loop forever.
+		// prefers-reduced-motion collapses them through the global 0.01ms
+		// rule; the motion toggle only matches selectors listed here.
+		expect(css).toContain(".gui-motion-off .gui-onboarding-dot--active");
+		expect(css).toContain(".gui-motion-off .gui-announcement-latest");
+	});
+
+	test("the primer's step body feathers its scroll edges", () => {
+		// The what's-new body already scrolls inside FadeScroll; the primer's
+		// bare overflow-y container was the one unfeathered scroller left in
+		// the tour family (gui-dialog-spec §4).
+		const tsx = read(ONBOARDING_TSX);
+		expect(tsx).toContain('<FadeScroll className="gui-obo-step-body">');
+		expect(tsx).not.toContain('<div className="gui-obo-step-body">');
+	});
+});
+
+describe("the announcement keyboard contract lets links open", () => {
+	test("Enter on a focused link does not dismiss the panel", () => {
+		const tsx = read(ANNOUNCEMENT_TSX);
+		expect(tsx).toContain("e.target instanceof HTMLAnchorElement");
+	});
+});

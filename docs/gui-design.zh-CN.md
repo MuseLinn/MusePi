@@ -512,7 +512,7 @@ turn
 | compact | `--radius-xl` | max-width 380px、auto 高、padding 22×24 | confirm / prompt / 更新决策卡（`gui-dialog--confirm`） |
 | standard | `--radius-2xl` | 600×420（`min(600px, 90vw)` × `min(420px, 80vh)`） | 设置类/表单类弹窗（`gui-dialog` 基类） |
 | wide | `--radius-2xl` | 内容定义（SaveImage 760px、palette 620px、Connect 向导、技能抽屉 480px 侧边抽屉） | 预览/多列/向导/侧边抽屉 |
-| 导览 | `--radius-2xl` | `min(1000px, vw−160)` × `min(620px, vh−160)`，居中浮动、四边留 ≥80px 玻璃边 | Onboarding / Announcement / Reward |
+| 导览 | `--radius-2xl` | 居中浮动、四边留 ≥80px 玻璃边；各卡自定阅读宽度：引导 `min(1000px, vw−160)` × `min(620px, vh−160)`、新功能 `min(680px, vw−160)` × `min(560px, vh−160)`、奖励 `min(520px, vw−120)` × auto | Onboarding / Announcement / Reward |
 
 ### z-index 层级表
 
