@@ -245,6 +245,16 @@ describe("BrowserControlOverlay pointer blocking", () => {
 		expect(frame.getAttribute("data-blocked")).toBeNull();
 	});
 
+	it("announces a refusal in the live region, not only in the visuals", () => {
+		act(() => root.render(<BrowserControlOverlay activity={running} now={2_000} onTakeover={() => {}} />));
+		const blocker = document.querySelector<HTMLElement>("[data-browser-control-blocker]")!;
+		act(() => {
+			blocker.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+		});
+		const live = document.querySelector("[role='status']");
+		expect(live?.textContent).toContain(t("tools.browserBlockedHint"));
+	});
+
 	it("never blocks while the user owns the tab", () => {
 		act(() =>
 			root.render(<BrowserControlOverlay activity={null} userOwned onTakeover={() => {}} onHandBack={() => {}} />),

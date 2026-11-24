@@ -252,6 +252,10 @@ export function BrowserControlOverlay({
 								{t("tools.browserAgentOperator", { agent: agentName })}
 							</span>
 						)}
+						{/* The blocker is aria-hidden, so a refusal would otherwise be
+						 * silent for a screen reader: announce it in the same live
+						 * region that already carries the action. */}
+						{denied && <span className="sr-only">{t("tools.browserBlockedHint")}</span>}
 					</span>
 					<span className="gui-browser-control-summary" title={displayActivity.summary}>
 						{denied ? (
