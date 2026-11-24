@@ -116,6 +116,16 @@ describe("tail presence stylesheet contract", () => {
 		expect(rule).toContain("hidden");
 	});
 
+	it("puts the detail card on its own line instead of squeezing the phrase", () => {
+		// The bug this pins: `.presence-detail` is a child of the horizontal
+		// flex row, so `width: 100%` made it compete for the row's width and the
+		// phrase collapsed to "正在…". It must wrap to its own line.
+		const row = /\.presence\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+		expect(row).toContain("flex-wrap: wrap");
+		const detail = /\.presence-detail\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+		expect(detail).toContain("flex: 0 0 100%");
+	});
+
 	it("drops the sheen when motion is off", () => {
 		expect(css).toMatch(/prefers-reduced-motion[\s\S]*?\.presence-band\s*\{\s*display:\s*none/);
 		expect(css).toMatch(/\.gui-motion-off\s+\.presence-band\s*\{\s*display:\s*none/);
