@@ -784,26 +784,25 @@ describe("会话信息卡层级与座位几何", () => {
 		host.remove();
 	});
 
-	it("配对时面板与卡片列共用一条宽度动效，未配对时面板仍瞬时开合", () => {
+	it("面板开合的两个方向都过渡宽度，聊天列不会在内容形变时一步跳到位", () => {
 		const style = document.createElement("style");
 		style.textContent = fs.readFileSync(path.resolve(import.meta.dir, "../src/styles/gui-chat.css"), "utf8");
 		document.head.appendChild(style);
 		const host = document.createElement("div");
 		host.innerHTML = `
-			<div data-session-info-paired="">
-				<aside class="gui-pane-right--inner"></aside>
-			</div>
-			<div>
-				<aside class="gui-pane-right--inner"></aside>
-			</div>`;
+			<aside class="gui-pane-right--inner"></aside>
+			<aside class="gui-pane-right--inner gui-pane-right--inner--closed"></aside>`;
 		document.body.appendChild(host);
-		const [paired, plain] = [...host.querySelectorAll<HTMLElement>(".gui-pane-right--inner")];
+		const [open, closed] = [...host.querySelectorAll<HTMLElement>(".gui-pane-right--inner")];
 
-		// Paired: the panel's box rides the seat's 220ms spring, so the chat
-		// reflows once with the card's fold instead of snapping in first.
-		expect(/width 220ms/.test(getComputedStyle(paired!).transition)).toBe(true);
-		// Unpaired: the documented zero-duration width snap stays.
-		expect(/width 0s/.test(getComputedStyle(plain!).transition)).toBe(true);
+		// Both directions carry the width: a snap on either side makes the chat
+		// column jump while the panel's own contents animate, which reads as two
+		// unrelated motions in one toggle.
+		expect(/width 220ms/.test(getComputedStyle(open!).transition)).toBe(true);
+		expect(/width 220ms/.test(getComputedStyle(closed!).transition)).toBe(true);
+		// The close side must not hold the box at full width first (the old
+		// `0s 220ms` snap), which moved the jump 220ms later instead of removing it.
+		expect(/0s/.test(getComputedStyle(closed!).transition)).toBe(false);
 
 		host.remove();
 	});
@@ -912,25 +911,6 @@ describe("ChatView 会话信息卡座位", () => {
 			/>
 		);
 	}
-
-	it("卡片参与该行时行上带配对标记；关掉卡片或行太窄时去掉，面板回到自己的瞬时开合", async () => {
-		mockLayout({ rowWidth: 1400 });
-		const paired = await mount(renderChat({ sessionInfoOpen: true, rightPanelOpen: false }));
-		const row = paired.host.querySelector<HTMLElement>(".gui-chat-surface .flex.min-h-0.flex-1")!;
-		expect(row.hasAttribute("data-session-info-paired")).toBe(true);
-		await paired.unmount();
-
-		const closed = await mount(renderChat({ sessionInfoOpen: false, rightPanelOpen: false }));
-		const closedRow = closed.host.querySelector<HTMLElement>(".gui-chat-surface .flex.min-h-0.flex-1")!;
-		expect(closedRow.hasAttribute("data-session-info-paired")).toBe(false);
-		await closed.unmount();
-
-		mockLayout({ rowWidth: 600 });
-		const narrow = await mount(renderChat({ sessionInfoOpen: true, rightPanelOpen: false }));
-		const narrowRow = narrow.host.querySelector<HTMLElement>(".gui-chat-surface .flex.min-h-0.flex-1")!;
-		expect(narrowRow.hasAttribute("data-session-info-paired")).toBe(false);
-		await narrow.unmount();
-	});
 
 	it("面板收起：宽行下渲染独立停靠列，位于会话列与右面板/rail 之间", async () => {
 		mockLayout({ rowWidth: 1200 });

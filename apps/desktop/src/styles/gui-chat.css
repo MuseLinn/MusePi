@@ -5170,33 +5170,29 @@ body.gui-resizing .gui-pane-right {
 	z-index: -1;
 }
 
-/* Right panel fold: the panel stays mounted and folds to zero width, but the
- * fold is NOT an animated width any more.
+/* Right panel fold: the panel stays mounted and folds to zero width, and the
+ * BOX animates with its contents.
  *
- * Animating `width` (the old 320ms spring) re-laid out the panel's whole
- * subtree AND reflowed the chat column on every frame — the transcript is a
- * flex sibling, so each intermediate width moved every message row. Opening
- * the capsule therefore spent its first 300ms reflowing text it was not
- * changing, which is most of what read as "卡顿". The closed state now snaps
- * its box and the motion lives in `transform`/`opacity` on the contents, both
- * compositor properties. The panel still folds, still animates, and
- * `aria-expanded` is untouched — it is the LAYOUT cost that is gone.
+ * The box used to snap (`width 0s`): the fold then read as the panel's
+ * contents morphing in while the chat column jumped a full panel width in one
+ * frame — two different motions in one toggle, and the jump is what the eye
+ * caught. Width, the gutter margin and the contents now share the 220ms
+ * spring, so the chat column and the session info column beside it change in
+ * one motion, once, in one direction. The cost is the layout the snap used to
+ * avoid: the panel's subtree and every transcript row re-measure per frame
+ * for those 220ms. The motion switch and reduced motion drop the transition
+ * entirely, and a width drag keeps `transition: none` so the seam follows the
+ * pointer.
  *
- * The margin rides the same delayed snap as the width: the closed state drops
- * the card gutter, and letting that drop apply on frame 1 while the box is
- * still full-width grew the panel 8px right into the freed gutter before the
- * width snapped — the "收起时面板会突然放大一点再收起" report. Both box
- * properties therefore move together at 220ms.
- *
- * The WIDTH itself is a delayed, zero-duration snap (`0s`), never an
- * interpolated length: the box jumps to its target, and the 220ms delay on the
- * closing side is what keeps it at full width while the contents fade — so the
- * fold reads as contents leaving, then the column reflowing ONCE. Opening
- * drops the delay, because the panel's box must be there for its contents to
- * slide into. */
+ * The margin rides the width: the closed state drops the card gutter, and
+ * letting that drop apply on frame 1 while the box is still full-width grew
+ * the panel 8px right into the freed gutter before the width moved — the
+ * "收起时面板会突然放大一点再收起" report. Both box properties therefore
+ * move together. */
 .gui-pane-right--inner {
 	transition:
-		width 0s 0ms,
+		width 220ms var(--spring),
+		margin 220ms var(--spring),
 		transform 220ms var(--spring),
 		opacity 160ms ease;
 	transform-origin: right center;
@@ -5207,13 +5203,12 @@ body.gui-resizing .gui-pane-right {
 	border-left-width: 0;
 	opacity: 0;
 	pointer-events: none;
-	/* Hold the box — width AND the gutter margin — for the length of the fade,
-	 * then snap both together. The transcript reflows exactly once instead of
-	 * once per frame, and the panel's left edge cannot jump 8px while the panel
-	 * is still full width. */
+	/* Same transition as the open state, with no delay: holding the box at full
+	 * width while the contents faded made the chat column jump once the hold
+	 * expired, which is the abrupt resize this rule now avoids. */
 	transition:
-		width 0s 220ms,
-		margin 0s 220ms,
+		width 220ms var(--spring),
+		margin 220ms var(--spring),
 		transform 220ms var(--spring),
 		opacity 160ms ease;
 	/* Folded states leave no trace: margins drop to 0 (the appended gutter
@@ -7912,41 +7907,6 @@ html.gui-view-transition .gui-pane-right--inner > :not(.gui-pane-resize-x, .gui-
 	margin: 0;
 }
 
-/* Paired right column: while the session info card shares this row, the card
- * column and the panel are ONE column and move on one width motion. Left to
- * their own rules they ran on different schedules — the panel snapped its
- * width open (`0s`), then the card's 220ms fold handed the column back — so a
- * single toggle narrowed the chat and widened it again. The panel keeps its
- * opacity/transform fold; only the box now rides the seat's spring, and the
- * close delay (which exists to fade the contents out at full width) is
- * dropped because it would hold the panel wide while the card column grows
- * back. The per-frame layout cost the panel's own rule avoids returns for
- * these 220ms, and only while the card is in the row; the motion-off and
- * reduced-motion blocks below drop it entirely. */
-[data-session-info-paired] .gui-pane-right--inner,
-[data-session-info-paired] .gui-pane-right--inner--closed {
-	transition:
-		width 220ms var(--spring),
-		margin 220ms var(--spring),
-		transform 220ms var(--spring),
-		opacity 160ms ease;
-}
-@media (prefers-reduced-motion: reduce) {
-	[data-session-info-paired] .gui-pane-right--inner,
-	[data-session-info-paired] .gui-pane-right--inner--closed {
-		transition: none;
-	}
-}
-.gui-motion-off [data-session-info-paired] .gui-pane-right--inner,
-.gui-motion-off [data-session-info-paired] .gui-pane-right--inner--closed {
-	transition: none;
-}
-/* A width drag owns the seam: the panel must follow the pointer, not ease
- * towards it. The body-level guard predates this rule, so it is restated at
- * the paired rule's specificity. */
-body.gui-resizing [data-session-info-paired] .gui-pane-right--inner {
-	transition: none;
-}
 
 @keyframes gui-session-info-in {
 	from {

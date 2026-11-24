@@ -3248,11 +3248,6 @@ export function ChatView({
 	// Auto-showing it there covers the conversation the card is meant to
 	// summarize, so that seat waits for an explicit toggle.
 	const sessionInfoNarrowRow = sessionInfoSeatState.narrow;
-	// Whether the card belongs to this row at all, regardless of the panel's
-	// state right now: the card's column and the panel then move as ONE right
-	// column, so the chat reflows once per toggle instead of once per owner.
-	// A closed card or a row too narrow to dock keeps the panel's own snap.
-	const sessionInfoSharesRow = !focusMode && sessionInfoOpen && sessionInfoSeatState.roomy;
 	const sessionInfoFloatOpen = sessionInfoSeatState.float;
 	// What the narrow-row toggle drives: the float seat needs BOTH the stored
 	// preference and an explicit request, so the click flips the pair instead of
@@ -3442,16 +3437,7 @@ export function ChatView({
 				 * session-info dock threshold; the panel and rail are part of the
 				 * width it reports, exactly as they were when nested in the chat
 				 * scene. */}
-				<div
-					ref={chatRowRef}
-					className="flex min-h-0 flex-1"
-					/* The card column and the panel are one right column while the
-					 * card shares this row: their widths must move together or the
-					 * chat reflows twice per toggle (panel snaps in, then the card's
-					 * fold gives the width back). gui-chat.css keys the shared motion
-					 * off this attribute. */
-					data-session-info-paired={sessionInfoSharesRow ? "" : undefined}
-				>
+				<div ref={chatRowRef} className="flex min-h-0 flex-1">
 					{/* Scene stack: both scenes mount during the 420ms overlap window,
 					 * each absolute-filling this wrapper (so they cross-fade/morph
 					 * full-surface). The wrapper itself is IN FLOW — the terminal
