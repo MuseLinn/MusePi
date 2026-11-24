@@ -157,21 +157,6 @@ export class JobLedger {
 		return rows.map(toRecord);
 	}
 
-	/** Finished-but-undelivered rows for one session. A restart can replay the
-	 *  text into the transcript instead of losing the result with the process. */
-	listUndelivered(sessionId: string, limit = 20): DurableJobRecord[] {
-		const rows = this.#db
-			.query(
-				`SELECT * FROM async_jobs
-				 WHERE session_id = ? AND delivered = 0
-				   AND status IN ('completed', 'failed', 'cancelled')
-				 ORDER BY updated_at ASC
-				 LIMIT ?`,
-			)
-			.all(sessionId, limit) as JobRow[];
-		return rows.map(toRecord);
-	}
-
 	/** Lost rows for one session (or session-less rows, which predate the
 	 *  session field). Used by `session.jobs` so a restarted daemon can show
 	 *  what it could not recover. */
