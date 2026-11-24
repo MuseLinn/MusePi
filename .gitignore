@@ -57,6 +57,8 @@ __pycache__/
 # Scratch files
 .analysis/
 .kimi-tmp/
+# superpowers plugin runtime state (ports, tokens, SDD records) — local to the machine
+.superpowers/
 syntax.jsonl
 out.jsonl
 out.html
