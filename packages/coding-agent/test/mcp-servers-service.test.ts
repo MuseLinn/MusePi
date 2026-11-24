@@ -15,15 +15,17 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServersService } from "../src/daemon/services/mcp-servers-service";
+import { listMcpGrants, mcpServerTarget, setMcpGrant } from "../src/secrets/mcp-grants";
 
 interface StoredConfig {
 	mcpServers?: Record<string, Record<string, unknown>>;
 }
 
-function newService(): { service: McpServersService; configPath: string } {
+function newService(): { service: McpServersService; configPath: string; agentDir: string } {
 	const dir = mkdtempSync(join(tmpdir(), "musepi-mcp-servers-"));
 	const configPath = join(dir, "mcp.json");
-	return { service: new McpServersService({ userConfigPath: () => configPath }), configPath };
+	const service = new McpServersService({ userConfigPath: () => configPath, agentDir: () => dir });
+	return { service, configPath, agentDir: dir };
 }
 
 function readStored(configPath: string): StoredConfig {
@@ -153,6 +155,20 @@ describe("McpServersService", () => {
 
 		expect(Object.keys(readStored(configPath).mcpServers ?? {})).toEqual(["notion"]);
 		await expect(service.remove({ name: "missing" })).rejects.toThrow(/not found/);
+	});
+
+	it("removing a server drops the vault grant it held", async () => {
+		const { service, agentDir } = newService();
+		await service.add({ name: "demo", url: "https://mcp.example/api" });
+		const target = mcpServerTarget({ type: "http", url: "https://mcp.example/api" });
+		await setMcpGrant(agentDir, "demo", target, ["GITHUB_TOKEN"]);
+		await setMcpGrant(agentDir, "notion", target, ["GITHUB_TOKEN"]);
+		expect((await listMcpGrants(agentDir)).map(entry => entry.server)).toEqual(["demo", "notion"]);
+
+		await service.remove({ name: "demo" });
+
+		// Only the removed server's grant goes; a server that still exists keeps its own.
+		expect((await listMcpGrants(agentDir)).map(entry => entry.server)).toEqual(["notion"]);
 	});
 
 	it("rejects a relative config path", async () => {

@@ -274,8 +274,9 @@ to this URL / running this command, may read this name" in
 http/sse, command plus arguments for stdio), so a workspace `.mcp.json` cannot
 reuse a grant by declaring a same-named server that points elsewhere; it must
 be granted again. An ungranted reference is dropped, so the server starts
-without that env/header; nothing is granted automatically, and a server removed
-from the config leaves its grant behind until it is edited.
+without that env/header, and nothing is granted automatically. Removing a
+server from the configuration also drops its grant: a grant that no server can
+use would otherwise wait for a future same-named entry to inherit it.
 
 ### Daemon RPC
 

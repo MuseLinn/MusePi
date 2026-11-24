@@ -888,6 +888,7 @@ export class DaemonServer {
 		this.#services.register(
 			new McpServersService({
 				userConfigPath: () => getMCPConfigPath("user", this.#host.cwd()),
+				agentDir: () => this.#host.settings()?.getAgentDir() ?? getAgentDir(),
 				reloadConnectors: () => this.#host.reloadMcpConnectors(),
 				// Probe by name resolves the session's workspace first (project
 				// config lives there), then falls back to the daemon cwd whose

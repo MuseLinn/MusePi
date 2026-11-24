@@ -203,7 +203,7 @@ Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值�
 
 MCP server 的 `env` 或 `headers` 值可以整个写成 `${vault:NAME}`。连接时 daemon 会按该 server 的工作区读取条目，因此配置文件永不包含值；条目缺失、不可解密或不在范围内时，该 env/header 会被省略。这是让 MCP 使用保险库值、而不把值写进 `mcp.json` 或进程环境的路径。
 
-引用只是请求，不是许可。用户按 server、按端点授权——在「设置 → 智能体 → 保险库」的密钥行点「MCP」，把「这个 server、连这个地址 / 跑这个命令，可以读这个名字」记入 `agent-secrets/mcp-grants.json`。端点属于授权内容（http/sse 是 URL，stdio 是命令加参数），因此工作区 `.mcp.json` 不能靠声明一个同名但指向别处的 server 复用授权，必须重新允许。未授权的引用会被省略，server 照常启动但不带该 env/header；没有任何自动授权，配置里删掉一个 server 后它的授权会留到下次编辑。
+引用只是请求，不是许可。用户按 server、按端点授权——在「设置 → 智能体 → 保险库」的密钥行点「MCP」，把「这个 server、连这个地址 / 跑这个命令，可以读这个名字」记入 `agent-secrets/mcp-grants.json`。端点属于授权内容（http/sse 是 URL，stdio 是命令加参数），因此工作区 `.mcp.json` 不能靠声明一个同名但指向别处的 server 复用授权，必须重新允许。未授权的引用会被省略，server 照常启动但不带该 env/header，也没有任何自动授权。从配置里删掉一个 server 时，它的授权一并删除：留着一条没有 server 能用的授权，只会等一个未来的同名条目去继承它。
 
 ### Daemon RPC
 

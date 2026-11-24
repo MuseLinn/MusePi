@@ -2,10 +2,11 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 import { MCPManager } from "@musepi/pi-coding-agent/mcp/manager";
+import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
 import { AgentSecretStore } from "@musepi/pi-coding-agent/secrets/agent-store";
 import {
+	forgetMcpGrants,
 	listMcpGrants,
 	mcpGrantedKeys,
 	mcpServerTarget,
@@ -59,6 +60,18 @@ describe("MCP grant store", () => {
 		// An empty list revokes the server entirely.
 		await setMcpGrant(dir, "demo", mcpServerTarget(STDIO), []);
 		expect(await listMcpGrants(dir)).toEqual([]);
+	});
+
+	it("forgets one server's grant without touching the others", async () => {
+		const dir = freshAgentDir();
+		await setMcpGrant(dir, "demo", mcpServerTarget(STDIO), ["GITHUB_TOKEN"]);
+		await setMcpGrant(dir, "notion", mcpServerTarget(STDIO), ["GITHUB_TOKEN"]);
+
+		await forgetMcpGrants(dir, "demo");
+		expect((await listMcpGrants(dir)).map(entry => entry.server)).toEqual(["notion"]);
+		// Idempotent: forgetting a server that has no grant writes nothing new.
+		await forgetMcpGrants(dir, "demo");
+		expect((await listMcpGrants(dir)).map(entry => entry.server)).toEqual(["notion"]);
 	});
 
 	it("refuses an invalid server name or secret name", async () => {

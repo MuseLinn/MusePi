@@ -33,7 +33,7 @@ import { type MCPServer, mcpCapability } from "../../capability/mcp";
 import { type MCPProbeResult, probeServer } from "../../mcp/client";
 import { addMCPServer, readMCPConfigFile, removeMCPServer, validateServerName } from "../../mcp/config-writer";
 import type { MCPAuthConfig, MCPConfigFile, MCPServerConfig } from "../../mcp/types";
-import { mcpServerTarget } from "../../secrets/mcp-grants";
+import { forgetMcpGrants, mcpServerTarget } from "../../secrets/mcp-grants";
 // The discovery providers that read the other agents' configurations.
 import "../../discovery/builtin";
 import type { DaemonService } from "./types";
@@ -72,6 +72,8 @@ export interface MCPProbeManager {
 export interface McpServersServiceDeps {
 	/** Absolute path of the user-scope config the service owns. */
 	userConfigPath(): string;
+	/** Resolved agent dir: removing a server also drops its vault grants. */
+	agentDir?(): string;
 	/** Reconcile live MCP managers after a write. Best-effort: an install
 	 *  still succeeded even if a running server could not be restarted. */
 	reloadConnectors?(): Promise<unknown>;
@@ -408,6 +410,10 @@ export class McpServersService implements DaemonService {
 		const nameError = validateServerName(name);
 		if (nameError) throw new Error(nameError);
 		await removeMCPServer(this.#configPath(), name);
+		// A grant belongs to one server: once the server is gone it can never be
+		// used, and a future same-named entry must not inherit it.
+		const agentDir = this.#deps.agentDir?.();
+		if (agentDir) await forgetMcpGrants(agentDir, name);
 		await this.#reloadConnectors();
 		return { ok: true, name };
 	}

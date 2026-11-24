@@ -165,3 +165,19 @@ export async function setMcpGrant(
 		await writeGrants(agentDir, file);
 	});
 }
+
+/**
+ * Drop a server's grant after it was removed from the configuration. A grant
+ * for a server that no longer exists can never be used, and keeping it would
+ * only let a future same-named entry inherit it silently.
+ */
+export async function forgetMcpGrants(agentDir: string, server: string): Promise<void> {
+	const name = validateMcpServerName(server);
+	const filePath = grantsPath(agentDir);
+	await withWriteLock(filePath, async () => {
+		const file = await readGrants(agentDir);
+		if (!(name in file.servers)) return;
+		delete file.servers[name];
+		await writeGrants(agentDir, file);
+	});
+}
