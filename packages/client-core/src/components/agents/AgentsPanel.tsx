@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens, relTime } from "../../lib/format";
+import { agentStatusKey } from "./status";
 import "./agents.css";
 
 /** Re-render tick so running-tool durations and relative times stay live. */
@@ -43,8 +44,8 @@ function activityLine(
 	if (lc) return lc.status;
 	// Persisted roster rows carry the child session's own summary once no
 	// live frame is left; without it a restart-surviving row would only read
-	// "parked" and never say what the subagent was asked to do.
-	return agent.activity ?? agent.status;
+	// its state and never say what the subagent was asked to do.
+	return agent.activity ?? t(agentStatusKey(agent.status));
 }
 
 function AgentRow(props: {
@@ -58,6 +59,9 @@ function AgentRow(props: {
 }): ReactNode {
 	const { agent, payload, lifecycle, selected, now, avatar, onSelect } = props;
 	const p = payload?.progress;
+	const activity = activityLine(agent, p, lifecycle, now);
+	// The type is a label, never the title: same-definition spawns share it.
+	const typeChip = agent.agentName ?? t(agent.kind === "main" ? "agents.main" : "agents.sub");
 	return (
 		<button
 			type="button"
@@ -67,10 +71,16 @@ function AgentRow(props: {
 			<span className="ag-row-head">
 				{avatar ? <span className="ag-row-avatar">{avatar}</span> : null}
 				<span className={`ag-dot ag-dot--${agent.status}`} />
-				<span className="ag-row-name">{agent.displayName}</span>
-				<span className="ag-chip">{t(agent.kind === "main" ? "agents.main" : "agents.sub")}</span>
+				<span className="ag-row-name" title={agent.displayName}>
+					{agent.displayName}
+				</span>
+				<span className="ag-chip">{typeChip}</span>
 			</span>
-			<span className="ag-row-activity">{activityLine(agent, p, lifecycle, now)}</span>
+			{activity && activity !== agent.displayName ? (
+				<span className="ag-row-activity" title={activity}>
+					{activity}
+				</span>
+			) : null}
 			<span className="ag-row-meta">
 				{p ? <span>{t("agents.tokWithCount", { count: fmtTokens(p.tokens) })}</span> : null}
 				{p ? <span>{fmtCost(p.cost)}</span> : null}

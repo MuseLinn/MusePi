@@ -146,6 +146,7 @@ describe("GuiSessionStore subagent hydration + ownership", () => {
 				id,
 				status,
 				agent: "scout",
+				description: "OpenMausBotArtifacts",
 				task: "do a thing",
 				toolCount: 1,
 				requests: 1,
@@ -170,6 +171,11 @@ describe("GuiSessionStore subagent hydration + ownership", () => {
 		const snap = store.getSnapshot();
 		expect(snap.activeTools.get("t1")?.toolName).toBe("task");
 		expect(snap.agents.some(a => a.id === "a1" && a.status === "running")).toBe(true);
+		// 行名是实例标签；共享的 agent 定义名只做类型。
+		expect(snap.agents.find(a => a.id === "a1")).toMatchObject({
+			displayName: "OpenMausBotArtifacts",
+			agentName: "scout",
+		});
 		expect(snap.progress.get("a1")?.progress.id).toBe("a1");
 	});
 

@@ -25,7 +25,7 @@ let server: DaemonServer;
 
 /** Production shape: the title slot, then `session_init` with a prompt-sized
  *  body and `agent` last. */
-function transcript(id: string, agent?: string, prompt?: string): string {
+function transcript(id: string, agent?: string, prompt?: string, title = id.slice(0, 8)): string {
 	const init = agent
 		? JSON.stringify({
 				type: "session_init",
@@ -37,7 +37,7 @@ function transcript(id: string, agent?: string, prompt?: string): string {
 			})
 		: null;
 	return `${[
-		JSON.stringify({ type: "title", v: 1, title: id.slice(0, 8), source: "auto", pad: "  " }),
+		JSON.stringify({ type: "title", v: 1, title, source: "auto", pad: "  " }),
 		JSON.stringify({ type: "session", version: 3, id, cwd: "/repo", timestamp: "2026-11-13T16:26:30.057Z" }),
 		...(init ? [init] : []),
 		JSON.stringify({ type: "message", message: { role: "user", content: prompt ?? `${id} assignment` } }),
@@ -56,11 +56,11 @@ beforeAll(async () => {
 	await fsp.writeFile(path.join(root, `${PARENT_BASE}.jsonl`), transcript(PARENT_ID));
 	await fsp.writeFile(
 		path.join(productDir, `${CHILD_A.file}.jsonl`),
-		transcript(CHILD_A.id, CHILD_A.agent, "collect the extension list"),
+		transcript(CHILD_A.id, CHILD_A.agent, "collect the extension list", "ListExtensionDirs"),
 	);
 	await fsp.writeFile(
 		path.join(productDir, `${CHILD_B.file}.jsonl`),
-		transcript(CHILD_B.id, CHILD_B.agent, "synthesize the report"),
+		transcript(CHILD_B.id, CHILD_B.agent, "synthesize the report", "SynthesizeReport"),
 	);
 	server = new DaemonServer(new DaemonSessionHost());
 }, 30_000);
@@ -86,13 +86,13 @@ async function roster(): Promise<RosterRow[]> {
 }
 
 describe("subagent sessions on real transcripts", () => {
-	it("names each finished child by its agent and child session id", async () => {
+	it("names each finished child by its instance title, with the agent as a type label", async () => {
 		const agents = await roster();
 		expect(agents).toHaveLength(2);
 		const byId = new Map(agents.map(agent => [agent.id, agent]));
 		expect(byId.get(CHILD_A.file)).toMatchObject({
 			sessionId: CHILD_A.id,
-			displayName: "sonic",
+			displayName: "ListExtensionDirs",
 			agentName: "sonic",
 			kind: "sub",
 			status: "idle",
@@ -100,7 +100,7 @@ describe("subagent sessions on real transcripts", () => {
 		});
 		expect(byId.get(CHILD_B.file)).toMatchObject({
 			sessionId: CHILD_B.id,
-			displayName: "task",
+			displayName: "SynthesizeReport",
 			agentName: "task",
 		});
 	});

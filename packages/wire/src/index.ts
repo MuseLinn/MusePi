@@ -863,7 +863,13 @@ export interface SessionPresence {
 
 export interface AgentSnapshot {
 	id: string;
+	/** Instance label — the name the user sees for this run. Never the
+	 *  shared agent definition name: several spawns of one definition would
+	 *  otherwise collapse onto the same title. */
 	displayName: string;
+	/** Agent definition that produced this row (`scout`, `designer`, …).
+	 *  Display metadata only; address and title stay instance-level. */
+	agentName?: string;
 	kind: "main" | "sub";
 	parentId?: string;
 	status: "running" | "idle" | "parked" | "aborted";

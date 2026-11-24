@@ -107,12 +107,14 @@ export class AgentsService implements DaemonService {
 			const id = transcriptAgentId(file);
 			const ref = registry.get(id);
 			// 三个 id 各有用途:agent id 寻址实时会话,子会话 id 打开会话,
-			// agent 定义名(`session_init.agent`)回答“是哪个子代理”。
+			// agent 定义名(`session_init.agent`)只做类型标签。主名必须是实例:
+			// 同类型的多个 spawn 共用定义名,拿它当 displayName 会让整列撞名。
 			const agentName = ref?.history?.agent ?? row.agentName;
+			const displayName = ref?.displayName ?? row.title ?? id;
 			return {
 				id,
 				sessionId: row.sessionId,
-				displayName: agentName ?? ref?.displayName ?? row.title ?? id,
+				displayName,
 				agentName: agentName ?? null,
 				kind: "sub" as const,
 				/** 注册表有 ref 时用实时状态;没有(一次性子代理已结束、daemon

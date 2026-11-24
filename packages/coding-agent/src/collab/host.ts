@@ -824,6 +824,7 @@ export class CollabHost {
 				.map(ref => ({
 					id: ref.id,
 					displayName: ref.displayName,
+					...(ref.history?.agent ? { agentName: ref.history.agent } : undefined),
 					kind: ref.kind,
 					parentId: ref.parentId,
 					status: ref.status,

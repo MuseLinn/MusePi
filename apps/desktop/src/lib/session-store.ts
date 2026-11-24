@@ -1016,18 +1016,26 @@ export class GuiSessionStore {
 		// created, never goes away.
 		const hasSessionFile = wrapper.sessionFile != null;
 		const existing = this.#agents.get(p.id);
+		const described = p.description?.trim();
 		if (existing) {
 			existing.status = p.status === "running" ? "running" : "idle";
 			existing.lastActivity = Date.now();
 			if (hasSessionFile) existing.hasSessionFile = true;
+			// The label is generated off the spawn's critical path: the row may
+			// first appear with the agent id and learn its sentence a frame later.
+			if (described) existing.displayName = described;
+			existing.agentName ??= p.agent;
 			this.#agents.set(p.id, existing);
 		} else {
 			// First sight of a subagent: synthesize its AgentSnapshot (the
 			// daemon stream carries progress but no per-subagent start
 			// envelope, so the row appears from the first progress frame).
+			// The title is the instance label; `agent` is the definition and
+			// belongs in the type chip, not in the row name.
 			this.#agents.set(p.id, {
 				id: p.id,
-				displayName: p.agent,
+				displayName: described || p.id,
+				agentName: p.agent,
 				kind: "sub",
 				parentId: undefined,
 				status: p.status === "running" ? "running" : "idle",

@@ -71,7 +71,8 @@ function snapshot(agents: readonly AgentSnapshot[]): GuiSessionState {
 
 const scout: AgentSnapshot = {
 	id: "a1",
-	displayName: "scout",
+	displayName: "ListExtensionDirs",
+	agentName: "scout",
 	kind: "sub",
 	status: "running",
 	hasSessionFile: false,
@@ -106,6 +107,9 @@ describe("ContextPanel agents 视图", () => {
 		const html = render([scout], null);
 		expect(html).toContain("ag-row");
 		expect(html).toContain("gui-agent-dock");
+		// 行名是实例，类型只做标签：同一定义的多个 spawn 不能都显示成 scout。
+		expect(html).toContain("ListExtensionDirs");
+		expect(html).toContain(">scout<");
 		// 未选中 = 关闭态(仍挂载,z 层与 panel 同栈)。
 		expect(html).not.toContain("gui-agent-dock--open");
 		expect(html.indexOf("gui-pane-right")).toBeLessThan(html.indexOf("gui-agent-dock"));

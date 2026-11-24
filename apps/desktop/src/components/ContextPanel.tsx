@@ -301,6 +301,7 @@ function useSubagentRoster(rpc: RpcClient, sessionId: string | null, enabled: bo
 						(d.agents ?? []).map(row => ({
 							id: row.id,
 							displayName: row.displayName,
+							...(row.agentName ? { agentName: row.agentName } : undefined),
 							kind: "sub" as const,
 							parentId: sessionId,
 							status:

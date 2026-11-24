@@ -1,4 +1,5 @@
 import { SessionErrorDock } from "@musepi/client-core";
+import { agentStatusKey } from "@musepi/client-core/src/components/agents/status";
 import { Transcript, type TranscriptProps } from "@musepi/client-core/src/components/transcript/Transcript";
 import { t } from "@musepi/client-core/src/i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens } from "@musepi/client-core/src/lib/format";
@@ -13,6 +14,14 @@ import { AgentAvatar } from "./AgentAvatar";
 
 const EMPTY_TOOLS: TranscriptProps["activeTools"] = new Map();
 const POLL_MS = 1200;
+
+/** Keep the tail of a model id — the variant suffix is what tells models
+ *  apart — instead of letting the chip clip it off. */
+function shortenModel(model: string, max = 26): string {
+	if (model.length <= max) return model;
+	const head = Math.ceil((max - 1) / 2);
+	return `${model.slice(0, head)}…${model.slice(-(max - 1 - head))}`;
+}
 
 /** RPC mirror of the collab client's TranscriptResult (not exported from
  *  transcript-poll.ts; the shape is the contract both sides share). */
@@ -175,9 +184,16 @@ export function SubagentSessionView(props: {
 		<>
 			<header className="ag-drawer-head">
 				<div className="ag-drawer-title">
-					<span className="ag-drawer-name">{agent.displayName}</span>
-					<span className={`ag-chip ag-chip--${agent.status}`}>{agent.status}</span>
-					{model ? <span className="ag-chip ag-chip--model">{model}</span> : null}
+					<span className="ag-drawer-name" title={agent.displayName}>
+						{agent.displayName}
+					</span>
+					{agent.agentName ? <span className="ag-chip">{agent.agentName}</span> : null}
+					<span className={`ag-chip ag-chip--${agent.status}`}>{t(agentStatusKey(agent.status))}</span>
+					{model ? (
+						<span className="ag-chip ag-chip--model" title={model}>
+							{shortenModel(model)}
+						</span>
+					) : null}
 				</div>
 				<div className="ag-drawer-actions">
 					{agent.status === "running" ? (

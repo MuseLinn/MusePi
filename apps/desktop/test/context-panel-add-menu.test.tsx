@@ -579,7 +579,8 @@ describe("ContextPanel browser projection regressions", () => {
 describe("ContextPanel 子代理会话标签页", () => {
 	const scout: AgentSnapshot = {
 		id: "a1",
-		displayName: "scout",
+		displayName: "OpenMausBotArtifacts",
+		agentName: "scout",
 		kind: "sub",
 		status: "running",
 		hasSessionFile: true,
@@ -623,7 +624,7 @@ describe("ContextPanel 子代理会话标签页", () => {
 
 		click(row!);
 		const opened = latest.current?.tabs.find(tab => tab.surface === "agent");
-		expect(opened).toMatchObject({ id: "agent::a1", target: "a1", dedupeKey: "a1", label: "scout" });
+		expect(opened).toMatchObject({ id: "agent::a1", target: "a1", dedupeKey: "a1", label: "OpenMausBotArtifacts" });
 		expect(latest.current?.activeId).toBe("agent::a1");
 	});
 
@@ -633,6 +634,8 @@ describe("ContextPanel 子代理会话标签页", () => {
 		act(() => latest.current?.open(agentTabDescriptor(scout)));
 		await flush();
 
+		expect(panel().textContent).toContain("OpenMausBotArtifacts");
+		// 类型是旁边的一枚标签，不是标题。
 		expect(panel().textContent).toContain("scout");
 		expect(panel().querySelector(".ag-drawer-body")).not.toBeNull();
 		expect(panel().querySelector(".ag-chat-input")).not.toBeNull();
@@ -651,7 +654,7 @@ describe("ContextPanel 子代理会话标签页", () => {
 							{
 								id: "ListExtensionDirs",
 								sessionId: "01a1d5bb-6329-776e-950f-e6ab1609964b",
-								displayName: "sonic",
+								displayName: "ListExtensionDirs",
 								agentName: "sonic",
 								kind: "sub",
 								status: "parked",
@@ -671,16 +674,16 @@ describe("ContextPanel 子代理会话标签页", () => {
 		act(() => latest.current?.open({ surface: "agents", label: t("agents") }));
 		const row = panel().querySelector<HTMLButtonElement>(".ag-row");
 		expect(row).not.toBeNull();
-		// “是哪个子代理”是 agent 名；实例 id 是第二行（分配任务）。
-		expect(row?.textContent).toContain("sonic");
+		// 实例是行名与标签页标题；agent 定义名（sonic）只做类型标签。
 		expect(row?.textContent).toContain("ListExtensionDirs");
+		expect(row?.textContent).toContain("sonic");
 
 		click(row!);
 		const opened = latest.current?.tabs.find(tab => tab.surface === "agent");
 		expect(opened).toMatchObject({
 			dedupeKey: "ListExtensionDirs",
 			target: "01a1d5bb-6329-776e-950f-e6ab1609964b",
-			label: "sonic",
+			label: "ListExtensionDirs",
 		});
 	});
 

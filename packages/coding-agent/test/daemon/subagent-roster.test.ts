@@ -45,6 +45,9 @@ function server(rows: Row[]): DaemonServer {
 		knownSessions: async () => rows,
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 		setOnExtensionNotification: () => {},
 	} as unknown as DaemonSessionHost;
 	return new DaemonServer(host);
@@ -110,7 +113,9 @@ describe("session.agents", () => {
 			expect(result.agents[0]).toMatchObject({
 				id: "ListExtensionDirs",
 				sessionId: CHILD_SESSION_ID,
-				displayName: "sonic",
+				// The row name is the instance label; the definition name is a
+				// label beside it, never the title (several spawns share it).
+				displayName: "ListExtensionDirs",
 				agentName: "sonic",
 				kind: "sub",
 				// Not in the registry (finished one-shot): presented as settled,
