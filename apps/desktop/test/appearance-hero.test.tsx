@@ -41,13 +41,20 @@ function mount(locale: "zh-CN" | "en-US" = "zh-CN"): HTMLDivElement {
 }
 
 describe("appearance hero", () => {
-	it("renders the session card before any settings section", () => {
+	it("renders the session card inside the app shell", () => {
 		const scope = mount();
 		const hero = scope.querySelector(".gui-appearance-hero .gui-effect-preview--session");
 		if (!hero) throw new Error("hero session card missing");
 		expect(hero.querySelector(".gui-agent-capsule")).not.toBeNull();
 		expect(hero.querySelector(".gui-effect-preview-composer")).not.toBeNull();
 		expect(hero.querySelectorAll(".tr-row").length).toBeGreaterThan(0);
+
+		// The shell is the real app chrome: left rail + chat card + right rail,
+		// inert so the preview cannot be clicked or tabbed into.
+		const shell = scope.querySelector(".gui-appearance-hero-window");
+		expect(shell?.hasAttribute("inert")).toBe(true);
+		expect(shell?.querySelector(".gui-rail")).not.toBeNull();
+		expect(shell?.querySelector(".gui-right-rail")).not.toBeNull();
 
 		const firstSection = scope.querySelector(".gui-settings-section");
 		expect(hero.compareDocumentPosition(firstSection!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

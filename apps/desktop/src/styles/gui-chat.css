@@ -1560,15 +1560,39 @@ html.gui-vt-surface-only::view-transition-new(root),
 }
 
 /* ── Appearance hero (Settings → 外观 头图) ─────────────────────────────
- * The preview is the page's header image: a session card, not a settings box.
- * It paints the chat card's own surface and radius, the capsule floats over
- * the transcript's reserved head band, and the composer docks on the bottom
- * edge over a fade — the same three seats ChatView gives them. Everything
- * inside is the real tr-* / capsule / composer markup, so theme, accent,
- * fonts, density, transparency and the avatar switches change this card the
- * way they change a conversation. */
+ * The preview is the page's header image: the app scene, not a settings box.
+ * A window frame holds the real left rail, the session card and the real right
+ * rail (side panel folded — a real state), all built from the components and
+ * tokens the app uses, so theme, accent, fonts, density and transparency
+ * change this scene the way they change the app. The chat card keeps the
+ * capsule floating over the transcript's reserved head band and the composer
+ * docked on the bottom edge, the same three seats ChatView gives them. */
 .gui-appearance-hero {
 	margin-top: calc(18px * var(--gui-density, 1));
+}
+
+.gui-appearance-hero-window {
+	display: flex;
+	align-items: stretch;
+	gap: calc(8px * var(--gui-density, 1));
+	padding: calc(8px * var(--gui-density, 1));
+	border: 1px solid var(--border);
+	border-radius: var(--radius-2xl);
+	background: var(--bg);
+	box-shadow: var(--gui-card-shadow);
+	overflow: hidden;
+}
+
+.gui-appearance-hero-window > .gui-effect-preview--session {
+	flex: 1;
+	min-width: 0;
+}
+
+/* The right rail is a card with its own outer gutters in the app; the window
+ * already supplies the gutter, so drop them here and let the rail fill the
+ * row's height. */
+.gui-appearance-hero-window > .gui-right-rail {
+	margin: 0;
 }
 
 .gui-effect-preview--session {

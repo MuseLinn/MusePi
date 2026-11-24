@@ -76,6 +76,7 @@ import { THEME_PRESET_LABEL } from "../../lib/theme-preset-labels";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
+import { AppRail, type RailItem } from "../AppRail";
 import {
 	AVATAR_PRESETS,
 	avatarPresetId,
@@ -88,6 +89,7 @@ import { ColorPickerPanel } from "../ColorPicker";
 import { GuiSelect } from "../GuiSelect";
 import { MockConversationPreview } from "../MockConversationPreview";
 import { Reveal } from "../Reveal";
+import { RightRail } from "../RightRail";
 import {
 	TURN_RAIL_CHANGED_EVENT,
 	TURN_RAIL_SIDE_KEY,
@@ -232,6 +234,23 @@ function CompanionDecorSection(): ReactNode {
 	);
 }
 
+/** Preview-only destinations for the hero's left rail: the real AppRail, with
+ *  sample entries so the shell reads as the app (首页 active) without asking
+ *  the settings page for the app's live navigation state. Clicks never fire —
+ *  the shell is inert. */
+const noop = (): void => {};
+const HERO_RAIL: readonly RailItem[] = [
+	{ id: "home", label: "general.home", icon: "home", panelId: "home", active: true, onSelect: noop },
+	{
+		id: "scheduled",
+		label: "settings.scheduledTasks",
+		icon: "calendar-schedule",
+		panelId: "scheduled",
+		onSelect: noop,
+	},
+	{ id: "board", label: "settings.board", icon: "layout-column", onSelect: noop },
+];
+
 export function AppearanceSection({
 	showAvatars,
 	onToggleAvatars,
@@ -345,12 +364,20 @@ export function AppearanceSection({
 			<h2 className="gui-settings-page-title">{t("settings.appearance")}</h2>
 			<p className="gui-settings-page-desc">{t("settings.appearanceSettings")}</p>
 
-			{/* ── 头图预览 — the session card itself, not a swatch. Theme, accent,
+			{/* ── 头图预览 — the app scene itself, not a swatch. Theme, accent,
 			 * fonts, spacing, transparency and the avatar switches reach it through
-			 * the same tokens and classes the chat uses, so it answers every row
+			 * the same components and tokens the app uses, so it answers every row
 			 * below instead of illustrating one of them. ── */}
 			<div className="gui-appearance-hero" role="img" aria-label={t("settings.appearancePreview")}>
-				<MockConversationPreview showAvatars={showAvatars} framed activity="collapsed" />
+				{/* The app shell around the session: the real left rail and right
+				 * rail, with the chat card between them — its side panel folded,
+				 * which is a real state of the app. `inert` keeps a preview from
+				 * being clicked or tabbed into. */}
+				<div className="gui-appearance-hero-window" inert>
+					<AppRail destinations={HERO_RAIL} panelAvailable onTogglePanel={noop} />
+					<MockConversationPreview showAvatars={showAvatars} framed activity="collapsed" />
+					<RightRail rpc={null} rightPanelOpen={false} terminalOpen={false} onSelect={noop} />
+				</div>
 			</div>
 
 			{/* ── 主题 — the palette first: scheme, preset and accent. ── */}
