@@ -1,9 +1,10 @@
 import { t } from "@musepi/client-core";
 import type { OfficeQuoteAnchor } from "@musepi/pi-wire";
-import { renderAsync as renderDocx } from "docx-preview";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { OfficeDraft } from "../lib/office-documents";
+import { type OfficeRestoreRequest, officeLocation, restoreOfficeElement } from "../lib/office-dom";
+import { OfficeWordEditor } from "./OfficeWordEditor";
 
 export interface OfficeEditorSelection {
 	text: string;
@@ -13,12 +14,6 @@ export interface OfficeEditorSelection {
 	anchor: OfficeQuoteAnchor;
 }
 
-interface OfficeRestoreRequest {
-	anchor: OfficeQuoteAnchor;
-	quote: string;
-	nonce: number;
-}
-
 interface OfficePreviewProps {
 	bytes: Uint8Array<ArrayBuffer>;
 	draft: OfficeDraft;
@@ -26,83 +21,6 @@ interface OfficePreviewProps {
 	onChange(draft: OfficeDraft): void;
 	onSave(): void;
 	onSelection(selection: OfficeEditorSelection | null): void;
-}
-
-function restoreOfficeElement(root: HTMLElement, request: OfficeRestoreRequest): boolean {
-	const element = Array.from(root.querySelectorAll<HTMLElement>("[data-office-kind]")).find(candidate => {
-		const anchor = request.anchor;
-		if (anchor.kind === "word") {
-			return candidate.dataset.officeKind === "word" && Number(candidate.dataset.paragraphId) === anchor.paragraphId;
-		}
-		if (anchor.kind === "presentation") {
-			return (
-				candidate.dataset.officeKind === "presentation" &&
-				Number(candidate.dataset.slide) === anchor.slide &&
-				candidate.dataset.shapeId === anchor.shapeId
-			);
-		}
-		return (
-			candidate.dataset.officeKind === "workbook" &&
-			candidate.dataset.sheet === anchor.sheet &&
-			candidate.dataset.cell === anchor.startCell
-		);
-	});
-	if (!element) return false;
-	element.scrollIntoView({ block: "center" });
-	const range = document.createRange();
-	const quote = request.quote.trim();
-	const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-	const nodes: Text[] = [];
-	for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text);
-	const text = nodes.map(node => node.data).join("");
-	const start = quote ? text.indexOf(quote) : -1;
-	if (start >= 0) {
-		let offset = 0;
-		let started = false;
-		for (const node of nodes) {
-			const end = offset + node.data.length;
-			if (!started && start < end) {
-				range.setStart(node, start - offset);
-				started = true;
-			}
-			if (started && start + quote.length <= end) {
-				range.setEnd(node, start + quote.length - offset);
-				break;
-			}
-			offset = end;
-		}
-	} else range.selectNodeContents(element);
-	const selection = window.getSelection();
-	selection?.removeAllRanges();
-	selection?.addRange(range);
-	return true;
-}
-
-function officeLocation(node: Node | null): { element: HTMLElement; anchor: OfficeQuoteAnchor } | null {
-	const element = (node instanceof HTMLElement ? node : node?.parentElement)?.closest<HTMLElement>(
-		"[data-office-kind]",
-	);
-	if (!element) return null;
-	const kind = element.dataset.officeKind;
-	if (kind === "word") return { element, anchor: { kind, paragraphId: Number(element.dataset.paragraphId) } };
-	if (kind === "presentation") {
-		return {
-			element,
-			anchor: { kind, slide: Number(element.dataset.slide), shapeId: element.dataset.shapeId ?? "" },
-		};
-	}
-	if (kind === "workbook") {
-		return {
-			element,
-			anchor: {
-				kind,
-				sheet: element.dataset.sheet ?? "",
-				startCell: element.dataset.cell ?? "",
-				endCell: element.dataset.cell ?? "",
-			},
-		};
-	}
-	return null;
 }
 
 export function FileOfficePreview(props: OfficePreviewProps): ReactNode {
@@ -151,75 +69,12 @@ function editableKeyDown(event: KeyboardEvent | React.KeyboardEvent, onSave: () 
 }
 
 function WordSurface({
-	bytes,
 	draft,
 	restore,
 	onChange,
 	onSave,
 }: OfficePreviewProps & { draft: Extract<OfficeDraft, { kind: "word" }> }): ReactNode {
-	const containerRef = useRef<HTMLDivElement | null>(null);
-	const draftRef = useRef(draft);
-	const restoreRef = useRef(restore);
-	const onChangeRef = useRef(onChange);
-	const onSaveRef = useRef(onSave);
-	draftRef.current = draft;
-	restoreRef.current = restore;
-	onChangeRef.current = onChange;
-	onSaveRef.current = onSave;
-	const [failed, setFailed] = useState(false);
-	useEffect(() => {
-		const container = containerRef.current;
-		if (!container) return;
-		let cancelled = false;
-		container.replaceChildren();
-		void renderDocx(new Blob([bytes]), container, undefined, {
-			className: "gui-filepane-docx",
-			inWrapper: true,
-			ignoreWidth: false,
-			ignoreHeight: false,
-			ignoreFonts: false,
-			breakPages: true,
-			useBase64URL: true,
-		})
-			.then(() => {
-				if (cancelled) return;
-				container.querySelectorAll<HTMLElement>("p").forEach((paragraph, index) => {
-					const model = draftRef.current.paragraphs[index];
-					if (!model) return;
-					paragraph.dataset.officeKind = "word";
-					paragraph.dataset.paragraphId = String(model.id);
-					// docx-preview always renders the original package. Reapply an edited
-					// draft after a tab/plugin remount so model and visible text agree.
-					if (paragraph.innerText.replace(/\n$/, "") !== model.text) paragraph.innerText = model.text;
-					paragraph.contentEditable = model.editable ? "plaintext-only" : "false";
-					paragraph.spellcheck = false;
-					paragraph.addEventListener("input", () => {
-						const current = draftRef.current;
-						onChangeRef.current({
-							...current,
-							paragraphs: current.paragraphs.map(item =>
-								item.id === model.id ? { ...item, text: paragraph.innerText.replace(/\n$/, "") } : item,
-							),
-						});
-					});
-					paragraph.addEventListener("keydown", event => editableKeyDown(event, onSaveRef.current));
-				});
-				if (restoreRef.current) restoreOfficeElement(container, restoreRef.current);
-			})
-			.catch(() => {
-				if (!cancelled) setFailed(true);
-			});
-		return () => {
-			cancelled = true;
-			container.replaceChildren();
-		};
-	}, [bytes]);
-	return (
-		<div className="gui-filepane-docx-host">
-			<div ref={containerRef} />
-			{failed && <p className="gui-filepane-preview-note">{t("guest.cannotPreviewFile")}</p>}
-		</div>
-	);
+	return <OfficeWordEditor draft={draft} restore={restore} onChange={onChange} onSave={onSave} />;
 }
 
 function PresentationSurface({

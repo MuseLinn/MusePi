@@ -1834,6 +1834,11 @@ export const settings = {
 	"settings.officeWorkbookComplex":
 		"Charts, drawings, comments, links, or macros require the external app for editing.",
 	"settings.officeWorkbookLarge": "Sheets over 1000 rows are read-only in the inline editor.",
+	"settings.officeFormatting": "Word formatting",
+	"settings.officeBold": "Bold",
+	"settings.officeItalic": "Italic",
+	"settings.officeUnderline": "Underline",
+	"settings.officeWordPreserved": "Table or image · kept as-is",
 	"settings.discoverNewVersion": "New version available",
 	"settings.cost": "Cost",
 	"settings.created": "Created",

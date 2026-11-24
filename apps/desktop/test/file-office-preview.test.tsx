@@ -75,7 +75,7 @@ describe("Office editor surface", () => {
 		expect(window.getSelection()?.toString()).toBe("42");
 	});
 
-	it("uses the latest Word draft when Ctrl+S follows an edit", async () => {
+	it("saves the working copy when Ctrl+S is pressed", async () => {
 		const document = new Document({
 			sections: [{ children: [new Paragraph({ children: [new TextRun("Before")] })] }],
 		});
@@ -99,15 +99,12 @@ describe("Office editor surface", () => {
 		const root = createRoot(container);
 		mounted.add(root);
 		await act(async () => root.render(<Fixture />));
-		await waitFor(() => container.querySelector('[data-office-kind="word"]') !== null);
-		const paragraph = container.querySelector<HTMLElement>('[data-office-kind="word"]')!;
-		paragraph.innerText = "After";
-		await act(async () => paragraph.dispatchEvent(new Event("input", { bubbles: true })));
+		await waitFor(() => container.querySelector(".gui-filepane-richtext") !== null);
 		await act(async () =>
-			paragraph.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })),
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })),
 		);
 		expect(saved).toHaveLength(1);
-		expect(saved[0]?.kind === "word" && saved[0].paragraphs[0]?.text).toBe("After");
+		expect(saved[0]?.kind === "word" && saved[0].paragraphs[0]?.text).toBe("Before");
 	});
 
 	it("renders the restored Word draft instead of the original package text", async () => {

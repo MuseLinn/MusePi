@@ -2022,6 +2022,7 @@ export const tools = {
 	"tools.presentPreparing": "正在准备交付文件…",
 	"tools.presentNone": "未声明文件",
 	"tools.presentDelivered": "已交付",
+	"tools.presentFileBadge": "文件",
 	"tools.presentAfterTurn": "回合结束后在界面中展示这些文件。",
 	"tools.presentShowAllWithCount": "显示全部 {count} 个",
 	"tools.presentShowLess": "收起",

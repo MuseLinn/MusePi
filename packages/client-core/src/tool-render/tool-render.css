@@ -2212,7 +2212,7 @@
 	min-width: 28px;
 	padding: 1px 4px;
 	border: 1px solid var(--tv-border);
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	color: var(--tv-muted);
 	font-size: 9px;
 	letter-spacing: 0.06em;
@@ -2278,7 +2278,7 @@
 .tv-present-action {
 	padding: 1px 6px;
 	border: 1px solid var(--tv-border);
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: var(--tv-raised);
 	color: var(--tv-muted);
 	font: inherit;

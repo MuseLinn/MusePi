@@ -2078,6 +2078,7 @@ export const tools = {
 	"tools.presentPreparing": "Preparing files…",
 	"tools.presentNone": "No files declared",
 	"tools.presentDelivered": "Delivered",
+	"tools.presentFileBadge": "FILE",
 	"tools.presentAfterTurn": "These files are shown in the interface after the turn ends.",
 	"tools.presentShowAllWithCount": "Show all {count}",
 	"tools.presentShowLess": "Show less",

@@ -2,11 +2,19 @@ import { t } from "@musepi/client-core";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import * as XLSX from "xlsx";
 
+/** One styled text span of a Word paragraph. */
+export interface OfficeWordRun {
+	text: string;
+	bold?: boolean;
+	italic?: boolean;
+	underline?: boolean;
+}
+
 /** Editable Office models contain text and stable package locations, never DOM nodes. */
 export type OfficeDraft =
 	| {
 			kind: "word";
-			paragraphs: Array<{ id: number; text: string; editable: boolean }>;
+			paragraphs: Array<{ id: number; text: string; runs?: OfficeWordRun[]; editable: boolean }>;
 			readOnlyReason?: string;
 	  }
 	| {
@@ -56,8 +64,8 @@ function xml(source: Uint8Array): Document {
 	return document;
 }
 
-function elements(root: Document | Element, name: string): Element[] {
-	return Array.from(root.getElementsByTagName(name));
+function entries(data: Uint8Array): Record<string, Uint8Array> {
+	return unzipSync(data);
 }
 
 function textOf(root: Element, name: string): string {
@@ -66,12 +74,85 @@ function textOf(root: Element, name: string): string {
 		.join("");
 }
 
-function entries(data: Uint8Array): Record<string, Uint8Array> {
-	return unzipSync(data);
+function elements(root: Document | Element, name: string): Element[] {
+	return Array.from(root.getElementsByTagName(name));
 }
 
-/** Only paragraphs whose complete text lives in one run are directly editable.
- * Other content stays visible and byte-preserved; saving never rewrites it. */
+const WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+/** Whether an on/off run property (w:b, w:i, w:u) is enabled on this run. */
+function runFlag(run: Element | undefined, name: "w:b" | "w:i" | "w:u"): boolean {
+	const property = run?.getElementsByTagName("w:rPr")[0]?.getElementsByTagName(name)[0];
+	if (!property) return false;
+	const value = property.getAttribute("w:val")?.toLowerCase();
+	return value === null || value === undefined || !["0", "false", "none"].includes(value);
+}
+
+function runMarks(run: Element | undefined): Omit<OfficeWordRun, "text"> {
+	return {
+		...(runFlag(run, "w:b") ? { bold: true } : {}),
+		...(runFlag(run, "w:i") ? { italic: true } : {}),
+		...(runFlag(run, "w:u") ? { underline: true } : {}),
+	};
+}
+
+function sameRuns(left: readonly OfficeWordRun[], right: readonly OfficeWordRun[]): boolean {
+	return (
+		left.length === right.length &&
+		left.every(
+			(run, index) =>
+				run.text === right[index]!.text &&
+				(run.bold === true) === (right[index]!.bold === true) &&
+				(run.italic === true) === (right[index]!.italic === true) &&
+				(run.underline === true) === (right[index]!.underline === true),
+		)
+	);
+}
+
+function setRunMark(run: Element, name: "b" | "i" | "u", enabled: boolean): void {
+	const document = run.ownerDocument;
+	const namespace = run.namespaceURI ?? WORD_NAMESPACE;
+	let properties = run.getElementsByTagName("w:rPr")[0];
+	if (!properties) {
+		properties = document.createElementNS(namespace, "w:rPr");
+		run.insertBefore(properties, run.firstChild);
+	}
+	const existing = properties.getElementsByTagName(`w:${name}`)[0];
+	if (enabled && !existing) {
+		const mark = document.createElementNS(namespace, `w:${name}`);
+		if (name === "u") mark.setAttribute("w:val", "single");
+		properties.appendChild(mark);
+	} else if (!enabled && existing) {
+		properties.removeChild(existing);
+	}
+}
+
+/** A paragraph whose entire content is plain runs (no hyperlink, field, tab,
+ * break, drawing or object) can be rewritten without touching anything else. */
+function editableWordParagraph(paragraph: Element): boolean {
+	const content = Array.from(paragraph.children).filter(child => child.localName !== "pPr");
+	if (content.length === 0) return true;
+	return content.every(child => {
+		if (child.localName !== "r") return false;
+		const onlyPropertiesAndText = Array.from(child.children).every(
+			grand => grand.localName === "rPr" || grand.localName === "t",
+		);
+		return (
+			onlyPropertiesAndText &&
+			child.getElementsByTagName("w:drawing").length === 0 &&
+			child.getElementsByTagName("w:object").length === 0
+		);
+	});
+}
+
+function paragraphRuns(paragraph: Element): OfficeWordRun[] {
+	return Array.from(paragraph.children)
+		.filter(child => child.localName === "r")
+		.map(run => ({ text: textOf(run, "w:t"), ...runMarks(run) }));
+}
+
+/** Only paragraphs whose content is plain runs are directly editable. Other
+ * content stays visible and byte-preserved; saving never rewrites it. */
 export function readWordDraft(data: Uint8Array): OfficeDraft {
 	const files = entries(data);
 	const source = files["word/document.xml"];
@@ -80,17 +161,52 @@ export function readWordDraft(data: Uint8Array): OfficeDraft {
 	return {
 		kind: "word",
 		paragraphs: paragraphs.map((paragraph, id) => {
-			const texts = elements(paragraph, "w:t");
+			const runs = paragraphRuns(paragraph);
+			const editable = editableWordParagraph(paragraph);
 			return {
 				id,
-				text: texts.map(node => node.textContent ?? "").join(""),
-				editable:
-					texts.length === 1 &&
-					elements(paragraph, "w:drawing").length === 0 &&
-					elements(paragraph, "w:object").length === 0,
+				text: textOf(paragraph, "w:t"),
+				...(editable ? { runs } : {}),
+				editable,
 			};
 		}),
 	};
+}
+
+/** Replace a paragraph's runs with the edited runs, keeping its properties. */
+function writeParagraphRuns(paragraph: Element, runs: readonly OfficeWordRun[]): void {
+	const document = paragraph.ownerDocument;
+	const namespace = paragraph.namespaceURI ?? WORD_NAMESPACE;
+	const existingRuns = Array.from(paragraph.children).filter(child => child.localName === "r");
+	const anchor = existingRuns[0] ?? null;
+	const template = existingRuns[0];
+	if (runs.length === 0) {
+		for (const run of existingRuns) paragraph.removeChild(run);
+		return;
+	}
+	const createRun = (): Element => {
+		if (template) {
+			const clone = template.cloneNode(true) as Element;
+			for (const child of Array.from(clone.childNodes)) {
+				if (child.nodeType === 1 && (child as Element).localName === "rPr") continue;
+				clone.removeChild(child);
+			}
+			return clone;
+		}
+		return document.createElementNS(namespace, "w:r");
+	};
+	for (const run of runs) {
+		const element = createRun();
+		const text = document.createElementNS(namespace, "w:t");
+		text.setAttribute("xml:space", "preserve");
+		text.textContent = run.text;
+		element.appendChild(text);
+		setRunMark(element, "b", run.bold === true);
+		setRunMark(element, "i", run.italic === true);
+		setRunMark(element, "u", run.underline === true);
+		paragraph.insertBefore(element, anchor);
+	}
+	for (const run of existingRuns) paragraph.removeChild(run);
 }
 
 function writeWordDraft(data: Uint8Array, draft: Extract<OfficeDraft, { kind: "word" }>): Uint8Array {
@@ -102,13 +218,16 @@ function writeWordDraft(data: Uint8Array, draft: Extract<OfficeDraft, { kind: "w
 	for (const edited of draft.paragraphs) {
 		const paragraph = paragraphs[edited.id];
 		if (!paragraph) throw new Error("Word paragraph no longer exists");
-		const original = textOf(paragraph, "w:t");
-		if (original === edited.text) continue;
-		if (!edited.editable) throw new Error("This Word paragraph is read-only");
-		const textNode = elements(paragraph, "w:t")[0];
-		if (!textNode || elements(paragraph, "w:t").length !== 1) throw new Error("Unsafe Word paragraph");
-		textNode.textContent = edited.text;
-		textNode.setAttribute("xml:space", "preserve");
+		const originalRuns = paragraphRuns(paragraph);
+		const runs =
+			edited.runs && edited.runs.length > 0 && edited.runs.map(run => run.text).join("") === edited.text
+				? edited.runs
+				: edited.text === ""
+					? []
+					: [{ text: edited.text }];
+		if (sameRuns(originalRuns, runs)) continue;
+		if (!edited.editable || !editableWordParagraph(paragraph)) throw new Error("This Word paragraph is read-only");
+		writeParagraphRuns(paragraph, runs);
 	}
 	files["word/document.xml"] = strToU8(new XMLSerializer().serializeToString(document));
 	return zipSync(files);

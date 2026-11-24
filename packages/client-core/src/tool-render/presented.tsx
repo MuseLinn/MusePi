@@ -29,7 +29,7 @@ function fileType(path: string): string {
 	const name = basename(path);
 	const dot = name.lastIndexOf(".");
 	const extension = dot > 0 ? name.slice(dot + 1) : "";
-	return extension ? extension.toUpperCase().slice(0, 6) : "FILE";
+	return extension ? extension.toUpperCase().slice(0, 6) : t("tools.presentFileBadge");
 }
 
 /** Parse `{ path, description? }[]`; a later duplicate keeps its last description. */
