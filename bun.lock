@@ -104,7 +104,6 @@
         "electron-builder": "^26.15.3",
         "fflate": "^0.8.3",
         "happy-dom": "^20.12.0",
-        "html-to-image": "^1.11.13",
         "lucide": "^1.29.0",
         "lucide-react": "^1.24.0",
         "morphicons": "^1.7.1",
@@ -205,6 +204,7 @@
         "@codemirror/state": "^6.7.1",
         "@codemirror/view": "6.43.14",
         "@musepi/client-locale": "workspace:*",
+        "@musepi/client-markdown": "workspace:*",
         "@musepi/client-ui-plugin-market": "workspace:*",
         "@musepi/client-ui-primitives": "workspace:*",
         "@musepi/collab-proto": "workspace:*",
@@ -239,6 +239,19 @@
       "version": "0.7.7",
       "dependencies": {
         "react": "19.2.7",
+      },
+    },
+    "packages/client/markdown": {
+      "name": "@musepi/client-markdown",
+      "version": "0.7.7",
+      "dependencies": {
+        "@musepi/pi-utils": "workspace:*",
+        "lucide": "^1.29.0",
+        "morphicons": "^1.7.1",
+        "react": "19.2.7",
+      },
+      "devDependencies": {
+        "@types/react": "^19.0.0",
       },
     },
     "packages/client/ui-charts": {
@@ -565,15 +578,15 @@
         "@musepi/pi-coding-agent": "workspace:*",
       },
     },
-    "packages/coding-agent/src/plugins/prompt/memory-local": {
-      "name": "musepi-memory-local",
+    "packages/coding-agent/src/plugins/prompt/memory-mnemopi": {
+      "name": "musepi-memory-mnemopi",
       "version": "0.7.7",
       "peerDependencies": {
         "@musepi/pi-coding-agent": "workspace:*",
       },
     },
-    "packages/coding-agent/src/plugins/prompt/memory-mnemopi": {
-      "name": "musepi-memory-mnemopi",
+    "packages/coding-agent/src/plugins/prompt/memory-musemem": {
+      "name": "musepi-memory-musemem",
       "version": "0.7.7",
       "peerDependencies": {
         "@musepi/pi-coding-agent": "workspace:*",
@@ -1725,6 +1738,8 @@
     "@musepi/client-core": ["@musepi/client-core@workspace:packages/client-core"],
 
     "@musepi/client-locale": ["@musepi/client-locale@workspace:packages/client/locale"],
+
+    "@musepi/client-markdown": ["@musepi/client-markdown@workspace:packages/client/markdown"],
 
     "@musepi/client-ui-charts": ["@musepi/client-ui-charts@workspace:packages/client/ui-charts"],
 
@@ -3090,8 +3105,6 @@
 
     "html-escaper": ["html-escaper@3.0.3", "", {}, "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ=="],
 
-    "html-to-image": ["html-to-image@1.11.13", "", {}, "sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg=="],
-
     "html-url-attributes": ["html-url-attributes@3.0.1", "", {}, "sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ=="],
 
     "html-void-elements": ["html-void-elements@3.0.0", "", {}, "sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg=="],
@@ -3512,9 +3525,9 @@
 
     "musepi-memory-hindsight": ["musepi-memory-hindsight@workspace:packages/coding-agent/src/plugins/prompt/memory-hindsight"],
 
-    "musepi-memory-local": ["musepi-memory-local@workspace:packages/coding-agent/src/plugins/prompt/memory-local"],
-
     "musepi-memory-mnemopi": ["musepi-memory-mnemopi@workspace:packages/coding-agent/src/plugins/prompt/memory-mnemopi"],
+
+    "musepi-memory-musemem": ["musepi-memory-musemem@workspace:packages/coding-agent/src/plugins/prompt/memory-musemem"],
 
     "musepi-memory-sharpshooter": ["musepi-memory-sharpshooter@workspace:packages/coding-agent/src/plugins/prompt/memory-sharpshooter"],
 

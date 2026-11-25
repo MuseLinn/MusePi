@@ -17,8 +17,8 @@
  */
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { blockGlyph } from "@musepi/client-markdown";
 import { t } from "../../i18n/index.js";
-import { blockGlyph } from "./block-glyph";
 import { escapeHtml } from "./highlight";
 
 const renderKatex = (source: string, displayMode: boolean): string => {

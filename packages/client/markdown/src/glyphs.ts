@@ -1,15 +1,11 @@
 /**
- * Icon glyphs for the inline block toolbars (code fence, table, math, mermaid).
+ * Icon glyphs for the inline block controls (code fence, table, math, mermaid).
  *
- * These toolbars are produced as HTML strings by the markdown renderers, not by
- * React, so they cannot use `<morph-icon>`: that custom element depends on the
- * registry being upgraded before the string reaches the document, and the SSR
- * and test renderers throw on upgrade. Serializing the same lucide data the
- * morph icons use keeps one set of shapes across every block.
- *
- * `setBlockGlyph` swaps a glyph in place for the two states a control has
- * (copy → check, widen → restore); it only touches the SVG, so a pressed or
- * hovered button keeps its focus and its box.
+ * `blockGlyph` serializes one to markup, for the toolbars the markdown renderer
+ * still emits as HTML strings; `setBlockGlyph` swaps a glyph in place for the
+ * two states a control has (copy → check, widen → restore). A React-owned
+ * control uses `MorphIcon` with the same lucide data instead, so both spell the
+ * same shapes.
  */
 
 import {

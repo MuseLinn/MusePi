@@ -27,6 +27,7 @@ const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
 	nit: "general.advisoryNit",
 };
 
+import { blockGlyph, setBlockGlyph } from "@musepi/client-markdown";
 import { useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
@@ -39,7 +40,6 @@ import {
 } from "../../ui-blocks/answers.js";
 import { isUiBlockLanguage, renderUiBlockFence, splitOpenUiFence } from "../../ui-blocks/render.js";
 import { flyFrame, motionDisabled } from "../image-morph";
-import { blockGlyph, setBlockGlyph } from "./block-glyph";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalImageSrc, localImagePath } from "./local-image.js";

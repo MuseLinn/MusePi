@@ -1,6 +1,6 @@
+import { blockGlyph } from "@musepi/client-markdown";
 import { type DiagramColors, renderMermaidASCII, renderMermaidSVG } from "beautiful-mermaid";
 import { t } from "../../i18n/index.js";
-import { blockGlyph } from "./block-glyph";
 import { escapeHtml } from "./highlight";
 
 export type MermaidMode = "svg" | "ascii";
