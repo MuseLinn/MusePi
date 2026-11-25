@@ -156,9 +156,13 @@ find_tui_release() {
     tui_release_page="$(github_api_text "https://api.github.com/repos/${REPO}/releases?per_page=100")"
     [ -n "$tui_release_page" ] || return 0
     printf '%s\n' "$tui_release_page" | awk -v asset="$1" '
-        function consider() {
-            if (tag == "" || !has_asset || !has_sums) return
-            if (!pre) { print tag; exit }
+        function consider(stop) {
+            if (chosen != "" || tag == "" || !has_asset || !has_sums) return
+            if (!pre) {
+                chosen = tag
+                if (stop) exit
+                return
+            }
             if (fallback == "") fallback = tag
         }
         function take_tag(line,    value) {
@@ -168,7 +172,7 @@ find_tui_release() {
             return value
         }
         /"tag_name"/ {
-            consider()
+            consider(1)
             tag = take_tag($0)
             pre = 0
             has_asset = 0
@@ -181,8 +185,9 @@ find_tui_release() {
             if (index($0, "\"name\":") && index($0, "\"SHA256SUMS.txt\"")) has_sums = 1
         }
         END {
-            consider()
-            if (fallback != "") print fallback
+            consider(0)
+            if (chosen != "") print chosen
+            else if (fallback != "") print fallback
         }
     '
 }

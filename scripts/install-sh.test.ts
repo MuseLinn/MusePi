@@ -60,6 +60,14 @@ const releaseList = `[
       { "name": "SHA256SUMS.txt" },
       { "name": "MusePi-0.7.5-amd64.deb" }
     ]
+  },
+  {
+    "tag_name": "v0.7.4",
+    "prerelease": false,
+    "assets": [
+      { "name": "musepi-linux-x64" },
+      { "name": "SHA256SUMS.txt" }
+    ]
   }
 ]
 `;
@@ -172,8 +180,9 @@ describe("install.sh missing TUI assets", () => {
 
 		expect(result.exitCode, result.stderr).toBe(1);
 		expect(result.stderr).toContain("GitHub release v0.7.7 does not include musepi-linux-x64");
-		expect(result.stderr).toContain("sh install.sh --ref v0.7.5");
-		expect(result.stderr).not.toContain("--ref v0.7.8-beta.1");
+		expect(result.stderr.match(/sh install\.sh --ref v0\.7\.5/g)).toEqual(["sh install.sh --ref v0.7.5"]);
+		expect(result.stderr).not.toContain("v0.7.8-beta.1");
+		expect(result.stderr).not.toContain("v0.7.4");
 		expect(result.stderr).toContain("sh install.sh --source");
 		expect(result.stdout).not.toContain("Installed musepi");
 	});
