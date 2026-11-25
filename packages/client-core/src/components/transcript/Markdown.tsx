@@ -244,36 +244,13 @@ const md = new Marked({
 			if (isUiBlockLanguage(l)) {
 				return renderUiBlockFence(text, { settled: uiFenceSettled, repair: uiFenceRepair });
 			}
-			const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
-			const body = escaped ? text : escapeHtml(text);
-			const trimmed = body.endsWith("\n") ? body.slice(0, -1) : body;
-			const lines = trimmed
-				.split("\n")
-				.map(line => `<span class="tr-code-line">${line}</span>`)
-				.join("\n");
+			// The fence is handed to its React block: the block owns the header and
+			// `<pre><code>`, so a stream tick cannot rebuild a finished block (and
+			// re-run its highlight). The raw source travels by hash, like the table.
 			const hash = fnv1a(text).toString(36);
 			cacheSet(highlightSource, hash, { code: text, lang: lang || undefined });
-			// Header carries the language tag + a copy button (delegated in
-			// the component below); textContent of <code> stays the raw
-			// source even after tree-sitter spans replace the body.
-			const initialLines =
-				typeof document !== "undefined" && document.documentElement.classList.contains("gui-code-lines");
-			const head =
-				`<div class="tr-code-head">` +
-				`<span class="tr-code-lang">${escapeHtml(codeLangLabel(l))}</span>` +
-				`<span class="tr-code-actions">` +
-				`<button type="button" class="tr-code-btn tr-code-lines" aria-pressed="${initialLines ? "true" : "false"}" aria-label="${escapeHtml(t("settings.lineNumbers"))}" title="${escapeHtml(t("settings.lineNumbers"))}">` +
-				`<morph-icon class="tr-code-glyph" data-glyph="lines" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
-				`</button>` +
-				`<button type="button" class="tr-code-btn tr-code-wrap" aria-pressed="false" aria-label="${escapeHtml(t("settings.wrapLines"))}" title="${escapeHtml(t("settings.wrapLines"))}">` +
-				`<morph-icon class="tr-code-glyph" data-glyph="wrap" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
-				`</button>` +
-				`<button type="button" class="tr-code-btn tr-code-copy" data-copy-hash="${hash}" aria-label="${escapeHtml(t("settings.copy"))}" title="${escapeHtml(t("settings.copy"))}">` +
-				`<morph-icon class="tr-code-glyph" data-glyph="copy" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
-				`</button>` +
-				`</span>` +
-				`</div>`;
-			return `<div class="tr-code">${head}<pre><code${langAttr} data-hl-hash="${hash}">${lines}\n</code></pre></div>`;
+			rememberCodeBlock(hash, { code: text, lang: l, label: codeLangLabel(l) });
+			return `<div data-code-block="${hash}"></div>`;
 		},
 	},
 	breaks: true,
@@ -321,6 +298,26 @@ export function plainTextOf(html: string): string {
 		.replace(/&#39;/g, "'")
 		.replace(/&amp;/g, "&")
 		.trim();
+}
+
+/** Parsed code-fence payloads by content hash (the pipeline's lookup for a block). */
+const codeBlocks = new Map<string, { code: string; lang: string; label: string }>();
+const CODE_BLOCKS_LIMIT = TABLE_BLOCKS_LIMIT;
+
+/** A code fence's source by content hash (the pipeline's lookup for a block). */
+export function markdownCodeBlock(hash: string): { code: string; lang: string; label: string } | undefined {
+	return codeBlocks.get(hash);
+}
+
+function rememberCodeBlock(hash: string, payload: { code: string; lang: string; label: string }): void {
+	codeBlocks.set(hash, payload);
+	if (codeBlocks.size <= CODE_BLOCKS_LIMIT) return;
+	const overflow = codeBlocks.size - CODE_BLOCKS_LIMIT;
+	const iterator = codeBlocks.keys();
+	for (let i = 0; i < overflow; i++) {
+		const key = iterator.next().value;
+		if (key !== undefined) codeBlocks.delete(key);
+	}
 }
 
 /** A parsed table payload by content hash (the pipeline's lookup for a block). */
@@ -627,25 +624,58 @@ function TableFragment({
 	);
 }
 
+/** A code fence's block: its source comes from the pipeline's store, its
+ *  highlight from the host (the desktop renderer owns tree-sitter). */
+function CodeFragment({
+	hash,
+	labels,
+	highlighted,
+}: {
+	hash: string;
+	labels: MarkdownBlockLabels;
+	highlighted: string | null;
+}): ReactNode {
+	const payload = markdownCodeBlock(hash);
+	const Block = markdownBlockDef("code")?.Component;
+	if (!payload || !Block) return null;
+	return (
+		<Block
+			source={payload.code}
+			html={null}
+			hash={hash}
+			streaming={false}
+			labels={labels}
+			code={payload.code}
+			lang={payload.lang}
+			label={payload.label}
+			highlighted={highlighted}
+		/>
+	);
+}
+
 /** One run of the rendered HTML, or one table handed to its block component. */
-export type MessageFragment = { kind: "html"; html: string } | { kind: "table"; hash: string };
+export type MessageFragment =
+	| { kind: "html"; html: string }
+	| { kind: "table"; hash: string }
+	| { kind: "code"; hash: string };
 
 /**
- * Split the rendered HTML at the table placeholders the renderer emits.
+ * Split the rendered HTML at the block placeholders the renderer emits.
  *
- * Everything else stays one `innerHTML` blob; a table becomes a React block of
- * its own, which is what keeps a finished table's `<table>` alive across a
- * stream tick (an element rebuilt from `innerHTML` loses its scroll position —
- * measured, not assumed).
+ * Everything else stays one `innerHTML` blob; a table and a code fence become
+ * React blocks of their own, which is what keeps their `<table>` / `<pre>`
+ * alive across a stream tick (an element rebuilt from `innerHTML` loses its
+ * scroll position — measured, not assumed).
  */
 export function splitTableFragments(html: string): MessageFragment[] {
 	const fragments: MessageFragment[] = [];
-	const pattern = /<div data-table-block="([^"]+)"><\/div>/g;
+	const pattern = /<div data-(table|code)-block="([^"]+)"><\/div>/g;
 	let cursor = 0;
 	let match: RegExpExecArray | null = pattern.exec(html);
 	while (match !== null) {
 		if (match.index > cursor) fragments.push({ kind: "html", html: html.slice(cursor, match.index) });
-		fragments.push({ kind: "table", hash: match[1] ?? "" });
+		const hash = match[2] ?? "";
+		fragments.push(match[1] === "code" ? { kind: "code", hash } : { kind: "table", hash });
 		cursor = match.index + match[0].length;
 		match = pattern.exec(html);
 	}
@@ -1706,11 +1736,13 @@ export const Markdown = memo(function Markdown({
 			copied: t("settings.copied"),
 			copy: t("settings.copy"),
 			download: t("settings.download"),
+			lineNumbers: t("settings.lineNumbers"),
 			expand: t("general.tableExpand"),
 			moreFormats: t("general.tableFormats"),
 			quoteRegion: t("general.quoteTableRegion"),
 			resetWidth: resetWideLabel,
 			widen: widenLabel,
+			wrapLines: t("settings.wrapLines"),
 		}),
 		[widenLabel, resetWideLabel],
 	);
@@ -1751,12 +1783,19 @@ export const Markdown = memo(function Markdown({
 							className="tr-md-fragment"
 							dangerouslySetInnerHTML={{ __html: fragment.html }}
 						/>
-					) : (
+					) : fragment.kind === "table" ? (
 						<TableFragment
 							key={`table:${fragment.hash}`}
 							hash={fragment.hash}
 							labels={blockLabels}
 							quoteText={quoteText}
+						/>
+					) : (
+						<CodeFragment
+							key={`code:${fragment.hash}`}
+							hash={fragment.hash}
+							labels={blockLabels}
+							highlighted={highlightHtml.get(fragment.hash) ?? null}
 						/>
 					),
 				)}

@@ -13,6 +13,7 @@
  */
 
 import type { ComponentType } from "react";
+import { MarkdownCodeBlock } from "./blocks/code";
 import { MarkdownTableBlock } from "./blocks/table";
 
 /** A table's parsed payload. */
@@ -42,10 +43,12 @@ export interface MarkdownBlockLabels {
 	readonly copy: string;
 	readonly download: string;
 	readonly expand: string;
+	readonly lineNumbers: string;
 	readonly moreFormats: string;
 	readonly quoteRegion: string;
 	readonly resetWidth: string;
 	readonly widen: string;
+	readonly wrapLines: string;
 }
 
 export interface MarkdownBlockProps {
@@ -55,6 +58,14 @@ export interface MarkdownBlockProps {
 	readonly html: string | null;
 	/** Present for `table`. */
 	readonly table?: MarkdownTablePayload;
+	/** Present for `code`: raw fence source. */
+	readonly code?: string;
+	/** Present for `code`: the fence's info string (`ts`). */
+	readonly lang?: string;
+	/** Present for `code`: header label (`TypeScript`). */
+	readonly label?: string;
+	/** Present for `code`: highlighted inner markup, when the host produced it. */
+	readonly highlighted?: string | null;
 	/** Content hash, stable while the block's content is unchanged. */
 	readonly hash: string;
 	/** Whether the reply that holds this block is still streaming. */
@@ -80,7 +91,10 @@ export interface MarkdownBlockDef {
 
 /** Kinds the pipeline routes to a component. A kind absent here keeps the
  *  renderer's HTML output. */
-const BUILTIN_BLOCKS: readonly MarkdownBlockDef[] = [{ kind: "table", Component: MarkdownTableBlock }];
+const BUILTIN_BLOCKS: readonly MarkdownBlockDef[] = [
+	{ kind: "table", Component: MarkdownTableBlock },
+	{ kind: "code", Component: MarkdownCodeBlock },
+];
 
 let externalBlocks: MarkdownBlockDef[] = [];
 const listeners = new Set<() => void>();

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { inlineMarkersBalanced, renderStreamingMarkdown } from "../src/components/transcript/Markdown";
+import {
+	inlineMarkersBalanced,
+	markdownCodeBlock,
+	renderStreamingMarkdown,
+} from "../src/components/transcript/Markdown";
 
 /**
  * Streaming-tail rendering contract (显示错位 fix): while a message
@@ -14,9 +18,12 @@ describe("renderStreamingMarkdown", () => {
 	it("renders the settled text as full markdown (fence becomes a code block)", () => {
 		const text = "说明\n\n```ts\nconst x = 1;\n```\n\n完毕";
 		const { html, tail } = renderStreamingMarkdown(text, false, null);
-		expect(html).toContain('<div class="tr-code">');
+		// The fence is handed to its React block by hash; the block owns the
+		// markup, and its source is in the pipeline's store.
+		const hash = /data-code-block="([^"]+)"/.exec(html)?.[1];
+		expect(hash).toBeTruthy();
+		expect(markdownCodeBlock(hash!)?.code).toContain("const x = 1;");
 		expect(tail).toBeNull();
-		expect(html).toContain("const x = 1;");
 	});
 
 	it("keeps an open fence literal in the streaming tail (never a code block)", () => {
@@ -40,8 +47,9 @@ describe("renderStreamingMarkdown", () => {
 		// the message streams, which is the point of promoting per frame. Only
 		// the still-unsettled region stays plain.
 		const second = renderStreamingMarkdown("说明\n\n```ts\nconst x = 1;\n```\n\n完毕", true, first.state);
-		expect(second.html).toContain('<div class="tr-code">');
-		expect(second.html).toContain("const x = 1;");
+		const promoted = /data-code-block="([^"]+)"/.exec(second.html)?.[1];
+		expect(promoted).toBeTruthy();
+		expect(markdownCodeBlock(promoted!)?.code).toContain("const x = 1;");
 		expect(second.html).toContain("<p>说明</p>");
 		expect(second.tail).toBe("完毕");
 	});

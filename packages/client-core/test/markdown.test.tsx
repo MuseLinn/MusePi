@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Markdown, markdownTableBlock, renderStreamingMarkdown } from "../src/components/transcript/Markdown";
+import {
+	Markdown,
+	markdownCodeBlock,
+	markdownTableBlock,
+	renderStreamingMarkdown,
+} from "../src/components/transcript/Markdown";
 import { t } from "../src/i18n/index.js";
 
 function renderMarkdown(text: string): string {
@@ -87,9 +92,14 @@ describe("Transcript LaTeX math", () => {
 	});
 
 	it("does not render math inside fenced code blocks", () => {
-		const html = renderMarkdown("```\n$x = 1$\n$$y = 2$$\n```");
+		const text = "```\n$x = 1$\n$$y = 2$$\n```";
+		const html = renderStreamingMarkdown(text, false, null, {}).html;
+		const hash = /data-code-block="([^"]+)"/.exec(html)?.[1];
+		// The block draws the raw source: math extensions never see fence text.
+		const payload = markdownCodeBlock(hash!);
+		expect(payload?.code).toContain("$x = 1$");
+		expect(payload?.code).toContain("$$y = 2$$");
 		expect(html).not.toContain('class="katex"');
-		expect(html).toContain("$x = 1$");
 	});
 
 	it("does not render math inside inline code spans", () => {
@@ -131,25 +141,25 @@ describe("Transcript LaTeX math", () => {
 		expect(html).toContain('class="tr-code-btn tr-math-copy tr-code-copy"');
 	});
 
-	it("labels a fenced block with its language and icon-only actions", () => {
-		const html = renderMarkdown("```ts\nconst x = 1;\n```");
-		expect(html).toContain('<span class="tr-code-lang">TypeScript</span>');
-		expect(html).toContain('class="tr-code-btn tr-code-lines" aria-pressed="false"');
-		expect(html).toContain('data-glyph="lines"');
-		expect(html).toContain('class="tr-code-btn tr-code-wrap" aria-pressed="false"');
-		expect(html).toContain('data-glyph="wrap"');
-		expect(html).toContain('class="tr-code-btn tr-code-copy"');
-		expect(html).toContain('morph-icon class="tr-code-glyph" data-glyph="copy"');
-		// Reference order: line numbers, wrap, copy.
-		const order = ["tr-code-lines", "tr-code-wrap", "tr-code-copy"].map(name => html.indexOf(name));
-		expect(order).toEqual([...order].sort((a, b) => a - b));
-		// Icon-only: the old text label must not survive in the header.
-		expect(html).not.toMatch(/tr-code-copy[^>]*>[^<]*复制/);
+	it("hands a fenced block to its React block with its language and source", () => {
+		const text = "```ts\nconst x = 1;\n```";
+		const html = renderStreamingMarkdown(text, false, null, {}).html;
+		const hash = /data-code-block="([^"]+)"/.exec(html)?.[1];
+		expect(hash).toBeTruthy();
+		const payload = markdownCodeBlock(hash!);
+		expect(payload?.lang).toBe("ts");
+		expect(payload?.label).toBe("TypeScript");
+		expect(payload?.code).toContain("const x = 1;");
+		// The block draws the header and <pre><code>; the renderer leaves only a
+		// placeholder, which is what keeps the finished block across a tick.
+		expect(html).not.toContain("<pre>");
 	});
 
-	it("falls back to the localized plain-text label for an unlabelled fence", () => {
-		const html = renderMarkdown("```\nplain\n```");
-		expect(html).toContain(`<span class="tr-code-lang">${t("settings.plainText")}</span>`);
+	it("labels an unlabelled fence with the localized plain-text label", () => {
+		const text = "```\nplain\n```";
+		const html = renderStreamingMarkdown(text, false, null, {}).html;
+		const hash = /data-code-block="([^"]+)"/.exec(html)?.[1];
+		expect(markdownCodeBlock(hash!)?.label).toBe(t("settings.plainText"));
 	});
 });
 
