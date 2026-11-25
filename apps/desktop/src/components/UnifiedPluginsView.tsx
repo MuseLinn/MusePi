@@ -2,6 +2,7 @@ import { SearchField, t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { type ExternalExecutableProbeResult, externalAgentBinary } from "../lib/external-agent-config";
+import { readPluginPackages } from "../lib/plugin-management";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
@@ -586,9 +587,8 @@ export function UnifiedPluginsView({
 	 */
 	const refreshPackages = useCallback((): void => {
 		if (!rpc) return;
-		void rpc
-			.request<{ packages: PluginPackageEntry[] }>("plugins.packages")
-			.then(res => onPackagesRefreshed?.(res?.packages ?? []))
+		void readPluginPackages(rpc)
+			.then(packages => onPackagesRefreshed?.(packages))
 			.catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
 	}, [rpc, onError, onPackagesRefreshed]);
 

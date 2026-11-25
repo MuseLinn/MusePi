@@ -5,7 +5,7 @@ import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconDat
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dismissActionToastSource, pushActionToast } from "../lib/action-toast";
-import { setPluginManagementEnabled } from "../lib/plugin-management";
+import { readPluginPackages, setPluginManagementEnabled } from "../lib/plugin-management";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import {
@@ -317,11 +317,10 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
-		void rpc
-			.request<{ plugins: PluginEntry[] }>("plugins.packages", {})
-			.then(res => {
+		void readPluginPackages(rpc)
+			.then(packages => {
 				if (!alive) return;
-				setPlugins(res?.plugins ?? []);
+				setPlugins(packages);
 			})
 			.catch((e: unknown) => alive && setPluginsError(e instanceof Error ? e.message : String(e)));
 		return () => {

@@ -14,7 +14,7 @@ import {
 	publishCapabilityNav,
 	subscribeCapabilityNavAction,
 } from "../../lib/capability-nav";
-import { setPluginManagementEnabled } from "../../lib/plugin-management";
+import { readPluginPackages, setPluginManagementEnabled } from "../../lib/plugin-management";
 import type { RpcClient } from "../../lib/rpc";
 
 /** First-class Skills / Plugins / Marketplace page owned by the desktop Cordis plugin.
@@ -116,11 +116,10 @@ export function CapabilityCenterPage({
 		if (!rpc) return;
 		let alive = true;
 		const load = (): void => {
-			void rpc
-				.request<{ plugins: PluginEntry[] }>("plugins.packages", {})
-				.then(res => {
+			void readPluginPackages(rpc)
+				.then(packages => {
 					if (!alive) return;
-					setPlugins(res?.plugins ?? []);
+					setPlugins(packages);
 					clearPluginsError();
 				})
 				.catch((e: unknown) => {

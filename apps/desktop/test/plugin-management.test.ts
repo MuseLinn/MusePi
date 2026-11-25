@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { PluginPackageEntry } from "../src/components/UnifiedPluginsView";
-import { setPluginManagementEnabled } from "../src/lib/plugin-management";
+import { readPluginPackages, setPluginManagementEnabled } from "../src/lib/plugin-management";
 
 function row(management: "package" | "bundle"): PluginPackageEntry {
 	return {
@@ -34,5 +34,30 @@ describe("plugin management toggle", () => {
 				params: { name: "@demo/capability", enabled: true },
 			},
 		]);
+	});
+});
+
+describe("plugin package list read", () => {
+	it("reads the plugins envelope the daemon actually answers", async () => {
+		const calls: string[] = [];
+		const rpc = {
+			async request(method: string, params: unknown) {
+				calls.push(method);
+				expect(params).toEqual({});
+				return { plugins: [row("package")] };
+			},
+		};
+		const packages = await readPluginPackages(rpc as never);
+		expect(calls).toEqual(["plugins.packages"]);
+		expect(packages).toHaveLength(1);
+	});
+
+	it("returns an empty list rather than throwing when the daemon omits the field", async () => {
+		const rpc = {
+			async request() {
+				return {};
+			},
+		};
+		expect(await readPluginPackages(rpc as never)).toEqual([]);
 	});
 });
