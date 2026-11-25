@@ -40,7 +40,9 @@ function makeRpc(shouldFail?: (requestId: string) => boolean): {
 	emit(event: StreamEvent): void;
 } {
 	const answers: { requestId: string; action: string; value?: string; scope?: string }[] = [];
-	let listener: ((event: StreamEvent) => void) | null = null;
+	// ChatView subscribes more than once (secrets, gates, …); keep every
+	// handler so an emit reaches the one under test instead of only the last.
+	const listeners = new Set<(event: StreamEvent) => void>();
 	const rpc = {
 		request: async (method: string, params?: unknown) => {
 			if (method === "secret.answer") {
@@ -54,16 +56,18 @@ function makeRpc(shouldFail?: (requestId: string) => boolean): {
 			return {};
 		},
 		addEventListener: (handler: (event: StreamEvent) => void) => {
-			listener = handler;
+			listeners.add(handler);
 			return () => {
-				if (listener === handler) listener = null;
+				listeners.delete(handler);
 			};
 		},
 	} as unknown as RpcClient;
 	return {
 		rpc,
 		answers,
-		emit: (event: StreamEvent) => listener?.(event),
+		emit: (event: StreamEvent) => {
+			for (const handler of listeners) handler(event);
+		},
 	};
 }
 
