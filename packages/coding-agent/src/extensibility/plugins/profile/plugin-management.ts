@@ -150,6 +150,34 @@ export function mergePluginTrackRows(
 	return rows;
 }
 
+/**
+ * The identity `plugins.uninstall` needs for one package, read from its row.
+ *
+ * A marketplace install has to clear its own registry, not just the npm tree:
+ * without the marketplace id the `installed_plugins.json` entry survives and
+ * points at a cache directory that no longer exists. The listing row carries
+ * the origin and scope, so removal re-reads them instead of guessing.
+ *
+ * Returns no marketplace field for a package that did not come from one, which
+ * is the correct instruction: `uninstall` then removes the npm entry alone.
+ */
+export function uninstallIdentityOf(
+	row: Pick<PluginManagementPackage, "name" | "scope" | "management" | "marketplace"> | undefined,
+	name: string,
+): {
+	name: string;
+	marketplace?: string;
+	scope?: "user" | "project";
+	management?: "package" | "bundle";
+} {
+	if (row === undefined) return { name };
+	return {
+		name,
+		...(row.marketplace !== undefined ? { marketplace: row.marketplace, scope: row.scope } : {}),
+		management: row.management,
+	};
+}
+
 /** Package/bundle cards share one management feed; missing selected bundles stay visible. */
 export async function listPluginManagementPackages(
 	cwd: string,

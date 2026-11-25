@@ -336,7 +336,7 @@ import {
 	resolveCompatibilityPath,
 	setVersionExemption,
 } from "../extensibility/plugins/compat/compatibility-store";
-import { mergePluginTrackRows } from "../extensibility/plugins/profile/plugin-management";
+import { mergePluginTrackRows, uninstallIdentityOf } from "../extensibility/plugins/profile/plugin-management";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
@@ -1687,7 +1687,13 @@ export class DaemonServer {
 						: "Report the failure; the previous package state was restored.",
 				};
 			},
-			removeBundle: async name => ({ ok: true, ...(await install.uninstall({ name })) }),
+			removeBundle: async name => {
+				// Removal re-reads the row's origin so a marketplace install clears
+				// its own registry too; see `uninstallIdentityOf`.
+				const inventory = await extensions.pluginPackages();
+				const row = inventory.plugins.find(entry => entry.name === name);
+				return { ok: true, ...(await install.uninstall(uninstallIdentityOf(row, name))) };
+			},
 			listVersionExemptions: async () => {
 				const read = readCompatibilityExemptions(resolveCompatibilityPath());
 				return { runtimeVersion: VERSION, exemptions: read.exemptions, warnings: read.warnings };

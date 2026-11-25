@@ -2,11 +2,35 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { listPluginManagementPackages, mergePluginTrackRows, type PluginManagementPackage } from "./plugin-management";
+import {
+	listPluginManagementPackages,
+	mergePluginTrackRows,
+	type PluginManagementPackage,
+	uninstallIdentityOf,
+} from "./plugin-management";
 
 let home: string;
 let cwd: string;
 let profileDir: string;
+
+/** One inventory row, with every field a real listing would carry. */
+function pkg(overrides: Partial<PluginManagementPackage> & { name: string }): PluginManagementPackage {
+	return {
+		version: "1.0.0",
+		path: `/plugins/${overrides.name}`,
+		scope: "user",
+		enabled: true,
+		description: null,
+		icon: null,
+		tools: 0,
+		commands: 0,
+		handlers: 0,
+		management: "package",
+		track: "extension",
+		removable: true,
+		...overrides,
+	};
+}
 
 beforeEach(() => {
 	home = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-plugin-management-home-"));
@@ -133,24 +157,6 @@ describe("merged two-track plugin list", () => {
 		},
 	];
 
-	function pkg(overrides: Partial<PluginManagementPackage> & { name: string }): PluginManagementPackage {
-		return {
-			version: "1.0.0",
-			path: `/plugins/${overrides.name}`,
-			scope: "user",
-			enabled: true,
-			description: null,
-			icon: null,
-			tools: 0,
-			commands: 0,
-			handlers: 0,
-			management: "package",
-			track: "extension",
-			removable: true,
-			...overrides,
-		};
-	}
-
 	it("appends extension packages the composition does not cover", () => {
 		const rows = mergePluginTrackRows(composed, [pkg({ name: "superpowers" })]);
 		expect(rows.map(row => [row.name, row.track, row.state])).toEqual([
@@ -176,5 +182,33 @@ describe("merged two-track plugin list", () => {
 		expect(rows.map(row => [row.id, row.name, row.track, row.state, row.mountable])).toEqual([
 			["superpowers", "superpowers", "extension", "disabled", false],
 		]);
+	});
+});
+
+describe("uninstall identity", () => {
+	it("carries the marketplace id and scope for a marketplace install", () => {
+		const identity = uninstallIdentityOf(
+			pkg({ name: "superpowers", marketplace: "superpowers-dev", scope: "user" }),
+			"superpowers",
+		);
+		// Without the marketplace id `plugins.uninstall` removes the npm entry and
+		// leaves the registry row pointing at a cache directory that is gone.
+		expect(identity).toEqual({
+			name: "superpowers",
+			marketplace: "superpowers-dev",
+			scope: "user",
+			management: "package",
+		});
+	});
+
+	it("names no marketplace for an ordinary package", () => {
+		expect(uninstallIdentityOf(pkg({ name: "@demo/plain" }), "@demo/plain")).toEqual({
+			name: "@demo/plain",
+			management: "package",
+		});
+	});
+
+	it("falls back to the bare name for a package with no row", () => {
+		expect(uninstallIdentityOf(undefined, "@demo/gone")).toEqual({ name: "@demo/gone" });
 	});
 });
