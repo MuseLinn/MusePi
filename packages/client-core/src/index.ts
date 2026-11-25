@@ -88,7 +88,14 @@ export {
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
 export { Markdown } from "./components/transcript/Markdown";
-export { type MermaidMode, mermaidMode } from "./components/transcript/mermaid";
+export {
+	type MermaidMode,
+	mermaidFallbackHtml,
+	mermaidMode,
+	renderDiagramAscii,
+	renderDiagramAsync,
+	renderDiagramSync,
+} from "./components/transcript/mermaid";
 export {
 	BlockUnitCounter,
 	BURST_WINDOW,

@@ -7,7 +7,7 @@
  * needs nothing from the pane but the file's URL and name.
  */
 
-import { type MermaidMode, renderMermaidHtml, t } from "@musepi/client-core";
+import { mermaidFallbackHtml, renderDiagramAscii, renderDiagramAsync, renderDiagramSync, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 
@@ -152,8 +152,38 @@ export function FontPreview({ url, name }: { url: string; name: string }): React
 	);
 }
 
-/** A Mermaid diagram file, rendered by the transcript's diagram renderer. */
+/**
+ * A Mermaid diagram file, rendered by the same renderers the transcript's
+ * diagram block uses.
+ *
+ * Not the block component itself: a file preview has no card, no toolbar and no
+ * copy control, and it must resolve the async renderer here rather than inherit
+ * a block's pending state. The renderer functions are shared, so a diagram looks
+ * the same in the preview and in a reply.
+ */
 export function MermaidPreview({ source }: { source: string }): ReactNode {
-	const html = renderMermaidHtml(source, "svg" as MermaidMode);
-	return <div className="gui-filepane-preview-mermaid" dangerouslySetInnerHTML={{ __html: html }} />;
+	const [svg, setSvg] = useState<string | null>(() => {
+		try {
+			const sync = renderDiagramSync(source);
+			return sync.usable ? sync.svg : renderDiagramAscii(source);
+		} catch {
+			return null;
+		}
+	});
+	useEffect(() => {
+		if (svg !== null) return;
+		let live = true;
+		void renderDiagramAsync(source).then(
+			html => {
+				if (live) setSvg(html);
+			},
+			() => {
+				if (live) setSvg(mermaidFallbackHtml(source));
+			},
+		);
+		return () => {
+			live = false;
+		};
+	}, [source, svg]);
+	return <div className="gui-filepane-preview-mermaid" dangerouslySetInnerHTML={{ __html: svg ?? "" }} />;
 }

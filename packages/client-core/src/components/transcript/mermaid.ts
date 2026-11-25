@@ -235,3 +235,6 @@ export function ensureMermaidFallbackObserver(): void {
 	// Initial sweep: placeholders rendered before the observer attached.
 	document.querySelectorAll(".tr-mermaid-async").forEach(el => fillMermaidPlaceholder(el as HTMLElement));
 }
+
+/** Async diagram renderer, named for the preview and block callers. */
+export { renderMermaidAsyncHtml as renderDiagramAsync };

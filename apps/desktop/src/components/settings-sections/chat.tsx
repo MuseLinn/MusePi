@@ -1,11 +1,4 @@
-import {
-	CodeHighlightProvider,
-	renderMermaidHtml,
-	Segmented,
-	type SegmentedOption,
-	type TranslationKey,
-	t,
-} from "@musepi/client-core";
+import { CodeHighlightProvider, Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
 import {
 	COLLAPSE_TIMINGS,
 	type CollapseTiming,
@@ -365,9 +358,6 @@ export function ChatSection(): ReactNode {
 			return "detailed";
 		}
 	});
-	// Live previews re-render with the segments (mermaid svg/ascii + diff
-	// layout) — same renderers the transcript uses, sample content only.
-	const mermaidPreviewHtml = useMemo(() => renderMermaidHtml(MERMAID_SAMPLE, mermaidModeState), [mermaidModeState]);
 	// Same highlighter the chat transcript uses (Electron IPC → tree-sitter
 	// natives); the provider makes the preview's DiffBlock highlight too.
 	const chatHighlight = useChatHighlight();
@@ -530,15 +520,6 @@ export function ChatSection(): ReactNode {
 		</CodeHighlightProvider>
 	);
 }
-
-/** Sample content for the chat preview (Settings → 聊天 → 聊天预览). */
-const MERMAID_SAMPLE = `graph TD
-  A[用户提问] --> B{分析需求}
-  B -->|明确| C[直接回答]
-  B -->|需工具| D[调用工具]
-  D --> E[汇总结果]
-  C --> F[回复用户]
-  E --> F`;
 
 const DIFF_SAMPLE = `--- a/src/greet.ts
 +++ b/src/greet.ts

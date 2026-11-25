@@ -6,6 +6,7 @@ import {
 	diagramBlockSource,
 	mermaidFallbackHtml,
 	namesDiagramType,
+	renderDiagramAscii,
 	renderDiagramSync,
 } from "../src/components/transcript/mermaid";
 import { t } from "../src/i18n/index.js";
@@ -206,5 +207,28 @@ describe("Transcript local paths", () => {
 		expect(html).not.toContain("data-open-path");
 		expect(html).not.toContain('href="javascript:');
 		expect(html).toContain('href="mailto:a@b.com"');
+	});
+});
+
+describe("diagram renderers for non-transcript hosts", () => {
+	// The file pane's mermaid preview renders a diagram outside the transcript
+	// (no card, no toolbar), so it calls the renderers directly instead of the
+	// block component. These are the contract it depends on.
+	it("renders a supported diagram synchronously", () => {
+		const sample = ["graph TD", "  A --> B"].join(String.fromCharCode(10));
+		const sync = renderDiagramSync(sample);
+		expect(sync.usable).toBe(true);
+		expect(sync.svg).toContain("<svg");
+	});
+
+	it("falls back to plain markup when a diagram cannot draw", () => {
+		const fallback = mermaidFallbackHtml("not a diagram {{{");
+		expect(fallback).toContain("tr-mermaid-fallback");
+	});
+
+	it("renders the ascii variant as text, not svg", () => {
+		const ascii = renderDiagramAscii(["graph TD", "  A --> B"].join(String.fromCharCode(10)));
+		expect(ascii).toContain("tr-mermaid-ascii");
+		expect(ascii).not.toContain("<svg");
 	});
 });
