@@ -54,11 +54,15 @@ const fnv1a = (s: string): number => {
  * carrying it away. Same action button as a fence's copy (`tr-code-btn`).
  */
 const renderDisplay = (source: string): string => {
-	const body = renderKatex(source, true);
 	const hash = fnv1a(source).toString(36);
 	const label = escapeHtml(t("settings.copy"));
+	// Display math is INLINE content: it sits inside the paragraph it stood in,
+	// so it cannot be lifted out of the message's HTML the way a table or a
+	// fence can — splitting there left the paragraph's own tags straddling the
+	// boundary. Its wrapper and copy control therefore stay in the string, and
+	// the delegated copy handler feeds their feedback.
 	return (
-		`<span class="tr-math">${body}` +
+		`<span class="tr-math">${renderKatex(source, true)}` +
 		`<button type="button" class="tr-code-btn tr-math-copy tr-code-copy" data-math-copy="${hash}" data-copy-hash="${hash}" aria-label="${label}" title="${label}">` +
 		blockGlyph("copy") +
 		`</button>` +
