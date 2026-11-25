@@ -19,7 +19,7 @@ electron . --remote-debugging-port=9224 --user-data-dir=/tmp/<name>
 | 层面 | 手段 |
 | --- | --- |
 | 类型与格式 | `bun check` |
-| 装载 | `plugin_manager` 的 `list_plugins`、`cordis_inspect_self` |
+| 装载 | `plugin_manager` 的 `list_plugins`（两轨都列，看行上的 `track`）、`cordis_inspect_self` |
 | 工具行为 | 真实会话里调一次工具，看结果 |
 | 界面 | 隔离实例 + CDP：座位是否挂载、样式是否用主题令牌、控制台有无报错 |
 | 主题 | 明暗两套都看一遍 |

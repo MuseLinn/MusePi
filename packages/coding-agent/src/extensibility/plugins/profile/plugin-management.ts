@@ -19,6 +19,15 @@ export interface PluginManagementPackage {
 	commands: number;
 	handlers: number;
 	management: "package" | "bundle";
+	/** Which track mounts this row, and therefore which store owns the
+	 *  enablement the row reports: `cordis` rows carry the profile's bundle
+	 *  selection (`bundles.setBundleEnabled`), `extension` rows carry the
+	 *  runtime lockfile flag (`plugins.setEnabled`). Derived from `management`
+	 *  rather than stored twice — `management` already means "which store said
+	 *  yes". A package that is also a bundle lists as a bundle, so its row
+	 *  reports bundle selection while its extension entries still follow the
+	 *  lockfile. */
+	track: "cordis" | "extension";
 	readable?: boolean;
 	/** Host fact (`removable`): whether this row may be uninstalled. A
 	 *  project-scope plain package has no uninstall path here; a bundle can
@@ -66,6 +75,81 @@ async function marketplacePackagesByName(
 	return out;
 }
 
+/** One row of another track's listing, as the merge below receives it. */
+export interface ComposedRowLike {
+	id: string;
+	name: string;
+	state: "enabled" | "disabled" | "conditional";
+	group: boolean;
+	layers: readonly string[];
+	pluginPath: string | null;
+	mountable: boolean;
+}
+
+/** One row of the merged, two-track plugin list. */
+export interface PluginTrackRow {
+	/** Stable id used by set_plugin. For `cordis` rows this is the composition
+	 *  id; for `extension` rows the package name, which is also the lockfile
+	 *  key that owns its enablement. */
+	id: string;
+	/** The npm package the row names. */
+	name: string;
+	state: "enabled" | "disabled" | "conditional";
+	group: boolean;
+	/** Bundles/layers that contributed the row. Empty for `extension` rows,
+	 *  which no profile layer composes. */
+	layers: string[];
+	pluginPath: string | null;
+	mountable: boolean;
+	/**
+	 * Which track owns this row's enablement, and therefore where set_plugin
+	 * writes: `cordis` rows carry the profile's bundle selection and its patch
+	 * overrides, `extension` rows carry `musepi-plugins.lock.json`. Only a
+	 * `cordis` row can report `conditional`.
+	 */
+	track: "cordis" | "extension";
+}
+
+/**
+ * One list covering both tracks.
+ *
+ * The two tracks keep enablement in different stores — a cordis row in the
+ * profile's bundle selection and patch, an extension package in
+ * `musepi-plugins.lock.json` — so a list built from one store hides the other
+ * track's packages entirely. They install, they run, and nothing lists them.
+ *
+ * Rows are keyed by package name, the only identity both stores share. A name
+ * that appears in both keeps the composed row: bundle selection is the narrower
+ * fact, and its `conditional` state is information an extension row cannot
+ * express. Extension packages no composed row covers are appended in inventory
+ * order, toggled by package name (their lockfile key is the identity).
+ */
+export function mergePluginTrackRows(
+	composed: readonly ComposedRowLike[],
+	packages: readonly PluginManagementPackage[],
+): PluginTrackRow[] {
+	const rows: PluginTrackRow[] = composed.map(row => ({
+		...row,
+		layers: [...row.layers],
+		track: "cordis" as const,
+	}));
+	const covered = new Set(rows.map(row => row.name));
+	for (const pkg of packages) {
+		if (pkg.track !== "extension" || covered.has(pkg.name)) continue;
+		rows.push({
+			id: pkg.name,
+			name: pkg.name,
+			state: pkg.enabled ? "enabled" : "disabled",
+			group: false,
+			layers: [],
+			pluginPath: pkg.path,
+			mountable: pkg.enabled,
+			track: "extension",
+		});
+	}
+	return rows;
+}
+
 /** Package/bundle cards share one management feed; missing selected bundles stay visible. */
 export async function listPluginManagementPackages(
 	cwd: string,
@@ -104,6 +188,7 @@ export async function listPluginManagementPackages(
 						? Object.keys(plugin.manifest.hooks).length
 						: 0,
 			management: "package",
+			track: "extension",
 			...(marketplace ? { marketplace: marketplace.marketplace } : {}),
 			...(plugin.scope === "user" || marketplace !== undefined
 				? { removable: true }
@@ -132,6 +217,7 @@ export async function listPluginManagementPackages(
 			commands: existing?.commands ?? 0,
 			handlers: existing?.handlers ?? 0,
 			management: "bundle",
+			track: "cordis",
 			readable: bundle.readable,
 			// A selected bundle is removable by deselecting it; an installed but
 			// unselected one by uninstalling the package. A selected name with

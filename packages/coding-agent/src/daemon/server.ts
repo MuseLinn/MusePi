@@ -336,10 +336,11 @@ import {
 	resolveCompatibilityPath,
 	setVersionExemption,
 } from "../extensibility/plugins/compat/compatibility-store";
+import { mergePluginTrackRows } from "../extensibility/plugins/profile/plugin-management";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
-import type { PluginManagementHandle } from "../tools/plugin-manager";
+import type { PluginEntryRow, PluginManagementHandle } from "../tools/plugin-manager";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { type ArtifactServerHandle, startArtifactServer, tryStartArtifactServer } from "./artifact-server";
@@ -1577,34 +1578,66 @@ export class DaemonServer {
 	pluginManagementHandle(): PluginManagementHandle | null {
 		let install: PluginInstallService;
 		let bundles: BundleService;
+		let extensions: ExtensionService;
 		try {
 			install = this.#services.get<PluginInstallService>("pluginInstall");
 			bundles = this.#services.get<BundleService>("bundles");
+			extensions = this.#services.get<ExtensionService>("extensions");
 		} catch {
 			return null;
 		}
+		/**
+		 * Composition rows plus every installed extension package they do not
+		 * already cover — one list for both tracks. See
+		 * {@link mergePluginTrackRows} for why the merge is read-side only.
+		 */
+		const mergedRows = async (): Promise<PluginEntryRow[]> => {
+			const [view, inventory] = await Promise.all([bundles.composition(), extensions.pluginPackages()]);
+			return mergePluginTrackRows(view.rows, inventory.plugins);
+		};
 		return {
-			listPlugins: async () => {
-				const view = await bundles.composition();
-				return view.rows.map(row => ({
-					id: row.id,
-					name: row.name,
-					state: row.state,
-					group: row.group,
-					layers: [...row.layers],
-					pluginPath: row.pluginPath,
-					mountable: row.mountable,
-				}));
-			},
+			listPlugins: mergedRows,
 			setPlugin: async (id, enabled) => {
+				const row = (await mergedRows()).find(entry => entry.id === id);
+				if (row === undefined) {
+					// Falling through to the cordis writer made an unknown id report
+					// "a conditional row cannot be toggled" — a specific explanation
+					// for a row that does not exist. Neither store owns this name.
+					return {
+						ok: false,
+						id,
+						message: `unknown plugin row "${id}"`,
+						nextStep: "Read list_plugins and use one of the ids it returns.",
+					};
+				}
+				if (row.track === "extension") {
+					// The lockfile owns this row: `plugins.setEnabled` writes it, runs
+					// the declared-component cascade, probes the real load, and applies
+					// to open sessions — a bundle row override would write a store this
+					// package never reads from.
+					const result = await extensions.setPluginEnabled({ name: row.name, enabled });
+					return {
+						ok: result.ok,
+						id,
+						message: result.error,
+						nextStep: result.ok
+							? undefined
+							: "The package is recorded as enabled but its entry did not load; read list_plugins for its state and check the daemon log for the load error.",
+					};
+				}
 				const result = await bundles.setRowEnabled({ id, enabled });
 				return {
 					ok: result.ok,
 					id: result.id,
 					message: result.error,
+					// The three ways a cordis toggle fails need three different
+					// answers; naming only the conditional case turned "this profile
+					// has no composition manifest" into a false diagnosis.
 					nextStep: result.ok
 						? undefined
-						: "Read list_plugins again; a conditional row cannot be toggled from this host.",
+						: row.state === "conditional"
+							? "The row's enable expression cannot be evaluated on this host, so its state is unknown. Toggle it from the extension page or edit the profile patch directly."
+							: "Read list_plugins again for the row's current state; the profile may have no composition manifest to write an override into.",
 				};
 			},
 			listBundles: async () => {

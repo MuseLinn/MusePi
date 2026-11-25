@@ -14,10 +14,10 @@
 
 模型侧走 `plugin_manager`：
 
-- `list_plugins` — 当前组合的插件行与状态
+- `list_plugins` — 两轨的插件行与状态，每行带 `track`（`cordis` / `extension`）
 - `list_bundles` — profile 可叠加的 bundle
 - `install_bundle` / `remove_bundle` — 装/卸包
-- `set_plugin` / `set_bundle` — 切换某一行、选中/取消一个 bundle
+- `set_plugin` / `set_bundle` — 切换某一行、选中/取消一个 bundle；`set_plugin` 按行的 `track` 写回各自存储（`extension` 行改 `musepi-plugins.lock.json`，`cordis` 行改 profile patch）
 - `list_version_exemptions` / `set_version_exemption` — 精确的版本兼容豁免
 
 `install_bundle` 的 `target` 就是市场版本给出的 `install.target`；若该版本声明了非默认 npm registry，同时传 `install.registry`。

@@ -12,6 +12,17 @@ const handle: PluginManagementHandle = {
 			layers: ["profile"],
 			pluginPath: "/plugins/demo",
 			mountable: true,
+			track: "cordis",
+		},
+		{
+			id: "superpowers",
+			name: "superpowers",
+			state: "enabled",
+			group: false,
+			layers: [],
+			pluginPath: "/plugins/superpowers",
+			mountable: true,
+			track: "extension",
 		},
 	],
 	setPlugin: async (id, enabled) => {
@@ -58,6 +69,14 @@ describe("plugin_manager tool", () => {
 		const result = await run({ action: "list_plugins" });
 		expect(result.ok).toBe(true);
 		expect((result.entries as Array<{ id: string }>)[0]?.id).toBe("persona");
+	});
+
+	test("lists rows from both tracks with the track that owns each one", async () => {
+		const result = await run({ action: "list_plugins" });
+		expect((result.entries as Array<{ name: string; track: string }>).map(e => [e.name, e.track])).toEqual([
+			["@demo/plugin", "cordis"],
+			["superpowers", "extension"],
+		]);
 	});
 
 	test("lists stackable bundles separately from their rows", async () => {

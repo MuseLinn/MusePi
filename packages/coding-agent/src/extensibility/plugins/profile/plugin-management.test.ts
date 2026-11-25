@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { listPluginManagementPackages } from "./plugin-management";
+import { listPluginManagementPackages, mergePluginTrackRows, type PluginManagementPackage } from "./plugin-management";
 
 let home: string;
 let cwd: string;
@@ -52,11 +52,11 @@ describe("plugin management inventory", () => {
 		);
 
 		const rows = await listPluginManagementPackages(cwd, home, "desktop");
-		expect(rows.map(row => [row.name, row.management, row.enabled, row.readable])).toEqual([
-			["@demo/plain", "package", true, undefined],
-			["@demo/selected", "bundle", true, true],
-			["@demo/missing", "bundle", true, false],
-			["@demo/optional", "bundle", false, true],
+		expect(rows.map(row => [row.name, row.management, row.track, row.enabled, row.readable])).toEqual([
+			["@demo/plain", "package", "extension", true, undefined],
+			["@demo/selected", "bundle", "cordis", true, true],
+			["@demo/missing", "bundle", "cordis", true, false],
+			["@demo/optional", "bundle", "cordis", false, true],
 		]);
 		// Every row has a removal path: an ordinary user package, a selected
 		// bundle (deselect), a missing selected bundle (deselect), or an installed
@@ -107,6 +107,74 @@ describe("plugin management inventory", () => {
 			["@demo/bundle-true", true],
 			["@demo/bundle-false", undefined],
 			["@demo/bundle-string", undefined],
+		]);
+	});
+});
+
+describe("merged two-track plugin list", () => {
+	const composed = [
+		{
+			id: "persona",
+			name: "@demo/persona",
+			state: "enabled" as const,
+			group: false,
+			layers: ["profile"],
+			pluginPath: "/plugins/persona",
+			mountable: true,
+		},
+		{
+			id: "shared",
+			name: "shared-pkg",
+			state: "conditional" as const,
+			group: true,
+			layers: ["bundle-a"],
+			pluginPath: null,
+			mountable: false,
+		},
+	];
+
+	function pkg(overrides: Partial<PluginManagementPackage> & { name: string }): PluginManagementPackage {
+		return {
+			version: "1.0.0",
+			path: `/plugins/${overrides.name}`,
+			scope: "user",
+			enabled: true,
+			description: null,
+			icon: null,
+			tools: 0,
+			commands: 0,
+			handlers: 0,
+			management: "package",
+			track: "extension",
+			removable: true,
+			...overrides,
+		};
+	}
+
+	it("appends extension packages the composition does not cover", () => {
+		const rows = mergePluginTrackRows(composed, [pkg({ name: "superpowers" })]);
+		expect(rows.map(row => [row.name, row.track, row.state])).toEqual([
+			["@demo/persona", "cordis", "enabled"],
+			["shared-pkg", "cordis", "conditional"],
+			["superpowers", "extension", "enabled"],
+		]);
+	});
+
+	it("keeps one row per package name and lets the composed row win", () => {
+		const rows = mergePluginTrackRows(composed, [pkg({ name: "shared-pkg", enabled: false })]);
+		expect(rows).toHaveLength(2);
+		const shared = rows.find(row => row.name === "shared-pkg");
+		// Bundle selection is the narrower fact: the package can be selected and
+		// still have its entries disabled in the lockfile, so the composed row
+		// (including its conditional state) is what the row reports.
+		expect(shared?.track).toBe("cordis");
+		expect(shared?.state).toBe("conditional");
+	});
+
+	it("carries a disabled extension package as a disabled row", () => {
+		const rows = mergePluginTrackRows([], [pkg({ name: "superpowers", enabled: false })]);
+		expect(rows.map(row => [row.id, row.name, row.track, row.state, row.mountable])).toEqual([
+			["superpowers", "superpowers", "extension", "disabled", false],
 		]);
 	});
 });

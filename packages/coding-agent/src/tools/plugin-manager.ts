@@ -16,18 +16,27 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentToolResult, CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 
-/** One composed plugin row of the active profile. */
+/** One plugin row of the active profile, from either track. */
 export interface PluginEntryRow {
-	/** Stable composition id used by set_plugin. */
+	/** Stable id used by set_plugin. For `cordis` rows this is the composition
+	 *  id; for `extension` rows the package name, which is the lockfile key. */
 	id: string;
 	/** The npm package the row names. */
 	name: string;
 	state: "enabled" | "disabled" | "conditional";
 	group: boolean;
-	/** Bundles/layers that contributed the row. */
+	/** Bundles/layers that contributed the row. Empty for `extension` rows,
+	 *  which no profile layer composes. */
 	layers: string[];
 	pluginPath: string | null;
 	mountable: boolean;
+	/**
+	 * Which track owns this row's enablement, and therefore where set_plugin
+	 * writes: `cordis` rows carry the profile's bundle selection and its patch
+	 * overrides, `extension` rows carry `musepi-plugins.lock.json`. A row that
+	 * reports `conditional` can only be a `cordis` row.
+	 */
+	track: "cordis" | "extension";
 }
 
 /** One bundle the profile may stack. */
@@ -167,7 +176,7 @@ export interface MarketVersionsPage {
 
 const pluginManagerSchema = type({
 	action: type("string").describe(
-		"list_plugins = composed plugin rows; list_bundles = bundles the profile can stack; set_plugin = toggle one row; set_bundle = select/remove a bundle; install_bundle / remove_bundle = manage packages; list_version_exemptions / set_version_exemption = exact compatibility grants",
+		"list_plugins = plugin rows from both tracks, each labelled with the track that owns its enablement; list_bundles = bundles the profile can stack; set_plugin = toggle one row; set_bundle = select/remove a bundle; install_bundle / remove_bundle = manage packages; list_version_exemptions / set_version_exemption = exact compatibility grants",
 	),
 	target: type("string")
 		.describe("Row id, bundle name, install spec, or name@version for exemptions, per action")
@@ -218,7 +227,7 @@ export function createPluginManagerTools(
 		defaultInactive: true, // creation ring only: plugin management is not a default work tool
 		label: "插件管理",
 		description:
-			"Manage the active profile's plugins. List first and use exact ids/names. list_plugins returns composed rows (set_plugin toggles one by id); list_bundles returns stackable bundles (set_bundle selects one); install_bundle/remove_bundle manage packages. Installing runs host code and may run build scripts, so it needs an auto-approved session; otherwise the person installs from the extension page. A change result carries application (applied = live now) and nextStep when the person must act. Version exemptions accept crash/data-loss risk: grant only with the user's explicit acceptance of this exact plugin and runtime version.",
+			"Manage the active profile's plugins. List first and use exact ids/names. list_plugins returns every plugin row from both tracks, each labelled with the track that owns its enablement (set_plugin toggles one by id and routes to that track's store); list_bundles returns stackable bundles (set_bundle selects one); install_bundle/remove_bundle manage packages. Installing runs host code and may run build scripts, so it needs an auto-approved session; otherwise the person installs from the extension page. A change result carries application (applied = live now) and nextStep when the person must act. Version exemptions accept crash/data-loss risk: grant only with the user's explicit acceptance of this exact plugin and runtime version.",
 		parameters: pluginManagerSchema,
 		async execute(
 			_toolCallId: string,

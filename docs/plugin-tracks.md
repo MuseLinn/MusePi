@@ -25,6 +25,8 @@ musePi 同时服务两类插件作者，两类的诉求不同：
 
 **创造模式只面向 Track A**：creator 预设激活的是 Cordis 环（`cordis_define` / `cordis_run` / `cordis_stop` / `cordis_undefine` / `cordis_inspect_list` / `cordis_inspect_query` / `cordis_inspect_self`，外加清单与 `plugin_manager`），模型默认交付具名导出的 Track A 插件包。Track B 的会话加载器（`extension_load` / `reload` / `status` / `validate` / `rollback`）是**兼容面**，不属于创造工具集、默认不激活，只在用户明确处理旧扩展时通过扩展管理面（TUI 面板 / GUI 扩展页）显式启用；`/extensions` 只是 TUI 面入口。模型不应把 Track B 入口当成新插件的写法。
 
+**`plugin_manager` 的管理面横跨两轨**：两条轨道分别把启停记在不同的存储里——cordis 行记在 profile 的 bundle 选择与 patch，扩展包记在 `musepi-plugins.lock.json`。只读其中一份的清单会让另一轨的包「装了、在跑、却查不到」，所以 `list_plugins` 是两者的并集，每行带 `track`（`cordis` / `extension`）；`set_plugin` 按 `track` 回到各自的写入路径（`bundles.rows.setEnabled` / `plugins.setEnabled`），不会把 profile patch 写进一个包根本不读的存储。同名包在两边都出现时只列一行，取组合行——bundle 选择是更窄的事实，且只有组合行能表达 `conditional`。
+
 **标准 work 面**（便于逐项审阅）：`work` 不叠加预设提示词、不声明 preset 行；能力由三部分组成——`system-prompt.md` 的基础提示词、`STANDARD_TOP_LEVEL_TOOL_NAMES` 显式声明的顶层工具（read/write/bash/edit/glob/grep/computer/eval/task/hub/learn/manage_skill/todo/ask/web_search，与 essentials + `XDEV_KEEP_TOP_LEVEL` 由漂移测试锁定）、以及其余工具经 `xd://` 目录按需发现。能力包（文件工具、委派、LSP、压缩等）由环境自动发现供给，不在 preset 行里重复声明；预设若需要不同工具面，自己声明 `topLevelTools`，不与标准列表合并。创建类工具（Cordis、清单、插件管理、Track B）默认不进入这个面。按工具卡片席位是 `tool.call.toolview.<wire tool name>`，由 `registerToolView` 贡献、客户端 keyed 注册表挂载。
 
 **工具所有权**：每个内建工具在 `tools/tool-ownership.ts` 里可以有一个拥有者组件（`TOOL_OWNERS`），工具可用性跟随该组件的 fiber——卸载或 deny 那个组件，工具就离开工具表；没有拥有者的工具保持隐式可用，从未装载过的域也不会让工具消失。`registerToolOwner(name, owner)` 是运行时声明缝（返回 disposer 恢复上一个拥有者），包可以在 `apply` 里认领自己贡献的工具。
