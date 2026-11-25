@@ -46,6 +46,9 @@ export const getModelsConfigSchemaBundle = once(() => {
 		"vercelGatewayRouting?": VercelGatewayRoutingSchema,
 		"extraBody?": { "[string]": "unknown" },
 		"cacheControlFormat?": '"anthropic"',
+		/** Whether chat payloads carry `prompt_cache_key`. Off by default: a strict
+		 *  proxy can reject the field, so turning it on is per-provider. */
+		"supportsPromptCacheKey?": "boolean",
 		/** Request header that mirrors the prompt-cache key, for a gateway that
 		 *  pins a session to one upstream (e.g. `x-session-affinity`). Any HTTP
 		 *  header token; the setup validates it before writing. */

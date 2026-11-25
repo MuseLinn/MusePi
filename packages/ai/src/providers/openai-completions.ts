@@ -1532,7 +1532,9 @@ function applyOpenAIChatCompletionsPromptCachePolicy(
 	options: OpenAICompletionsOptions | undefined,
 ): void {
 	const promptCacheKey = getOpenAIPromptCacheKey(options);
-	if (model.provider === "kimi-code" && promptCacheKey !== undefined) {
+	// A strict proxy rejects unknown body fields, so the key is opt-in per
+	// provider (`compat.supportsPromptCacheKey`) rather than sent to everyone.
+	if (model.compat.supportsPromptCacheKey && promptCacheKey !== undefined) {
 		params.prompt_cache_key = promptCacheKey;
 	}
 

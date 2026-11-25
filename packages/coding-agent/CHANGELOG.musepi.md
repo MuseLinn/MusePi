@@ -6,6 +6,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ### 新功能
 
+- **自定义提供商可以自己决定用不用请求体里的缓存键**：新增 `compat.supportsPromptCacheKey`，默认关闭。打开后 Chat Completions 的请求体带 `prompt_cache_key`（会话 id），网关据此把一段对话留在持有其前缀的后端上。之所以默认关：严格的代理会拒收未知字段，而以前只有 kimi-code 被硬编码为发送，其他自建网关没有出口。Responses API 一直无条件带这个键，两个面本就不一致，这次没有改动它。
+  - EN: A custom provider can now decide whether to use the cache key in the request body. The new `compat.supportsPromptCacheKey` defaults to off; switched on, Chat Completions bodies carry `prompt_cache_key` (the session id), which lets a gateway keep one conversation on the backend holding its prefix. It defaults off because a strict proxy rejects unknown fields, and previously only kimi-code was hardcoded to send it, leaving other self-hosted gateways no way in. The Responses API has always carried the key unconditionally; the two surfaces differ on purpose and that is left unchanged.
+
 - **自建网关可以让会话粘在同一台后端上，缓存命中率才不会虚低**：自定义 provider 的 `compat.promptCacheSessionHeader` 现在可以写任意合法的请求头名（此前只接受 xAI 的 `x-grok-conv-id`）。写上网关要求的亲和头（例如 `x-session-affinity`），客户端就会把会话的缓存键放进该头，负载均衡的网关据此把同一段对话留在持有其前缀的节点上。不配这个字段时客户端不发任何亲和提示，前缀缓存再真实，命中率也可能接近零——那不是计算错误。非法的头名会被丢弃，不会让每个请求都变成传输错误。
   - EN: A self-hosted gateway can now pin a session to one backend, so a cache hit rate stops reading as falsely low. A custom provider's `compat.promptCacheSessionHeader` accepts any valid request header name (it previously only took xAI's `x-grok-conv-id`). Naming the header the gateway expects — `x-session-affinity`, say — makes the client send the session's cache key in it, which lets a load-balanced gateway keep one conversation on the node holding its prefix. Without the field the client sends no affinity at all, and a real prefix cache can still report a hit rate near zero: that is not a calculation error. An invalid header name is dropped instead of turning every request into a transport error.
 

@@ -22,6 +22,7 @@
 - 带简单 inline API-key login flow 的 provider；
 - 大多数 OpenAI-compatible gateway。
 - 若网关靠「把同一会话固定在同一上游」来做 prompt caching，就在模型的 `compat.promptCacheSessionHeader` 里写它的亲和头名（任意 HTTP header token；catalog 里 xAI 的条目用 `x-grok-conv-id`）。该头的值就是会话的缓存键，于是负载均衡的网关能把一段对话留在持有其前缀的节点上。不写这个字段，客户端一个亲和提示都不发，每一轮可能落到不同后端——前缀缓存确实存在，命中率仍会接近零。
+- 若网关更想用请求字段而不是请求头，在 compat 里写 `supportsPromptCacheKey: true`，Chat Completions 的请求体就会带 `prompt_cache_key`。默认关闭，因为严格的代理会拒收未知字段；Responses API 一直带这个键，所以两个面本就不一致。
 
 对于**非 trivial 的 provider-local OAuth flow**，把实现放在 `packages/ai/src/registry/oauth/<vendor>.ts`，并让 def file 做 lazy import。其复用的共享 OAuth flow infrastructure 位于同一 `registry/oauth/` 目录。
 

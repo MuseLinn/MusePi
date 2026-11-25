@@ -53,6 +53,11 @@ That is the full change for:
   conversation on the node that holds its prefix. Without the field the client
   sends no affinity at all, and every turn may land on a different backend — a
   real prefix cache then still reports a hit rate near zero.
+- A gateway that prefers the request field over a header sets
+  `compat.supportsPromptCacheKey: true` and receives `prompt_cache_key` in Chat
+  Completions bodies. Off by default, because a strict proxy rejects unknown
+  fields; the Responses API always carries the key, so the two surfaces differ
+  on purpose.
 
 For a **non-trivial provider-local OAuth flow**, put the implementation in
 `packages/ai/src/registry/oauth/<vendor>.ts` and lazy-import it from the def

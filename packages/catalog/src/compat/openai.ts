@@ -639,6 +639,10 @@ export function buildOpenAICompat(spec: ModelSpec<"openai-completions">): Resolv
 		emptyLengthFinishIsContextError: provider === "ollama",
 		usesOpenAIToolCallIdLimit: provider === "openai",
 		promptCacheSessionHeader: isGrok ? "x-grok-conv-id" : undefined,
+		// Chat Completions has no cache-key field on most endpoints, and a strict
+		// proxy rejects unknown fields. Kimi is the one built-in that takes it;
+		// any other provider opts in through `compat.supportsPromptCacheKey`.
+		supportsPromptCacheKey: provider === "kimi-code",
 		dropThinkingWhenReasoningEffort: provider === "fireworks",
 	};
 

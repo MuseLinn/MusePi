@@ -1,5 +1,5 @@
 # Consistency record for adding-a-provider.md / adding-a-provider.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/adding-a-provider
-adding-a-provider.md: 0cf127f1477a9420592f6ed413c8e2140885140d
-adding-a-provider.zh-CN.md: 3d1ba49e04e18223301f123fe191185b1c19767e
+adding-a-provider.md: 53cb8d9f183e42512612c3eda21c90f0408b183f
+adding-a-provider.zh-CN.md: 318f03216dbd0f5cc810becae55252391f71b6cc

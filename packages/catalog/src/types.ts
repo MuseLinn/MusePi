@@ -300,6 +300,11 @@ export interface OpenAICompat {
 	vercelGatewayRouting?: VercelGatewayRouting;
 	/** Extra fields to include in request body (e.g. gateway routing hints for OpenClaw-style proxies). */
 	extraBody?: Record<string, unknown>;
+	/** Whether CHAT COMPLETIONS payloads carry `prompt_cache_key`. Off by
+	 *  default: a strict proxy can reject the field, so only the providers known
+	 *  to accept it turn it on. The Responses API always carries it — the two
+	 *  surfaces differ by design. */
+	supportsPromptCacheKey?: boolean;
 	/** Request-session header that should mirror the normalized prompt-cache key.
 	 *  Default: unset. Any HTTP header token is accepted (validated where the
 	 *  header is set) so a gateway that pins a session to one upstream can ask
@@ -630,6 +635,8 @@ export interface ResolvedOpenAISharedCompat {
 	emptyLengthFinishIsContextError: boolean;
 	usesOpenAIToolCallIdLimit: boolean;
 	promptCacheSessionHeader?: OpenAICompat["promptCacheSessionHeader"];
+	/** Whether chat payloads carry `prompt_cache_key`. */
+	supportsPromptCacheKey?: OpenAICompat["supportsPromptCacheKey"];
 	/**
 	 * Whether this model accepts explicit OpenAI prompt-cache breakpoints.
 	 * Built catalog models always materialize this false-by-default value;
