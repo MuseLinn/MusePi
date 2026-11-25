@@ -174,10 +174,14 @@ describe("recoverTuiRelease", () => {
 		runs: unknown;
 		jobs?: unknown;
 		log?: string;
+		compare?: { status?: string; ahead_by?: number };
 		onDispatch?: (body: string) => void;
 	}): typeof fetch {
 		return (async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input);
+			if (url.includes("/compare/")) {
+				return Response.json(handlers.compare ?? { status: "behind", ahead_by: 0 });
+			}
 			if (url.includes("/dispatches")) {
 				handlers.onDispatch?.(String(init?.body ?? ""));
 				return new Response(null, { status: 204 });
@@ -326,6 +330,25 @@ describe("recoverTuiRelease", () => {
 		});
 		expect(decision.action).toBe("dispatch");
 		expect(dispatched).toBe(true);
+	});
+
+	it("does not publish a tag whose commit is not on the default branch", async () => {
+		let dispatched = false;
+		const decision = await recoverTuiRelease({
+			...base,
+			tag: "v0.7.8",
+			baseRef: "main",
+			fetchImpl: route({
+				runs: { workflow_runs: [] },
+				compare: { status: "ahead", ahead_by: 3 },
+				onDispatch: () => {
+					dispatched = true;
+				},
+			}),
+		});
+		expect(decision.action).toBe("skip");
+		expect(decision.reason).toContain("not reachable from main");
+		expect(dispatched).toBe(false);
 	});
 
 	it("rejects a tag CI would not treat as a release", async () => {

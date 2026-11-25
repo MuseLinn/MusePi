@@ -127,11 +127,19 @@ export function isRecoverableReleaseTag(tag: string): boolean {
 	return /^v\d/.test(tag);
 }
 
+/** True when every commit on the tag is already on the base branch. */
+export function commitIsReachableFromBase(compare: { status?: string; ahead_by?: number }): boolean {
+	if (typeof compare.ahead_by === "number") return compare.ahead_by === 0;
+	return compare.status === "behind" || compare.status === "identical";
+}
+
 interface RecoverOptions {
 	sha: string;
 	tag: string;
 	repository: string;
 	token: string;
+	/** Branch the tagged commit must already be on. Defaults to `main`. */
+	baseRef?: string;
 	fetchImpl?: typeof fetch;
 	timeoutMs?: number;
 	pollIntervalMs?: number;
@@ -173,6 +181,7 @@ export async function recoverTuiRelease({
 	tag,
 	repository,
 	token,
+	baseRef = "main",
 	fetchImpl = fetch,
 	timeoutMs = 20 * 60_000,
 	pollIntervalMs = 15_000,
@@ -196,6 +205,22 @@ export async function recoverTuiRelease({
 	};
 	const started = nowImpl();
 	const deadline = started + timeoutMs;
+	const compareResponse = await fetchImpl(
+		`https://api.github.com/repos/${repository}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(sha)}`,
+		{ headers },
+	);
+	const compare = await readJson<{ status?: string; ahead_by?: number }>(compareResponse, "Commit ancestry lookup");
+	if (!commitIsReachableFromBase(compare)) {
+		const decision: RecoveryDecision = {
+			action: "skip",
+			reason:
+				`Commit ${sha} is not reachable from ${baseRef} ` +
+				`(${compare.status ?? "unknown"}, ${compare.ahead_by ?? "?"} commits ahead), ` +
+				"so this tag is not published as a release.",
+		};
+		console.log(decision.reason);
+		return decision;
+	}
 
 	for (;;) {
 		const listed = await readPages<Omit<WorkflowRun, "jobs">>(
@@ -288,10 +313,11 @@ if (import.meta.main) {
 	const tag = process.argv[3] ?? Bun.env.GITHUB_REF_NAME;
 	const repository = Bun.env.GITHUB_REPOSITORY;
 	const token = Bun.env.GH_TOKEN ?? Bun.env.GITHUB_TOKEN;
+	const baseRef = Bun.env.RECOVER_BASE_REF || "main";
 	if (!sha || !tag || !repository || !token) {
 		throw new Error(
 			"Usage: GH_TOKEN=<token> GITHUB_REPOSITORY=<owner/repo> bun scripts/ci-tui-release-recover.ts <sha> <tag>",
 		);
 	}
-	await recoverTuiRelease({ sha, tag, repository, token });
+	await recoverTuiRelease({ sha, tag, repository, token, baseRef });
 }

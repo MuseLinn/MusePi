@@ -146,6 +146,7 @@ describe("CI runtime and delivery contracts", () => {
 		expect(dispatch?.run).not.toContain("${{");
 		expect(dispatch?.env?.GITHUB_SHA).toBe("${{ github.sha }}");
 		expect(dispatch?.env?.GITHUB_REF_NAME).toBe("${{ github.ref_name }}");
+		expect(dispatch?.env?.RECOVER_BASE_REF).toBe("${{ github.event.repository.default_branch }}");
 		expect(steps.some(step => step.uses?.startsWith("softprops/action-gh-release@"))).toBe(false);
 		const metadata = allSteps(readYaml(".github/workflows/ci.yml").jobs?.release_metadata);
 		expect(metadata.some(step => step.run?.includes("HEAD carries release tag"))).toBe(true);
