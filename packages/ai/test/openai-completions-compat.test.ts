@@ -221,6 +221,7 @@ describe("openai-completions compatibility", () => {
 			emptyLengthFinishIsContextError: false,
 			usesOpenAIToolCallIdLimit: false,
 			dropThinkingWhenReasoningEffort: false,
+			supportsPromptCacheKey: false,
 		} satisfies ResolvedOpenAICompat;
 		const assistantMessage: AssistantMessage = {
 			role: "assistant",

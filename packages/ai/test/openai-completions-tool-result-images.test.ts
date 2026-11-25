@@ -62,6 +62,7 @@ const compat: ResolvedOpenAICompat = {
 	emptyLengthFinishIsContextError: false,
 	usesOpenAIToolCallIdLimit: false,
 	dropThinkingWhenReasoningEffort: false,
+	supportsPromptCacheKey: false,
 };
 
 function buildToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
