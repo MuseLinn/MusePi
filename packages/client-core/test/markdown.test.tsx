@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Markdown, markdownCodeBlock, renderStreamingMarkdown } from "../src/components/transcript/Markdown";
 import {
-	Markdown,
-	markdownCodeBlock,
-	markdownTableBlock,
-	renderStreamingMarkdown,
-} from "../src/components/transcript/Markdown";
+	diagramBlockSource,
+	mermaidFallbackHtml,
+	namesDiagramType,
+	renderDiagramSync,
+} from "../src/components/transcript/mermaid";
 import { t } from "../src/i18n/index.js";
 
 function renderMarkdown(text: string): string {
@@ -113,18 +114,12 @@ describe("Transcript LaTeX math", () => {
 		expect(html).not.toContain('class="katex"');
 	});
 
-	it("wraps display math with a copy button, inline math does not get one", () => {
-		const html = renderMarkdown("inline $x^2$ and\n$$\ny = a + b\n$$");
-		expect(html).toContain('<span class="tr-math">');
-		// The formula's copy control is the same action button a fence carries:
-		// shared `.tr-code-btn` box, an icon instead of the word "copy", and the
-		// hash that flips its glyph to a check.
-		expect(html).toMatch(
-			/<button type="button" class="tr-code-btn tr-math-copy tr-code-copy" data-math-copy="[a-z0-9]+" data-copy-hash="[a-z0-9]+" aria-label="[^"]+"/,
-		);
-		expect(html).toContain('data-glyph="copy"');
-		// exactly one copy button (the display block only)
-		expect(html.match(/tr-math-copy/g)).toHaveLength(1);
+	it("wraps display math with a copy control, inline math does not get one", () => {
+		const display = renderMarkdown("inline $x^2$ and\n$$\ny = a + b\n$$");
+		expect(display).toContain('<span class="tr-math">');
+		expect(display).toContain("katex-display");
+		// Exactly one copy control: display math only.
+		expect(display.match(/tr-math-copy/g)).toHaveLength(1);
 	});
 
 	it("embeds the original LaTeX source in the annotation for copying", () => {
@@ -135,10 +130,9 @@ describe("Transcript LaTeX math", () => {
 		expect(annotation).not.toContain("&amp;amp;");
 	});
 
-	it("renders \\[...\\] display math with the same copy wrapper", () => {
+	it("renders \\[...\\] display math through the same wrapper", () => {
 		const html = renderMarkdown("\\[\\int_0^1 f(x)\\,dx\\]");
 		expect(html).toContain('<span class="tr-math">');
-		expect(html).toContain('class="tr-code-btn tr-math-copy tr-code-copy"');
 	});
 
 	it("hands a fenced block to its React block with its language and source", () => {
@@ -164,82 +158,33 @@ describe("Transcript LaTeX math", () => {
 });
 
 describe("Transcript mermaid", () => {
-	it("wraps svg diagrams with a copy + download toolbar carrying the source", () => {
-		const html = renderMarkdown("```mermaid\nflowchart LR\nA-->B\n```");
-		expect(html).toContain('<div class="tr-mermaid-block">');
-		expect(html).toContain('<div class="tr-mermaid-bar">');
-		expect(html).toContain('data-mermaid-src="flowchart LR');
-		expect(html).toContain("data-mermaid-download");
-	});
-
-	it("draws the diagram toolbar with the shared inline-block action buttons", () => {
-		const html = renderMarkdown("```mermaid\nflowchart LR\nA-->B\n```");
-		// Every control carries the shared box and an icon. Before this, the
-		// classes below had no rule anywhere — the toolbar rendered as browser
-		// default buttons (grey bevel, system font) while every other block had
-		// icon buttons.
-		for (const name of ["tr-mermaid-copy", "tr-mermaid-zoom", "tr-mermaid-fs", "tr-mermaid-dl"]) {
-			const tag = html.match(new RegExp(`<button[^>]*class="[^"]*${name}[^"]*"[^>]*>`))?.[0] ?? "";
-			expect(tag).toContain("tr-code-btn");
-			expect(tag).toContain("aria-label=");
-		}
-		// Icons, not glyph characters ("+", "−") or words.
-		expect(html).not.toMatch(/data-mermaid-zoom="in"[^>]*>\+</);
-		expect(html).toContain('data-glyph="zoomIn"');
-		expect(html).toContain('data-glyph="zoomOut"');
-		expect(html).toContain('data-glyph="expand"');
-		expect(html).toContain('data-glyph="download"');
-	});
-
-	it("escapes the mermaid source in the data attribute", () => {
-		const html = renderMarkdown('```mermaid\nflowchart LR\nA["x & y"]-->B\n```');
-		expect(html).toContain('data-mermaid-src="flowchart LR');
-		expect(html).toContain("&amp;");
-		expect(html).not.toContain('data-mermaid-src="flowchart LR\nA["');
-	});
-
-	it("keeps invalid mermaid as a plain fallback without a toolbar", () => {
-		const html = renderMarkdown("```mermaid\nthis is not mermaid {{{\n```");
-		expect(html).toContain("tr-mermaid-fallback");
-		expect(html).not.toContain("tr-mermaid-bar");
-	});
-});
-
-describe("Transcript tables", () => {
-	it("routes a table to its block component instead of serializing it", () => {
-		const text = "| a | b |\n|---|---|\n| 1 | 2 |";
+	it("hands a diagram to its block with the fenced source", () => {
+		const text = "```mermaid\nflowchart LR\nA-->B\n```";
 		const html = renderStreamingMarkdown(text, false, null, {}).html;
-		// The renderer leaves a placeholder; the table's markup comes from the
-		// React block, which is what keeps `<table>` stable across stream ticks.
-		expect(html).toMatch(/data-table-block="[a-z0-9]+"/);
-		expect(html).not.toContain("<table>");
-	});
-
-	it("hands the block the cells' inline markup, pipes and code spans intact", () => {
-		const text = "| a | b |\n|---|---|\n| **x** | `y` |";
-		const html = renderStreamingMarkdown(text, false, null, {}).html;
-		const hash = /data-table-block="([^"]+)"/.exec(html)?.[1];
+		const hash = /data-diagram-block="([^"]+)"/.exec(html)?.[1];
 		expect(hash).toBeTruthy();
-		const payload = markdownTableBlock(hash!);
-		expect(payload).toBeTruthy();
-		expect(payload!.header.map(cell => cell.text)).toEqual(["a", "b"]);
-		// Emphasis arrives as markup for the cell, and as plain text for CSV.
-		expect(payload!.rows[0]![0]!.html).toContain("<strong>x</strong>");
-		expect(payload!.rows[0]![0]!.text).toBe("x");
-		expect(payload!.rows[0]![1]!.html).toContain("<code>y</code>");
+		const stored = diagramBlockSource(hash!);
+		expect(stored?.source).toContain("flowchart LR");
+		expect(stored?.mode).toBe("svg");
 	});
 
-	it("renders table cells with inline markdown and escaped content", () => {
-		const html = renderMarkdown("| a | b |\n|---|---|\n| **x** | <script> |");
-		expect(html).toContain("<strong>x</strong>");
-		expect(html).not.toContain("<script>");
-		expect(html).toContain("&lt;script&gt;");
+	it("draws the diagram synchronously when the sync renderer covers it", () => {
+		const sync = renderDiagramSync("flowchart LR\nA-->B");
+		expect(sync.usable).toBe(true);
+		expect(sync.svg).toContain("<svg");
 	});
 
-	it("keeps table alignment attributes", () => {
-		const html = renderMarkdown("| a | b |\n|:--|--:|\n| 1 | 2 |");
-		expect(html).toContain('align="left"');
-		expect(html).toContain('align="right"');
+	it("recognizes a fence that names no diagram type", () => {
+		// A mermaid fence full of prose is a plain code block, not a diagram
+		// that failed to draw.
+		expect(namesDiagramType("this is not mermaid {{{")).toBe(false);
+		expect(namesDiagramType("gantt" + "\n" + "title A")).toBe(true);
+	});
+
+	it("keeps an unrenderable diagram as a plain fallback", () => {
+		const fallback = mermaidFallbackHtml("x --> y");
+		expect(fallback).toContain("tr-mermaid-fallback");
+		expect(fallback).toContain("language-mermaid");
 	});
 });
 

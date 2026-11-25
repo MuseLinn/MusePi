@@ -52,7 +52,15 @@ import { useCodeHighlight } from "./highlight-context";
 import { isLocalImageSrc, localImagePath } from "./local-image.js";
 import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
-import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
+import {
+	diagramBlockSource,
+	emitDiagramBlock,
+	mermaidFallbackHtml,
+	mermaidMode,
+	renderDiagramAscii,
+	renderDiagramSync,
+	renderMermaidAsyncHtml,
+} from "./mermaid";
 import { graphemeSpans } from "./reveal";
 import "../../ui-blocks/ui-blocks.css";
 import { useStreamingReveal } from "./use-streaming-reveal";
@@ -236,7 +244,7 @@ const md = new Marked({
 		code({ text, lang, escaped }) {
 			const l = (lang ?? "").trim().toLowerCase();
 			if (l === "mermaid" || l === "mmd") {
-				return renderMermaidHtml(text, mermaidMode());
+				return emitDiagramBlock(text, mermaidMode());
 			}
 			// Declarative UI block: data and structure the reply should show
 			// rather than describe. Rendered from JSON Lines so a fence still
@@ -624,6 +632,31 @@ function TableFragment({
 	);
 }
 
+/** A diagram's block: the stored source plus the renderers it needs. The
+ *  block awaits the async render itself, so no observer watches the DOM for
+ *  placeholders any more. */
+function DiagramFragment({ hash, labels }: { hash: string; labels: MarkdownBlockLabels }): ReactNode {
+	const stored = diagramBlockSource(hash);
+	const Block = markdownBlockDef("diagram")?.Component;
+	if (!stored || !Block) return null;
+	const ascii = stored.mode === "ascii" ? renderDiagramAscii(stored.source) : null;
+	const sync = stored.mode === "ascii" ? { svg: null, usable: false } : renderDiagramSync(stored.source);
+	return (
+		<Block
+			source={stored.source}
+			html={null}
+			hash={hash}
+			streaming={false}
+			labels={labels}
+			diagram={stored.source}
+			svg={ascii ?? sync.svg}
+			usable={ascii !== null || sync.usable}
+			renderAsync={renderMermaidAsyncHtml}
+			fallback={mermaidFallbackHtml}
+		/>
+	);
+}
+
 /** A code fence's block: its source comes from the pipeline's store, its
  *  highlight from the host (the desktop renderer owns tree-sitter). */
 function CodeFragment({
@@ -657,7 +690,8 @@ function CodeFragment({
 export type MessageFragment =
 	| { kind: "html"; html: string }
 	| { kind: "table"; hash: string }
-	| { kind: "code"; hash: string };
+	| { kind: "code"; hash: string }
+	| { kind: "diagram"; hash: string };
 
 /**
  * Split the rendered HTML at the block placeholders the renderer emits.
@@ -669,13 +703,14 @@ export type MessageFragment =
  */
 export function splitTableFragments(html: string): MessageFragment[] {
 	const fragments: MessageFragment[] = [];
-	const pattern = /<div data-(table|code)-block="([^"]+)"><\/div>/g;
+	const pattern = /<div data-(table|code|diagram)-block="([^"]+)"><\/div>/g;
 	let cursor = 0;
 	let match: RegExpExecArray | null = pattern.exec(html);
 	while (match !== null) {
 		if (match.index > cursor) fragments.push({ kind: "html", html: html.slice(cursor, match.index) });
 		const hash = match[2] ?? "";
-		fragments.push(match[1] === "code" ? { kind: "code", hash } : { kind: "table", hash });
+		const kind = match[1] === "code" ? "code" : match[1] === "diagram" ? "diagram" : "table";
+		fragments.push({ kind, hash } as MessageFragment);
 		cursor = match.index + match[0].length;
 		match = pattern.exec(html);
 	}
@@ -1654,9 +1689,6 @@ export const Markdown = memo(function Markdown({
 	// debounced official-mermaid render (streaming blocks keep changing
 	// hash → their placeholder is replaced by the next sync render, and
 	// the stale timer's element is no longer connected).
-	useLayoutEffect(() => {
-		ensureMermaidFallbackObserver();
-	}, []);
 
 	// The copy button's feedback is applied to the rendered DOM (attribute +
 	// morphicon), not by rewriting the markdown HTML — a string swap replaced
@@ -1743,6 +1775,9 @@ export const Markdown = memo(function Markdown({
 			resetWidth: resetWideLabel,
 			widen: widenLabel,
 			wrapLines: t("settings.wrapLines"),
+			zoomIn: t("settings.zoomIn"),
+			zoomOut: t("settings.zoomOut"),
+			renderingDiagram: t("settings.renderingDiagram"),
 		}),
 		[widenLabel, resetWideLabel],
 	);
@@ -1790,13 +1825,15 @@ export const Markdown = memo(function Markdown({
 							labels={blockLabels}
 							quoteText={quoteText}
 						/>
-					) : (
+					) : fragment.kind === "code" ? (
 						<CodeFragment
 							key={`code:${fragment.hash}`}
 							hash={fragment.hash}
 							labels={blockLabels}
 							highlighted={highlightHtml.get(fragment.hash) ?? null}
 						/>
+					) : (
+						<DiagramFragment key={`diagram:${fragment.hash}`} hash={fragment.hash} labels={blockLabels} />
 					),
 				)}
 				{/* Stable streaming-tail container: React never rebuilds this

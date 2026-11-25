@@ -1,6 +1,4 @@
-import { blockGlyph } from "@musepi/client-markdown";
 import { type DiagramColors, renderMermaidASCII, renderMermaidSVG } from "beautiful-mermaid";
-import { t } from "../../i18n/index.js";
 import { escapeHtml } from "./highlight";
 
 export type MermaidMode = "svg" | "ascii";
@@ -59,75 +57,51 @@ export function isUsableSvg(svg: unknown): svg is string {
 	return true;
 }
 
-/**
- * Hover toolbar: copy the mermaid SOURCE (svg mode additionally offers zoom
- * in/out, fullscreen and download of the rendered SVG). Every control is the
- * shared inline-block action button (`tr-code-btn` + an icon), matching the
- * copy button a fence and a table carry. The copy button shares the
- * code-block hash scheme so its glyph flips to a check; the source rides in
- * data-mermaid-src (escaped) and the SVG is serialized from the DOM at
- * download time. Delegated in the Markdown component.
- */
-const mermaidToolbar = (source: string, mode: MermaidMode): string => {
-	const hash = fnv1a(source).toString(36);
-	const copyLabel = escapeHtml(t("settings.copy"));
-	const copyButton =
-		`<button type="button" class="tr-code-btn tr-mermaid-copy tr-code-copy" data-copy-hash="${hash}" data-mermaid-src="${escapeHtml(source)}" aria-label="${copyLabel}" title="${copyLabel}">` +
-		blockGlyph("copy") +
-		`</button>`;
-	if (mode === "ascii") {
-		return `<div class="tr-mermaid-bar">${copyButton}</div>`;
-	}
-	const zoomIn = `<button type="button" class="tr-code-btn tr-mermaid-zoom" data-mermaid-zoom="in" aria-label="${escapeHtml(t("settings.zoomIn"))}" title="${escapeHtml(t("settings.zoomIn"))}">${blockGlyph("zoomIn")}</button>`;
-	const zoomOut = `<button type="button" class="tr-code-btn tr-mermaid-zoom" data-mermaid-zoom="out" aria-label="${escapeHtml(t("settings.zoomOut"))}" title="${escapeHtml(t("settings.zoomOut"))}">${blockGlyph("zoomOut")}</button>`;
-	const fs = `<button type="button" class="tr-code-btn tr-mermaid-fs" data-mermaid-fullscreen aria-label="${escapeHtml(t("settings.fullscreen"))}" title="${escapeHtml(t("settings.fullscreen"))}">${blockGlyph("expand")}</button>`;
-	const downloadLabel = escapeHtml(t("settings.download"));
-	const dl = `<button type="button" class="tr-code-btn tr-mermaid-dl" data-mermaid-download aria-label="${downloadLabel}" title="${downloadLabel}">${blockGlyph("download")}</button>`;
-	return `<div class="tr-mermaid-bar">${copyButton}${zoomIn}${zoomOut}${fs}${dl}</div>`;
-};
+/** Fenced diagram sources by hash (the pipeline's lookup for the block). */
+const diagramBlocks = new Map<string, { source: string; mode: MermaidMode }>();
 
-/**
- * Render a fenced mermaid block to embeddable HTML — SVG via
- * beautiful-mermaid's sync renderer, or the ASCII fallback. When the sync
- * renderer fails or the diagram type is outside its coverage (gantt, pie,
- * timeline, quadrant…), the SVG path emits a placeholder that the Markdown
- * component fills asynchronously with the official mermaid renderer
- * (P1 fallback, debounced — see MERMAID_FALLBACK_DEBOUNCE_MS).
- */
-export function renderMermaidHtml(source: string, mode: MermaidMode): string {
-	const bar = mermaidToolbar(source, mode);
-	if (mode === "ascii") {
-		// colorMode none → plain text (the html/ansi modes embed markup
-		// that would need unescaped injection; we stay text-safe).
-		try {
-			const ascii = renderMermaidASCII(source, { colorMode: "none" });
-			return `<div class="tr-mermaid-block">${bar}<pre class="tr-mermaid-ascii">${escapeHtml(ascii)}</pre></div>`;
-		} catch {
-			// ASCII has no official fallback — degrade to a plain code block.
-			return `<pre class="tr-mermaid-fallback"><code class="language-mermaid">${escapeHtml(source)}</code></pre>`;
-		}
+export function diagramBlockSource(hash: string): { source: string; mode: MermaidMode } | undefined {
+	return diagramBlocks.get(hash);
+}
+
+/** Store a fenced diagram and return its placeholder marker. The block renders
+ *  the SVG and its toolbar, so the marker is all that travels in the string. */
+export function emitDiagramBlock(source: string, mode: MermaidMode): string {
+	const hash = fnv1a(source).toString(36);
+	diagramBlocks.set(hash, { source, mode });
+	while (diagramBlocks.size > 100) {
+		const oldest = diagramBlocks.keys().next().value;
+		if (oldest === undefined) break;
+		diagramBlocks.delete(oldest);
 	}
+	return `<div data-diagram-block="${hash}"></div>`;
+}
+
+/** Whether beautiful-mermaid can draw this source synchronously, and its SVG. */
+export function renderDiagramSync(source: string): { svg: string | null; usable: boolean } {
 	try {
 		const svg = renderMermaidSVG(source, MERMAID_COLORS);
-		if (isUsableSvg(svg)) {
-			return `<div class="tr-mermaid-block">${bar}<div class="tr-mermaid">${svg}</div></div>`;
-		}
+		return { svg, usable: isUsableSvg(svg) };
 	} catch {
-		// fall through to the async placeholder
+		return { svg: null, usable: false };
 	}
-	// A source that names no mermaid diagram type is not a diagram — render
-	// it as a plain code block instead of an async placeholder that would
-	// just fail downstream. (Known types like gantt/pie/timeline still take
-	// the official-mermaid fallback path.)
-	const KNOWN_TYPES =
-		/\b(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|timeline|quadrant|journey|requirementDiagram|gitGraph|mindmap|block-beta|sankey-beta)\b/i;
-	if (!KNOWN_TYPES.test(source)) {
-		return `<pre class="tr-mermaid-fallback"><code class="language-mermaid">${escapeHtml(source)}</code></pre>`;
+}
+
+/** ASCII mode: the text rendering wrapped in a `<pre>`, or null when it fails. */
+export function renderDiagramAscii(source: string): string | null {
+	try {
+		return `<pre class="tr-mermaid-ascii">${escapeHtml(renderMermaidASCII(source, { colorMode: "none" }))}</pre>`;
+	} catch {
+		return null;
 	}
-	// Outside beautiful-mermaid coverage or unparseable → async official
-	// mermaid fallback placeholder (filled by Markdown's effect).
-	const hash = fnv1a(source).toString(36);
-	return `<div class="tr-mermaid-block">${bar}<div class="tr-mermaid-async" data-mermaid-hash="${hash}" data-mermaid-code="${escapeHtml(source)}"><div class="tr-mermaid-loading">${t("settings.renderingDiagram")}…</div></div></div>`;
+}
+
+/** Whether a fence names a diagram type at all. A fence of prose in a
+ *  `mermaid` block is a plain code block, not a diagram that failed to draw. */
+export function namesDiagramType(source: string): boolean {
+	return /\b(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|timeline|quadrant|journey|requirementDiagram|gitGraph|mindmap|block-beta|sankey-beta)\b/i.test(
+		source,
+	);
 }
 
 let mermaidPromise: Promise<typeof import("mermaid")> | null = null;
@@ -183,8 +157,8 @@ export async function renderMermaidAsyncHtml(source: string): Promise<string> {
 	const id = `omp-mermaid-${Date.now()}-${mermaidRenderSeq++}`;
 	const { svg } = await mermaid.render(id, source);
 	if (!isUsableSvg(svg)) throw new Error("mermaid rendered an invalid SVG");
-	const hash = fnv1a(source).toString(36);
-	return `<div class="tr-mermaid-block">${mermaidToolbar(source, "svg")}<div class="tr-mermaid">${svg}</div></div>`;
+	// The SVG alone: the block owns the wrapper and its toolbar.
+	return svg;
 }
 
 /** Wrap a failed fallback render as a plain code block. */

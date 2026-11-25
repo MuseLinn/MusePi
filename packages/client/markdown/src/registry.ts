@@ -14,6 +14,7 @@
 
 import type { ComponentType } from "react";
 import { MarkdownCodeBlock } from "./blocks/code";
+import { MarkdownMermaidBlock } from "./blocks/mermaid";
 import { MarkdownTableBlock } from "./blocks/table";
 
 /** A table's parsed payload. */
@@ -45,10 +46,13 @@ export interface MarkdownBlockLabels {
 	readonly expand: string;
 	readonly lineNumbers: string;
 	readonly moreFormats: string;
+	readonly renderingDiagram: string;
 	readonly quoteRegion: string;
 	readonly resetWidth: string;
 	readonly widen: string;
 	readonly wrapLines: string;
+	readonly zoomIn: string;
+	readonly zoomOut: string;
 }
 
 export interface MarkdownBlockProps {
@@ -66,6 +70,17 @@ export interface MarkdownBlockProps {
 	readonly label?: string;
 	/** Present for `code`: highlighted inner markup, when the host produced it. */
 	readonly highlighted?: string | null;
+	/** Present for `diagram`: the fenced source. */
+	readonly diagram?: string;
+	/** Present for `diagram`: synchronous SVG markup (or an ASCII `<pre>`). */
+	readonly svg?: string | null;
+	/** Present for `diagram`: whether `svg` is a usable diagram. */
+	readonly usable?: boolean;
+	/** Present for `diagram`: the async renderer for diagram types the sync
+	 *  renderer cannot draw. */
+	renderAsync?(source: string): Promise<string>;
+	/** Present for `diagram`: last-resort markup (the source as a fence). */
+	fallback?(source: string): string;
 	/** Content hash, stable while the block's content is unchanged. */
 	readonly hash: string;
 	/** Whether the reply that holds this block is still streaming. */
@@ -94,6 +109,7 @@ export interface MarkdownBlockDef {
 const BUILTIN_BLOCKS: readonly MarkdownBlockDef[] = [
 	{ kind: "table", Component: MarkdownTableBlock },
 	{ kind: "code", Component: MarkdownCodeBlock },
+	{ kind: "diagram", Component: MarkdownMermaidBlock },
 ];
 
 let externalBlocks: MarkdownBlockDef[] = [];

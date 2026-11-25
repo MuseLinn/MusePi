@@ -84,7 +84,7 @@ export { ThemeToggle } from "./components/shell/ThemeToggle";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
 export { Markdown } from "./components/transcript/Markdown";
-export { type MermaidMode, mermaidMode, renderMermaidHtml } from "./components/transcript/mermaid";
+export { type MermaidMode, mermaidMode } from "./components/transcript/mermaid";
 export {
 	BlockUnitCounter,
 	BURST_WINDOW,
