@@ -175,7 +175,7 @@ describe("media providers page", () => {
 			"true",
 		);
 		await act(async () => addKeyButton(openai).click());
-		expect(openai.querySelector("input[type=password]")).not.toBeNull();
+		expect(openai.querySelector("input[type=password]") !== null).toBe(true);
 		expect(openai.textContent).not.toContain(t("settings.login"));
 		// Its own localized line, not the daemon's env-var sentence.
 		expect(openai.textContent).toContain(t("settings.mediaProvider.openai"));
@@ -185,7 +185,7 @@ describe("media providers page", () => {
 	it("offers login for oauth providers and both for xAI", async () => {
 		const scope = await mount();
 		const codex = rowFor(scope, "Codex");
-		expect(codex.querySelector("input[type=password]")).toBeNull();
+		expect(codex.querySelector("input[type=password]") === null).toBe(true);
 		expect(codex.textContent).toContain(t("settings.login"));
 		expect(codex.textContent).not.toContain(t("settings.addApiKey"));
 
@@ -198,7 +198,7 @@ describe("media providers page", () => {
 		const scope = await mount();
 		const agnes = rowFor(scope, "Agnes");
 		expect(agnes.textContent).toContain(t("settings.configured"));
-		expect(agnes.querySelector(".gui-media-remove")).not.toBeNull();
+		expect(agnes.querySelector(".gui-media-remove") !== null).toBe(true);
 
 		const openai = rowFor(scope, "OpenAI");
 		await act(async () => addKeyButton(openai).click());

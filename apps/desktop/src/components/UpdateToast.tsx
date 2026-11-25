@@ -1,4 +1,4 @@
-import { Markdown, t, useLocale } from "@musepi/client-core";
+import { Markdown, t, tLoose, useLocale } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	downloadInstaller,
@@ -11,6 +11,7 @@ import {
 	type UpdaterState,
 } from "../lib/electron";
 import { localizeUpdateNotes } from "../lib/update-notes";
+import { restartHint } from "../lib/update-presentation";
 import {
 	isUpdateInstalling,
 	requestUpdateInstall,
@@ -159,6 +160,8 @@ export function UpdateToast(): ReactNode {
 	const speed = progress?.bytesPerSecond ?? 0;
 	const localizedNotes = notes ? localizeUpdateNotes(notes, locale) : null;
 	const hasNotes = localizedNotes !== null && localizedNotes.trim().length > 0;
+	/** Count of requests still running, for the idle-handoff hint. */
+	const hint = restartHint(state?.restart);
 
 	const close = (skipVersion: boolean): void => {
 		if (skipVersion) {
@@ -275,6 +278,11 @@ export function UpdateToast(): ReactNode {
 					<span>{t("settings.downloadComplete")}</span>
 				</div>
 			)}
+			{/* Idle handoff: the package is ready, the watchdog is waiting for
+			 *  running requests to settle before restarting on its own. */}
+			{downloaded && !installerDone && !installing && hint && hint.key !== "update.installingUpdate" && (
+				<div className="gui-update-toast-hint">{hint.params ? tLoose(hint.key, hint.params) : t(hint.key)}</div>
+			)}
 			{installerDone && <div className="gui-update-toast-hint">{t("settings.installerReadyHint")}</div>}
 			{failed && state?.error && (
 				<div className="gui-update-toast-error" title={state.error.message}>
@@ -310,7 +318,10 @@ export function UpdateToast(): ReactNode {
 								{t("settings.goDownload")}
 							</button>
 						</>
-					) : (
+					) : downloaded ? null : (
+						// Once downloaded, "skip this version" would contradict the
+						// idle handoff (the package restarts on its own) — closing
+						// via × still dismisses the notice.
 						<button type="button" className="gui-btn" onClick={() => close(true)}>
 							{t("settings.skipVersion")}
 						</button>

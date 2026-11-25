@@ -96,6 +96,120 @@ function nextPollDelayMs(consecutiveFailures, opts = {}) {
 	return Math.round(lower + (upper - lower) * Math.min(1, Math.max(0, random())));
 }
 
+/** Idle-gate cadence for the after-download restart (dsh `updateTasks` parity). */
+const UPDATE_IDLE_SAMPLE_MS = 4_000;
+/** Continuous idle samples required before the handoff starts (~8s). */
+const UPDATE_IDLE_SAMPLES = 2;
+/** Consecutive unanswered inspections before auto-restart gives up (~20s). */
+const UPDATE_IDLE_UNKNOWN_LIMIT = 5;
+
+/** Clamp an untrusted daemon count to a non-negative integer. */
+function updateCount(value) {
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+/**
+ * Units of work the banner calls "in flight": busy sessions, background jobs
+ * and approvals waiting on the user. Queued messages belong to a busy session,
+ * so counting them here would double-count the same conversation.
+ * @returns null when the daemon's answer is not a summary (`"unknown"`).
+ */
+function updateInFlightCount(summary) {
+	if (!summary || typeof summary !== "object") return null;
+	return (
+		updateCount(summary.activeSessions) +
+		updateCount(summary.runningJobs) +
+		updateCount(summary.pendingApprovals)
+	);
+}
+
+/**
+ * Stable blocker ids the renderer maps to localized copy. `unknown` means the
+ * daemon did not answer; the caller must wait rather than restart over work it
+ * cannot see.
+ */
+function updateRestartBlockers(summary) {
+	if (!summary || typeof summary !== "object") return ["unknown"];
+	const blockers = [];
+	if (updateCount(summary.activeSessions) > 0) blockers.push("active-sessions");
+	if (updateCount(summary.queuedMessages) > 0) blockers.push("queued-messages");
+	if (updateCount(summary.runningJobs) > 0) blockers.push("running-jobs");
+	if (updateCount(summary.pendingApprovals) > 0) blockers.push("pending-approvals");
+	if (updateCount(summary.armedSchedules) > 0) blockers.push("scheduled-reminders");
+	return blockers;
+}
+
+/**
+ * One idle sample of the after-download watchdog.
+ *
+ * `summary` is the daemon's answer, `"unknown"` when it exists but did not
+ * answer in time, or null when no daemon is running (nothing can be
+ * interrupted, so the sample counts as idle). A restart needs
+ * `requiredSamples` consecutive idle samples so a turn that settles and then
+ * starts again is not mistaken for an idle app.
+ *
+ * @returns {{ action: "wait"|"restart", streak: number, unknownStreak: number,
+ *   inFlight: number|null, blockers: string[], giveUp: boolean }} `giveUp` asks
+ *   the caller to stop the automatic attempt and leave 立即重启 to the user.
+ */
+function idleRestartStep({ summary, streak = 0, unknownStreak = 0, requiredSamples = UPDATE_IDLE_SAMPLES, unknownLimit = UPDATE_IDLE_UNKNOWN_LIMIT } = {}) {
+	if (summary === "unknown") {
+		const unknownNext = unknownStreak + 1;
+		return {
+			action: "wait",
+			streak: 0,
+			unknownStreak: unknownNext,
+			inFlight: null,
+			scheduled: 0,
+			blockers: ["unknown"],
+			giveUp: unknownNext >= unknownLimit,
+		};
+	}
+	if (summary === null) {
+		const next = streak + 1;
+		return {
+			action: next >= requiredSamples ? "restart" : "wait",
+			streak: next,
+			unknownStreak: 0,
+			inFlight: 0,
+			scheduled: 0,
+			blockers: [],
+			giveUp: false,
+		};
+	}
+	const blockers = updateRestartBlockers(summary);
+	if (blockers.length > 0) {
+		return {
+			action: "wait",
+			streak: 0,
+			unknownStreak: 0,
+			inFlight: updateInFlightCount(summary),
+			scheduled: updateCount(summary.armedSchedules),
+			blockers,
+			giveUp: false,
+		};
+	}
+	const next = streak + 1;
+	return {
+		action: next >= requiredSamples ? "restart" : "wait",
+		streak: next,
+		unknownStreak: 0,
+		inFlight: 0,
+		scheduled: 0,
+		blockers: [],
+		giveUp: false,
+	};
+}
+
+/**
+ * Whether a downloaded OTA package may restart on its own. The manual
+ * installer path has nothing to restart into, and a build that cannot OTA
+ * (ad-hoc signed macOS) never has a package to hand off.
+ */
+function shouldAutoRestart({ status, mode, autoRestart, otaCapable } = {}) {
+	return status === "downloaded" && mode === "ota" && autoRestart === true && otaCapable !== false;
+}
+
 const CHANNEL_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.([1-9]\d*))?$/;
 
 function parseChannelVersion(version) {
@@ -188,11 +302,19 @@ module.exports = {
 	UPDATE_POLL_BASE_MS,
 	UPDATE_POLL_MAX_MS,
 	UPDATE_POLL_JITTER,
+	UPDATE_IDLE_SAMPLE_MS,
+	UPDATE_IDLE_SAMPLES,
+	UPDATE_IDLE_UNKNOWN_LIMIT,
 	MISSING_UPDATE_FEED_RE,
 	isNetworkError,
 	isMissingUpdateFeedError,
 	classifyUpdateError,
 	nextPollDelayMs,
+	updateCount,
+	updateInFlightCount,
+	updateRestartBlockers,
+	idleRestartStep,
+	shouldAutoRestart,
 	normalizeUpdateChannel,
 	UPDATE_CHANNELS,
 	releaseChannelForVersion,

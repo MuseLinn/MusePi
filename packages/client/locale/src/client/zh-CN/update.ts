@@ -24,6 +24,16 @@ export const update = {
 	"update.updateLater": "暂不",
 	// quitAndInstall 宽限期内 toast/弹窗的不可点文案（§3.3-3）。
 	"update.installingUpdate": "正在安装更新，安装完成后将自动重启",
+	// 下载完成后的空闲交接：主进程只发计数与稳定原因 id，
+	// 文案归此处。计数是"还要等几个请求"，不是会话总数。
+	"update.restartWaitingWithCount": "{count} 个请求进行中，结束后自动重启完成更新",
+	"update.restartWaiting": "有任务正在进行，结束后自动重启完成更新",
+	"update.restartWaitingUnavailable": "暂时无法确认运行状态，恢复后自动重启",
+	"update.restartImminent": "请求已结束，正在重启完成更新…",
+	"update.restartBlockedScheduled": "{count} 个定时任务待触发，已暂停自动重启",
+	"update.restartBlockedBusy": "有会话刚刚开始运行，已暂停自动重启",
+	"update.restartBlockedUnavailable": "无法确认运行状态，已暂停自动重启",
+	"update.restartBlockedFailed": "上次重启未完成，可稍后重试",
 	// 下载末段相位文案（§3.3-1 阶梯语义）。
 	"update.preparingUpdate": "正在准备更新…",
 	"update.verifyingUpdate": "正在校验安装包…",

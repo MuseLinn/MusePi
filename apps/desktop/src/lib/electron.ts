@@ -38,6 +38,8 @@ export interface ElectronAPI {
 	checkUpdates(): Promise<UpdateCheckResult | null>;
 	/** Mirror of the `update.channel` setting; resolves the channel in effect. */
 	setUpdateChannel?(channel: UpdateChannel): Promise<{ channel: UpdateChannel }>;
+	/** Mirror of the `update.autoRestart` setting (idle handoff policy). */
+	setUpdateAutoRestart?(enabled: boolean): Promise<{ autoRestart: boolean }>;
 	/** Current updater state (idle/checking/preparing/downloading/downloaded/error). */
 	getUpdateState(): Promise<UpdaterState | null>;
 	/** Download the detected update (progress via onUpdateState). */
@@ -106,6 +108,32 @@ export interface UpdateErrorInfo {
 	technicalDetails?: string;
 }
 
+/** Why the idle restart is holding (work kinds) or refused (handoff failures). */
+type UpdateRestartBlocker =
+	| "active-sessions"
+	| "queued-messages"
+	| "running-jobs"
+	| "pending-approvals"
+	| "scheduled-reminders"
+	| "unknown"
+	| "busy"
+	| "tasks-unavailable"
+	| "tasks-changed"
+	| "stop-failed"
+	| "handoff-failed";
+
+/** Idle-restart progress for a downloaded package (main-process watchdog). */
+export interface UpdateRestartProgress {
+	/** An idle watchdog is armed and hands off on its own. */
+	auto: boolean;
+	status: "idle" | "waiting" | "installing" | "blocked";
+	/** Sessions, background jobs and approvals still running. */
+	inFlight: number;
+	/** Armed scheduled reminders the restart would drop. */
+	scheduled?: number;
+	blockers: UpdateRestartBlocker[];
+}
+
 /** Live updater state (main process electron-updater → renderer contract).
  *  `preparing` covers the click → first-byte gap (feed resolve + TTFB) where
  *  electron-updater emits no download-progress yet; `available` is an
@@ -121,6 +149,8 @@ export interface UpdaterState {
 	error?: UpdateErrorInfo | null;
 	/** Absolute path of a downloaded manual installer (mode "installer"). */
 	installerPath?: string | null;
+	/** Idle handoff progress; absent on shells that predate the watchdog. */
+	restart?: UpdateRestartProgress;
 }
 
 /** An app the current folder can be opened with (openchamber open-in). */
@@ -395,6 +425,21 @@ export async function setUpdateChannel(channel: UpdateChannel): Promise<UpdateCh
 		return result?.channel === "beta" ? "beta" : "stable";
 	} catch {
 		return channel;
+	}
+}
+
+/**
+ * Mirror the daemon-side `update.autoRestart` setting into the shell's idle
+ * watchdog. A downloaded package arms or disarms immediately.
+ */
+export async function setUpdateAutoRestart(enabled: boolean): Promise<boolean> {
+	if (!isElectron()) return enabled;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		const result = await electronAPI.setUpdateAutoRestart?.(enabled === true);
+		return result?.autoRestart === true;
+	} catch {
+		return enabled;
 	}
 }
 

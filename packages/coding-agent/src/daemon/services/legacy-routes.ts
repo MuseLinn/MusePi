@@ -147,6 +147,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"system.prewarmStatus",
 	"system.setAutostart",
 	"system.shutdown",
+	"system.updateTasks",
 	"tool_execution_end",
 	"tool_execution_start",
 	"tool_execution_update",

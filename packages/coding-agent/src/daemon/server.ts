@@ -429,6 +429,8 @@ import {
 } from "./session-host";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { createTerminalCorePlugin } from "./terminal-core-plugin";
+import { UpdateAdmissionLock } from "./update-admission";
+import { summarizeUpdateTasks } from "./update-tasks";
 import type { WebRouteRegistry } from "./web-routes";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
 
@@ -561,6 +563,22 @@ export class DaemonServer {
 
 	setShutdownHook(fn: () => Promise<void>): void {
 		this.#onShutdown = fn;
+	}
+
+	/** Update handoff admission lock: refuses new work while the shell hands the
+	 *  process to the installer. */
+	readonly #updateAdmission = new UpdateAdmissionLock();
+
+	/** Live work counts, shared by quit inspection and the update handoff. */
+	#updateTaskSummary() {
+		const sessions = [...this.#host.allSessions()].map(live => ({
+			busy: isLiveSessionBusy(live),
+			queuedMessages: live.agentSession.queuedMessageCount,
+			runningJobs: live.agentSession.getAsyncJobSnapshot({ recentLimit: 0 })?.running.length ?? 0,
+			pendingApprovals: live.approvals.pending.size,
+			armedSchedules: live.agentSession.extensionRunner?.hasArmedSchedules() ? 1 : 0,
+		}));
+		return summarizeUpdateTasks(sessions, AsyncJobManager.instance()?.runningCount() ?? 0);
 	}
 	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
 	readonly #services = new HostServices();
@@ -2168,18 +2186,21 @@ export class DaemonServer {
 			}
 			case "system.quitInspection": {
 				// dsh's desktop `quit-inspection`: answer at quit time so a turn
-				// that started after the shell's last poll still counts. Running
-				// agents (generating/compacting/tool calls), queued messages,
-				// running background jobs, and armed session reminders.
-				const { inspectQuit } = await import("./quit-inspection");
-				const { AsyncJobManager } = await import("../async/job-manager");
-				const sessions = [...this.#host.allSessions()].map(live => ({
-					busy: isLiveSessionBusy(live),
-					queuedMessages: live.agentSession.queuedMessageCount,
-					runningJobs: live.agentSession.getAsyncJobSnapshot({ recentLimit: 0 })?.running.length ?? 0,
-					armedSchedules: live.agentSession.extensionRunner?.hasArmedSchedules() ? 1 : 0,
-				}));
-				return inspectQuit(sessions, AsyncJobManager.instance()?.runningCount() ?? 0);
+				// that started after the shell's last poll still counts.
+				const summary = this.#updateTaskSummary();
+				return { activeTasks: summary.activeTasks, scheduledTasks: summary.scheduledTasks };
+			}
+			case "system.updateTasks": {
+				// Update handoff: `inspect` counts live work,
+				// `lock` additionally refuses new work for the window in which the
+				// shell stops this daemon and hands the process to the installer.
+				// The answer is the post-lock summary, so the caller can detect
+				// work that appeared between its idle check and the lock.
+				const p = (params ?? {}) as { mode?: unknown };
+				const mode = p.mode === "lock" || p.mode === "unlock" ? p.mode : "inspect";
+				if (mode === "lock") this.#updateAdmission.engage();
+				else if (mode === "unlock") this.#updateAdmission.release();
+				return { locked: this.#updateAdmission.engaged, ...this.#updateTaskSummary() };
 			}
 			case "system.shutdown": {
 				// Cooperative shutdown, requested by the desktop shell before it
@@ -3940,6 +3961,10 @@ export class DaemonServer {
 					clientId?: string;
 					clientRequestId?: string;
 				};
+				// Update handoff: refuse new work for the window in which the
+				// shell stops this daemon. The client keeps the message and
+				// retries after the relaunch.
+				this.#updateAdmission.assertAdmitted();
 				// Reactivate history sessions on send so continuing an old
 				// conversation works (the GUI opens them snapshot-only via
 				// session.resume; activation makes them live again).

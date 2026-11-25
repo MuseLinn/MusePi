@@ -983,6 +983,18 @@ export const settings: TranslationMap = {
 	"MuseMem Global Scope": "MuseMem Global Scope",
 	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
 		"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
+	"Bash secret injection": "Bash secret injection",
+	"Every saved secret, or only the ones the command names": "Every saved secret, or only the ones the command names",
+	"Every saved secret": "Every saved secret",
+	"Compatible with scripts that read the variables themselves":
+		"Compatible with scripts that read the variables themselves",
+	"Only named secrets": "Only named secrets",
+	"Inject only $MUSEPI_SECRET_<NAME> names present in the command":
+		"Inject only $MUSEPI_SECRET_<NAME> names present in the command",
+	"Relay a share connects through (wss://host[:port]). Empty by default: this build ships no relay. Point it at a self-hosted relay, a LAN address, or a tunnel origin you control":
+		"Relay a share connects through (wss://host[:port]). Empty by default: this build ships no relay. Point it at a self-hosted relay, a LAN address, or a tunnel origin you control",
+	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>). Empty by default: this build ships no share server, so set your own or use the gist store":
+		"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>). Empty by default: this build ships no share server, so set your own or use the gist store",
 	"settings.memory.general.model": "Memory Model",
 	"settings.memory.hindsight.apiToken": "Hindsight API Token",
 	"settings.memory.hindsight.apiUrl": "Hindsight API URL",
@@ -992,6 +1004,17 @@ export const settings: TranslationMap = {
 	"settings.memory.hindsight.mentalModelAuto": "Hindsight Mental Model Auto-Seed",
 	"settings.memory.hindsight.mentalModels": "Hindsight Mental Models",
 	"settings.memory.hindsight.retainMode": "Hindsight Retain Mode",
+	"settings.memory.idleEnqueue.title": "Idle Maintenance Queue",
+	"settings.memory.idleEnqueue.desc":
+		"After this much idle time, queue one consolidation of the active memory backend so it runs before your next request instead of during it.",
+	"settings.memory.idleEnqueueMinutes.title": "Idle Before Queueing",
+	"settings.memory.idleEnqueueMinutes.desc": "How long the session sits idle before a consolidation is queued.",
+	"settings.memory.idleEnqueueMinutes.option.15m": "15 minutes",
+	"settings.memory.idleEnqueueMinutes.option.30m": "30 minutes",
+	"settings.memory.idleEnqueueMinutes.option.1h": "1 hour",
+	"settings.memory.idleEnqueueMinutes.option.3h": "3 hours",
+	"settings.memory.idleEnqueueMinutes.option.12h": "12 hours",
+	"settings.memory.idleEnqueueMinutes.option.24h": "24 hours",
 	"settings.memory.mnemopi.autoRecall": "Mnemopi Auto Recall",
 	"settings.memory.mnemopi.autoRetain": "Mnemopi Auto Retain",
 	"settings.memory.mnemopi.bank": "Mnemopi Bank",

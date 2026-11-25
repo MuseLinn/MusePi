@@ -121,6 +121,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	checkUpdates: () => ipcRenderer.invoke("updater-check"),
 	/** OTA: follow the stable or beta channel (mirror of `update.channel`). */
 	setUpdateChannel: channel => ipcRenderer.invoke("updater-set-channel", channel),
+	/** OTA: restart automatically once live work settles (mirror of `update.autoRestart`). */
+	setUpdateAutoRestart: enabled => ipcRenderer.invoke("updater-set-auto-restart", enabled),
 	/** OTA: current updater state (idle/checking/preparing/downloading/downloaded/error). */
 	getUpdateState: () => ipcRenderer.invoke("updater-state"),
 	/** OTA: download the detected update (progress via onUpdateState). */

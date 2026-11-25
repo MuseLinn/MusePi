@@ -8,6 +8,16 @@ export const settings = {
 	"MuseMem Global Scope": "MuseMem 全局作用域",
 	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
 		"允许 learn 使用 scope: global，使每个项目都能读取这条经验。关闭后所有经验只留在项目内。",
+	"Bash secret injection": "Bash 密钥注入",
+	"Every saved secret, or only the ones the command names": "注入所有已保存密钥，或只注入命令点名的那些",
+	"Every saved secret": "所有已保存密钥",
+	"Compatible with scripts that read the variables themselves": "适用于自己读取这些变量的脚本",
+	"Only named secrets": "只注入点名的密钥",
+	"Inject only $MUSEPI_SECRET_<NAME> names present in the command": "只注入命令里出现的 $MUSEPI_SECRET_<NAME>",
+	"Relay a share connects through (wss://host[:port]). Empty by default: this build ships no relay. Point it at a self-hosted relay, a LAN address, or a tunnel origin you control":
+		"分享连接所用的中继（wss://host[:port]）。默认为空：本构建不附带中继。可以指向自建中继、局域网地址，或你自己控制的隧道域名",
+	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>). Empty by default: this build ships no share server, so set your own or use the gist store":
+		"/share 使用的查看与上传地址（加密 blob 上传 + 查看页；链接形如 <base>/<id>#<key>）。默认为空：本构建不附带分享服务器，请填自己的地址或使用 gist 存储",
 	"settings.offLocalSummary.info": "关闭、本地摘要管线、Mnemopi SQLite 或 Hindsight 远程记忆",
 	"settings.general": "常规",
 	"settings.noMemorySubsystemRuns": "不运行任何记忆子系统",
@@ -3829,6 +3839,9 @@ export const settings = {
 	"Unexpected Stops": "意外中止",
 	Unicode: "Unicode 字符",
 	"Update Channel": "更新通道",
+	"Restart When Idle After Downloading": "下载完成后空闲时自动重启",
+	"Restart the desktop app to finish an update once no session, background job or approval is running":
+		"没有会话、后台任务或待处理审批时，重启桌面应用完成更新",
 	"Update channel followed by the desktop app, musepi update and the startup update check":
 		"桌面端、musepi update 与启动时更新检查共同遵循的更新通道",
 	Beta: "测试版",
@@ -7144,6 +7157,17 @@ export const settings = {
 	"settings.memoryStatusEmpty": "此外端没有可显示的统计。",
 	"settings.memoryWorkspaceEmptyHint": "本地摘要流水线尚未写入记忆文件。",
 	"settings.memory.group.maintenance": "记忆维护",
+	"settings.memory.idleEnqueue.title": "空闲时整理记忆",
+	"settings.memory.idleEnqueue.desc":
+		"会话安静一段时间后，在后台把陈旧的短期记忆折叠成长期摘要。哪些算「旧」由记忆后端自己的时间线决定；没有可整合的内容时不做任何事。",
+	"settings.memory.idleEnqueueMinutes.title": "空闲整理延迟",
+	"settings.memory.idleEnqueueMinutes.desc": "会话安静多久之后开始整理。",
+	"settings.memory.idleEnqueueMinutes.option.15m": "15 分钟",
+	"settings.memory.idleEnqueueMinutes.option.30m": "30 分钟",
+	"settings.memory.idleEnqueueMinutes.option.1h": "1 小时",
+	"settings.memory.idleEnqueueMinutes.option.3h": "3 小时",
+	"settings.memory.idleEnqueueMinutes.option.12h": "12 小时",
+	"settings.memory.idleEnqueueMinutes.option.24h": "24 小时",
 	"settings.memoryBackends": "后端",
 	"settings.memoryStatusDescription": "实时后端状态与维护操作。",
 	"settings.secrets": "保险库",

@@ -22,6 +22,16 @@ export const update = {
 	"update.updateLater": "Later",
 	// quitAndInstall 宽限期内 toast/弹窗的不可点文案（§3.3-3）。
 	"update.installingUpdate": "Installing the update — the app will restart automatically when done",
+	// Idle handoff after the download: the main process ships counts and stable
+	// reason ids only; wording lives here.
+	"update.restartWaitingWithCount": "{count} request(s) still running — restarting when they complete",
+	"update.restartWaiting": "Work is still running — restarting when it completes",
+	"update.restartWaitingUnavailable": "Temporarily unable to confirm the app is idle — restarting once it can",
+	"update.restartImminent": "No work left — restarting to finish the update…",
+	"update.restartBlockedScheduled": "{count} scheduled reminder(s) armed — automatic restart paused",
+	"update.restartBlockedBusy": "A session started running again — automatic restart paused",
+	"update.restartBlockedUnavailable": "Could not confirm the app is idle — automatic restart paused",
+	"update.restartBlockedFailed": "The last restart did not complete — try again",
 	// 下载末段相位文案（§3.3-1 阶梯语义）。
 	"update.preparingUpdate": "Preparing update…",
 	"update.verifyingUpdate": "Verifying package…",

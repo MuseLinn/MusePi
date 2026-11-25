@@ -45,14 +45,18 @@ const {
 	checkForUpdates,
 	downloadUpdate,
 	downloadInstaller,
+	installUpdate,
 	quitAndInstall,
 	fetchManifestNotes,
 	wireRenderer,
+	wireRestartHandoff,
 	otaCapable,
 	setChannel: setUpdateChannel,
+	setAutoRestart: setUpdateAutoRestart,
+	snapshot: updaterSnapshot,
 	log: logUpdater,
-	state: updaterState,
 } = require("./updater.cjs");
+const { createRestartHandoff } = require("./update-restart.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
 const { createLidPower } = require("./lid-power.cjs");
 // Lid-closed sleep prevention lives here, not in the daemon: the macOS
@@ -1941,6 +1945,57 @@ async function inspectQuitTasks() {
 }
 
 /**
+ * Ask the daemon what an update handoff would interrupt (dsh `updateTasks`
+ * parity). Same answer shape as quit inspection plus per-kind counts, so the
+ * banner can say how many requests are still running. `null` = no daemon, so
+ * nothing can be interrupted; `"unknown"` = a daemon is there but did not
+ * answer in time and is never treated as idle.
+ */
+async function inspectUpdateTasks() {
+	if (trayWs && trayWs.readyState === 1 /* OPEN */) {
+		const result = await trayRequest("system.updateTasks", { mode: "inspect" }, 1500);
+		return result !== null && typeof result === "object" ? result : "unknown";
+	}
+	const port = probe();
+	if (port && (await portOpen(port))) return "unknown";
+	return null;
+}
+
+/** Lock daemon admission for the handoff; null when the daemon did not answer. */
+function lockUpdateAdmission() {
+	return trayRequest("system.updateTasks", { mode: "lock" }, 3000);
+}
+
+/** Release admission after a failed handoff. */
+function unlockUpdateAdmission() {
+	return trayRequest("system.updateTasks", { mode: "unlock" }, 1500);
+}
+
+/**
+ * Stop the owned daemon before the installer replaces this build, and mark the
+ * quit as handled so `before-quit` does not run the quit-inspection dialog
+ * again — electron-updater registers its install action on `quit`, and
+ * swallowing that quit would race the handoff.
+ */
+async function stopOwnedDaemonForUpdate() {
+	try {
+		const { killOwnedDaemon, kill, probe: probeDaemon } = require("./daemon.cjs");
+		if (killOwnedDaemon) {
+			await killOwnedDaemon().catch(() => {});
+		} else {
+			const port = probeDaemon();
+			if (port) await kill(port);
+		}
+	} catch (err) {
+		// A daemon that refused to stop must not strand the install: the
+		// installer owns the restart from here.
+		console.error("[updater] daemon kill failed:", err?.message ?? err);
+	}
+	daemonQuitHandled = true;
+	return true;
+}
+
+/**
  * Tray "always allow": persist `tools.approval.<tool> = "allow"` so the next
  * call of the same tool skips the prompt. The approval wrapper reads the
  * record live on every call (`wrapper.ts` `settings.get("tools.approval")`),
@@ -3562,11 +3617,29 @@ ipcMain.handle("notification-show", (_event, { title, body, silent }) => {
 	}
 });
 
+// ── Update handoff wiring ─────────────────────────────────────────────────
+// The idle watchdog decides *when* to restart (updater.cjs); this supplies the
+// two capabilities the shell owns — daemon inspection/admission and the
+// owned-daemon stop — plus the installer handoff.
+wireRestartHandoff(
+	createRestartHandoff({
+		log: logUpdater,
+		inspectTasks: inspectUpdateTasks,
+		lockTasks: lockUpdateAdmission,
+		unlockTasks: unlockUpdateAdmission,
+		stopDaemon: stopOwnedDaemonForUpdate,
+		handoff: () => quitAndInstall(),
+	}),
+);
+
 // ── IPC: OTA update check (manifest-driven) ───────────────────────────────
 
 ipcMain.handle("updater-check", () => checkForUpdates());
 ipcMain.handle("updater-set-channel", (_event, channel) => setUpdateChannel(channel));
-ipcMain.handle("updater-state", () => ({ ...updaterState }));
+/** Idle-restart policy (main-process owned: the watchdog must decide without
+ *  a daemon round-trip). Persisted beside the channel. */
+ipcMain.handle("updater-set-auto-restart", (_event, enabled) => setUpdateAutoRestart(enabled === true));
+ipcMain.handle("updater-state", () => updaterSnapshot());
 ipcMain.handle("updater-download", () => downloadUpdate());
 ipcMain.handle("updater-notes", () => fetchManifestNotes());
 /** Manual install fallback: download the release installer (dmg/exe) to
@@ -3587,40 +3660,12 @@ ipcMain.handle("updater-flash-frame", () => {
 		}
 	}
 });
-ipcMain.handle("updater-install", async () => {
-	// Kill the daemon sidecar BEFORE quitting so the installed app can
-	// start its own fresh daemon (openchamber killSidecar parity). The
-	// daemon holds the ws.port / journal; a live one would be orphaned.
-	// killOwnedDaemon also clears the client.pid marker and flags the
-	// before-quit handler as already-handled, so the pending quit from
-	// quitAndInstall() below is NOT held up by a preventDefault/second-quit
-	// cycle — electron-updater registers its install action on `quit`, and
-	// swallowing the first quit risks racing that handoff.
-	try {
-		const { killOwnedDaemon, kill, probe } = require("./daemon.cjs");
-		if (killOwnedDaemon) {
-			await killOwnedDaemon().catch(() => {});
-		} else {
-			const port = probe();
-			if (port) await kill(port);
-		}
-		daemonQuitHandled = true;
-	} catch (err) {
-		console.error("[updater] daemon kill failed:", err?.message ?? err);
-	}
-	// quitAndInstall resolves once the app is shutting down (install
-	// underway) or REJECTS if the installer reports a failure (rejected
-	// signature, disabled Squirrel session) — the rejection arrives while
-	// the app is still alive, so surface it to the renderer for a retry
-	// prompt instead of the install dying silently in the log.
-	try {
-		await quitAndInstall();
-		return { ok: true };
-	} catch (err) {
-		console.error("[updater] install failed:", err?.message ?? err);
-		return { ok: false, error: err instanceof Error ? err.message : String(err) };
-	}
-});
+/**
+ * Manual install entry (立即重启). The actual handoff — admission lock, owned
+ * daemon stop, installer handoff — lives in update-restart.cjs, shared with
+ * the idle watchdog.
+ */
+ipcMain.handle("updater-install", () => installUpdate("manual"));
 // OTA/发布一致性:renderer 拿 GUI 版本,与 daemon 的 system.meta
 // musepiVersion 比对 —— 不一致说明运行中的 daemon 是旧进程,走
 // daemon-restart 刷新(见 app.tsx boot)。

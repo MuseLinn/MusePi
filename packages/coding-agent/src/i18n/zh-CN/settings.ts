@@ -947,6 +947,16 @@ export const settings = {
 	"MuseMem Global Scope": "MuseMem 全局作用域",
 	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
 		"允许 learn 使用 scope: global，使每个项目都能读取这条经验。关闭后所有经验只留在项目内。",
+	"Bash secret injection": "Bash 密钥注入",
+	"Every saved secret, or only the ones the command names": "注入所有已保存密钥，或只注入命令点名的那些",
+	"Every saved secret": "所有已保存密钥",
+	"Compatible with scripts that read the variables themselves": "适用于自己读取这些变量的脚本",
+	"Only named secrets": "只注入点名的密钥",
+	"Inject only $MUSEPI_SECRET_<NAME> names present in the command": "只注入命令里出现的 $MUSEPI_SECRET_<NAME>",
+	"Relay a share connects through (wss://host[:port]). Empty by default: this build ships no relay. Point it at a self-hosted relay, a LAN address, or a tunnel origin you control":
+		"分享连接所用的中继（wss://host[:port]）。默认为空：本构建不附带中继。可以指向自建中继、局域网地址，或你自己控制的隧道域名",
+	"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>). Empty by default: this build ships no share server, so set your own or use the gist store":
+		"/share 使用的查看与上传地址（加密 blob 上传 + 查看页；链接形如 <base>/<id>#<key>）。默认为空：本构建不附带分享服务器，请填自己的地址或使用 gist 存储",
 	"settings.memory.general.model": "记忆模型",
 	"settings.noMemorySubsystemRuns": "无记忆子系统运行",
 	"settings.memory.mnemopi.bank": "Mnemopi 库",
@@ -1074,6 +1084,17 @@ export const settings = {
 	"settings.memory.hindsight.mentalModels": "Hindsight 心智模型",
 	"settings.memory.hindsight.mentalModelAuto": "Hindsight 心智模型自动种子",
 	"settings.memory.hindsight.retainMode": "Hindsight 保留模式",
+	"settings.memory.idleEnqueue.title": "空闲维护排队",
+	"settings.memory.idleEnqueue.desc":
+		"空闲这么久之后，排队一次当前记忆后端的合并，让它在你的下一条请求之前完成，而不是在请求中间。",
+	"settings.memory.idleEnqueueMinutes.title": "排队前的空闲时长",
+	"settings.memory.idleEnqueueMinutes.desc": "会话空闲多久之后排入一次合并。",
+	"settings.memory.idleEnqueueMinutes.option.15m": "15 分钟",
+	"settings.memory.idleEnqueueMinutes.option.30m": "30 分钟",
+	"settings.memory.idleEnqueueMinutes.option.1h": "1 小时",
+	"settings.memory.idleEnqueueMinutes.option.3h": "3 小时",
+	"settings.memory.idleEnqueueMinutes.option.12h": "12 小时",
+	"settings.memory.idleEnqueueMinutes.option.24h": "24 小时",
 	"settings.hindsightScoping": "Hindsight 范围",
 	"settings.messagesBeforeRuleCan": "规则可再次触发前的消息数",
 	"settings.linesContextBeforeEach": "每个 grep 匹配前的上下文行数",
@@ -2079,6 +2100,9 @@ export const settings = {
 	"Typo Detection (macOS)": "拼写检查（macOS）",
 	"Unexpected Stops": "意外中止",
 	"Update Channel": "更新通道",
+	"Restart When Idle After Downloading": "下载完成后空闲时自动重启",
+	"Restart the desktop app to finish an update once no session, background job or approval is running":
+		"没有会话、后台任务或待处理审批时，重启桌面应用完成更新",
 	"Update channel followed by the desktop app, musepi update and the startup update check":
 		"桌面端、musepi update 与启动时更新检查共同遵循的更新通道",
 	Beta: "测试版",

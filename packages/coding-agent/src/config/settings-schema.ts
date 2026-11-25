@@ -2408,6 +2408,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"update.autoRestart": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "interaction",
+			group: "Startup & Updates",
+			label: "Restart When Idle After Downloading",
+			description:
+				"Restart the desktop app to finish an update once no session, background job or approval is running",
+		},
+	},
+
 	"marketplace.autoUpdate": {
 		type: "enum",
 		values: ["off", "notify", "auto"] as const,

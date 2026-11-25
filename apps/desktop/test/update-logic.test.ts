@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 // types — same convention as the daemon.cjs test imports.
 import {
 	classifyUpdateError,
+	idleRestartStep,
 	isMissingUpdateFeedError,
 	isNetworkError,
 	isNewerVersion,
@@ -10,11 +11,17 @@ import {
 	normalizeUpdateChannel,
 	releaseChannelForVersion,
 	releaseDownloadUrl,
+	shouldAutoRestart,
+	UPDATE_IDLE_SAMPLE_MS,
+	UPDATE_IDLE_SAMPLES,
+	UPDATE_IDLE_UNKNOWN_LIMIT,
 	UPDATE_POLL_BASE_MS,
 	UPDATE_POLL_JITTER,
 	UPDATE_POLL_MAX_MS,
 	updateFeedForVersion,
+	updateInFlightCount,
 	updateManifestUrlForVersion,
+	updateRestartBlockers,
 	// @ts-expect-error — untyped CJS module (electron/, outside tsconfig include)
 } from "../electron/update-logic.cjs";
 
@@ -223,5 +230,113 @@ describe("nextPollDelayMs", () => {
 
 	test("rejects negative garbage failure counts back to the base interval", () => {
 		expect(nextPollDelayMs(-3, { random: () => 0.5 })).toBe(BASE);
+	});
+});
+
+/**
+ * After-download idle restart (dsh `updateTasks` parity):
+ *
+ *  - a single idle sample must not restart the app — a turn that settles and
+ *    then starts again would be interrupted;
+ *  - an unanswering daemon must never be read as idle;
+ *  - armed reminders block the automatic path (they would be dropped);
+ *  - the manual installer path has nothing to restart into.
+ */
+describe("updateInFlightCount", () => {
+	test("counts sessions, jobs and approvals as units of work", () => {
+		expect(updateInFlightCount({ activeSessions: 1, runningJobs: 2, pendingApprovals: 1 })).toBe(4);
+	});
+
+	test("does not double-count queued messages behind a busy session", () => {
+		expect(updateInFlightCount({ activeSessions: 1, queuedMessages: 3 })).toBe(1);
+	});
+
+	test("answers null when the daemon did not report a summary", () => {
+		expect(updateInFlightCount("unknown")).toBeNull();
+		expect(updateInFlightCount(null)).toBeNull();
+	});
+});
+
+describe("updateRestartBlockers", () => {
+	test("names every kind of work with a stable id", () => {
+		expect(
+			updateRestartBlockers({
+				activeSessions: 1,
+				queuedMessages: 1,
+				runningJobs: 1,
+				pendingApprovals: 1,
+				armedSchedules: 1,
+			}),
+		).toEqual(["active-sessions", "queued-messages", "running-jobs", "pending-approvals", "scheduled-reminders"]);
+	});
+
+	test("is empty for an idle daemon", () => {
+		expect(updateRestartBlockers({ activeSessions: 0, armedSchedules: 0 })).toEqual([]);
+	});
+
+	test("keeps an unanswered daemon unknown instead of idle", () => {
+		expect(updateRestartBlockers("unknown")).toEqual(["unknown"]);
+	});
+});
+
+describe("idleRestartStep", () => {
+	test("waits one sample before restarting an idle app", () => {
+		const first = idleRestartStep({ summary: { activeSessions: 0 } });
+		expect(first).toMatchObject({ action: "wait", streak: 1, inFlight: 0, blockers: [] });
+		expect(idleRestartStep({ summary: { activeSessions: 0 }, streak: first.streak }).action).toBe("restart");
+	});
+
+	test("resets the streak when work appears between samples", () => {
+		const step = idleRestartStep({ summary: { activeSessions: 1 }, streak: 1 });
+		expect(step).toMatchObject({ action: "wait", streak: 0, inFlight: 1, blockers: ["active-sessions"] });
+	});
+
+	test("treats a missing daemon as idle (nothing left to interrupt)", () => {
+		const first = idleRestartStep({ summary: null });
+		expect(first).toMatchObject({ action: "wait", streak: 1 });
+		expect(idleRestartStep({ summary: null, streak: first.streak }).action).toBe("restart");
+	});
+
+	test("never restarts over an unanswering daemon and gives up after the limit", () => {
+		let unknownStreak = 0;
+		for (let i = 0; i < UPDATE_IDLE_UNKNOWN_LIMIT; i++) {
+			const step = idleRestartStep({ summary: "unknown", unknownStreak });
+			expect(step.action).toBe("wait");
+			expect(step.blockers).toEqual(["unknown"]);
+			unknownStreak = step.unknownStreak;
+		}
+		expect(idleRestartStep({ summary: "unknown", unknownStreak }).giveUp).toBe(true);
+	});
+
+	test("an armed reminder blocks the automatic restart", () => {
+		const step = idleRestartStep({ summary: { armedSchedules: 1 }, streak: 1 });
+		expect(step).toMatchObject({ action: "wait", streak: 0, blockers: ["scheduled-reminders"] });
+	});
+
+	test("honours a caller's sample requirement", () => {
+		expect(idleRestartStep({ summary: { activeSessions: 0 }, requiredSamples: 1 }).action).toBe("restart");
+	});
+
+	test("samples often enough to stay inside a short handoff", () => {
+		expect(UPDATE_IDLE_SAMPLE_MS).toBeLessThanOrEqual(5_000);
+		expect(UPDATE_IDLE_SAMPLES).toBeGreaterThanOrEqual(2);
+	});
+});
+
+describe("shouldAutoRestart", () => {
+	const downloaded = { status: "downloaded", mode: "ota", autoRestart: true, otaCapable: true };
+
+	test("arms only for a downloaded OTA package with the setting on", () => {
+		expect(shouldAutoRestart(downloaded)).toBe(true);
+	});
+
+	test("never arms while downloading, for the manual installer, or when OTA cannot install", () => {
+		expect(shouldAutoRestart({ ...downloaded, status: "downloading" })).toBe(false);
+		expect(shouldAutoRestart({ ...downloaded, mode: "installer" })).toBe(false);
+		expect(shouldAutoRestart({ ...downloaded, otaCapable: false })).toBe(false);
+	});
+
+	test("respects the setting being off", () => {
+		expect(shouldAutoRestart({ ...downloaded, autoRestart: false })).toBe(false);
 	});
 });

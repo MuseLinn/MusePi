@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-	DEFAULT_RELAY_URL,
 	encodeBase64Url,
 	formatCollabLink,
 	generateRoomId,
@@ -117,9 +116,9 @@ describe("collab link parsing", () => {
 	});
 
 	it("parses dot-joined web deep links (https://<relay>/#<roomId>.<key>)", () => {
-		const parsed = parseCollabLink(`https://my.omp.sh/#${ROOM}.${KEY_TEXT}`);
+		const parsed = parseCollabLink(`https://relay.example.com/#${ROOM}.${KEY_TEXT}`);
 		if ("error" in parsed) throw new Error(parsed.error);
-		expect(parsed.wsUrl).toBe(`${DEFAULT_RELAY_URL}/r/${ROOM}`);
+		expect(parsed.wsUrl).toBe(`wss://relay.example.com/r/${ROOM}`);
 		expect(parsed.key).toEqual(KEY);
 	});
 
@@ -131,15 +130,15 @@ describe("collab link parsing", () => {
 	});
 
 	it("accepts %23-mangled legacy deep links (macOS Foundation re-encoding)", () => {
-		const parsed = parseCollabLink(`https://my.omp.sh/#${ROOM}%23${KEY_TEXT}`);
+		const parsed = parseCollabLink(`https://relay.example.com/#${ROOM}%23${KEY_TEXT}`);
 		if ("error" in parsed) throw new Error(parsed.error);
-		expect(parsed.wsUrl).toBe(`${DEFAULT_RELAY_URL}/r/${ROOM}`);
+		expect(parsed.wsUrl).toBe(`wss://relay.example.com/r/${ROOM}`);
 		expect(parsed.key).toEqual(KEY);
 	});
 
-	it("round-trips format → parse for default, custom, and localhost relays", () => {
+	it("round-trips format → parse for public, ported, and localhost relays", () => {
 		const roomId = generateRoomId();
-		for (const relay of [DEFAULT_RELAY_URL, "wss://relay.example.com:8443", "ws://127.0.0.1:7466"]) {
+		for (const relay of ["wss://relay.example.com", "wss://relay.example.com:8443", "ws://127.0.0.1:7466"]) {
 			const link = formatCollabLink(relay, roomId, KEY);
 			const parsed = parseCollabLink(link);
 			if ("error" in parsed) throw new Error(`${relay}: ${parsed.error}`);

@@ -50,3 +50,41 @@ describe("update channel mirror", () => {
 		expect(pushed.length).toBe(before);
 	});
 });
+
+describe("update auto-restart mirror", () => {
+	it("pushes the stored policy and follows its commits", async () => {
+		const pushed: boolean[] = [];
+		let autoRestart: unknown = false;
+		const rpc = {
+			request: async () => ({ "update.channel": "stable", "update.autoRestart": autoRestart }),
+		} as unknown as RpcClient;
+
+		const stop = syncUpdateChannel(
+			rpc,
+			() => {},
+			enabled => pushed.push(enabled),
+		);
+		await Bun.sleep(0);
+		expect(pushed).toEqual([false]);
+
+		autoRestart = true;
+		dispatchSettingsChanged("update.autoRestart");
+		await Bun.sleep(0);
+		expect(pushed).toEqual([false, true]);
+
+		stop();
+	});
+
+	it("treats a missing preference as enabled", async () => {
+		const pushed: boolean[] = [];
+		const rpc = { request: async () => ({}) } as unknown as RpcClient;
+		const stop = syncUpdateChannel(
+			rpc,
+			() => {},
+			enabled => pushed.push(enabled),
+		);
+		await Bun.sleep(0);
+		expect(pushed).toEqual([true]);
+		stop();
+	});
+});

@@ -36,6 +36,7 @@ if (!app) {
 		checkForUpdates: async () => ({ enabled: false, error: unavailable, url: "", otaCapable: false }),
 		downloadUpdate: async () => false,
 		downloadInstaller: async () => ({ ok: false, error: unavailable }),
+		installUpdate: async () => ({ ok: false, error: unavailable }),
 		quitAndInstall: async () => {
 			throw new Error(unavailable);
 		},
@@ -44,9 +45,12 @@ if (!app) {
 		otaCapable: () => false,
 		detectSigning: () => "unknown",
 		setChannel: () => ({ channel: "stable" }),
+		setAutoRestart: () => ({ autoRestart: false }),
 		channel: () => "stable",
 		log: (...args) => process.stderr.write(`[updater] ${args.join(" ")}\n`),
 		wireRenderer: () => {},
+		wireRestartHandoff: () => {},
+		snapshot: () => ({ ...disabledState, restart: { auto: false, status: "idle", inFlight: 0, blockers: [] } }),
 		state: disabledState,
 	};
 	return;
@@ -58,13 +62,16 @@ const fs = require("node:fs");
 const nodePath = require("node:path");
 const {
 	classifyUpdateError,
+	idleRestartStep,
 	isMissingUpdateFeedError,
 	isNewerVersion,
 	normalizeUpdateChannel,
 	releaseChannelForVersion,
 	releaseDownloadUrl,
+	shouldAutoRestart,
 	updateFeedForChannel,
 	updateManifestUrlForVersion,
+	UPDATE_IDLE_SAMPLE_MS,
 } = require("./update-logic.cjs");
 
 // ── File log ─────────────────────────────────────────────────────────────
@@ -288,6 +295,33 @@ function readRequestedChannel() {
 
 let requestedChannel = readRequestedChannel();
 
+/**
+ * Whether a downloaded OTA package restarts on its own once live work
+ * settles. Stored beside the channel because the watchdog must decide without
+ * a daemon round-trip — the daemon may be the thing being replaced. Defaults
+ * to on: 下载更新 is the user's consent to be updated.
+ */
+function readAutoRestart() {
+	try {
+		const raw = JSON.parse(fs.readFileSync(CHANNEL_FILE, "utf8"));
+		return raw?.autoRestart !== false;
+	} catch {
+		return true;
+	}
+}
+
+let autoRestart = readAutoRestart();
+
+/** Persist both main-process update preferences (channel + auto-restart). */
+function writePreferences() {
+	try {
+		fs.mkdirSync(nodePath.dirname(CHANNEL_FILE), { recursive: true });
+		fs.writeFileSync(CHANNEL_FILE, JSON.stringify({ channel: requestedChannel, autoRestart }));
+	} catch (error) {
+		log("failed to persist update preferences:", String(error));
+	}
+}
+
 /** Channel the updater actually follows (a beta build never leaves beta). */
 function effectiveChannel() {
 	return releaseChannelForVersion(app.getVersion(), requestedChannel);
@@ -309,12 +343,9 @@ function applyChannelFeed() {
  */
 function setChannel(value) {
 	requestedChannel = normalizeUpdateChannel(value);
-	try {
-		fs.mkdirSync(nodePath.dirname(CHANNEL_FILE), { recursive: true });
-		fs.writeFileSync(CHANNEL_FILE, JSON.stringify({ channel: requestedChannel }));
-	} catch (error) {
-		log("failed to persist update channel:", String(error));
-	}
+	writePreferences();
+	// A new feed means a new target: the armed watchdog pointed at the old one.
+	stopIdleWatch("channel change");
 	return { channel: applyChannelFeed() };
 }
 
@@ -328,6 +359,8 @@ autoUpdater.on("checking-for-update", () => {
 });
 
 autoUpdater.on("update-available", (info) => {
+	// A new candidate invalidates the armed target.
+	stopIdleWatch("new candidate");
 	// `available` is now an explicit phase (design §3.1-1) so the renderer
 	// can read "a newer version exists" from the state stream alone instead
 	// of splicing the update-available event with updater-state. Never
@@ -345,6 +378,7 @@ autoUpdater.on("update-available", (info) => {
 });
 
 autoUpdater.on("update-not-available", () => {
+	stopIdleWatch("no update");
 	// A stale-version verdict must not erase a downloaded package either.
 	if (!["preparing", "downloading", "verifying", "downloaded"].includes(state.status)) {
 		state.status = "idle";
@@ -354,6 +388,7 @@ autoUpdater.on("update-not-available", () => {
 });
 
 autoUpdater.on("error", (err) => {
+	stopIdleWatch("error");
 	// A release with no update metadata for this platform/channel (404 on
 	// latest.yml) means "nothing to update to", not a broken updater
 	// (openchamber updater-check parity): log it, stay idle, and let the
@@ -401,10 +436,13 @@ autoUpdater.on("update-downloaded", (info) => {
 	// phase is signaled by the app quitting, not a bar.
 	setTaskbarProgress(-2);
 	emitState();
+	// The package is verified: from here the only open question is when no
+	// live work remains.
+	armIdleWatch();
 });
 
 function emitState() {
-	if (sendToRenderer) sendToRenderer("updater-state", { ...state });
+	if (sendToRenderer) sendToRenderer("updater-state", snapshot());
 }
 
 function emitUpdateAvailable(version) {
@@ -416,6 +454,155 @@ function emitUpdateAvailable(version) {
 			latest: version,
 		});
 	}
+}
+
+// ── Idle restart (dsh updateTasks parity) ────────────────────────────────
+// A downloaded OTA package restarts as soon as live work settles: inspect the
+// daemon, lock admission, stop the owned daemon, hand off to the installer.
+// This module decides *when*; update-restart.cjs performs the handoff and is
+// wired by main.cjs (daemon RPC + owned-daemon stop live there).
+
+/** Shell-owned handoff, injected at startup before any check can fire. */
+let restartHandoff = null;
+
+/** Progress mirrored to the renderer so the banner can name what is running. */
+const restart = {
+	/** An idle watchdog is armed. */
+	auto: false,
+	/** "idle" | "waiting" | "installing" | "blocked" */
+	status: "idle",
+	inFlight: 0,
+	/** Armed scheduled reminders the restart would drop. */
+	scheduled: 0,
+	blockers: [],
+};
+
+let idleTimer = null;
+let idleStreak = 0;
+let unknownStreak = 0;
+let installing = false;
+
+/** Wire the shell-owned handoff (called once at startup). */
+function wireRestartHandoff(handoff) {
+	restartHandoff = handoff;
+}
+
+/** State plus restart progress, for the updater-state IPC and event pushes. */
+function snapshot() {
+	return { ...state, restart: { ...restart, blockers: [...restart.blockers] } };
+}
+
+function stopIdleWatch(reason) {
+	if (idleTimer) {
+		clearInterval(idleTimer);
+		idleTimer = null;
+	}
+	idleStreak = 0;
+	unknownStreak = 0;
+	if (!restart.auto) return;
+	restart.auto = false;
+	log("auto-restart: disarmed", reason ?? "");
+	emitState();
+}
+
+/** Arm the watchdog for a downloaded package (idempotent). */
+function armIdleWatch() {
+	if (!restartHandoff || idleTimer || installing || restart.status === "blocked") return;
+	if (!shouldAutoRestart({ status: state.status, mode: state.mode, autoRestart, otaCapable: otaCapable() })) {
+		if (restart.status !== "idle") {
+			restart.status = "idle";
+			emitState();
+		}
+		return;
+	}
+	log("auto-restart: armed");
+	restart.auto = true;
+	restart.status = "waiting";
+	restart.inFlight = 0;
+	restart.blockers = [];
+	emitState();
+	idleTimer = setInterval(() => void idleTick(), UPDATE_IDLE_SAMPLE_MS);
+	// The watchdog must never be the reason the process stays alive.
+	idleTimer.unref?.();
+	// Sample immediately: the app may already be idle.
+	void idleTick();
+}
+
+async function idleTick() {
+	if (!idleTimer || installing || !restartHandoff) return;
+	const summary = await restartHandoff.inspect();
+	// A manual install (or a disarm) may have landed while the inspection was
+	// in flight; the sample is then stale, not authoritative.
+	if (!idleTimer || installing) return;
+	const step = idleRestartStep({ summary, streak: idleStreak, unknownStreak });
+	idleStreak = step.streak;
+	unknownStreak = step.unknownStreak;
+	restart.status = "waiting";
+	restart.inFlight = step.inFlight ?? 0;
+	restart.scheduled = step.scheduled ?? 0;
+	restart.blockers = step.blockers;
+	emitState();
+	if (step.giveUp) {
+		// A daemon that cannot answer is not evidence of idleness: stop asking
+		// automatically and leave 立即重启 to the user.
+		stopIdleWatch("daemon did not answer");
+		restart.status = "blocked";
+		restart.blockers = ["tasks-unavailable"];
+		restart.inFlight = 0;
+		emitState();
+		return;
+	}
+	if (step.action === "restart") {
+		stopIdleWatch("idle");
+		void installUpdate("auto");
+	}
+}
+
+/**
+ * Hand the downloaded package to the installer.
+ * @param {"manual"|"auto"} [reason] `auto` refuses while work is in flight.
+ */
+async function installUpdate(reason = "manual") {
+	if (installing) return { ok: false, error: "install already in progress" };
+	if (!restartHandoff) return { ok: false, error: "update handoff unavailable" };
+	// Nothing to hand off: never stop the daemon for a package that is not
+	// downloaded and verified.
+	if (state.status !== "downloaded") return { ok: false, error: "no downloaded update" };
+	stopIdleWatch(reason === "auto" ? "handing off" : "manual install");
+	installing = true;
+	restart.status = "installing";
+	restart.blockers = [];
+	emitState();
+	try {
+		const result = await restartHandoff.install({ auto: reason === "auto" });
+		if (result.ok) return { ok: true };
+		// Keep the verified package and the retry entry: a refused handoff never
+		// discards the download.
+		restart.status = "blocked";
+		restart.blockers = result.blockers ?? [result.reason];
+		restart.inFlight = result.inFlight ?? restart.inFlight;
+		log("install refused:", result.reason);
+		emitState();
+		return { ok: false, error: result.reason };
+	} finally {
+		installing = false;
+	}
+}
+
+/** Toggle the idle restart policy; a downloaded package re-arms immediately. */
+function setAutoRestart(value) {
+	autoRestart = value === true;
+	writePreferences();
+	if (autoRestart) {
+		// An explicit policy change is also the retry path after a blocked
+		// handoff: clear the refusal so the watchdog may try again.
+		restart.status = "idle";
+		restart.blockers = [];
+		armIdleWatch();
+	} else {
+		stopIdleWatch("disabled");
+	}
+	return { autoRestart };
 }
 
 // ── Public API (replaces the old updater.cjs exports) ────────────────────
@@ -489,6 +676,8 @@ async function downloadUpdate() {
 	// Re-entry guard: a double-click (or toast + settings racing) must not
 	// start a second electron-updater download — it rejects confusingly.
 	if (state.status === "preparing" || state.status === "downloading") return true;
+	// A new download supersedes the armed idle target.
+	stopIdleWatch("new download");
 	// Optimistic intermediate state: the first download-progress event only
 	// fires once bytes flow (latest.yml + release-asset TTFB can take seconds),
 	// so the renderer shows a preparing bar instead of a dead button.
@@ -646,10 +835,12 @@ function quitAndInstall() {
 		autoUpdater.on("error", fail);
 
 		// Defer so the renderer's invoke channel is idle before the app
-		// starts shutting down.
+		// starts shutting down. Silent install + relaunch: both entry points
+		// (立即重启 and the idle handoff) promise a restarted app, not an
+		// installer wizard (dsh `quitAndInstall(true, true)` parity).
 		setImmediate(() => {
 			try {
-				autoUpdater.quitAndInstall();
+				autoUpdater.quitAndInstall(true, true);
 			} catch (error) {
 				fail(error);
 			}
@@ -661,14 +852,18 @@ module.exports = {
 	checkForUpdates,
 	downloadUpdate,
 	downloadInstaller,
+	installUpdate,
 	quitAndInstall,
 	fetchManifestNotes,
 	fetchManifestMeta,
 	otaCapable,
 	detectSigning,
 	setChannel,
+	setAutoRestart,
 	channel: effectiveChannel,
 	log,
 	wireRenderer,
+	wireRestartHandoff,
+	snapshot,
 	state,
 };
