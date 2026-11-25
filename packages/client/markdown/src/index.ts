@@ -14,6 +14,14 @@ export {
 	subscribeMarkdownBlocks,
 } from "./registry";
 export {
+	lexedText,
+	type LexicalRenderer,
+	type FrozenPrefix,
+	NO_PREFIX,
+	renderStreamingBlocks,
+	stableTokenCount,
+} from "./stream-boundary";
+export {
 	advanceTail,
 	EMPTY_TAIL,
 	graphemeSpans,
