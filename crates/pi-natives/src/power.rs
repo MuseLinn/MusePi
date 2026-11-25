@@ -24,15 +24,19 @@ use napi_derive::napi;
 #[napi(object, js_name = "MacOSPowerAssertionOptions")]
 pub struct MacOSPowerAssertionOptions {
 	/// Human-readable reason shown in macOS power diagnostics.
-	pub reason:  Option<String>,
+	pub reason:          Option<String>,
 	/// `caffeinate -i`: prevent the system from idle-sleeping.
-	pub idle:    Option<bool>,
+	pub idle:            Option<bool>,
 	/// `caffeinate -s`: prevent the system from sleeping (AC power only).
-	pub system:  Option<bool>,
+	pub system:          Option<bool>,
 	/// `caffeinate -u`: declare the user is active (wakes the display).
-	pub user:    Option<bool>,
+	pub user:            Option<bool>,
 	/// `caffeinate -d`: prevent the display from idle-sleeping.
-	pub display: Option<bool>,
+	pub display:         Option<bool>,
+	/// Seconds until the assertion lapses on its own. The shell re-takes the
+	/// assertion before it expires, so a shell that dies stops holding the
+	/// machine awake instead of leaving an assertion behind.
+	pub timeout_seconds: Option<u32>,
 }
 
 #[cfg(target_os = "macos")]
@@ -47,6 +51,7 @@ mod platform {
 	const UTF8_ENCODING: u32 = 0x0800_0100;
 	const ASSERTION_LEVEL_ON: u32 = 255;
 	const ASSERTION_ID_NONE: u32 = 0;
+	const CF_NUMBER_SINT32_TYPE: i32 = 3;
 	const PREVENT_USER_IDLE_SYSTEM_SLEEP: &str = "PreventUserIdleSystemSleep";
 	const PREVENT_SYSTEM_SLEEP: &str = "PreventSystemSleep";
 	const PREVENT_USER_IDLE_DISPLAY_SLEEP: &str = "PreventUserIdleDisplaySleep";
@@ -87,6 +92,8 @@ mod platform {
 			encoding: u32,
 		) -> CFStringRef;
 		fn CFRelease(value: CFTypeRef);
+		fn CFNumberCreate(alloc: *const c_void, the_type: i32, value_ptr: *const c_void)
+		-> CFTypeRef;
 	}
 
 	#[link(name = "IOKit", kind = "framework")]
@@ -98,6 +105,11 @@ mod platform {
 			assertion_id: *mut IOPMAssertionID,
 		) -> IOReturn;
 		fn IOPMAssertionRelease(assertion_id: IOPMAssertionID) -> IOReturn;
+		fn IOPMAssertionSetProperty(
+			assertion_id: IOPMAssertionID,
+			the_property: CFStringRef,
+			the_value: CFTypeRef,
+		) -> IOReturn;
 	}
 
 	struct CfString(CFStringRef);
@@ -137,12 +149,46 @@ mod platform {
 		}
 	}
 
+	/// Records how long the assertion may live on its own. IOKit reads
+	/// `TimeoutSeconds` at acquisition, so the property is written right after
+	/// the assertion exists and before it is published to the caller.
+	fn set_timeout(assertion_id: IOPMAssertionID, seconds: u32) -> Result<()> {
+		let key = CfString::new("TimeoutSeconds")?;
+		let value = i32::try_from(seconds).unwrap_or(i32::MAX);
+		// SAFETY: `CFNumberCreate` copies the pointed-to value, so the address of
+		// the stack `value` is valid for the call; the returned number is released
+		// below, and the key wrapper owns its own reference.
+		let number = unsafe {
+			CFNumberCreate(ptr::null(), CF_NUMBER_SINT32_TYPE, (&raw const value).cast::<c_void>())
+		};
+		if number.is_null() {
+			return Err(Error::from_reason("Failed to allocate the power assertion timeout value"));
+		}
+		// SAFETY: `number` is a live CoreFoundation object created immediately above
+		// and `key` outlives the call; the assertion id is the one this call just
+		// created.
+		let status = unsafe { IOPMAssertionSetProperty(assertion_id, key.as_ptr(), number) };
+		// SAFETY: `number` carries the single reference returned by `CFNumberCreate`,
+		// and it is not used again after the property write.
+		unsafe { CFRelease(number) };
+		if status != 0 {
+			return Err(Error::from_reason(format!(
+				"Failed to set the macOS power assertion timeout (IOReturn={status})"
+			)));
+		}
+		Ok(())
+	}
+
 	pub struct AssertionInner {
 		assertion_id: IOPMAssertionID,
 	}
 
 	impl AssertionInner {
-		pub fn start(kind: AssertionKind, reason: &str) -> Result<Self> {
+		pub fn start(
+			kind: AssertionKind,
+			reason: &str,
+			timeout_seconds: Option<u32>,
+		) -> Result<Self> {
 			let assertion_type = CfString::new(kind.iokit_name())?;
 			let assertion_reason = CfString::new(reason)?;
 			let mut assertion_id = ASSERTION_ID_NONE;
@@ -161,6 +207,14 @@ mod platform {
 				return Err(Error::from_reason(format!(
 					"Failed to acquire macOS power assertion {kind:?} (IOReturn={status})"
 				)));
+			}
+			if let Some(seconds) = timeout_seconds {
+				if let Err(error) = set_timeout(assertion_id, seconds) {
+					// SAFETY: `assertion_id` was created just above and is still owned here,
+					// so releasing it drops the assertion this call failed to configure.
+					unsafe { IOPMAssertionRelease(assertion_id) };
+					return Err(error);
+				}
 			}
 			Ok(Self { assertion_id })
 		}
