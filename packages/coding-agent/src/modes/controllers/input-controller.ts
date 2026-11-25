@@ -46,7 +46,7 @@ import { resizeImage } from "../../utils/image-resize";
  *
  * - /login accepts three callback forms (redirect URL, query string, raw auth
  *   code) — all can contain OAuth code=/state= params.
- * - /join <link> carries a 32-byte room key and optional write token.
+ * - /join <link> carries a 32-byte share key and optional write token.
  * - /mcp add --token <token> carries a bearer token.
  *
  * The command name is extracted the same way as parseSlashCommand() — splitting
@@ -64,7 +64,7 @@ export function shouldSkipHistory(slashText: string): boolean {
 	// /login <anything> — parseCallbackInput() accepts redirect URLs, query
 	// strings (?code=...), and raw auth codes, all of which carry secrets.
 	if (name === "login" && hasArgs) return true;
-	// /join <link> — the link carries the 32-byte room key and write token.
+	// /join <link> — the link carries the 32-byte share key and write token.
 	if (name === "join" && hasArgs) return true;
 	if (name === "mcp") {
 		const args = body.slice(sep + 1).trim();

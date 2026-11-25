@@ -229,7 +229,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	useCollapseHeight(openMethod === "link", linkBodyRef);
 
 	// Resolve host credentials asynchronously; public metadata never contains
-	// room keys. The same resolved records also drive startup restoration.
+	// share keys. The same resolved records also drive startup restoration.
 	useEffect(() => {
 		let alive = true;
 		void loadResolvedHosts().then(hosts => {

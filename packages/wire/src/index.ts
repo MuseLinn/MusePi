@@ -1233,11 +1233,17 @@ export const ENVELOPE_HEADER_LENGTH = 4;
 
 export const ROOM_ID_BYTES = 16;
 
-/** AES-256-GCM room key; the seal key for every collab frame. */
+/**
+ * AES-256-GCM share key; the seal key for every collab frame. Named for what it
+ * protects — one share — not for the relay room that happens to carry it: the
+ * room is a transport unit, and a key handed to several devices is still one
+ * share's secret. `ROOM_KEY_BYTES` keeps its name because the wire, the parser
+ * and stored links already spell it that way.
+ */
 export const ROOM_KEY_BYTES = 32;
 
 /**
- * Random write token appended to the room key in full links
+ * Random write token appended to the share key in full links
  * (`base64url(key ∥ token)`); view links carry the bare key. Possession
  * proves prompt/abort/agent-cmd capability to the host.
  */

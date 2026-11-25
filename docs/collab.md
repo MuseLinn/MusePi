@@ -80,6 +80,8 @@ Serve exposes the relay at `https://<machine>.<tailnet>.ts.net`. It does not req
 
 One capability, three words that are not interchangeable. **Remote access** (`远程访问`) is this feature: letting a phone, browser or chat bot reach the workspace and its sessions. **Remote connection** (`远程连接`) is the other axis — running the daemon on, or mounting files from, another machine. The wire keeps the older `remote-access.*` and `collab.*` names, and the consent record is `musepi-gui-remote-access-consent`; copy never calls this "remote control", which over-promises for a watch-only link.
 
+Two more words carry weight here, and neither is a room. A **share key** (`分享密钥`) is one share's AES-256-GCM secret plus its optional write token: it grants read or control of that one share, and several devices may join with it. A **room** is only the relay's forwarding unit for that share — it has no key of its own, and it ends with the share. **Device identity** is separate and this build has none: every join presents a share key, so there is no per-device key, no account directory, and no revocation per device. Anything that needs those belongs to a design this document does not yet describe.
+
 ### Health, revocation, and TTL
 
 Every tunnel watches its child process and probes the public host every 30 seconds. A tunnel that dies is revoked immediately: the URL is cleared, health becomes `degraded` with the reason and a next step, and the relay behind it is closed. Share state is authoritative — `remote-access.status` returns `mode`, `sessionId`, `exposure`, and `health`, and reports `hosting: false` once the host ends, the session switches, or the exposure fails, so a share panel never keeps a dead link. The reason survives that clearing: while `hosting` is `false`, the same reply carries `lastEnd {exposure, health, at, reason, detail, hint}` (cleared by the next `collab.start`), which is where a failed tunnel's `detail` and next-step `hint` reach the UI. A reply also carries `warning` when a configuration value makes part of the share unusable — for example an unusable `collab.webUrl`, whose origin the relay rejects with `403`. The same warning comes back while the share runs, when an identical share is reused, and after it stops; starting a share recomputes it.
@@ -89,7 +91,7 @@ Every tunnel watches its child process and probes the public host every 30 secon
 ### Privacy boundary
 
 - **LAN** — traffic stays on your network; the browser link is `https` with a self-signed certificate, and the tailnet link (when shown) is encrypted by Tailscale.
-- **Public tunnels** — Cloudflare or ngrok terminates TLS at its edge and can see connection metadata, never room content, which is sealed end to end. The public URL alone is not a secret: the fragment carries the room key, and anyone with the full link can steer the session.
+- **Public tunnels** — Cloudflare or ngrok terminates TLS at its edge and can see connection metadata, never room content, which is sealed end to end. The public URL alone is not a secret: the fragment carries the share key, and anyone with the full link can steer the session.
 - **Tailscale** — the relay is reachable only inside your tailnet; guests need Tailscale installed and signed in to the same tailnet.
 
 ### Running a relay yourself
@@ -143,10 +145,12 @@ Newly generated direct links put the room secret in the fragment (`/r/<roomId>#<
 
 `<link>` / `<relay-link>` are parsed recursively as any accepted link above. For `http(s)` browser wrappers with a parseable fragment, the fragment wins before the HTTP host/path are treated as a relay. This lets `https://web.example/collab/#relay.example.com/r/<roomId>.<secret>` open the web UI at `web.example` while joining `wss://relay.example.com/r/<roomId>`. If the fragment is not a complete collab link, parsing falls back to the legacy direct relay form, so `https://relay.example.com/r/<roomId>#<secret>` still means relay `relay.example.com`.
 
-The trailing `.<secret>` or `#<secret>` part is the room secret, base64url-encoded, in one of two strengths:
+The trailing `.<secret>` or `#<secret>` part is the **share secret**, base64url-encoded, in one of two strengths:
 
-- **Full link** — 48 bytes: the 32-byte AES-256-GCM room key followed by a 16-byte write token. Grants prompting, interrupting, and subagent control.
+- **Full link** — 48 bytes: the 32-byte AES-256-GCM share key followed by a 16-byte write token. Grants prompting, interrupting, and subagent control.
 - **View-only link** — the bare 32-byte key, no write token. Grants live read access only. Pre-token links parse as view-only.
+
+The secret belongs to a **share**, not to a room or a device. A room is the relay's forwarding unit for one share; the same secret is what several devices use when they join that share, so calling it a room key described the carrier instead of the thing being protected. Device identity is a separate axis this build does not yet have — see [Naming](#naming).
 
 Parsers accept both secret positions (and `%23`-mangled legacy deep links). Only the fragment position keeps the secret out of proxy logs; links embedded inside another fragment use the path position because RFC 3986 forbids a raw `#` there.
 

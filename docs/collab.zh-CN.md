@@ -80,6 +80,8 @@ Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求
 
 一个能力，三个词不能混用。**远程访问**（`remote access`）指这套能力：让手机、浏览器或聊天 Bot 够到这里的工作区与会话。**远程连接**（`remote connection`）指另一条轴——daemon 跑在另一台机器上，或文件挂载自另一台机器。wire 沿用旧的 `remote-access.*` 与 `collab.*`，同意记录是 `musepi-gui-remote-access-consent`；文案里不用「远程控制」，因为它对只读观看链接是名不副实。
 
+还有两个词要分清，而且都不是「房间」。**分享密钥**（`share key`）是一次分享的 AES-256-GCM 密钥加上可选的 write token：它授予这一次分享的读取或控制权，多台设备可以持同一份加入。**房间**只是 relay 为这次分享转发用的单位——它自己没有密钥，并随分享结束而结束。**设备身份**是另一条轴，本版本没有：每次加入出示的都是分享密钥，因此没有按设备区分的密钥、没有账户目录，也没有按设备撤销。需要这些的设计不在本文档范围内。
+
 ### 健康检查、撤销与时限
 
 每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。应答还会在某个配置值让分享的一部分不可用时带上 `warning`——例如不可用的 `collab.webUrl`，其来源会被 relay 以 `403` 拒绝。分享运行中、复用同一分享时，以及分享停止后，都会返回同一条提示；重新开始分享时会重新计算。
@@ -89,7 +91,7 @@ Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求
 ### 隐私边界
 
 - **局域网** — 流量只在你自己的网络里；浏览器链接是带自签名证书的 `https`，tailnet 链接（若显示）由 Tailscale 加密。
-- **公网隧道** — Cloudflare 或 ngrok 在边缘终结 TLS，能看到连接元数据，但看不到房间内容（内容端到端密封）。公网 URL 本身不是秘密：fragment 里带着房间密钥，拿到完整链接的人就能操控会话。
+- **公网隧道** — Cloudflare 或 ngrok 在边缘终结 TLS，能看到连接元数据，但看不到房间内容（内容端到端密封）。公网 URL 本身不是秘密：fragment 里带着分享密钥，拿到完整链接的人就能操控会话。
 - **Tailscale** — relay 只在你的 tailnet 内可达；访客需要安装 Tailscale 并登录同一个 tailnet。
 
 ### 自己运行一个 relay
@@ -143,10 +145,12 @@ https://web.example/collab/#relay.example.com/r/<roomId>.<secret> → web UI 与
 
 `<link>` / `<relay-link>` 会递归解析为上述任意可接受格式。对于带有可解析 fragment 的 `http(s)` 浏览器包装链接，fragment 优先，HTTP host/path 才被视为 relay。这使得 `https://web.example/collab/#relay.example.com/r/<roomId>.<secret>` 可以在 `web.example` 打开 web UI，同时加入 `wss://relay.example.com/r/<roomId>`。如果 fragment 不是完整的 collab 链接，解析会回退到旧版直接 relay 格式，因此 `https://relay.example.com/r/<roomId>#<secret>` 仍表示 relay `relay.example.com`。
 
-末尾的 `.<secret>` 或 `#<secret>` 部分是 room secret，使用 base64url 编码，有两种强度：
+末尾的 `.<secret>` 或 `#<secret>` 部分是**分享密钥**（share secret），使用 base64url 编码，有两种强度：
 
-- **Full link** — 48 字节：32 字节 AES-256-GCM room key + 16 字节 write token。允许提问、中断和 subagent 控制。
+- **Full link** — 48 字节：32 字节 AES-256-GCM 分享密钥 + 16 字节 write token。允许提问、中断和 subagent 控制。
 - **View-only link** — 仅 32 字节 key，无 write token。仅允许实时读取。旧链接会被解析为只读。
+
+密钥属于**一次分享**，不属于「房间」，也不属于某台设备。房间是 relay 为这次分享转发用的单位；同一份密钥正是多台设备加入这次分享时使用的凭据，所以「房间密钥」描述的是载体而不是被保护的东西。设备身份是另一条轴，本版本还没有——见[命名](#命名)。
 
 解析器接受两种 secret 位置（以及 `%23` 转义的旧版 deep link）。只有 fragment 位置能让 secret 不进入代理日志；嵌在另一个 fragment 里的链接使用 path 位置，因为 RFC 3986 禁止那里出现原始 `#`。
 

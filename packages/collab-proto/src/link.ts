@@ -147,7 +147,7 @@ export interface CollabLinkOptions {
  * only localhost/private ws:// links keep their full URL so parsing cannot
  * mis-infer wss.
  *
- * The room secret goes in the fragment. A link is pasted into browsers and
+ * The share secret goes in the fragment. A link is pasted into browsers and
  * terminals, and every byte of a URL path is sent to — and logged by — the
  * outermost proxy: with a tunnel share that is the tunnel edge. Fragments
  * never leave the client. The legacy path form
@@ -218,7 +218,7 @@ function normalizeCollabWebBaseUrl(relayUrl: string, webUrl?: string): string {
 /**
  * Render the browser deep link. The browser UI may be hosted separately from
  * the relay; the fragment always carries the relay-specific collab link, so
- * room secrets stay out of HTTP path and query bytes. The inner link keeps the
+ * share secrets stay out of HTTP path and query bytes. The inner link keeps the
  * dot form: it already lives in a fragment, and a second `#` inside one is
  * what strict URL stacks percent-encode.
  */

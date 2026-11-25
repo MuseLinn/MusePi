@@ -2,7 +2,7 @@
  * AES-256-GCM sealing for collab frames. Browser-safe: WebCrypto only, no
  * Buffer, no Node globals. Works identically in Bun, Node ≥22 and browsers.
  *
- * The room key lives only in the link fragment; the relay sees opaque bytes.
+ * The share key lives only in the link fragment; the relay sees opaque bytes.
  * Sealed layout: `[12B IV][ciphertext+tag]` (tag is appended by AES-GCM).
  *
  * Frames are generic: hosts seal their rich `CollabFrame`, guests seal the
@@ -15,7 +15,7 @@ const IV_LENGTH = 12;
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
 
-/** Random 32-byte room key. */
+/** Random 32-byte share key. */
 export function generateRoomKey(): Uint8Array {
 	const key = new Uint8Array(ROOM_KEY_BYTES);
 	crypto.getRandomValues(key);
@@ -29,7 +29,7 @@ export function generateWriteToken(): Uint8Array {
 	return token;
 }
 
-/** Import a raw room key for AES-GCM. Rejects wrong-length keys. */
+/** Import a raw share key for AES-GCM. Rejects wrong-length keys. */
 export function importRoomKey(raw: Uint8Array): Promise<CryptoKey> {
 	if (raw.byteLength !== ROOM_KEY_BYTES) {
 		throw new Error(`Room key must be ${ROOM_KEY_BYTES} bytes, got ${raw.byteLength}`);

@@ -2,7 +2,7 @@
  * Host-side session client for the daemon's JSON-RPC WebSocket.
  *
  * The "runtime serves the renderer" compat chain: this client connects to the
- * daemon as a host (bearer token, not a collab room key), calls
+ * daemon as a host (bearer token, not a collab share key), calls
  * session.subscribe for the initial snapshot + live event stream, and feeds
  * the same GuestSnapshot shape the guest renderer consumes.
  *

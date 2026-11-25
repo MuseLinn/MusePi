@@ -222,7 +222,7 @@ export class CollabHost {
 		return this.#webLink;
 	}
 
-	/** Read-only variant of {@link link}: bare room key, no write token. */
+	/** Read-only variant of {@link link}: bare share key, no write token. */
 	get viewLink(): string {
 		return this.#viewLink;
 	}
