@@ -1930,6 +1930,96 @@ button.tr-display-context-source:hover {
 	outline-offset: -2px;
 }
 
+/* Region selection (drag a rectangle, or click a header for its column). The
+ * tint has to read on top of the row-hover fill, so it is the accent rather
+ * than another neutral: two grays stacked are indistinguishable. */
+.tr-table-cell--selected {
+	background: color-mix(in oklab, var(--accent) 16%, transparent) !important;
+}
+
+.tr-table--selecting {
+	/* The rectangle is a text selection in spirit; letting the browser start a
+	 * native selection mid-drag fights the gesture. */
+	user-select: none;
+}
+
+/* Floating "quote this region" affordance, positioned over the selection. It
+ * sits as a sibling of the scroll container so a wide table scrolls under it. */
+.tr-table-quote {
+	position: absolute;
+	z-index: 3;
+	display: inline-flex;
+	align-items: center;
+	height: 24px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--bg-raised);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	font-family: inherit;
+	cursor: pointer;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
+	animation: tr-table-menu-in 120ms var(--ease-appear-snappy);
+}
+
+.tr-table-quote:hover {
+	background: var(--bg-inset);
+}
+
+.tr-table-quote:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+
+/* Expanded table: a native modal dialog (focus trap, Escape, inert backdrop and
+ * focus restoration come from the element). The body scrolls both ways so a
+ * wide table is readable at window width instead of inside the message column. */
+.tr-table-expand {
+	width: min(94vw, 1400px);
+	max-width: none;
+	max-height: 92vh;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--bg-raised);
+	color: var(--color-text);
+	box-shadow: 0 24px 64px rgb(0 0 0 / 40%);
+}
+
+.tr-table-expand::backdrop {
+	background: rgb(0 0 0 / 55%);
+	backdrop-filter: blur(3px);
+	-webkit-backdrop-filter: blur(3px);
+}
+
+.tr-table-expand-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 10px 8px 16px;
+	border-bottom: 1px solid var(--border);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+}
+
+.tr-table-expand-body {
+	max-height: calc(92vh - 46px);
+	overflow: auto;
+	padding: 12px 16px 16px;
+}
+
+.tr-table-expand-body table {
+	margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tr-table-quote {
+		animation: none;
+	}
+}
+
 /* Wide table (toolbar 加宽表格 / 恢复默认宽度). The default table is clamped to
  * the message column (`width: 100%`) and wraps its cells to fit it, so a
  * content-rich table reads cramped. Wide mode lays the table out at its

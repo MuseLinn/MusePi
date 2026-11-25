@@ -4,13 +4,14 @@ import { Loader } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { assertCanvasHasContent } from "../lib/rasterize";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 
 /**
  * 保存为图片 export dialog: a LIVE preview of the message card with three
  * style options (title / border / watermark) applied WYSIWYG, and a copy
- * button that rasterizes the preview DOM (html-to-image, pixelRatio 2 —
+ * button that rasterizes the preview DOM (modern-screenshot, scale 2 —
  * same pipeline the old one-shot export used) and pushes the PNG to the
  * clipboard. The copy button morphs Copy → ✓ (morphicons) once the write
  * lands; the transcript row's save button is now just the dialog trigger.
@@ -49,17 +50,25 @@ export function SaveImageDialog({
 		if (!card || busy) return;
 		setBusy(true);
 		try {
-			// Dynamic import on purpose: html-to-image is a large dependency
+			// Dynamic import on purpose: the rasterizer is a large dependency
 			// pulled in only when someone actually exports a message, so it
-			// stays out of the main bundle.
+			// stays out of the main bundle. The same module backs the widget
+			// card's copy/download, so both paths render identically.
 			//
-			// toBlob hands back the canvas blob directly. Going through toPng
-			// + fetch(dataUrl) needs `data:` in connect-src, which the app's
-			// CSP does not allow — the fetch was rejected, the catch below
+			// The canvas is handed back directly rather than as a data URL:
+			// `fetch(data:)` needs `data:` in connect-src, which the app's CSP
+			// does not allow — that fetch was rejected, the catch below
 			// swallowed it, and the button silently did nothing.
-			const { toBlob } = await import("html-to-image");
+			const { domToCanvas } = await import("modern-screenshot");
 			const bg = getComputedStyle(card).backgroundColor || "#ffffff";
-			const blob = await toBlob(card, { pixelRatio: 2, backgroundColor: bg });
+			const canvas = await domToCanvas(card, {
+				scale: 2,
+				backgroundColor: bg,
+				font: {},
+				features: { removeControlCharacter: true, fixSvgXmlDecode: true },
+			});
+			assertCanvasHasContent(canvas);
+			const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
 			if (!blob) throw new Error("canvas produced no blob");
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 			setCopied(true);

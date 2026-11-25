@@ -1322,6 +1322,9 @@
         const template = document.createElement('template');
         template.innerHTML = html;
         const node = template.content.firstElementChild;
+        // Typeset before caching: the cache clones the node, and a clone does
+        // not carry a second pass of work.
+        if (node) typesetMath(node);
 
         // Cache the node
         if (cacheable && node) {
@@ -1432,6 +1435,32 @@
       function safeMarkedParse(text) {
         return marked.parse(text);
       }
+
+      // KaTeX delivery is deferred, so a formula may be parsed before the
+      // renderer exists. Render every markdown block once the scripts land and
+      // again whenever marked inserts a new one. A second pass over an
+      // already-typeset block finds nothing: the delimiters themselves were
+      // consumed, so only their rendered spans remain.
+      function typesetMath(root) {
+        if (typeof renderMathInElement !== 'function') return;
+        const targets = root.querySelectorAll
+          ? (root.matches && root.matches('.markdown-content') ? [root] : root.querySelectorAll('.markdown-content'))
+          : [];
+        for (const target of targets) {
+          renderMathInElement(target, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '\\[', right: '\\]', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false },
+            ],
+            throwOnError: false,
+            ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          });
+        }
+      }
+
+      window.addEventListener('load', () => typesetMath(document));
 
       // Search input
       const searchInput = document.getElementById('tree-search');

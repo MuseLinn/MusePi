@@ -12,7 +12,18 @@
  * hovered button keeps its focus and its box.
  */
 
-import { Check, Copy, Download, Ellipsis, FoldHorizontal, Maximize2, UnfoldHorizontal, ZoomIn, ZoomOut } from "lucide";
+import {
+	Check,
+	Copy,
+	Download,
+	Ellipsis,
+	FoldHorizontal,
+	Maximize2,
+	UnfoldHorizontal,
+	X,
+	ZoomIn,
+	ZoomOut,
+} from "lucide";
 
 const BLOCK_GLYPH = {
 	copy: Copy,
@@ -24,6 +35,7 @@ const BLOCK_GLYPH = {
 	zoomIn: ZoomIn,
 	zoomOut: ZoomOut,
 	expand: Maximize2,
+	close: X,
 } as const;
 
 export type BlockGlyphName = keyof typeof BLOCK_GLYPH;

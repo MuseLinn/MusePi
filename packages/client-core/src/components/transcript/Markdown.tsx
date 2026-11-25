@@ -46,6 +46,7 @@ import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
 import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
 import { graphemeSpans } from "./reveal";
+import { installTableSelection } from "./table-selection";
 import "../../ui-blocks/ui-blocks.css";
 import { useStreamingReveal } from "./use-streaming-reveal";
 
@@ -306,6 +307,7 @@ function tableToolbarHtml(hash: string): string {
 	const widen = escapeHtml(t("general.widenTable"));
 	const copy = escapeHtml(t("settings.copy"));
 	const download = escapeHtml(t("settings.download"));
+	const expand = escapeHtml(t("general.tableExpand"));
 	const formats = escapeHtml(t("general.tableFormats"));
 	const split = (main: string, menu: string): string =>
 		`<span class="tr-table-split">${main}` +
@@ -334,8 +336,58 @@ function tableToolbarHtml(hash: string): string {
 			`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
 				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>`,
 		) +
+		`<button type="button" class="tr-code-btn tr-table-btn" data-table-expand aria-label="${expand}" title="${expand}">` +
+		blockGlyph("expand") +
+		`</button>` +
 		`</div>`
 	);
+}
+
+/**
+ * Expanded table view: a native `<dialog>` with `showModal()`, which supplies
+ * the focus trap, Escape, the inert background and focus restoration that a
+ * hand-rolled overlay has to re-implement (and gets subtly wrong). The table is
+ * cloned in, so a wide one can scroll at full window width without touching the
+ * message it came from.
+ */
+export function openTableExpandDialog(table: HTMLTableElement): void {
+	const existing = document.querySelector<HTMLDialogElement>("dialog.tr-table-expand");
+	existing?.remove();
+
+	const dialog = document.createElement("dialog");
+	dialog.className = "tr-table-expand";
+	const head = document.createElement("div");
+	head.className = "tr-table-expand-head";
+	const title = document.createElement("span");
+	title.textContent = t("general.tableExpand");
+	const close = document.createElement("button");
+	close.type = "button";
+	close.className = "tr-code-btn";
+	close.setAttribute("aria-label", t("settings.close"));
+	close.title = t("settings.close");
+	close.innerHTML = blockGlyph("close");
+	head.append(title, close);
+
+	const body = document.createElement("div");
+	body.className = "tr-table-expand-body";
+	body.appendChild(table.cloneNode(true));
+	dialog.append(head, body);
+	document.body.appendChild(dialog);
+
+	const dismiss = (): void => {
+		dialog.close();
+		dialog.remove();
+	};
+	close.addEventListener("click", dismiss);
+	// A click on the backdrop (the dialog element itself, outside the body).
+	dialog.addEventListener("click", event => {
+		if (event.target === dialog) dismiss();
+	});
+	dialog.addEventListener("close", () => dialog.remove());
+	dialog.showModal();
+	// Restoring focus is the browser's job on close; make the close button the
+	// initial target so keyboard users land inside the dialog.
+	close.focus();
 }
 
 /** Documents whose dismissal listeners are already installed. Keyed by the
@@ -1141,6 +1193,12 @@ export const Markdown = memo(function Markdown({
 			toggleTableMenu(tableMenuBtn);
 			return;
 		}
+		const tableExpand = target.closest<HTMLElement>("[data-table-expand]");
+		if (tableExpand) {
+			const table = tableExpand.closest<HTMLElement>(".tr-table")?.querySelector("table");
+			if (table) openTableExpandDialog(table);
+			return;
+		}
 		const tableWide = target.closest<HTMLElement>("[data-table-wide]");
 		if (tableWide) {
 			const hash = tableWide.dataset.tableWide ?? "";
@@ -1476,6 +1534,15 @@ export const Markdown = memo(function Markdown({
 	useLayoutEffect(() => {
 		installTableMenuDismiss();
 	}, []);
+	// Region selection on tables: drag a rectangle (or click a header for its
+	// column) and quote it. The listeners live on the message root rather than
+	// on cells, because the message's markup is regenerated on every stream tick.
+	const quoteSelectionLabel = t("general.quoteTableRegion");
+	useLayoutEffect(() => {
+		const host = rootRef.current;
+		if (!host) return;
+		return installTableSelection(host, quoteSelectionLabel);
+	}, [quoteSelectionLabel]);
 	const htmlRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
 		const host = htmlRef.current;

@@ -2826,7 +2826,7 @@ export function ChatView({
 		showPlan: (request: { directory: string; id: string; title: string }) =>
 			openPlanFromChat(request.directory, request.id, request.title),
 		// Widget card "下载为图片"/"复制为图片": rasterize the card and hand
-		// the blob to the download/clipboard helper. html-to-image is imported
+		// the blob to the download/clipboard helper. modern-screenshot is imported
 		// dynamically inside rasterizeToBlob on purpose (same as SaveImageDialog):
 		// a static import would pull a large dependency into the main bundle for
 		// a rarely used action. rasterizeToBlob also rebuilds sandboxed iframe

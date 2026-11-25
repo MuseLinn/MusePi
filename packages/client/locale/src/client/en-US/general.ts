@@ -593,6 +593,8 @@ export const general = {
 	"general.copyFailed": "Copy failed",
 	"general.widenTable": "Widen table",
 	"general.tableFormats": "More formats",
+	"general.quoteTableRegion": "Quote selection",
+	"general.tableExpand": "Expand table",
 	"general.resetTableWidth": "Reset width",
 	"general.deleteSession": "Delete session",
 	"general.deleteSession2": "Delete this session? This action cannot be undone.",

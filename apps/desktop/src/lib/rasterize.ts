@@ -1,31 +1,31 @@
 /**
  * Rasterize a DOM element to a PNG blob (widget card 下载为图片 / 复制为图片).
  *
- * Two defects shaped this implementation:
+ * Three defects shaped this implementation:
  *
- * 1. **Sandboxed widget frames are invisible to `html-to-image`.** The
- *    library clones an `<iframe>` by reading `contentDocument.body` — an
- *    opaque-origin `sandbox="allow-scripts"` frame throws, so the clone keeps
- *    an empty frame and the export is a blank card. Rewriting the clone
- *    through the library's `onclone` hook is not an option: `html-to-image
- *    1.11.13` has no such option, and the callback that used to live here was
- *    silently dropped. Instead we build the export source ourselves: each
- *    srcdoc frame is re-rendered same-origin in a shadow frame, its rendered
- *    document is captured into a `<style>` + markup subtree inside a *shadow
- *    root*, and that subtree takes the frame's place in a staged clone of the
- *    card. The library walks shadow roots (and inlines the computed styles it
- *    finds there), so the face lands in the image while its CSS stays scoped
- *    to the shadow root instead of leaking into the app.
+ * 1. **Sandboxed widget frames are invisible to a DOM rasterizer.** A library
+ *    clones an `<iframe>` by reading `contentDocument.body`; an opaque-origin
+ *    `sandbox="allow-scripts"` frame throws, so the clone keeps an empty frame
+ *    and the export is a blank card. Instead we build the export source
+ *    ourselves: each srcdoc frame is re-rendered same-origin in a shadow
+ *    frame, its rendered document is captured into a `<style>` + markup subtree
+ *    inside a *shadow root*, and that subtree takes the frame's place in a
+ *    staged clone of the card. The rasterizer walks shadow roots (and inlines
+ *    the computed styles it finds there), so the face lands in the image while
+ *    its CSS stays scoped to the shadow root instead of leaking into the app.
  *
  * 2. **A transparent card exports as "blank".** `getComputedStyle(el)
  *    .backgroundColor` is `rgba(0, 0, 0, 0)` for the widget wrapper, so a
  *    dark theme's light text landed on transparency and vanished in any
  *    white-backed viewer. Resolve the first opaque ancestor color instead.
  *
- * The dynamic import keeps `html-to-image` out of the main bundle; the font
- * CSS is embedded once per session (the library re-reads every stylesheet and
- * re-encodes every font face on each call otherwise, which is what made the
- * copy button feel stuck for seconds).
+ * 3. **A failed decode returns a valid, empty image.** Neither a null blob nor
+ *    a thrown error marks that case, so the raster is checked for content.
+ *
+ * `modern-screenshot` (the maintained fork of html-to-image) does the work:
+ * it resolves `var()` and web fonts itself, and its `font`/`features` options
+ * are what keep glyph metrics stable. The dynamic import keeps it out of the
+ * main bundle.
  */
 
 /** Face scripts render on load; give a slow face a hard cap so a broken
@@ -208,18 +208,10 @@ export function opaqueBackground(element: HTMLElement, fallback: string): string
 }
 
 /** Pixel ratio that keeps the canvas inside Chromium's dimension cap. Past it
- *  `toBlob` yields an empty image, indistinguishable from a broken export. */
+ *  the rasterizer yields an empty image, indistinguishable from a broken
+ *  export. */
 export function cappedPixelRatio(ratio: number, width: number, height: number): number {
 	return Math.max(1, Math.min(ratio, MAX_CANVAS_EDGE / Math.max(Math.max(width, 1), Math.max(height, 1))));
-}
-
-/** Font CSS is embedded once per session: the library otherwise reads and
- *  re-encodes every stylesheet and font face on every export. */
-let fontEmbedCss: Promise<string | null> | null = null;
-
-function loadFontEmbedCss(): Promise<string | null> {
-	fontEmbedCss ??= import("html-to-image").then(mod => mod.getFontEmbedCSS(document.body)).catch(() => null);
-	return fontEmbedCss;
 }
 
 /** Wait for the faces the card is about to measure, but never for long: a
@@ -320,8 +312,7 @@ export async function rasterizeToBlob(element: HTMLElement, options: RasterizeOp
 		}
 		await fontsSettled();
 
-		const { toCanvas } = await import("html-to-image");
-		const fontEmbedCSS = await loadFontEmbedCss();
+		const { domToCanvas } = await import("modern-screenshot");
 		const background = opaqueBackground(element, options.backgroundColor ?? "#ffffff");
 		const preferred = options.pixelRatio ?? 2;
 		const includeStyleProperties = captureStyleProperties(clone);
@@ -335,11 +326,15 @@ export async function rasterizeToBlob(element: HTMLElement, options: RasterizeOp
 			const pixelRatio = cappedPixelRatio(ratio, rect.width, rect.height);
 			let canvas: HTMLCanvasElement | null = null;
 			try {
-				canvas = await toCanvas(clone, {
-					pixelRatio,
+				canvas = await domToCanvas(clone, {
+					scale: pixelRatio,
 					backgroundColor: background,
 					includeStyleProperties,
-					...(fontEmbedCSS ? { fontEmbedCSS } : {}),
+					// Embed the faces the card actually renders: a fallback face
+					// changes glyph widths, and a wrong-metric "almost right" export
+					// is worse than a visible failure.
+					font: {},
+					features: { removeControlCharacter: true, fixSvgXmlDecode: true },
 				});
 				if (!canvas) throw new Error("canvas produced no raster");
 				assertCanvasHasContent(canvas);
