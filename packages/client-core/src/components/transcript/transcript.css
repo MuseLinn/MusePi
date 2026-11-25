@@ -1884,6 +1884,10 @@ button.tr-display-context-source:hover {
 	.tr-table-split {
 		position: static;
 	}
+	.tr-table-menu-sep,
+	.tr-table-menu-label {
+		display: none;
+	}
 	.tr-table-split[data-menu-open] .tr-table-menu {
 		position: static;
 		flex-direction: row;
@@ -1928,6 +1932,21 @@ button.tr-display-context-source:hover {
 .tr-table-menu button:focus-visible {
 	outline: 2px solid var(--ring);
 	outline-offset: -2px;
+}
+
+/* Copy formats and download formats share one menu; the rule keeps them from
+ * reading as six interchangeable entries. */
+.tr-table-menu-sep {
+	height: 1px;
+	margin: 3px 4px;
+	background: var(--border);
+}
+
+.tr-table-menu-label {
+	padding: 3px 8px 1px;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+	letter-spacing: 0.02em;
 }
 
 /* Region selection (drag a rectangle, or click a header for its column). The
@@ -2010,7 +2029,14 @@ button.tr-display-context-source:hover {
 	padding: 12px 16px 16px;
 }
 
-.tr-table-expand-body table {
+/* The clone is wrapped in `.tr-md` (see openTableExpandDialog), so the table
+ * keeps the card frame, cell inset and header fill it has in the message. Only
+ * the width differs: a wide table lays itself out at its content width instead
+ * of being squeezed into the message column, and a narrow one still fills the
+ * dialog. */
+.tr-table-expand-body > table {
+	width: max-content;
+	min-width: 100%;
 	margin: 0;
 }
 

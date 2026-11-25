@@ -38,6 +38,7 @@ import {
 	setAnswerMarks,
 } from "../../ui-blocks/answers.js";
 import { isUiBlockLanguage, renderUiBlockFence, splitOpenUiFence } from "../../ui-blocks/render.js";
+import { flyFrame, motionDisabled } from "../image-morph";
 import { blockGlyph, setBlockGlyph } from "./block-glyph";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
@@ -297,11 +298,13 @@ function tableToMarkdown({ headers, rows }: { headers: string[]; rows: string[][
  * (26px ghost targets, `<morph-icon>` glyphs, hover/focus reveal) instead of
  * the text buttons that used to float over the header cells.
  *
- * Copy and download are split controls: the glyph acts on the default format
- * (Markdown / CSV) in one click, the caret beside it opens the other formats.
- * Both share the code-block `data-copy-hash` scheme, so the copy glyph morphs
- * to a check through the same feedback effect. The width toggle carries the
- * table hash so the component can re-apply its pressed state after a rebuild.
+ * Copy and download each act on their default format (Markdown / CSV) in one
+ * click; the formats that need a choice live behind ONE "more formats" menu
+ * instead of a caret on each control — two identical carets read as two
+ * different things and cost a button. Both share the code-block
+ * `data-copy-hash` scheme, so the copy glyph flips to a check through the same
+ * feedback effect. The width toggle carries the table hash so the component can
+ * re-apply its pressed state after a rebuild.
  */
 function tableToolbarHtml(hash: string): string {
 	const widen = escapeHtml(t("general.widenTable"));
@@ -309,33 +312,36 @@ function tableToolbarHtml(hash: string): string {
 	const download = escapeHtml(t("settings.download"));
 	const expand = escapeHtml(t("general.tableExpand"));
 	const formats = escapeHtml(t("general.tableFormats"));
-	const split = (main: string, menu: string): string =>
-		`<span class="tr-table-split">${main}` +
-		`<button type="button" class="tr-code-btn tr-table-btn tr-table-caret" data-table-menu aria-haspopup="menu" aria-expanded="false" aria-label="${formats}" title="${formats}">` +
-		blockGlyph("more") +
-		`</button>` +
-		`<span class="tr-table-menu" role="menu">${menu}</span>` +
-		`</span>`;
+	const item = (attrs: string, label: string): string =>
+		`<button type="button" role="menuitem" ${attrs}>${escapeHtml(label)}</button>`;
 	return (
 		`<div class="tr-table-bar">` +
 		`<button type="button" class="tr-code-btn tr-table-btn tr-table-wide" data-table-wide="${hash}" aria-pressed="false" aria-label="${widen}" title="${widen}">` +
 		blockGlyph("widen") +
 		`</button>` +
-		split(
-			`<button type="button" class="tr-code-btn tr-table-btn tr-code-copy" data-table-copy="markdown" data-copy-hash="${hash}" aria-label="${copy}" title="${copy}">` +
-				blockGlyph("copy") +
-				`</button>`,
-			`<button type="button" role="menuitem" data-table-copy="csv">CSV</button>` +
-				`<button type="button" role="menuitem" data-table-copy="tsv">TSV</button>` +
-				`<button type="button" role="menuitem" data-table-copy="markdown">Markdown</button>`,
-		) +
-		split(
-			`<button type="button" class="tr-code-btn tr-table-btn" data-table-download="csv" aria-label="${download}" title="${download}">` +
-				blockGlyph("download") +
-				`</button>`,
-			`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
-				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>`,
-		) +
+		`<button type="button" class="tr-code-btn tr-table-btn tr-code-copy" data-table-copy="markdown" data-copy-hash="${hash}" aria-label="${copy}" title="${copy}">` +
+		blockGlyph("copy") +
+		`</button>` +
+		`<button type="button" class="tr-code-btn tr-table-btn" data-table-download="csv" aria-label="${download}" title="${download}">` +
+		blockGlyph("download") +
+		`</button>` +
+		`<span class="tr-table-split">` +
+		`<button type="button" class="tr-code-btn tr-table-btn tr-table-caret" data-table-menu aria-haspopup="menu" aria-expanded="false" aria-label="${formats}" title="${formats}">` +
+		blockGlyph("more") +
+		`</button>` +
+		`<span class="tr-table-menu" role="menu">` +
+		// Both groups list formats, and a menu of two unlabelled "CSV"s does not
+		// say which one copies and which one downloads.
+		`<span class="tr-table-menu-label" role="presentation">${copy}</span>` +
+		item(`data-table-copy="csv"`, "CSV") +
+		item(`data-table-copy="tsv"`, "TSV") +
+		item(`data-table-copy="markdown"`, "Markdown") +
+		`<span class="tr-table-menu-sep" role="separator"></span>` +
+		`<span class="tr-table-menu-label" role="presentation">${download}</span>` +
+		item(`data-table-download="csv"`, "CSV") +
+		item(`data-table-download="markdown"`, "Markdown") +
+		`</span>` +
+		`</span>` +
 		`<button type="button" class="tr-code-btn tr-table-btn" data-table-expand aria-label="${expand}" title="${expand}">` +
 		blockGlyph("expand") +
 		`</button>` +
@@ -349,6 +355,16 @@ function tableToolbarHtml(hash: string): string {
  * hand-rolled overlay has to re-implement (and gets subtly wrong). The table is
  * cloned in, so a wide one can scroll at full window width without touching the
  * message it came from.
+ *
+ * Two details make the expanded table legible and continuous:
+ *
+ * - The clone is wrapped in `.tr-md`, the scope every table rule hangs off. A
+ *   bare clone in the dialog lost the card frame, the cell inset and the header
+ *   fill, and rendered as the browser's default table on a white sheet.
+ * - It flies out of the source table and back into it (`flyFrame`, the same
+ *   one-take shared-element recipe the lightbox and the standalone widget use),
+ *   so the reader can tell which table opened instead of a panel appearing from
+ *   nowhere.
  */
 export function openTableExpandDialog(table: HTMLTableElement): void {
 	const existing = document.querySelector<HTMLDialogElement>("dialog.tr-table-expand");
@@ -369,22 +385,52 @@ export function openTableExpandDialog(table: HTMLTableElement): void {
 	head.append(title, close);
 
 	const body = document.createElement("div");
-	body.className = "tr-table-expand-body";
+	// `.tr-md` is the scope the table's frame, dividers and header fill hang off;
+	// without it the clone renders as an unstyled browser table.
+	body.className = "tr-md tr-table-expand-body";
 	body.appendChild(table.cloneNode(true));
 	dialog.append(head, body);
 	document.body.appendChild(dialog);
 
+	const origin = table.getBoundingClientRect();
+	dialog.showModal();
+
+	// Fly out of the source table so the reader can tell which table opened.
+	if (!motionDisabled()) {
+		flyFrame(dialog, origin, dialog.getBoundingClientRect());
+	}
+
+	let closing = false;
 	const dismiss = (): void => {
 		dialog.close();
 		dialog.remove();
 	};
-	close.addEventListener("click", dismiss);
+	/** Fly home first; `close()` would drop the element before the animation. */
+	const requestClose = (): void => {
+		if (closing) return;
+		closing = true;
+		const current = table.getBoundingClientRect();
+		const flight = motionDisabled()
+			? null
+			: flyFrame(dialog, current, dialog.getBoundingClientRect(), { reverse: true, fill: "forwards" });
+		if (!flight) {
+			dismiss();
+			return;
+		}
+		flight.onfinish = dismiss;
+	};
+
+	close.addEventListener("click", requestClose);
 	// A click on the backdrop (the dialog element itself, outside the body).
 	dialog.addEventListener("click", event => {
-		if (event.target === dialog) dismiss();
+		if (event.target === dialog) requestClose();
+	});
+	// Escape arrives as `cancel`: take it over so the flight can play.
+	dialog.addEventListener("cancel", event => {
+		event.preventDefault();
+		requestClose();
 	});
 	dialog.addEventListener("close", () => dialog.remove());
-	dialog.showModal();
 	// Restoring focus is the browser's job on close; make the close button the
 	// initial target so keyboard users land inside the dialog.
 	close.focus();

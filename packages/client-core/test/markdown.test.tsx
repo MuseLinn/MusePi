@@ -210,6 +210,20 @@ describe("Transcript tables", () => {
 		expect(html).toContain('data-table-download="markdown"');
 	});
 
+	it("keeps one format menu instead of a caret on every control", () => {
+		const html = renderMarkdown("| a | b |\n|---|---|\n| 1 | 2 |");
+		const bar = html.match(/<div class="tr-table-bar">[\s\S]*?<\/div>/)?.[0] ?? "";
+		expect(bar).not.toBe("");
+		// Five actions: widen, copy, download, more formats, expand. The menu
+		// items are buttons too, so count the toolbar's own controls.
+		expect(bar.match(/class="tr-code-btn/g)).toHaveLength(5);
+		// Two identical carets read as two different things and cost a button.
+		expect(bar.match(/data-table-menu(?![-a-z])/g)).toHaveLength(1);
+		// Six interchangeable format entries would not say which group copies.
+		expect(bar.match(/tr-table-menu-label/g)).toHaveLength(2);
+		expect(bar).toContain('aria-label="');
+	});
+
 	it("renders table cells with inline markdown and escaped content", () => {
 		const html = renderMarkdown("| a | b |\n|---|---|\n| **x** | <script> |");
 		expect(html).toContain("<strong>x</strong>");
