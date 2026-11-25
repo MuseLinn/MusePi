@@ -76,6 +76,10 @@ named 模式需要 `collab.cloudflaredHostname` 和隧道 token。token 存放�
 
 Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求 serve 配置为空：MusePi 先用 `tailscale serve get-config --all` 备份当前配置，把 relay 挂到 443，443 已被占用时回退到 8443（端口写进链接）。停止时只移除自己那一条（`tailscale serve --https=<port> off`），再用 `tailscale serve set-config` 恢复备份——绝不使用 `tailscale serve reset`。MusePi 从不运行 `tailscale up`，也不保存任何 Tailscale 凭据；未登录、MagicDNS 关闭或 HTTPS 证书不可用时，会指出具体该去管理后台改哪个开关。
 
+### 命名
+
+一个能力，三个词不能混用。**远程访问**（`remote access`）指这套能力：让手机、浏览器或聊天 Bot 够到这里的工作区与会话。**远程连接**（`remote connection`）指另一条轴——daemon 跑在另一台机器上，或文件挂载自另一台机器。wire 沿用旧的 `remote-access.*` 与 `collab.*`，同意记录是 `musepi-gui-remote-access-consent`；文案里不用「远程控制」，因为它对只读观看链接是名不副实。
+
 ### 健康检查、撤销与时限
 
 每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。应答还会在某个配置值让分享的一部分不可用时带上 `warning`——例如不可用的 `collab.webUrl`，其来源会被 relay 以 `403` 拒绝。分享运行中、复用同一分享时，以及分享停止后，都会返回同一条提示；重新开始分享时会重新计算。

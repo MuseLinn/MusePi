@@ -2353,6 +2353,16 @@
 	min-height: 0;
 }
 
+/* The capability's model line: one sentence, above the scroller so it explains
+ * both columns without repeating either of them. */
+.gui-collab-lede {
+	margin: 0;
+	padding: 10px 22px 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
 .gui-collab-grid {
 	display: grid;
 	flex: 1 1 auto;

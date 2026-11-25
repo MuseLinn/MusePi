@@ -41,7 +41,7 @@ lang: zh-CN
 
 - **三栏 shell**：左会话侧栏（会话/分组/项目）+ 中聊天列（transcript + 圆角 composer）+ 右 ContextPanel（始终可见）。`gui-shell` 是 flex row；每个全宽 pane（设置与页面目的地）必须 `flex: 1; min-width: 0`，否则会塌到内容宽。
 - **应用 rail**：常驻 52px 目的地列（`.gui-rail`，`components/AppRail.tsx`）位于面板槽之前，面板收到 0 宽也不会把人困住。顶部 48px 拖拽带（`.gui-rail-top`，与 48px 顶栏齐平）刻意留空：rail 规避标题栏，不改标题栏。目的地从带下方开始，绝不进标题栏行。按钮为纯图标 + tooltip + 可访问名称；`aria-current="page"` 只标记当前目的地，未读圆点是装饰。目的地为 首页 / 任务中心 / 看板 / 问题与拉取请求 / 能力中心（按插件开关）/ 设置；新建与搜索留在面板里，因为它们是操作不是目的地。每个目的地拥有自己的左栏：首页显示会话列表，设置显示设置导航，看板与问题折叠会话侧栏，任务中心与能力中心换上自己的二级面板。唯一决策点是 `computeSettingsShellState`。
-- **rail 底部**：实例菜单、快捷键与远程控制固定在 rail 底部组，面板折叠或切换目的地都不会消失。`InstanceButton` 的 `compact` 变体保留完整 portal 菜单，只显示连接状态点；几何与其它 rail 按钮一致（36×36、`--radius-md`）。`SessionSidebar.showFooter` 在两级 shell 中关闭重复的侧栏 footer。
+- **rail 底部**：实例菜单、快捷键与远程访问固定在 rail 底部组，面板折叠或切换目的地都不会消失。`InstanceButton` 的 `compact` 变体保留完整 portal 菜单，只显示连接状态点；几何与其它 rail 按钮一致（36×36、`--radius-md`）。`SessionSidebar.showFooter` 在两级 shell 中关闭重复的侧栏 footer。
 - **二级面板**：`gui-side-panel.css` 是首页、任务中心、能力中心共用的唯一表面语言——8px 拖拽带、一个整宽主操作、一行紧凑搜索/过滤、扁平命名分组（不套卡片、不加行分隔线）、整宽 hover 行且选中只用一种强调色、一行空态提示。面板不重复目的地标题，也不重复内容区的插画空态。每个 pane 自带槽位 class；`data-panel` 是唯一显隐权威，绝不切 `display`。
 - **卡片几何**：所有目的地的浮起卡片（会话、欢迎页、右面板、终端坞、看板、任务、问题、能力中心）共用一套几何。`.gui-chat-surface` 承担 8px 窗口 gutter，里面卡片再承担同样 gutter，所以卡片距列左/右/下三边都是 16px；顶边把 surface 的不可见 gutter 折进卡片，卡片从顶栏下方一个 8px gutter 开始。圆角 `--radius-2xl`（16px）、阴影 `--gui-card-shadow`、表面 `--color-surface`。`.gui-float-card` 覆盖会话/欢迎/右面板，`.gui-page-card` 覆盖页面目的地。Tailwind `m-2`、`rounded-2xl` 与旧单卡阴影在此禁用。
 - **等高卡片**：侧栏面板与 `.gui-chat-column` / `.gui-page-card` 是同一张卡片：从 48px rail/顶栏带下方开始，镜像内容列 gutter，半径、阴影、表面一致。卡片线上方是窗口拖动面。`data-panel` 只决定哪个已挂载 pane 生效，绝不切 `display`，否则宽度折叠会丢。

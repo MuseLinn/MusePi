@@ -665,6 +665,10 @@ export function RemoteAccessDialog({
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
+			{/* The model, stated once and kept outside the scroller: each column is
+			 * a way in, not an artifact, and this sentence is what makes the two
+			 * read as one capability. */}
+			<p className="gui-collab-lede">{t("settings.remoteAccessModel")}</p>
 			<div className="gui-collab-frame gui-scroll-frame">
 				<div ref={scrollRef} className="gui-collab-grid">
 					<section className="gui-collab-col gui-collab-share">
@@ -780,7 +784,6 @@ export function RemoteAccessDialog({
 							</div>
 						) : (
 							<div className="gui-collab-setup">
-								<p className="gui-collab-desc">{t("settings.remoteAccessIntro")}</p>
 								{degraded ? (
 									<div className="gui-collab-recovery" role="alert">
 										<Icon name="error-warning" className="h-5 w-5" />

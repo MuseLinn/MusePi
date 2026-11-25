@@ -228,7 +228,9 @@ describe("RemoteAccessDialog sharing surface", () => {
 			expect(radioGroup(dialog, "共享范围")).toBeNull();
 			expect(dialog.textContent).not.toContain("Secret Demo");
 			expect(dialog.textContent).toContain("共享整个工作台");
-			expect(dialog.textContent).toContain("选择网络方式后开始共享");
+			// The model line is the dialog's, not this entrance's: it must not
+			// name a session either.
+			expect(dialog.querySelector(".gui-collab-lede")?.textContent).toContain("工作区与会话");
 			expect(dialog.textContent).not.toContain("选择范围");
 
 			clickButton(dialog, "开始共享");
@@ -535,6 +537,21 @@ describe("RemoteAccessDialog hierarchy", () => {
 			});
 			const afterEnd = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
 			expect(afterEnd[afterEnd.length - 1]?.getAttribute("aria-checked")).toBe("true");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("the capability model line stays outside the scrolling body", async () => {
+		const harness = await renderDialog(rpcStub());
+		try {
+			const dialog = harness.dialog();
+			const lede = dialog.querySelector(".gui-collab-lede");
+			// One sentence explains both columns; it must not scroll away with
+			// whichever way-in happens to be long.
+			expect(lede === null).toBe(false);
+			expect(dialog.querySelector(".gui-collab-grid")?.contains(lede)).toBe(false);
+			expect(lede?.nextElementSibling?.className).toContain("gui-collab-frame");
 		} finally {
 			await harness.unmount();
 		}
