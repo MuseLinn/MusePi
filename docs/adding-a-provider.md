@@ -46,6 +46,13 @@ That is the full change for:
 - env-key-only providers,
 - providers with a simple inline API-key login flow,
 - most OpenAI-compatible gateways.
+- A gateway that pins one session to one upstream for prompt caching names its
+  affinity header in the model's `compat.promptCacheSessionHeader` (any HTTP
+  header token; the catalog's own xAI entries use `x-grok-conv-id`). The value
+  is the session's cache key, so a load-balanced gateway can keep a
+  conversation on the node that holds its prefix. Without the field the client
+  sends no affinity at all, and every turn may land on a different backend — a
+  real prefix cache then still reports a hit rate near zero.
 
 For a **non-trivial provider-local OAuth flow**, put the implementation in
 `packages/ai/src/registry/oauth/<vendor>.ts` and lazy-import it from the def

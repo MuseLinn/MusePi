@@ -213,6 +213,13 @@ function applyCoreWeaveProjectHeader(headers: Record<string, string>): void {
 	}
 }
 
+/** RFC 9110 token: the only shape a header name may take. */
+const HTTP_HEADER_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+function isHttpHeaderToken(name: string): boolean {
+	return HTTP_HEADER_TOKEN.test(name);
+}
+
 function setHeaderIfAbsent(headers: Record<string, string>, name: string, value: string): void {
 	const normalizedName = name.toLowerCase();
 	for (const existingName in headers) {
@@ -349,7 +356,11 @@ export function resolveOpenAIRequestSetup(
 	}
 	applyOpenCodeSessionHeader(headers, model.provider, options.openCodeSessionAffinity);
 	if (options.promptCacheSessionId && model.compat?.promptCacheSessionHeader) {
-		setHeaderIfAbsent(headers, model.compat.promptCacheSessionHeader, options.promptCacheSessionId);
+		// A custom provider names its own affinity header, so validate the name:
+		// an invalid token is a config typo, and letting it through would turn
+		// every request into a transport error instead of one cold cache.
+		const header = model.compat.promptCacheSessionHeader;
+		if (isHttpHeaderToken(header)) setHeaderIfAbsent(headers, header, options.promptCacheSessionId);
 	}
 
 	if (options.defaultBaseUrl !== undefined) {
