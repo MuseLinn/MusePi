@@ -669,8 +669,7 @@ export async function shareSession(sm: SessionManager, options?: ShareSessionOpt
 
 /** Strip trailing slashes so `<base>/<id>` composes cleanly. */
 export function normalizeShareServerUrl(serverUrl?: string): string {
-	const base = (serverUrl ?? DEFAULT_SHARE_URL).trim().replace(/\/+$/, "");
-	return base || DEFAULT_SHARE_URL;
+	return (serverUrl ?? DEFAULT_SHARE_URL).trim().replace(/\/+$/, "");
 }
 
 interface SealedSession {

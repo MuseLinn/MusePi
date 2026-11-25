@@ -8,7 +8,6 @@
  */
 import { describe, expect, it } from "bun:test";
 import {
-	DEFAULT_RELAY_URL,
 	decodeBase64Url,
 	encodeBase64Url,
 	formatCollabLink,
@@ -107,9 +106,11 @@ describe("web deep links", () => {
 		}
 	});
 
-	it("resolves the default relay deep link", () => {
-		const link = formatCollabWebLink(DEFAULT_RELAY_URL, ROOM, KEY);
-		expect(link).toBe(`https://my.omp.sh/#${ROOM}.${KEY_TEXT}`);
-		expect(parsed(link).wsUrl).toBe(`${DEFAULT_RELAY_URL}/r/${ROOM}`);
+	it("resolves a web deep link against the relay it was given", () => {
+		const link = formatCollabWebLink("wss://relay.example.com", ROOM, KEY);
+		// With no built-in relay there is no "bare" collapse: the inner link
+		// names the origin, since only a configured relay can be resolved.
+		expect(link).toBe(`https://relay.example.com/#relay.example.com/r/${ROOM}.${KEY_TEXT}`);
+		expect(parsed(link).wsUrl).toBe(`wss://relay.example.com/r/${ROOM}`);
 	});
 });
