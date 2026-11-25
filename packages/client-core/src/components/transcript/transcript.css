@@ -4064,16 +4064,13 @@ a.tr-tool-search-title:hover {
 	justify-content: center;
 }
 
-/* 一镜到底 flight: the panel is scaled by WAAPI, so the content only has to be
- * rasterized once — blurred — instead of re-laying out text and iframes at every
- * intermediate size. The filter sits on the content layer while the transform
- * animates the scrolling body, which keeps the two on separate compositor
- * layers. */
+/* 一镜到底 flight: the panel is scaled by WAAPI, so the transform animates one
+ * composited layer. No `filter: blur()` — that is a second offscreen pass over
+ * the whole card (an iframe face included) for every frame of a 200ms flight,
+ * and the flight reads fine without it. Pointer input is still suppressed while
+ * the card is in motion. */
 .tr-widget-fs[data-flying="true"] .tr-widget-fs-body {
 	will-change: transform;
-}
-.tr-widget-fs[data-flying="true"] .tr-widget-fs-body > .tv-widget {
-	filter: blur(9px);
 }
 .tr-widget-fs[data-flying="true"] .tr-widget-fs-body iframe,
 .tr-widget-fs[data-flying="true"] .tr-widget-fs-body button {
