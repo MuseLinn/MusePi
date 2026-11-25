@@ -2027,6 +2027,8 @@ export const settings = {
 	"settings.noSavedHosts": "还没有保存的电脑——先添加一台（或使用 omp ssh add）。",
 	"settings.connectFailed": "连接失败",
 	"settings.notConnected": "未连接",
+	"settings.channelNeedsCredentials": "需填写凭据",
+	"settings.channelScansToConnect": "扫码登录",
 	"settings.disconnect2": "断开连接",
 	"settings.connectingToWithHost": "正在连接到 {host}…",
 	"settings.probeFailed": "电脑探测失败",

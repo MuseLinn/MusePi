@@ -591,6 +591,37 @@ export function RemoteAccessDialog({
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(scrollRef);
 
+	const selectExposure = (id: string): void => {
+		setExposureId(id);
+		setError(null);
+	};
+
+	/**
+	 * Radio-group keyboard contract: arrows move the selection and focus with
+	 * it, Home/End jump to the ends. The group is one tab stop, so a keyboard
+	 * user must be able to change the path without tabbing through four rows.
+	 */
+	const onExposureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+		const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
+		if (!keys.includes(event.key)) return;
+		const list = exposures ?? [];
+		if (list.length === 0) return;
+		event.preventDefault();
+		const current = list.findIndex(entry => entry.id === exposureId);
+		const from = current < 0 ? 0 : current;
+		const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+		const next =
+			event.key === "Home" ? 0 : event.key === "End" ? list.length - 1 : (from + step + list.length) % list.length;
+		const target = list[next];
+		if (!target) return;
+		selectExposure(target.id);
+		// Focus follows selection: the newly checked radio is the group's tab stop.
+		const group = event.currentTarget;
+		requestAnimationFrame(() => {
+			group.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+		});
+	};
+
 	const errorBlock = error ? (
 		<div className="gui-collab-recovery" role="alert">
 			<Icon name="error-warning" className="h-5 w-5" />
@@ -820,6 +851,7 @@ export function RemoteAccessDialog({
 											role="radiogroup"
 											aria-label={t("settings.shareExposure")}
 											className="gui-collab-exposure-list"
+											onKeyDown={onExposureKeyDown}
 										>
 											{(exposures ?? []).map(entry => {
 												const selected = entry.id === exposureId;
@@ -835,11 +867,11 @@ export function RemoteAccessDialog({
 															type="button"
 															role="radio"
 															aria-checked={selected}
+															// A radio group is one tab stop: arrows move the
+															// selection, so every option must not be tabbed to.
+															tabIndex={selected ? 0 : -1}
 															disabled={busy}
-															onClick={() => {
-																setExposureId(entry.id);
-																setError(null);
-															}}
+															onClick={() => selectExposure(entry.id)}
 															className="gui-collab-exposure-row"
 														>
 															<span
@@ -960,6 +992,14 @@ export function RemoteAccessDialog({
 										const waitingScan = c.state === "waiting_scan";
 										const channelBusy = busyChannel === c.kind;
 										const stateKind = channelStateText(c.state, c.detail);
+										// What "Connect" will ask for decides which row is worth
+										// opening now: a bot token is a detour, a scan is one tap.
+										const needsCredentials = !!fields?.some(field => !field.optional);
+										const offHint = needsCredentials
+											? t("settings.channelNeedsCredentials")
+											: fields
+												? t("settings.channelScansToConnect")
+												: null;
 										const stateText =
 											stateKind === "connected"
 												? (c.detail ?? t("settings.connected"))
@@ -969,7 +1009,9 @@ export function RemoteAccessDialog({
 														? (c.detail ?? t("settings.waitingForScan"))
 														: stateKind === "detail"
 															? c.detail
-															: t("settings.notConnected");
+															: offHint
+																? `${t("settings.notConnected")} · ${offHint}`
+																: t("settings.notConnected");
 										return (
 											<li key={c.kind} className="gui-collab-bot-wrap">
 												<div className="gui-collab-bot">

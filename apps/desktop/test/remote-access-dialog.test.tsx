@@ -512,6 +512,34 @@ describe("RemoteAccessDialog hierarchy", () => {
 		}
 	});
 
+	test("the network paths behave as one radio group for the keyboard", async () => {
+		const harness = await renderDialog(rpcStub());
+		try {
+			const dialog = harness.dialog();
+			const group = radioGroup(dialog, "网络方式");
+			if (!group) throw new Error("exposure group missing");
+			const radios = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+			expect(radios.length).toBeGreaterThan(1);
+			const stops = (active: number): number[] => radios.map((_, index) => (index === active ? 0 : -1));
+			// One tab stop: only the checked path is tabbable, so a keyboard user
+			// does not have to tab through every path to reach Start.
+			expect(radios.map(el => el.tabIndex)).toEqual(stops(0));
+			act(() => {
+				group.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+			});
+			const afterArrow = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+			expect(afterArrow[1]?.getAttribute("aria-checked")).toBe("true");
+			expect(afterArrow.map(el => el.tabIndex)).toEqual(stops(1));
+			act(() => {
+				group.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+			});
+			const afterEnd = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+			expect(afterEnd[afterEnd.length - 1]?.getAttribute("aria-checked")).toBe("true");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
 	test("install guidance is folded into the option that needs it", async () => {
 		const harness = await renderDialog(rpcStub());
 		try {
@@ -626,6 +654,28 @@ describe("RemoteAccessDialog channels", () => {
 			// never-configured rows looked like six configured ones.
 			expect(discord?.textContent).toContain("未连接");
 			expect(telegram?.textContent).toContain("已连接");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("an idle channel says what connecting will ask for", async () => {
+		const harness = await renderDialog(
+			rpcStub({
+				channelsList: () => [
+					{ kind: "discord", state: "off", config: {} },
+					{ kind: "wechat", state: "off", config: {} },
+				],
+			}),
+		);
+		try {
+			const rows = Array.from(harness.dialog().querySelectorAll(".gui-collab-bot"));
+			const discord = rows.find(row => row.textContent?.includes("Discord"));
+			const wechat = rows.find(row => row.textContent?.includes("WeChat"));
+			// The choice between six bots turns on what each one costs to set up:
+			// a bot token is a detour, a QR scan is one tap.
+			expect(discord?.textContent).toContain("需填写凭据");
+			expect(wechat?.textContent).toContain("扫码登录");
 		} finally {
 			await harness.unmount();
 		}

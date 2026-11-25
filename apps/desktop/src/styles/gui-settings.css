@@ -2898,11 +2898,6 @@
 	padding-top: 2px;
 }
 
-.gui-collab-scope.gui-seg {
-	width: 100%;
-	max-width: none;
-}
-
 .gui-collab-scope-summary {
 	display: flex;
 	align-items: flex-start;
@@ -2957,13 +2952,6 @@
 	flex-direction: column;
 	gap: 8px;
 	min-width: 0;
-}
-
-.gui-collab-recovery-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	margin-top: 4px;
 }
 
 .gui-collab-technical {

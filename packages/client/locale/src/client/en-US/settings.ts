@@ -2126,6 +2126,8 @@ export const settings = {
 	"settings.noSavedHosts": "No saved computers yet — add one first (or use omp ssh add).",
 	"settings.connectFailed": "Connection failed",
 	"settings.notConnected": "Not connected",
+	"settings.channelNeedsCredentials": "needs credentials",
+	"settings.channelScansToConnect": "scan to sign in",
 	"settings.disconnect2": "Disconnect",
 	"settings.connectingToWithHost": "Connecting to {host}…",
 	"settings.probeFailed": "Computer probe failed",
