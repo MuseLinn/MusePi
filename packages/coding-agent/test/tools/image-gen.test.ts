@@ -905,3 +905,99 @@ describe("imageGenTool", () => {
 		expect(resultText(result)).toContain("OS temp directory");
 	});
 });
+
+describe("added media providers", () => {
+	const providerCtx = (keys: Record<string, string>, fetchMock: typeof fetch): CustomToolContext =>
+		({
+			fetch: fetchMock,
+			sessionManager: {
+				getCwd: () => "/tmp",
+				getSessionId: () => "test-session",
+			} as unknown as ReadonlySessionManager,
+			modelRegistry: {
+				getApiKey: async () => undefined,
+				getApiKeyForProvider: async (provider: string) => keys[provider],
+				authStorage: { rotateSessionCredential: async () => false },
+				resolver: (provider: string) => async () => keys[provider] ?? "",
+			} as unknown as ModelRegistry,
+			model: undefined,
+			isIdle: () => true,
+			hasQueuedMessages: () => false,
+			abort: () => {},
+		}) as CustomToolContext;
+
+	it("lists MiniMax and Meta as built-in image providers", async () => {
+		const { AUTO_IMAGE_PROVIDER_ORDER, IMAGE_PROVIDER_CHOICES } = await import(
+			"@musepi/pi-coding-agent/tools/image-providers"
+		);
+		const values = IMAGE_PROVIDER_CHOICES.map(choice => choice.value);
+		expect(values).toContain("minimax");
+		expect(values).toContain("meta");
+		expect(AUTO_IMAGE_PROVIDER_ORDER).toContain("minimax");
+		expect(AUTO_IMAGE_PROVIDER_ORDER).toContain("meta");
+	});
+
+	it("routes MiniMax through /image_generation with inline base64", async () => {
+		setImageProviderOrder(["minimax"]);
+		let requestUrl: string | undefined;
+		let requestBody: Record<string, unknown> | undefined;
+		const fetchMock = (async (input: string | URL | Request, init?: RequestInit) => {
+			requestUrl = input.toString();
+			requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			return new Response(
+				JSON.stringify({
+					data: { image_base64: [Buffer.from("fake-png").toString("base64")] },
+					base_resp: { status_code: 0, status_msg: "success" },
+					metadata: { success_count: 1, failed_count: 0 },
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		}) as unknown as typeof fetch;
+
+		const result = await imageGenTool.execute(
+			"call-minimax",
+			{ subject: "a cat", aspect_ratio: "16:9" },
+			undefined,
+			providerCtx({ minimax: "test-minimax-key" }, fetchMock),
+		);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestUrl).toBe("https://api.minimax.io/v1/image_generation");
+		expect(requestBody).toMatchObject({
+			model: "image-01",
+			n: 1,
+			aspect_ratio: "16:9",
+			response_format: "base64",
+		});
+		expect(result.details?.provider).toBe("minimax");
+		expect(result.details?.imageCount).toBe(1);
+		expect(result.details?.images[0]?.mimeType).toBe("image/png");
+	});
+
+	it("routes Meta Muse Image through the OpenAI-compatible images endpoint", async () => {
+		setImageProviderOrder(["meta"]);
+		let requestUrl: string | undefined;
+		let requestBody: Record<string, unknown> | undefined;
+		const fetchMock = (async (input: string | URL | Request, init?: RequestInit) => {
+			requestUrl = input.toString();
+			requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+			return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("fake-webp").toString("base64") }] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			});
+		}) as unknown as typeof fetch;
+
+		const result = await imageGenTool.execute(
+			"call-meta",
+			{ subject: "a cat", aspect_ratio: "4:3" },
+			undefined,
+			providerCtx({ meta: "test-meta-key" }, fetchMock),
+		);
+		generatedImagePaths.push(...(result.details?.imagePaths ?? []));
+
+		expect(requestUrl).toBe("https://api.meta.ai/v1/images/generations");
+		expect(requestBody).toMatchObject({ model: "muse-image-1.0", n: 1, size: "1536x1024" });
+		expect(result.details?.provider).toBe("meta");
+		expect(result.details?.imageCount).toBe(1);
+	});
+});

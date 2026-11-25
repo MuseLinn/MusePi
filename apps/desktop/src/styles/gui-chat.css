@@ -3379,6 +3379,15 @@ body.gui-resizing .gui-pane-right {
 	margin: 4px 0 0;
 }
 
+/* Page subtitle under the title (settings pages whose copy runs longer than
+ * one line): same muted voice as the description, its own rhythm. */
+.gui-settings-page-subtitle {
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--color-text-muted);
+	margin: 6px 0 0;
+}
+
 /* Sub-navigation inside one settings page (会话与记忆): the page owns the
  * heading, so this row only sits below it with the same 18px rhythm the first
  * section would have had. */

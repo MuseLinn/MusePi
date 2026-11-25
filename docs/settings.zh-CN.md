@@ -730,7 +730,7 @@ searxng:
 |---|---|---|---|
 | `providers.webSearchOrder` | array | `[]` | `web_search` 按优先级排列的 provider ID（`perplexity`, `gemini`, `anthropic`, `codex`, `zai`, `exa`, `jina`, `kagi`, `tavily`, `brave`, `kimi`, `parallel`, `synthetic`, `searxng` 等）。重复和未知 ID 会被忽略；未列出的 provider 之后保持其内置相对顺序。空 = 内置顺序。取代已移除的 `providers.webSearch` enum（旧值迁移到此列表头部）。 |
 | `providers.webSearchGeminiModel` | string | _（未设置）_ | 当 `web_search` 使用 Gemini 时用于 Google Search grounding 的 Gemini model ID；默认 `gemini-2.5-flash`，可被 `GEMINI_SEARCH_MODEL` 覆盖。 |
-| `providers.imageOrder` | array | `[]` | 图像生成 provider ID 的优先顺序（`openai`, `openai-codex`, `antigravity`, `xai`, `gemini`, `openrouter`）。未列出的 provider 跟随活跃 session provider 和内置顺序。取代已移除的 `providers.image` enum（旧值迁移到此列表头部）。 |
+| `providers.imageOrder` | array | `[]` | 图像生成 provider ID 的优先顺序（`agnes`, `agnes-global`, `openai`, `openai-codex`, `antigravity`, `xai`, `gemini`, `openrouter`, `minimax`, `meta`）。未列出的 provider 跟随活跃 session provider 和内置顺序。取代已移除的 `providers.image` enum（旧值迁移到此列表头部）。 |
 | `providers.fetch` | enum | `auto` | `auto`, `native`, `trafilatura`, `lynx`, `parallel`, `jina`。 |
 | `providers.tinyModel` | enum | `online` | `online` 或一个本地 model（`lfm2-350m`, `qwen3-0.6b`, `gemma-270m`, `qwen2.5-0.5b`, `lfm2-700m`）。 |
 | `providers.tinyModelDevice` | enum | `default` | 本地 tiny model 的 ONNX execution provider。可被 `PI_TINY_DEVICE` 覆盖。 |

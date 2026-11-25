@@ -3804,15 +3804,37 @@ export const settings = {
 		"When on, the close button hides the window to the tray and the app keeps running in the background; when off, closing quits the app and stops the local daemon with it",
 	"settings.imageVideoGeneration": "Image & video generation",
 	"settings.imageVideoGenSubtitle":
-		"Manage provider credentials for image generation (generate_image) and video generation (agnes_video_gen); keys are stored in the local credential store and take effect for every session immediately",
-	"settings.imageGenerationProviders": "Image generation providers",
-	"settings.videoGenerationProviders": "Video generation providers",
+		"Credentials for image and video generation. Keys live in the local credential store, shared with Model providers, and take effect for every session immediately.",
+	"settings.imageGenerationProviders": "Image",
+	"settings.videoGenerationProviders": "Video",
 	"settings.noImageProvidersAvailable": "No image generation providers available",
+	"settings.noVideoProvidersAvailable": "No video generation providers available",
 	"settings.enterApiKey": "Enter API key",
-	"settings.oauthProviderManageProviders": "OAuth provider — sign in via Model settings → Providers",
-	"settings.videoGenNote":
-		"Video generation (agnes_video_gen) reuses the Agnes credential above; the tool toggle lives in Tools settings",
-	"settings.extensionProvidersCount": "{count} media provider(s) contributed by extensions",
+	"settings.addApiKey": "Add key",
+	"settings.oauthProviderManageProviders":
+		"Sign in under Model providers; once connected the status here updates automatically.",
+	"settings.videoGenNote": "Video generation reuses the Agnes credential; enable the video tool under Tools.",
+	"settings.mediaProviderExtension": "Extension",
+	"settings.apiKeyFor": "{provider} API key",
+	"settings.removeCredentialFor": "Remove {provider} credential",
+	"settings.loggingIn": "Signing in…",
+	"settings.mediaProvider.agnes": "Your Agnes API key; image and video generation share this one credential.",
+	"settings.mediaProvider.agnesGlobal":
+		"API key for Agnes's international site, configured separately from the mainland one.",
+	"settings.mediaProvider.openai":
+		"An OpenAI API key (gpt-image models); a connected Codex / ChatGPT subscription also works.",
+	"settings.mediaProvider.openaiCodex": "Uses the connected Codex / ChatGPT subscription — no OpenAI API key needed.",
+	"settings.mediaProvider.antigravity": "Sign in with Google Antigravity — no API key needed.",
+	"settings.mediaProvider.xai": "Sign in with an xAI Grok account, or use XAI_API_KEY.",
+	"settings.mediaProvider.gemini": "A Gemini API key from Google AI Studio.",
+	"settings.mediaProvider.openrouter": "An OpenRouter API key; its aggregated image models are available.",
+	"settings.mediaProvider.minimax": "A MiniMax API key, using the image-01 image models.",
+	"settings.mediaProvider.meta": "A Meta Model API key (LLM|… token) using Muse Image.",
+
+	// ── Image-provider schema strings (providers.imageOrder choices) ──
+	"Meta Muse Image": "Meta Muse Image",
+	"Requires MINIMAX_API_KEY (image-01)": "Requires MINIMAX_API_KEY (image-01)",
+	"Requires MODEL_API_KEY or META_API_KEY (muse-image)": "Requires MODEL_API_KEY or META_API_KEY (muse-image)",
 	// ── Plugin install (spec install: package name / git / archive / local path) ──
 	"settings.pluginInstallTitle": "Install plugin",
 	"settings.pluginInstallHint":

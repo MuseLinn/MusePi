@@ -42,6 +42,10 @@ const DEFAULT_OPENROUTER_MODEL = "google/gemini-3-pro-image-preview";
 const DEFAULT_ANTIGRAVITY_MODEL = "gemini-3-pro-image";
 const DEFAULT_XAI_IMAGE_MODEL = "grok-imagine-image";
 const DEFAULT_AGNES_MODEL = "agnes-image-2.1-flash";
+const DEFAULT_MINIMAX_IMAGE_MODEL = "image-01";
+const DEFAULT_META_IMAGE_MODEL = "muse-image-1.0";
+const MINIMAX_BASE_URL = "https://api.minimax.io/v1";
+const META_IMAGE_BASE_URL = "https://api.meta.ai/v1";
 // Mainland China endpoint — https://www.agnes-ai.cn; international endpoint —
 // https://agnes-ai.com. Mirrors the agnes / agnes-global catalog base URLs in
 // `@musepi/pi-catalog` provider-models; the active session model decides which
@@ -483,6 +487,8 @@ const BUILTIN_ASPECT_RATIOS_BY_PROVIDER: Record<Exclude<ImageProvider, string & 
 	"openai-codex": COMMON_IMAGE_ASPECT_RATIOS,
 	openrouter: COMMON_IMAGE_ASPECT_RATIOS,
 	xai: XAI_IMAGE_ASPECT_RATIOS,
+	minimax: COMMON_IMAGE_ASPECT_RATIOS,
+	meta: COMMON_IMAGE_ASPECT_RATIOS,
 };
 const ASPECT_RATIOS_BY_PROVIDER: ReadonlyMap<string, readonly string[]> = new Map(
 	Object.entries(BUILTIN_ASPECT_RATIOS_BY_PROVIDER),
@@ -677,6 +683,10 @@ function activeImageProvider(model: Model | undefined): Exclude<ImageProviderPre
 			return "xai";
 		case "openrouter":
 			return "openrouter";
+		case "minimax":
+			return "minimax";
+		case "meta":
+			return "meta";
 		case "google":
 			return "gemini";
 		default:
@@ -728,6 +738,18 @@ async function findImageApiKey(
 			// Explicit international request: force the global endpoint/key even
 			// when the active chat model is the CN provider.
 			return findAgnesImageCredentials(modelRegistry, activeModel, sessionId, "agnes-global");
+		case "minimax":
+		case "meta": {
+			// Both are catalog providers: the key can come from the local
+			// credential store (已在此页或「模型与供应商」保存) or the provider env.
+			if (modelRegistry) {
+				const apiKey = await modelRegistry.getApiKeyForProvider(provider, sessionId);
+				if (!apiKey) return null;
+				return { provider, apiKey: modelRegistry.resolver(provider, { sessionId }) };
+			}
+			const apiKey = getEnvApiKey(provider);
+			return apiKey ? { provider, apiKey } : null;
+		}
 		default: {
 			// Extension-registered media provider: credential comes from the
 			// shared auth storage (the same keys the settings UI writes); the
@@ -1225,6 +1247,44 @@ async function parseAntigravitySseForImage(response: Response, signal?: AbortSig
 	return { images, text: textParts, usage };
 }
 
+/** OpenAI-compatible `images/generations` body (DeepInfra-style providers and
+ *  Meta's Muse Image endpoint share this shape; the caller supplies base URL). */
+export function buildOpenAICompatibleImageRequest(
+	model: string,
+	prompt: string,
+	params: { aspect_ratio?: string; image_size?: string },
+): Record<string, unknown> {
+	const size = resolveOpenAIImageSize(params.aspect_ratio, params.image_size);
+	return size ? { model, prompt, n: 1, size } : { model, prompt, n: 1 };
+}
+
+/** MiniMax `POST /image_generation` body: presets by aspect ratio, inline
+ *  base64 output (URLs expire after 24 hours). */
+export function buildMiniMaxImageRequest(
+	model: string,
+	prompt: string,
+	params: { aspect_ratio?: string },
+): Record<string, unknown> {
+	return { model, prompt, n: 1, aspect_ratio: params.aspect_ratio ?? "1:1", response_format: "base64" };
+}
+
+async function inlineImagesFromEntries(
+	entries: ReadonlyArray<{ b64?: string; url?: string }>,
+	fetchImpl: FetchImpl,
+	signal: AbortSignal | undefined,
+): Promise<InlineImageData[]> {
+	const images: InlineImageData[] = [];
+	for (const entry of entries) {
+		if (entry.b64) {
+			const bytes = Buffer.from(entry.b64, "base64");
+			images.push({ data: entry.b64, mimeType: parseImageMetadata(bytes)?.mimeType ?? "image/png" });
+		} else if (entry.url) {
+			images.push(await loadImageFromUrl(entry.url, fetchImpl, signal));
+		}
+	}
+	return images;
+}
+
 export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails> = {
 	name: "generate_image",
 	label: "GenerateImage",
@@ -1274,7 +1334,11 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 										? DEFAULT_XAI_IMAGE_MODEL
 										: provider === "agnes"
 											? DEFAULT_AGNES_MODEL
-											: DEFAULT_MODEL;
+											: provider === "minimax"
+												? DEFAULT_MINIMAX_IMAGE_MODEL
+												: provider === "meta"
+													? DEFAULT_META_IMAGE_MODEL
+													: DEFAULT_MODEL;
 					const resolvedModel = provider === "openrouter" ? resolveOpenRouterModel(model) : model;
 					if (params.aspect_ratio && !ASPECT_RATIOS_BY_PROVIDER.get(provider)?.includes(params.aspect_ratio)) {
 						unsupportedAspectRatioProvider ??= provider;
@@ -1826,6 +1890,103 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 								imageCount: agnesInlineImages.length,
 								imagePaths: agnesImagePaths,
 								images: agnesInlineImages,
+							},
+						};
+					}
+
+					if (provider === "minimax" || provider === "meta") {
+						const isMiniMax = provider === "minimax";
+						const prompt = assemblePrompt(params);
+						const requestBody = isMiniMax
+							? buildMiniMaxImageRequest(resolvedModel, prompt, params)
+							: buildOpenAICompatibleImageRequest(resolvedModel, prompt, params);
+						const endpoint = isMiniMax
+							? `${MINIMAX_BASE_URL}/image_generation`
+							: `${META_IMAGE_BASE_URL}/images/generations`;
+						const providerName = isMiniMax ? "MiniMax" : "Meta";
+
+						const rawText = await withAuth(
+							apiKey.apiKey,
+							async key => {
+								const resp = await fetchImpl(endpoint, {
+									method: "POST",
+									headers: {
+										Authorization: `Bearer ${key}`,
+										"Content-Type": "application/json",
+									},
+									body: JSON.stringify(requestBody),
+									signal: requestSignal,
+								});
+								const text = await resp.text();
+								if (!resp.ok) {
+									let message = text;
+									try {
+										const parsed = JSON.parse(text) as { error?: { message?: string } };
+										message = parsed.error?.message ?? message;
+									} catch {
+										// Keep raw text.
+									}
+									throw new ProviderHttpError(
+										`${providerName} image request failed (${resp.status}): ${message}`,
+										resp.status,
+										{ headers: resp.headers },
+									);
+								}
+								return text;
+							},
+							{ signal: requestSignal },
+						);
+
+						const entries: Array<{ b64?: string; url?: string }> = [];
+						if (isMiniMax) {
+							const data = JSON.parse(rawText) as {
+								data?: { image_base64?: string[]; image_urls?: string[] };
+								base_resp?: { status_code?: number; status_msg?: string };
+								metadata?: { failed_count?: number | string };
+							};
+							const status = data.base_resp;
+							if (status?.status_code !== undefined && status.status_code !== 0) {
+								throw new ProviderHttpError(
+									`MiniMax image request failed (${status.status_code}): ${status.status_msg ?? "unknown error"}`,
+									400,
+									{},
+								);
+							}
+							for (const b64 of data.data?.image_base64 ?? []) entries.push({ b64 });
+							for (const url of data.data?.image_urls ?? []) entries.push({ url });
+						} else {
+							const data = JSON.parse(rawText) as {
+								data?: Array<{ b64_json?: string; url?: string }>;
+								error?: { message?: string };
+							};
+							if (data.error?.message) {
+								throw new ProviderHttpError(`Meta image request failed: ${data.error.message}`, 400, {});
+							}
+							for (const entry of data.data ?? []) entries.push({ b64: entry.b64_json, url: entry.url });
+						}
+
+						const generated = await inlineImagesFromEntries(entries, fetchImpl, requestSignal);
+						if (generated.length === 0) {
+							return {
+								content: [{ type: "text", text: "No image data returned." }],
+								details: {
+									provider,
+									model: resolvedModel,
+									imageCount: 0,
+									imagePaths: [],
+									images: [],
+								},
+							};
+						}
+						const saved = await Promise.all(generated.map(image => saveImage(image, artifactsDir)));
+						return {
+							content: [{ type: "text", text: buildResponseSummary(provider, resolvedModel, saved, undefined) }],
+							details: {
+								provider,
+								model: resolvedModel,
+								imageCount: generated.length,
+								imagePaths: saved.map(image => image.path),
+								images: generated,
 							},
 						};
 					}

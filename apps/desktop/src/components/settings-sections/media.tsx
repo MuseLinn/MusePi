@@ -1,20 +1,25 @@
 /**
  * MediaSection — settings section for image & video generation providers.
- * Shows the 8 built-in image providers + any extension-registered media
- * providers with per-provider credential status, API key entry for apiKey-
- * typed providers, and OAuth login for oauth-typed providers.
  *
- * Credential writes use the same provider-scoped RPCs as the ModelSection
- * providers tab (providers.importApiKey / providers.login / providers.logout),
- * so a key entered here is visible to the generate_image tool immediately.
+ * The list is the daemon's (`media.providers`): the built-in image providers,
+ * the built-in video providers and any extension-registered media providers,
+ * each with its credential state. The daemon also says HOW a provider stores
+ * its credential (`authType`), so this page offers the right control instead
+ * of guessing: an API-key field, a login button, or both.
+ *
+ * Credential writes reuse the provider-scoped RPCs (providers.importApiKey /
+ * providers.login / providers.logout) — the same store the model providers use,
+ * so a key entered here is visible to generate_image immediately and a key
+ * added under 模型与供应商 shows up here.
  */
-import { t } from "@musepi/client-core";
+import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { reportRequestFailure } from "../../lib/report-request-failure";
 import type { RpcClient } from "../../lib/rpc";
 import { logoutProvider } from "../../lib/rpc-commands";
 import { Icon } from "../../vendor/oc-icons";
+import { Reveal } from "../Reveal";
 
 interface MediaProviderEntry {
 	id: string;
@@ -25,41 +30,244 @@ interface MediaProviderEntry {
 	description?: string;
 	baseUrl?: string | null;
 	models?: string[];
-	authType?: string;
+	/** How the credential is stored. Built-ins used to omit it, which made the
+	 *  client render a login button for key-only providers. */
+	authType?: "apiKey" | "oauth" | "both";
 }
 
-/** Settings style secret input — standard gui-settings-select text input.
- *  state kept as controlled component via the parent's apiKey state map. */
+/** Settings style secret input — standard gui-settings-select text input. */
 function SecretInput({
 	value,
 	onChange,
 	placeholder,
+	label,
 }: {
 	value: string;
 	onChange(v: string): void;
 	placeholder?: string;
+	label: string;
 }): ReactNode {
 	return (
 		<input
 			type="password"
 			spellCheck={false}
-			className="gui-settings-select !w-auto min-w-[180px] max-w-[280px] font-mono text-[12px]"
+			className="gui-settings-select !w-auto min-w-[200px] max-w-[300px] font-mono text-[12px]"
 			placeholder={placeholder ?? "sk-..."}
+			aria-label={label}
 			value={value}
 			onInput={e => onChange((e.target as HTMLInputElement).value)}
 		/>
 	);
 }
 
+/** User-facing provider copy, one line per built-in id. The daemon's
+ *  description is written for the tool ("Requires AGNES_API_KEY"); the
+ *  settings page says what the provider is and what it needs in the reader's
+ *  language. Extension providers keep the description their author wrote. */
+const PROVIDER_DESCRIPTION: Record<string, TranslationKey> = {
+	agnes: "settings.mediaProvider.agnes",
+	"agnes-global": "settings.mediaProvider.agnesGlobal",
+	openai: "settings.mediaProvider.openai",
+	"openai-codex": "settings.mediaProvider.openaiCodex",
+	antigravity: "settings.mediaProvider.antigravity",
+	xai: "settings.mediaProvider.xai",
+	gemini: "settings.mediaProvider.gemini",
+	openrouter: "settings.mediaProvider.openrouter",
+	minimax: "settings.mediaProvider.minimax",
+	meta: "settings.mediaProvider.meta",
+};
+
+function descriptionFor(provider: MediaProviderEntry): string {
+	const key = PROVIDER_DESCRIPTION[provider.id];
+	return key ? t(key) : (provider.description ?? "");
+}
+
+function configuredFirst(a: MediaProviderEntry, b: MediaProviderEntry): number {
+	if (a.configured !== b.configured) return a.configured ? -1 : 1;
+	return a.label.localeCompare(b.label);
+}
+
+/** One provider: identity, one-line explanation, status, and the credential
+ *  control that matches its auth type. */
+function MediaProviderRow({
+	provider,
+	apiKey,
+	onApiKeyChange,
+	onSave,
+	onRemove,
+	onLogin,
+	busy,
+	pendingLogin,
+}: {
+	provider: MediaProviderEntry;
+	apiKey: string;
+	onApiKeyChange(v: string): void;
+	onSave(): void;
+	onRemove(): void;
+	onLogin?(): void;
+	busy: boolean;
+	pendingLogin: boolean;
+}): ReactNode {
+	const [keyOpen, setKeyOpen] = useState(false);
+	const auth = provider.authType ?? "apiKey";
+	const canKey = auth !== "oauth";
+	const canLogin = auth !== "apiKey" && Boolean(onLogin);
+	const configured = provider.configured;
+	const description = descriptionFor(provider);
+	const mark = provider.label.trim().charAt(0).toUpperCase() || "?";
+
+	return (
+		<div className={`gui-media-provider${configured ? " gui-media-provider--on" : ""}`}>
+			<div className="gui-media-provider-main">
+				<span className="gui-media-provider-mark" aria-hidden="true">
+					{mark}
+				</span>
+				<div className="gui-media-provider-copy">
+					<div className="gui-media-provider-name">
+						<span>{provider.label}</span>
+						{provider.source === "extension" && (
+							<span className="gui-provider-chip">{t("settings.mediaProviderExtension")}</span>
+						)}
+						{provider.models && provider.models.length > 0 && (
+							<span className="gui-provider-chip">{provider.models.join(" · ")}</span>
+						)}
+					</div>
+					{description && <div className="gui-media-provider-desc">{description}</div>}
+				</div>
+				<div className="gui-media-provider-side">
+					<span className={`gui-media-status${configured ? " gui-media-status--on" : ""}`}>
+						<span
+							className={`gui-provider-status-dot${configured ? " gui-provider-status-dot--on" : ""}`}
+							aria-hidden="true"
+						/>
+						{configured ? t("settings.configured") : t("settings.notConfigured")}
+					</span>
+					{configured ? (
+						<button
+							type="button"
+							className="gui-media-remove"
+							disabled={busy}
+							title={t("general.removeCredential")}
+							aria-label={t("settings.removeCredentialFor", { provider: provider.label })}
+							onClick={onRemove}
+						>
+							<Icon name="delete-bin" className="h-3.5 w-3.5" />
+						</button>
+					) : (
+						<>
+							{canKey && (
+								<button
+									type="button"
+									className="gui-btn gui-media-action"
+									aria-expanded={keyOpen}
+									onClick={() => setKeyOpen(open => !open)}
+								>
+									{t("settings.addApiKey")}
+								</button>
+							)}
+							{canLogin && (
+								<button
+									type="button"
+									className="gui-btn gui-btn-approve gui-media-login"
+									disabled={busy || pendingLogin}
+									onClick={onLogin}
+								>
+									<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+									{pendingLogin ? t("settings.loggingIn") : t("settings.login")}
+								</button>
+							)}
+						</>
+					)}
+				</div>
+			</div>
+
+			{!configured && canKey && (
+				<Reveal open={keyOpen}>
+					<div className="gui-media-keyrow">
+						<SecretInput
+							value={apiKey}
+							onChange={onApiKeyChange}
+							placeholder={t("settings.enterApiKey")}
+							label={t("settings.apiKeyFor", { provider: provider.label })}
+						/>
+						<button
+							type="button"
+							className="gui-btn gui-btn-approve"
+							disabled={busy || !apiKey.trim()}
+							onClick={onSave}
+						>
+							{t("general.save")}
+						</button>
+					</div>
+				</Reveal>
+			)}
+			{!configured && !canKey && !canLogin && (
+				<div className="gui-media-provider-foot">{t("settings.oauthProviderManageProviders")}</div>
+			)}
+		</div>
+	);
+}
+
+/** A titled run of provider rows with a count; the note stays under the list
+ *  it explains. */
+function MediaProviderGroup({
+	title,
+	providers,
+	note,
+	empty,
+	...rowProps
+}: {
+	title: string;
+	providers: MediaProviderEntry[];
+	note?: string;
+	empty: string;
+	apiKeys: Record<string, string>;
+	onApiKeyChange(id: string, value: string): void;
+	onSave(id: string): void;
+	onRemove(id: string): void;
+	onLogin?(id: string): void;
+	busy: boolean;
+	pendingLogins?: readonly string[];
+}): ReactNode {
+	const { apiKeys, onApiKeyChange, onSave, onRemove, onLogin, busy, pendingLogins } = rowProps;
+	return (
+		<div className="gui-media-group">
+			<div className="gui-media-group-head">
+				<span className="gui-media-group-title">{title}</span>
+				{providers.length > 0 && <span className="gui-media-group-count">{providers.length}</span>}
+			</div>
+			{providers.length === 0 ? (
+				<div className="gui-media-empty">{empty}</div>
+			) : (
+				<div className="gui-media-list">
+					{providers.map(provider => (
+						<MediaProviderRow
+							key={provider.id}
+							provider={provider}
+							apiKey={apiKeys[provider.id] ?? ""}
+							onApiKeyChange={v => onApiKeyChange(provider.id, v)}
+							onSave={() => onSave(provider.id)}
+							onRemove={() => onRemove(provider.id)}
+							onLogin={onLogin ? () => onLogin(provider.id) : undefined}
+							busy={busy}
+							pendingLogin={pendingLogins?.includes(provider.id) ?? false}
+						/>
+					))}
+				</div>
+			)}
+			{note && <p className="gui-media-group-note">{note}</p>}
+		</div>
+	);
+}
+
 export function MediaSection({
 	rpc,
-	onLogin,
+	onLogin: login,
 	pendingLogins,
 }: {
 	rpc: RpcClient | null;
 	/** Optional OAuth login handler, same as ModelSection's onLogin — when
-	 *  absent (or for providers without onLogin), the section shows a "manage
-	 *  in providers tab" hint for oauth providers instead. */
+	 *  absent, oauth providers point at the providers tab instead. */
 	onLogin?: (providerId: string) => void;
 	pendingLogins?: readonly string[];
 }): ReactNode {
@@ -128,162 +336,40 @@ export function MediaSection({
 	const imageProviders = [
 		...providers.builtin.filter(p => p.kind === "image"),
 		...providers.extension.filter(p => p.kind === "image"),
-	];
+	].sort(configuredFirst);
 	const videoProviders = [
 		...providers.builtin.filter(p => p.kind === "video"),
 		...providers.extension.filter(p => p.kind === "video"),
-	];
+	].sort(configuredFirst);
+
+	const rowProps = {
+		apiKeys,
+		onApiKeyChange: (id: string, value: string) => setApiKeys(prev => ({ ...prev, [id]: value })),
+		onSave: (id: string) => void importKey(id),
+		onRemove: (id: string) => void removeCredential(id),
+		onLogin: login,
+		busy,
+		pendingLogins,
+	};
 
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.imageVideoGeneration")}</h2>
 			<p className="gui-settings-page-subtitle">{t("settings.imageVideoGenSubtitle")}</p>
 
-			{/* Image generation providers */}
-			<h3 className="gui-settings-card-title">{t("settings.imageGenerationProviders")}</h3>
-			<div className="gui-settings-card-grid">
-				{imageProviders.length === 0 && (
-					<p className="text-[13px] text-[var(--color-text-muted)]">{t("settings.noImageProvidersAvailable")}</p>
-				)}
-				{imageProviders.map(p => (
-					<div key={p.id} className="gui-settings-section mb-2">
-						<div className="gui-settings-row">
-							<div className="min-w-0 flex-1">
-								<div className="gui-settings-row-label">{p.label}</div>
-								{p.description && (
-									<div className="truncate text-[12px] text-[var(--color-text-faint)]">{p.description}</div>
-								)}
-							</div>
-							<span
-								className={`gui-provider-status-dot${p.configured ? " gui-provider-status-dot--on" : ""}`}
-								aria-hidden="true"
-							/>
-							<span className="text-[12px] text-[var(--color-text-muted)]">
-								{p.configured ? t("settings.configured") : t("settings.notConfigured")}
-							</span>
-						</div>
-						{p.source === "extension" && p.models && p.models.length > 0 && (
-							<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">
-								<span className="font-medium">{t("general.models")}:</span>
-								<span>{p.models.join(", ")}</span>
-							</div>
-						)}
-						{!p.configured && (
-							<div className="gui-settings-row">
-								{p.authType === "oauth" || !p.authType ? (
-									onLogin ? (
-										<button
-											type="button"
-											className="gui-btn gui-btn-approve"
-											disabled={pendingLogins?.includes(p.id)}
-											onClick={() => onLogin(p.id)}
-										>
-											<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-											{t("settings.login")}
-										</button>
-									) : (
-										<span className="text-[12px] text-[var(--color-text-muted)]">
-											{t("settings.oauthProviderManageProviders")}
-										</span>
-									)
-								) : (
-									<div className="flex items-center gap-2">
-										<SecretInput
-											value={apiKeys[p.id] ?? ""}
-											onChange={v => setApiKeys(prev => ({ ...prev, [p.id]: v }))}
-											placeholder={t("settings.enterApiKey")}
-										/>
-										<button
-											type="button"
-											className="gui-btn gui-btn-approve"
-											disabled={busy || !(apiKeys[p.id] ?? "").trim()}
-											onClick={() => void importKey(p.id)}
-										>
-											{t("general.save")}
-										</button>
-									</div>
-								)}
-							</div>
-						)}
-						{p.configured && (
-							<div className="gui-settings-row">
-								<button
-									type="button"
-									className="gui-btn"
-									disabled={busy}
-									onClick={() => void removeCredential(p.id)}
-								>
-									<Icon name="delete-bin" className="h-3.5 w-3.5" />
-									{t("general.removeCredential")}
-								</button>
-							</div>
-						)}
-					</div>
-				))}
-			</div>
-
-			{/* Video generation */}
-			{videoProviders.length > 0 && (
-				<>
-					<h3 className="gui-settings-card-title mt-4">{t("settings.videoGenerationProviders")}</h3>
-					{videoProviders.map(p => (
-						<div key={p.id} className="gui-settings-section mb-2">
-							<div className="gui-settings-row">
-								<div className="min-w-0 flex-1">
-									<div className="gui-settings-row-label">{p.label}</div>
-								</div>
-								<span
-									className={`gui-provider-status-dot${p.configured ? " gui-provider-status-dot--on" : ""}`}
-									aria-hidden="true"
-								/>
-								<span className="text-[12px] text-[var(--color-text-muted)]">
-									{p.configured ? t("settings.configured") : t("settings.notConfigured")}
-								</span>
-							</div>
-							{!p.configured && (
-								<div className="gui-settings-row">
-									<div className="flex items-center gap-2">
-										<SecretInput
-											value={apiKeys[p.id] ?? ""}
-											onChange={v => setApiKeys(prev => ({ ...prev, [p.id]: v }))}
-											placeholder={t("settings.enterApiKey")}
-										/>
-										<button
-											type="button"
-											className="gui-btn gui-btn-approve"
-											disabled={busy || !(apiKeys[p.id] ?? "").trim()}
-											onClick={() => void importKey(p.id)}
-										>
-											{t("general.save")}
-										</button>
-									</div>
-								</div>
-							)}
-							{p.configured && (
-								<div className="gui-settings-row">
-									<button
-										type="button"
-										className="gui-btn"
-										disabled={busy}
-										onClick={() => void removeCredential(p.id)}
-									>
-										<Icon name="delete-bin" className="h-3.5 w-3.5" />
-										{t("general.removeCredential")}
-									</button>
-								</div>
-							)}
-						</div>
-					))}
-					<p className="text-[12px] text-[var(--color-text-muted)] mt-1">{t("settings.videoGenNote")}</p>
-				</>
-			)}
-
-			{/* Extension providers summary */}
-			{providers.extension.length > 0 && (
-				<p className="text-[12px] text-[var(--color-text-faint)] mt-3">
-					{t("settings.extensionProvidersCount", { count: providers.extension.length })}
-				</p>
-			)}
+			<MediaProviderGroup
+				title={t("settings.imageGenerationProviders")}
+				providers={imageProviders}
+				empty={t("settings.noImageProvidersAvailable")}
+				{...rowProps}
+			/>
+			<MediaProviderGroup
+				title={t("settings.videoGenerationProviders")}
+				providers={videoProviders}
+				empty={t("settings.noVideoProvidersAvailable")}
+				note={t("settings.videoGenNote")}
+				{...rowProps}
+			/>
 		</>
 	);
 }

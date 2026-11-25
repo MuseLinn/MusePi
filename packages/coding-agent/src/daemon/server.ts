@@ -6507,6 +6507,22 @@ export class DaemonServer {
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) throw new Error("No model registry yet — create a session first");
 				const storage = registry.authStorage;
+				// How each built-in stores its credential. The settings page uses
+				// this to offer the right control: an API-key field, a login
+				// button, or both. Built-ins used to omit it, so the client
+				// guessed OAuth and showed a login button for key-only providers.
+				const AUTH_TYPE: Record<string, "apiKey" | "oauth" | "both"> = {
+					agnes: "apiKey",
+					"agnes-global": "apiKey",
+					openai: "apiKey",
+					gemini: "apiKey",
+					openrouter: "apiKey",
+					minimax: "apiKey",
+					meta: "apiKey",
+					xai: "both",
+					"openai-codex": "oauth",
+					antigravity: "oauth",
+				};
 				const builtin = [
 					...IMAGE_PROVIDER_CHOICES.map(choice => {
 						const provider = choice.value;
@@ -6517,6 +6533,7 @@ export class DaemonServer {
 							description: choice.description,
 							kind: "image" as const,
 							source: "builtin" as const,
+							authType: AUTH_TYPE[provider] ?? "apiKey",
 							configured,
 						};
 					}),
@@ -6526,6 +6543,7 @@ export class DaemonServer {
 						description: choice.description,
 						kind: "video" as const,
 						source: "builtin" as const,
+						authType: AUTH_TYPE[choice.value] ?? "apiKey",
 						configured: storage.hasAuth(choice.value),
 						models: [...choice.models],
 					})),
