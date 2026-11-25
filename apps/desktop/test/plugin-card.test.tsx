@@ -96,7 +96,7 @@ describe("shared plugin horizontal card", () => {
 		// Track A plugin rows are managed as packages/built-ins; deleting a
 		// legacy extension is the extension inventory's job, so this row has no
 		// trash button even when the Host marked the underlying module removable.
-		expect(host.querySelector(".gui-plugin-card-actions .gui-icon-btn")).toBeNull();
+		expect(host.querySelector(".gui-plugin-card-actions .gui-icon-btn") === null).toBe(true);
 		await act(async () => root.unmount());
 		host.remove();
 	});

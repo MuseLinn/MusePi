@@ -53,12 +53,12 @@ describe("BrowserControlOverlay", () => {
 		let takeovers = 0;
 		act(() => root.render(<BrowserControlOverlay activity={running} now={13_000} onTakeover={() => takeovers++} />));
 		const frame = document.querySelector<HTMLElement>("[data-browser-control='running']");
-		expect(frame).not.toBeNull();
+		expect(frame !== null).toBe(true);
 		expect(frame?.style.position).toBe("fixed");
 		expect(frame?.style.zIndex).toBe("1000");
-		expect(document.querySelector("[data-elapsed='12']")).not.toBeNull();
+		expect(document.querySelector("[data-elapsed='12']") !== null).toBe(true);
 		const button = document.querySelector("button");
-		expect(button).not.toBeNull();
+		expect(button !== null).toBe(true);
 		act(() => button!.click());
 		expect(takeovers).toBe(1);
 
@@ -67,16 +67,16 @@ describe("BrowserControlOverlay", () => {
 				<BrowserControlOverlay activity={{ ...running, status: "completed" }} onTakeover={() => takeovers++} />,
 			),
 		);
-		expect(document.querySelector("[data-browser-control='closing']")).not.toBeNull();
+		expect(document.querySelector("[data-browser-control='closing']") !== null).toBe(true);
 		await act(async () => Bun.sleep(220));
-		expect(host.querySelector("[data-browser-control]")).toBeNull();
+		expect(host.querySelector("[data-browser-control]") === null).toBe(true);
 	});
 
 	it("keeps the elapsed counter continuous from the start of the hold", () => {
 		act(() =>
 			root.render(<BrowserControlOverlay activity={running} since={1_000} now={9_000} onTakeover={() => {}} />),
 		);
-		expect(document.querySelector("[data-elapsed='8']")).not.toBeNull();
+		expect(document.querySelector("[data-elapsed='8']") !== null).toBe(true);
 	});
 
 	it("stays visible for a settled activity while the agent still holds the tab", async () => {
@@ -90,10 +90,10 @@ describe("BrowserControlOverlay", () => {
 				/>,
 			),
 		);
-		expect(document.querySelector("[data-browser-control='running']")).not.toBeNull();
+		expect(document.querySelector("[data-browser-control='running']") !== null).toBe(true);
 		expect(document.body.textContent).toContain(t("tools.agentHolding"));
 		await act(async () => Bun.sleep(220));
-		expect(document.querySelector("[data-browser-control='running']")).not.toBeNull();
+		expect(document.querySelector("[data-browser-control='running']") !== null).toBe(true);
 	});
 
 	it("reveals the background agent tab instead of drawing a frame over the current page", () => {
@@ -108,7 +108,7 @@ describe("BrowserControlOverlay", () => {
 				/>,
 			),
 		);
-		expect(document.querySelector("[data-browser-control='out-of-view']")).not.toBeNull();
+		expect(document.querySelector("[data-browser-control='out-of-view']") !== null).toBe(true);
 		const reveal = [...document.querySelectorAll("button")].find(
 			button => button.textContent === t("tools.browserShowAgentTab"),
 		);
@@ -142,7 +142,7 @@ describe("BrowserControlOverlay", () => {
 
 	it("stays hidden without an active operation", () => {
 		act(() => root.render(<BrowserControlOverlay activity={null} onTakeover={() => {}} />));
-		expect(host.querySelector("[data-browser-control]")).toBeNull();
+		expect(host.querySelector("[data-browser-control]") === null).toBe(true);
 	});
 
 	it("names the agent operating a tab so a subagent's run is attributable", async () => {
@@ -192,7 +192,7 @@ describe("BrowserControlOverlay context", () => {
 describe("BrowserControlOverlay pointer blocking", () => {
 	it("puts a hit layer over the page while the agent drives the visible tab", () => {
 		act(() => root.render(<BrowserControlOverlay activity={running} now={2_000} onTakeover={() => {}} />));
-		expect(document.querySelector("[data-browser-control-blocker]")).not.toBeNull();
+		expect(document.querySelector("[data-browser-control-blocker]") !== null).toBe(true);
 	});
 
 	it("does not block the user's own page on a background tab", () => {
@@ -201,7 +201,7 @@ describe("BrowserControlOverlay pointer blocking", () => {
 				<BrowserControlOverlay activity={running} inView={false} onTakeover={() => {}} onReveal={() => {}} />,
 			),
 		);
-		expect(document.querySelector("[data-browser-control-blocker]")).toBeNull();
+		expect(document.querySelector("[data-browser-control-blocker]") === null).toBe(true);
 	});
 
 	it("refuses a click on the page and answers on the capsule instead", async () => {
@@ -221,7 +221,7 @@ describe("BrowserControlOverlay pointer blocking", () => {
 		expect(document.querySelector(".gui-browser-control-summary")?.textContent).toBe(t("tools.browserBlockedHint"));
 
 		await act(async () => Bun.sleep(1_500));
-		expect(frame.getAttribute("data-blocked")).toBeNull();
+		expect(frame.getAttribute("data-blocked") === null).toBe(true);
 		expect(document.querySelector(".gui-browser-control-summary")?.textContent).toContain("example.com");
 	});
 
@@ -242,7 +242,7 @@ describe("BrowserControlOverlay pointer blocking", () => {
 		await act(async () => Bun.sleep(900));
 		expect(frame.getAttribute("data-blocked")).toBe("true");
 		await act(async () => Bun.sleep(700));
-		expect(frame.getAttribute("data-blocked")).toBeNull();
+		expect(frame.getAttribute("data-blocked") === null).toBe(true);
 	});
 
 	it("announces a refusal in the live region, not only in the visuals", () => {
@@ -259,6 +259,6 @@ describe("BrowserControlOverlay pointer blocking", () => {
 		act(() =>
 			root.render(<BrowserControlOverlay activity={null} userOwned onTakeover={() => {}} onHandBack={() => {}} />),
 		);
-		expect(document.querySelector("[data-browser-control-blocker]")).toBeNull();
+		expect(document.querySelector("[data-browser-control-blocker]") === null).toBe(true);
 	});
 });

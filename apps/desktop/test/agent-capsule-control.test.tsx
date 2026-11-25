@@ -144,13 +144,13 @@ describe("agent capsule control", () => {
 		expect(capsule?.tagName).toBe("BUTTON");
 		expect(capsule?.getAttribute("type")).toBe("button");
 		expect(capsule?.getAttribute("aria-expanded")).toBe("false");
-		expect(capsule?.querySelector(".gui-agent-capsule-go")).not.toBeNull();
+		expect(capsule?.querySelector(".gui-agent-capsule-go") !== null).toBe(true);
 		// The role id is data; the visible name is its localized reading (the
 		// workbench lane's coder before any row lands).
 		expect(capsule?.dataset.agentRole).toBe("coder");
 		// The visible reading IS the accessible name: no aria-label may replace
 		// "助手 编码 · 空闲" (label-in-name), and the action is the tooltip.
-		expect(capsule?.getAttribute("aria-label")).toBeNull();
+		expect(capsule?.getAttribute("aria-label") === null).toBe(true);
 		expect(capsule?.textContent).toContain("助手");
 		expect(capsule?.querySelector(".gui-agent-role-tag")?.textContent).toBe("编码");
 		expect(capsule?.textContent).toContain("空闲");
@@ -181,7 +181,7 @@ describe("agent capsule control", () => {
 				onToggleRightPanel: () => {},
 			});
 			const capsule = host.querySelector<HTMLButtonElement>(".gui-agent-capsule")!;
-			expect(capsule.querySelector(".gui-agent-avatar")).not.toBeNull();
+			expect(capsule.querySelector(".gui-agent-avatar") !== null).toBe(true);
 			await act(async () => capsule.click());
 			expect(calls).toBe(1);
 			expect(oldName).toBe("agent-identity-avatar");
@@ -266,12 +266,12 @@ describe("agent capsule control", () => {
 			onToggleRightPanel: () => {},
 		});
 		const composer = host.querySelector(".gui-composer");
-		expect(composer).not.toBeNull();
+		expect(composer !== null).toBe(true);
 		// The chip was the composer's only model surface; it now lives in the tab.
 		expect(composer?.querySelectorAll(".gui-model-capsule").length).toBe(0);
 		// The rest of the input row is untouched.
 		expect(composer?.querySelectorAll(".gui-composer-ico").length ?? 0).toBeGreaterThan(0);
-		expect(composer?.querySelector(".gui-composer-send")).not.toBeNull();
+		expect(composer?.querySelector(".gui-composer-send") !== null).toBe(true);
 		await unmount();
 	});
 });

@@ -507,20 +507,20 @@ describe("window drag — one owner for the property", () => {
 
 	it("declares the region only in the owner stylesheet and its second roots", () => {
 		const counts: Record<string, number> = {};
-		const cssFiles: string[] = [];
-		const collect = (directory: string): void => {
-			for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-				const full = path.join(directory, entry.name);
-				if (entry.isDirectory()) {
-					if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
-					collect(full);
-				} else if (entry.name.endsWith(".css")) {
-					cssFiles.push(full.replaceAll("\\", "/"));
-				}
-			}
-		};
-		collect(path.join(REPO, "apps"));
-		collect(path.join(REPO, "packages"));
+		// Source, not build output. This walks what git tracks plus untracked
+		// files that are not ignored, so a bundled copy under `apps/*/dist` or a
+		// platform `rawfile/` never counts as a second declaration while a new
+		// hand-written sheet still has to pass.
+		const listed = Bun.spawnSync(
+			["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "apps", "packages"],
+			{ cwd: REPO },
+		);
+		if (listed.exitCode !== 0) throw new Error("git ls-files for stylesheets failed");
+		const cssFiles = listed.stdout
+			.toString()
+			.split("\0")
+			.filter(entry => entry.endsWith(".css"))
+			.map(entry => path.join(REPO, entry));
 		for (const file of cssFiles) {
 			const relative = path.relative(REPO, file).replaceAll("\\", "/");
 			if (relative === `apps/desktop/src/styles/${OWNER_STYLE}`) continue;

@@ -117,6 +117,10 @@ export const settingsCompaction = {
 	"settings.compaction.idleDelay.option.30m": "30 minutes",
 	"settings.compaction.idleDelay.option.1h": "1 hour",
 
+	"settings.compaction.speculationCacheGuard.title": "Skip Pre-Compaction on a Cold Cache",
+	"settings.compaction.speculationCacheGuard.desc":
+		"Write the background summary only while the last response's prompt cache is still alive; after a long pause it would pay for the whole prefix again beside your next request. Off always pre-compacts.",
+
 	"settings.compaction.editor.title": "Edit per model",
 	"settings.compaction.editor.model": "Model",
 	"settings.compaction.editor.pick": "Pick a model",

@@ -147,12 +147,12 @@ describe("agent tab open cost", () => {
 		const { rpc, calls } = makeRpc();
 		const host = mountFirstFrame(rpc);
 		// The shell the click is asking for is already there…
-		expect(host.querySelector(".gui-agent-info-head")).not.toBeNull();
-		expect(host.querySelector(".gui-agent-model-card")).not.toBeNull();
+		expect(host.querySelector(".gui-agent-info-head") !== null).toBe(true);
+		expect(host.querySelector(".gui-agent-model-card") !== null).toBe(true);
 		// …and the catalog was neither read nor built.
 		expect(calls).not.toContain("models.list");
 		expect(host.querySelectorAll(".gui-model-opt").length).toBe(0);
-		expect(host.querySelector(".gui-model-menu--inline")).toBeNull();
+		expect(host.querySelector(".gui-model-menu--inline") === null).toBe(true);
 
 		// The ladder deferral, asserted in the window it actually covers: the
 		// session reads have settled (`info` is populated, so the `info === null`
@@ -179,7 +179,7 @@ describe("agent tab open cost", () => {
 		const host = mountFirstFrame(rpc);
 		await settle();
 		// Settled: the identity and the ladder are live, the catalog still is not.
-		expect(host.querySelector('[role="slider"]')).not.toBeNull();
+		expect(host.querySelector('[role="slider"]') !== null).toBe(true);
 		expect(calls).not.toContain("models.list");
 		expect(host.querySelectorAll(".gui-model-opt").length).toBe(0);
 
@@ -193,7 +193,7 @@ describe("agent tab open cost", () => {
 		expect(calls).toContain("models.list");
 		// A 260-model catalog mounts a budgeted window, not every row.
 		expect(host.querySelectorAll(".gui-model-opt").length).toBe(INITIAL_ROWS);
-		expect(host.querySelector(".gui-model-more")).not.toBeNull();
+		expect(host.querySelector(".gui-model-more") !== null).toBe(true);
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>(".gui-model-more")!.click();
 			await new Promise(resolve => setTimeout(resolve, 0));

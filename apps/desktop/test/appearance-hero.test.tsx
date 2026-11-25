@@ -45,16 +45,16 @@ describe("appearance hero", () => {
 		const scope = mount();
 		const hero = scope.querySelector(".gui-appearance-hero .gui-effect-preview--session");
 		if (!hero) throw new Error("hero session card missing");
-		expect(hero.querySelector(".gui-agent-capsule")).not.toBeNull();
-		expect(hero.querySelector(".gui-effect-preview-composer")).not.toBeNull();
+		expect(hero.querySelector(".gui-agent-capsule") !== null).toBe(true);
+		expect(hero.querySelector(".gui-effect-preview-composer") !== null).toBe(true);
 		expect(hero.querySelectorAll(".tr-row").length).toBeGreaterThan(0);
 
 		// The shell is the real app chrome: left rail + chat card + right rail,
 		// inert so the preview cannot be clicked or tabbed into.
 		const shell = scope.querySelector(".gui-appearance-hero-window");
 		expect(shell?.hasAttribute("inert")).toBe(true);
-		expect(shell?.querySelector(".gui-rail")).not.toBeNull();
-		expect(shell?.querySelector(".gui-right-rail")).not.toBeNull();
+		expect(shell?.querySelector(".gui-rail") !== null).toBe(true);
+		expect(shell?.querySelector(".gui-right-rail") !== null).toBe(true);
 
 		const firstSection = scope.querySelector(".gui-settings-section");
 		expect(hero.compareDocumentPosition(firstSection!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -71,7 +71,7 @@ describe("appearance hero", () => {
 	it("shows the resting activity fold, like a finished turn", () => {
 		const scope = mount();
 		const hero = scope.querySelector(".gui-effect-preview--session");
-		expect(hero?.querySelector(".tr-round-fold")).not.toBeNull();
-		expect(hero?.querySelector(".tr-activity-preview-rows")).toBeNull();
+		expect(hero?.querySelector(".tr-round-fold") !== null).toBe(true);
+		expect(hero?.querySelector(".tr-activity-preview-rows") === null).toBe(true);
 	});
 });

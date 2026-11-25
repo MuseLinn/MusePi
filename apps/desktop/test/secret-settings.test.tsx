@@ -196,7 +196,7 @@ describe("设置页密钥", () => {
 		expect(scope.textContent).not.toContain("所有会话");
 		// 行不再靠悬停才出现动作：替换与删除始终在 DOM 里可点。
 		const row = scope.querySelector<HTMLElement>('[data-secret-name="GITHUB_TOKEN"]');
-		expect(row?.querySelector('[data-secret-action="delete"]')).not.toBeNull();
+		expect(row?.querySelector('[data-secret-action="delete"]') !== null).toBe(true);
 
 		// Replace opens a masked field with no stored value echoed back.
 		const replace = row?.querySelector<HTMLButtonElement>('[data-secret-action="replace"]');
@@ -226,7 +226,7 @@ describe("设置页密钥", () => {
 		await act(async () => confirm?.click());
 		await waitFor(() => fake.calls("secret.delete").length === 1, "secret.delete");
 		expect(fake.calls("secret.delete")).toEqual([{ name: "GITHUB_TOKEN" }]);
-		expect(scope.querySelector('[data-secret-name="GITHUB_TOKEN"]')).toBeNull();
+		expect(scope.querySelector('[data-secret-name="GITHUB_TOKEN"]') === null).toBe(true);
 	});
 
 	test("状态模型：表单打开时独占正文，不与行列表或空态并存", async () => {
@@ -241,7 +241,7 @@ describe("设置页密钥", () => {
 		expect(storedScope.querySelectorAll("[data-secret-name]")).toHaveLength(2);
 
 		await act(async () => buttonByText(storedScope, "添加密钥").click());
-		expect(storedScope.querySelector("form[data-secret-form]")).not.toBeNull();
+		expect(storedScope.querySelector("form[data-secret-form]") !== null).toBe(true);
 		expect(storedScope.querySelectorAll("[data-secret-name]")).toHaveLength(0);
 		// 计数行仍可见（列表事实），但添加动作在表单打开时禁用，避免叠出第二个表单。
 		expect(storedScope.textContent).toContain("已保存 · 2");
@@ -255,12 +255,12 @@ describe("设置页密钥", () => {
 		expect(emptyScope.textContent).toContain("还没有保存任何内容。");
 
 		await act(async () => buttonByText(emptyScope, "添加密钥").click());
-		expect(emptyScope.querySelector("form[data-secret-form]")).not.toBeNull();
+		expect(emptyScope.querySelector("form[data-secret-form]") !== null).toBe(true);
 		expect(emptyScope.textContent).not.toContain("还没有保存任何内容。");
-		expect(emptyScope.querySelector(".gui-secret-empty")).toBeNull();
+		expect(emptyScope.querySelector(".gui-secret-empty") === null).toBe(true);
 		// 关闭表单后回到空态，两种正文不会同时存在。
 		await act(async () => buttonByText(emptyScope, "取消").click());
-		expect(emptyScope.querySelector("form[data-secret-form]")).toBeNull();
+		expect(emptyScope.querySelector("form[data-secret-form]") === null).toBe(true);
 		expect(emptyScope.textContent).toContain("还没有保存任何内容。");
 	});
 
@@ -276,13 +276,13 @@ describe("设置页密钥", () => {
 		const fields = [...scope.querySelectorAll(".gui-settings-field")];
 		expect(fields.length).toBe(3);
 		for (const field of fields) {
-			expect(field.querySelector(".gui-settings-field-label")).not.toBeNull();
+			expect(field.querySelector(".gui-settings-field-label") !== null).toBe(true);
 			const control = field.querySelector(".gui-settings-field-control");
-			expect(control?.querySelector("input")).not.toBeNull();
+			expect(control?.querySelector("input") !== null).toBe(true);
 		}
 		// 页面私有的那套字段类不得再出现（否则就是第二份近似语法）。
-		expect(scope.querySelector(".gui-secret-field")).toBeNull();
-		expect(scope.querySelector(".gui-secret-field-label")).toBeNull();
+		expect(scope.querySelector(".gui-secret-field") === null).toBe(true);
+		expect(scope.querySelector(".gui-secret-field-label") === null).toBe(true);
 	});
 
 	test("添加表单提交名字、值和用途，值输入已遮罩且提交后不回显", async () => {
@@ -308,7 +308,7 @@ describe("设置页密钥", () => {
 			{ name: "OPENAI_API_KEY", value: "sk-test-123456", purpose: "模型调用" },
 		]);
 		expect(scope.textContent).not.toContain("sk-test-123456");
-		expect(scope.querySelector('[data-secret-field="value"]')).toBeNull();
+		expect(scope.querySelector('[data-secret-field="value"]') === null).toBe(true);
 		expect(scope.textContent).toContain("OPENAI_API_KEY");
 	});
 
@@ -344,10 +344,10 @@ describe("设置页密钥", () => {
 
 		expect(scope.textContent).toContain("保存密钥失败：secret master key is invalid");
 		// The form stays open with the reason inside it, so the value is not lost.
-		expect(scope.querySelector<HTMLFormElement>("form")).not.toBeNull();
+		expect(scope.querySelector<HTMLFormElement>("form") !== null).toBe(true);
 		// A failed write must not fabricate a row or a count.
 		expect(scope.textContent).toContain("已保存 · 0");
-		expect(scope.querySelector('[data-secret-name="OPENAI_API_KEY"]')).toBeNull();
+		expect(scope.querySelector('[data-secret-name="OPENAI_API_KEY"]') === null).toBe(true);
 		expect(scope.textContent).not.toContain("sk-test-123456");
 	});
 
@@ -361,7 +361,7 @@ describe("设置页密钥", () => {
 		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="value"]')!, "sk-test-123456");
 		await act(async () => buttonByText(scope, "取消").click());
 
-		expect(scope.querySelector('[data-secret-field="value"]')).toBeNull();
+		expect(scope.querySelector('[data-secret-field="value"]') === null).toBe(true);
 		expect(scope.textContent).not.toContain("sk-test-123456");
 		expect(fake.calls("secret.set")).toEqual([]);
 	});
@@ -378,7 +378,7 @@ describe("设置页密钥", () => {
 		// The invariant encryption line stays visible; only availability failed.
 		expect(scope.textContent).toContain("值在本机加密保存");
 		// Without a readable status the protection row would guess wrong.
-		expect(scope.querySelector("[data-secret-protection]")).toBeNull();
+		expect(scope.querySelector("[data-secret-protection]") === null).toBe(true);
 	});
 });
 
@@ -412,7 +412,7 @@ describe("保险库静态加密", () => {
 		await waitFor(() => fake.calls("secret.encrypt").length === 1, "secret.encrypt");
 		expect(fake.calls("secret.encrypt")).toEqual([{ passphrase: "correct horse battery" }]);
 		await waitFor(() => (scope.textContent ?? "").includes("口令保护"), "passphrase state");
-		expect(scope.querySelector('input[type="password"]')).toBeNull();
+		expect(scope.querySelector('input[type="password"]') === null).toBe(true);
 		expect(scope.innerHTML).not.toContain("correct horse battery");
 	});
 
@@ -472,7 +472,7 @@ describe("保险库静态加密", () => {
 		const scope = await mount(fake);
 		await act(async () => buttonByText(scope, "更换口令").click());
 		const form = scope.querySelector<HTMLFormElement>('[data-secret-protection-form="change"]');
-		expect(form).not.toBeNull();
+		expect(form !== null).toBe(true);
 		expect(scope.querySelectorAll('input[type="password"]')).toHaveLength(3);
 
 		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="passphrase"]')!, "correct horse battery");
@@ -487,7 +487,7 @@ describe("保险库静态加密", () => {
 		await waitFor(() => fake.calls("secret.rephrase").length === 1, "secret.rephrase");
 		expect(fake.calls("secret.rephrase")).toEqual([{ current: "correct horse battery", next: "another passphrase" }]);
 		// The form closes on success and no passphrase is left in any text node.
-		expect(scope.querySelector("[data-secret-protection-form]")).toBeNull();
+		expect(scope.querySelector("[data-secret-protection-form]") === null).toBe(true);
 		expect(scope.textContent).not.toContain("correct horse battery");
 	});
 
@@ -527,7 +527,7 @@ describe("保险库静态加密", () => {
 		expect(fake.calls("secret.setMcpGrant")).toEqual([
 			{ server: "github", target: "url:https://mcp.github.example/api", keys: ["GITHUB_TOKEN"] },
 		]);
-		expect(scope.querySelector("[data-secret-grant-form]")).toBeNull();
+		expect(scope.querySelector("[data-secret-grant-form]") === null).toBe(true);
 	});
 
 	test("关闭口令走 secret.decrypt，失败原因留在卡里可重试", async () => {

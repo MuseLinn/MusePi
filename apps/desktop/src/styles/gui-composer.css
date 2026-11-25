@@ -2544,6 +2544,7 @@ button.gui-stats-pill {
 	line-height: 1.55;
 	color: var(--color-text-muted);
 	overflow-y: auto;
+	overflow-x: clip;
 	max-height: min(46vh, 320px);
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;

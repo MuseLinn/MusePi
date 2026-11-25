@@ -91,6 +91,15 @@ lang: zh-CN
 - **身份仍然重要。** `entryViewKey` 让用户行按 `requestIdentity`（`msg:<clientId>:<clientRequestId>`）做 key——与 daemon 写在持久化消息上的字符串一致；因此乐观行与 ack 后的权威条目是同一个 DOM 节点，ack 到达时入场不会重播。
 - **关闭开关。** `prefers-reduced-motion: reduce` 与 `.gui-motion-off` 直接去掉动画，气泡正常出现。
 
+### 全表面视图切换与关闭开关
+
+`.gui-view-enter` / `.gui-view-leave` / `.gui-slot-leave` 与 keeper 的 `--enter` 修饰符是应用里唯一一次全表面过渡：进场 300ms、退场 150ms，两者都在动 `filter: blur()`。模糊半径每帧变化都会让整个表面重新光栅化，所以这是 GUI 里最贵的一支动画——在此之前它也是唯一没有关闭开关的一支，于是没人分得清是动画卡住还是布局卡住。
+
+- **两个开关都生效。** `.gui-motion-off` 与 `prefers-reduced-motion: reduce` 给进场类设 `animation: none`，切换变成瞬时。
+- **退场的表面同时落到 `opacity: 0`。** 退场关键帧收在 opacity 0 且 `fill: forwards`；只去掉动画，离场表面会在 JS 保留它挂载的那 150ms 里完整可见，所以关闭态必须自己写出终值。
+- **keeper 永不模糊。** 靠切换 `display` 隐藏自己的元素，每次显出都会重启动画，所以把入场动画放在 keeper 基类上就会每往返一次重播一遍。keeper 的状态靠保留 DOM 维持，而不是靠重播入场：设置栏 keeper 不动任何动画，备选页 keeper 用 160ms 透明度淡入（`gui-keeper-reveal`）显形。它们此前共用 `gui-view-blur-in`，也就是每次关掉设置都要把整列离屏光栅化一次。真正的视图进场保留模糊。
+- **由** `apps/desktop/test/keeper-entrance-motion.test.ts` **守住**。
+
 ## 3a. 状态过渡
 
 状态文案是固定槽，不是出现又消失的块。`StatusText`（`packages/client-core/src/components/shell/StatusText.tsx`，共享样式在 `shell.css`）是唯一实现：旧串与新串共用一个 grid 单元，按 `--gui-motion-fade-out` / `--gui-motion-fade-in`（160ms）交叉淡入淡出，配 `--gui-motion-slide-y`（6px）。`gui-motion-off` 与 `prefers-reduced-motion` 直接切换，不留离场层。外层拥有 `role="status"` + `aria-live="polite"`，离场串 `aria-hidden`，`text: null` 清空。不重挂、不跳高、不闪烁。
@@ -334,7 +343,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **看板/widget 画布**:`BoardPage` + 白名单 `WidgetRegistry`(18 种 widget)——同一 registry 渲染看板网格、transcript 内联卡与 pin 窗,一个 widget 写一处三处复用。画布固定布局(BASE_W 1092)缩放适配窗口(`transform: scale(窗口宽/1092)`),`overflow-x:hidden` + `overflow-y:auto`;ChromaGroup 辉光(`components/ChromaGroup.tsx`)以单份共享 RGB 偏移径向渐变点亮整组(`mix-blend-mode: screen`,`gui-motion-off` 隐藏)。
 - **Composer 与状态行设置**(daemon schema,设置「交互」/「Shell」tab 中呈现,§4 TUI 设置同步):`composer.shape`(string,默认 `"box"`)选 composer 形态;`statusLine.contextLine`(enum `CONTEXT_LINE_MODE_VALUES`,默认 `"embedded"`)驱动状态行 gauge——`off`(纯 accent 实线)、`percentage`(已用段 accent、其余 border)、`annotated`/`embedded`(百分比 + 窗口标签)。
 - **win32 磨砂玻璃修复(2026-08-26)**:显式 `html:root, html:root body { background: transparent }`——`html` 是被忽略的一层,带着不透明 `var(--bg)` 挡住 DWM Acrylic(Windows)/vibrancy(macOS)透出半透明 scrim。`[data-platform="win32"] .gui-main` 关掉页面 `backdrop-filter`(模糊来自窗口材质,更省 GPU);`[data-platform="win32"][data-theme="light"]` 用薄 22–58% scrim(Acrylic 是亮材质,默认 58–76% 浅色 scrim 会冲掉磨砂)。
-- **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4);toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。
+- **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4);toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。**空闲交接**:`update.autoRestart`(默认开启)打开时,校验完成的包会在工作中止后自行重启——toast 说出还有几个请求在跑,而不是只留一个按钮。忙会话、排队消息、后台任务与等待用户的审批都会拦住它;已武装的定时提醒会暂停自动路径(重启会丢掉它们),「立即重启」则始终可以强制交接。
 - **双语文档约定**(`docs/i18n/README.md`):范围内 `docs/**` 每个 markdown 成对 `foo.md` + `foo.zh-CN.md` + `foo.i18n.yaml`(blob 哈希一致性记录);标题后语言切换行(`English | [中文](foo.zh-CN.md)` / `[English](foo.md) | 中文`);`bun run verify-translation-pairing` 执行(`--write` 记录哈希,具名 pair 严格校验);两语言地位平等、结构镜像。
 - **画板 Codex 对齐**(2026-09-19):画板新增**文本工具**(真实 `<textarea>` 浮层,按画布像素定位 —— 输入法/粘贴/选区都是原生行为;失焦或切到别的工具时落成 Konva `Text`,所以待输入的插入符不会丢)、用**形状飞出菜单**取代原来平铺的直线/箭头两个按钮(直线/箭头/矩形/椭圆/菱形/三角形/五角星/心形,4 列玻璃浮层;轨道按钮显示**当前选中**形状的图标,让矩形和菱形一眼可辨)、**12 色调色盘**,以及取代 2/4/8/14 四档的**连续粗细滑杆**(1–24)。**全部几何计算搬进 `lib/sketch-geometry.ts`** —— 拖拽归一化、星形/心形取点、文本度量、命中范围 —— 因为 Konva 离开 canvas 无法断言;由 `test/sketch-geometry.test.ts`(42 个用例)覆盖。画板外壳并入**液态玻璃 + 弹簧动效规范**:78% 半透明表面 + `blur(3xl) saturate(170%)`、`--glass-sheen` 走未被占用的 `::before`、`--glass-shadow`,入场用 240ms `--spring-liquid`(关闭时 180ms `--spring` 的缩小回弹不变,画板仍读作"回落进输入框")。这里每个视觉 `position`/`transform` 都只有一个归属(入场由画板 keyframes 独占,遮罩只负责淡化)。
 - **画板 chip 重开的是 A0,不是 A1 的副本**(2026-09-20):这里的产品规则是**画的连续**,不是**一张能涂的图**。完成时既交付进入消息的 PNG,**也**交付画板的笔画列表(`scene`,`lib/sketch-scene.ts`);chip 两者都带,所以点击它恢复的是对象——每一笔依旧可选、可拖、可缩放、可擦除——再次编辑就是精确地改用户所指的那一笔。旧行为(把导出的 PNG 当底图挂回)让画板自己的产物一步就变成不可再编辑:之后任何修改都只能在栅格上叠涂,这正是它读作"只是粘贴了图片"的原因。scene 同时也是闭环的关键——完成是像素**与** scene 一起换,所以第十次再编辑和第一次一样可编辑。降级只有一个方向且无感:丢了 scene 的 chip(恢复的草稿、改动前的数据)按旧的整图底图打开,而不是拒绝打开。
@@ -442,6 +451,22 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **挂靠球保留清晰的响应式盒子**：容器查询 clamp 为 48–64px；≤380px 的输入框保持 46px，即完整面部的下限，不进入 micro 变体。矢量球体填满盒子的 100%，不再停留在 fallback 尺寸，因此图形与可点击包装层同步缩放。宿主仍通过 `--gui-composer-pet-size` 覆盖尺寸，不在 JS 中指定像素几何。
 - **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
+## 5q. M1 轮渲染语义在 desktop 的落地（2026-09-21，roadmap M1.9）
+
+**架构事实（先明确，避免重复建设）**：desktop-app 的消息渲染不是自有实现，而是直接复用 guest-client 的 React `Transcript` 组件（`ChatView.tsx` 以 `@musepi/guest-client` 包引入，daemon JSON-RPC 只负责供数）。因此 M1.1/M1.2 落在共享组件上的能力——**turn header、工作段折叠、tail/hook 行折叠豁免——desktop 天然全量继承**，无需移植编码。
+
+本章节只登记 desktop 侧的三处接线与等价物映射：
+
+1. **model prop 接线（已落地）**：`<Transcript model={snap.state.model ? provider/id : undefined}>`（`ChatView.tsx`），与 DetailsPanel 同一 compound key 约定；render-units 语义取 turn 内最后一个 model_change，轮内切换仍显示实际产出回复的模型。缺省（无 snap）时 header 不显示模型段。
+2. **审批等待反馈——等价物映射，不照搬**：guest-client 用 ApprovalCard 底部 accent 进度线；desktop 的 ApprovalCard 已有 pulse border beam（`BorderBeam`）+ 提示音，且 ChatView 有 "paused for you" wave 语义（审批 pin waiting）。设计裁决：**desktop 保持 beam/wave 现状**，进度线不跨面照搬——两个面各自已有"卡片承担进度反馈"的实现，语义同构即可，视觉允许面差。
+3. **loading 收敛**：desktop Composer 无 guest 式聊天 loading pill，工作态指示走 `snap.working` 既有链路；M1.2 的抑制矩阵（审批/ask/compact 期间抑制聊天 loading）在 desktop 无对应物可抑制，记为无需移植，仅保留语义对照。
+
+**M1.3 滚动锚定**：将落在共享 `Transcript` 组件内（现有 followKey/lockRef 机制上补 timelineScrollAnchor 语义），一处落地 guest + desktop 两面同时生效，不设 desktop 单独验收。
+
+**液态玻璃统一（roadmap M1.10 前置说明）**：turn header/折叠段 CSS（`.tr-turn-head`/`.tr-seg` 系列）已在 guest-client transcript.css 内以液态玻璃 token（`--glass-*`）实现，desktop 随包继承同一套样式；M1.10 的全产品统一设计稿将以 guest-client tokens.css 暗色段 + desktop gui.css 液态玻璃段为双基准做映射，不动本章节组件语义。
+
+**验收**：desktop-app `tsgo --noEmit` + biome 全绿（已达成）；人工走查：折叠态/展开态/审批等待三视图（desktop 真机 daemon 会话）。
+
 ## 5r. 轮渲染视觉语言（M1，2026-09-21 转正）
 
 参照 ZCode v4 轮渲染单元语义（`zcode/packages/ui/src/v4/conversationTurnRenderUnits.ts`）。**设计基线**：全部视觉值取自 `packages/client-core/src/styles/tokens.css` 暗色段，禁止发明新 token；品牌 accent #d9a441 金禁止改。
@@ -481,6 +506,80 @@ turn
 **流式进行态（D）**：turn header 圆点 accent + 旋转 spinner + "进行中"，耗时 `…`；当前轮工作段 `.tr-seg--open.tr-seg--live`（`--glass-bg-strong` 底，与历史段 `--glass-bg` 区分）；进行中工具行 spinner + `…`，完成立即转 ✓ + 实际耗时；滚动锚定视口钉在 `latestAssistantTextRow` 末行；流式 caret 8px×1.1em accent 块 0.9s steps(2)。
 
 **遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
+
+## 5s. 液态玻璃材质与动效语言——全产品视觉总纲（M1.10，2026-09-21 转正）
+
+> 总纲：**整个产品统一液态玻璃视觉与交互效果，动效丰富流畅，一镜到底。** 双基准：client-core `tokens.css`（web/安卓/desktop 共享渲染层，`--glass-*`/`--spring-liquid`）+ desktop-app `gui.css`（桌面壳，`--gui-motion-*`）。收敛方式是**单向映射层**而非合并词汇：desktop 壳保留 `--gui-motion-*`（motion-pack 皮肤机制是产品特性），取值与曲线锚定 client-core 玻璃语言；client-core 不引入 `--gui-motion-*`。
+
+### 玻璃 = 四层配方（缺一不可，blur 缺席时后三层独立成立）
+
+1. **底** `--glass-bg` / `--glass-bg-strong`（卡面 7% / 浮层 11%；亮色 55%/72%）
+2. **缘** `--glass-border` + 内 rim（edge-hi 上缘高光 30% / edge-lo 下缘收 7%）——"液态"读感主要来自 rim 的 1px 高光，不是 blur
+3. **泽** `--glass-sheen` 线性渐变（对角 45°，仅浮层/活动卡）
+4. **影** `--glass-shadow` 双层（近环 + 远落地）
+
+**层级表（新增组件必须按级取值，禁止跳级发明）**：L0 pane（滚动面板底/输入条：全无）/ L1 card（折叠段、消息卡、工具卡：底+缘）/ L2 float（ApprovalCard、TurnRail hover、回到底部钮、lightbox：强底+缘+rim+泽+近环）/ L3 overlay（对话框、GlobalPause、导览：双层全量）。
+
+**活态**（玻璃随会话状态呼吸）：streaming/进行中 → rim 高光换 accent、底升 strong；审批等待 → 进度线（guest）/pulse beam（desktop）+ 底升 strong；冻结态回落 L1。
+
+### 动效语言
+
+- **曲线统一锚点**：常规变形 `--spring`（linear()）；entrance"弹入" `--spring-liquid = cubic-bezier(0.34,1.56,0.64,1)`（两面对齐到此，写进规范防漂移）；退出 `--spring-snappy`（无 overshoot）；俏皮（宠物/彩蛋）`--spring-bouncy`。
+- **时长阶梯**（desktop `--gui-motion-*` 保留，取值成规范）：130ms 菜单浮层 → 160ms 淡入淡出 → 180ms chip/小件 → 240ms 高度形变/滚动 → 280ms 模糊 → 480ms 大高度形变上限；高度形变一律 delta/6 capped；位移 6px（小）/10px（大）；模糊量 8px/24px。
+- **一镜到底（核心交互原则）**：场景切换不许黑场/闪白/整屏淡入淡出——共享元素持稳定 identity（data-morph-id）从原位置连续变形（desktop `morphFrame` 先例收编：单 rAF 链 translate+scale 插值）；非共享元素就地收缩/滑出（高度形变到 0 + 8px 下滑），整屏 opacity 动画禁用（系统级 overlay 除外）；会话切换（welcome→chat、chat→chat）按此执行，聊天内发送视为同场景增量；场景 morph 总长 300-420ms。
+- **降级**：`gui-motion-off`/`prefers-reduced-motion` → morph 与浮层 entrance/exit 都即时完成（玻璃材质保留，材质不是动效）；`prefers-reduced-transparency`、不支持 `backdrop-filter` 与 `[data-platform="win32"]` → 浮层 blur 归零，切换不透明可读底色并保留 border/sheen/rim/shadow。
+
+### Token 映射表（落地契约）
+
+| 统一语义 | client-core | desktop-app |
+|---|---|---|
+| 玻璃底/强底 | `--glass-bg(-strong)` | `--gui-glass-alpha` 派生 overlay（对齐 7%/11% 两档） |
+| 玻璃缘 | `--glass-border` | 同名对齐，否则 gui.css 引 client-core 值 |
+| entrance 曲线 | `--spring-liquid` | 同名（已天然一致） |
+| 淡入淡出 | 160ms ease（不新建变量） | `--gui-motion-fade-in/out` 时长语义 |
+| 高度形变 | delta/6 capped | `--gui-motion-height(-max)` 同一规则 |
+
+**纪律**：新组件先查本表与层级表；两表没有才提案新增，新增必须双面上报（更新本章）。
+
+### 批次计划（随里程碑推进）
+
+A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部按钮（L2 规格，已落地）。B（guest/安卓壳）：ConnectScreen→会话 morph、移动端列表↔会话 morph、composer 浮层升 L2。C（desktop 壳）：面板浮层（ContextPanel/DetailsPanel）层级审计到 L2/L3；会话切换 morph 推广到 chat→chat。D（收口）：映射表 CI lint（check-radius-tokens 先例）、双平台截图对比报告。
+
+**验收**：映射表与层级表即本章（已合入）；逐面板收敛 biome+tsgo 全绿、无"表外" token、motion-off 无中间帧；Windows blur 缺席下与 macOS 并排截图对比可读性；动效抽查（无黑场、entrance 全走 `--spring-liquid`、时长落阶梯）。
+
+## 5t. 顶栏（titlebar）架构定稿：避让三件套与"无 tab"原则（2026-09-22，替代 §3.1 A2 的内联 tabs strip）
+
+> 背景：A2 批次曾在顶栏内联加入会话 tabs strip（与会话标题 pill 并排），评审认定"四不像"——tab 与标题挤在顶栏同一层级、折叠侧栏时标题 pill 与浮动控制簇重叠。本章为顶栏的最终设计约束，后续顶栏改动以本章为准。
+
+### 设计依据（来自参考实现的实测结论）
+
+- **openchamber**（`packages/ui/src/components/layout/TitlebarLeftControls.tsx` + `Header.tsx` renderDesktop）：浮动控制簇（侧栏开关 + ProjectActions）是 drag header 的 fixed 子节点；簇用 ResizeObserver 实测自身宽度，发布为 CSS 变量 `--oc-titlebar-controls-width`；头部内容区左侧放两个 spacer——① 红绿灯 drag inset、② no-drag carve spacer（宽 = controls-width，220ms 宽度过渡）。侧栏顶部另有 `SidebarTopBar` 预留条（drag inset + no-drag carve + drag 剩余）。
+- **openchamber `sessionTabsEnabled` 默认 false**：会话 tab 是实验功能；开启时由 SessionTabsStrip **承载标题**（活动 tab 内嵌标题列，是"替换"而非"与标题并排"）。
+- **zcode（zai-org/ZCode）桌面端 GUI 存在于 `packages/desktop` + `packages/ui`**（本地 `zcode/` 克隆即含，初始开源提交即有；2026-09-22 实证）：顶栏模型 = `WorkspaceHeader`（TitleSection + ActionSection 两段，**无 tab 条**；`DesktopWindowFrame` 的 `tabBar` 插槽语义是"渲染在 header 内标题**后面**"，不与标题并排）；Win/Linux 用**内联自绘窗口控制按钮**（`DesktopWindowControls`，min/max/close 在 ActionSection 最右，`[app-region:no-drag]`，最大化态经 platform 事件同步换 restore 图标）而非原生 `titleBarOverlay`；mac 避让 = 状态感知 padding 类（pl-38/48/58/66，按全屏 × 更新就绪角标取值，更新角标占红绿灯区），过渡显式限定 `transition-[padding]`（注释说明：限定 transition-property 避免非合成动画拖慢大会话 resize）；Linux 外壳 16px 圆角 + `clip-path` 合成裁切防圆角丢失 + win/linux 不透明根底（mac 才有 vibrancy 透明底）。
+- 结论：**tab 若未来要做，走 openchamber 模式（tab 承载标题）或内容容器内的 tab 条（zcode tabBar 插槽同属此类），必须先出设计稿评审；顶栏本身永远不放与标题并排的 tab。** 窗口控制：维持我们的原生 `titleBarOverlay` + 150px 右避让（零维护、白得系统 snap/贴边布局）；zcode 内联自绘按钮列为已评估替代方案——若未来要主题化窗口按钮或在标题栏塞更新角标再切换。
+
+### 我们的窗口 frame 配置（`apps/desktop/electron/main.cjs`）
+
+主窗 `titleBarStyle: "hidden"`；macOS `trafficLightPosition: {x:16, y:17}`；Windows/Linux 用原生 `titleBarOverlay {height: 48}`（右上原生最小化/最大化/关闭，命中区约 138–150px，内容右避让取 150px）。
+
+### 避让三件套（落地契约）
+
+1. **左浮动簇** `.gui-float-controls--overlay`：fixed，`left: 84px`（mac，红绿灯避让）/ `16px`（win/linux），`top: 11px`，z 50，header 子节点保证 no-drag 生效。簇内容 = 侧栏开关 + openin 胶囊（自动发现/停止 + 预览 + 项目动作），对应 openchamber toggle + ProjectActionsButton。
+2. **折叠 spacer** `.gui-header-spacer`：仅 `data-collapsed="true"` 时渲染宽度——win/linux `calc(var(--gui-float-controls-width, 86px) + 8px)`；mac `calc(68px + var(--gui-float-controls-width, 86px) + 8px)`（84 − 16 基础 padding + 簇宽 + 8 间隙），220ms 宽度过渡。**禁止**再用内联 `paddingLeft` 凑数（已删除的 mac 172 / win 16 hack 即为反面教材——win 折叠态 16px 让标题 pill 被浮动簇压住）。
+3. **簇宽变量** `--gui-float-controls-width`：GuiHeader 内 ResizeObserver 实测簇宽发布到 `document.documentElement`。簇宽随运行态变化（devRunning 时多出预览按钮），必须实测而非常量。
+
+右侧避让：`hasOverlay`（win/linux）时头部 `paddingRight: 150`，与 `titleBarOverlay` 命中区对齐；右侧功能簇（暂停组 → mini-chat → openin）层级与 P-tier 退避维持 §3.1 既有约定，不在顶栏加新常驻项。**2026-10-21 减法**：「终端」「board」「右侧面板」三个按钮已移出顶栏——终端开关改居会话右缘 RightRail 底部组（与面板折叠钮相邻，dsh 位置）；board 入口在侧栏菜单；右侧面板折叠仍由 RightRail 底部钮兜底。原实例按钮（本地/远程守护进程、版本、延迟、浏览器桥诊断）整块迁至侧栏底栏左侧（`InstanceButton`，状态点 + 「本地」胶囊，菜单内容不变），侧栏 footer 呈「实例在左、设置在右」两段布局。
+
+### 会话导航回归 switcher
+
+会话切换 = 标题 pill 的 switcher 下拉（openchamber SessionSwitcherDropdown parity：新建会话 + recent sessions，折叠侧栏时尤为关键）。`surface-tabs.tsx` 的 SurfaceTabStrip 保留——那是多实例面板的 tab，属内容容器语义，与本章不冲突。
+
+### 验收
+
+- 折叠侧栏：标题 pill 与 `.gui-float-controls--overlay` bounding rect 不相交（走查脚本 step 04 断言此条）。
+- 展开侧栏：spacer 宽 0，头部无多余留白。
+- 簇宽变化（dev server 启动出现预览按钮）后 spacer 自动跟随，无重叠帧。
+- mac/win 双平台 data-platform 分支各自生效。
 
 ## 5u. 弹窗动效与样式规范（2026-09-26 定稿，评审决策①-⑧全按默认建议执行）
 

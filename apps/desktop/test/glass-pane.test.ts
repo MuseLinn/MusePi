@@ -81,6 +81,10 @@ beforeAll(async () => {
 	if (!executablePath) throw new Error("No Chromium executable resolved");
 	browser = await puppeteer.launch({ executablePath, headless: true });
 	page = await browser.newPage();
+	// The pane's dark material is the default; the OS scheme decides whether
+	// the system-light fallback applies, so pin the host preference instead of
+	// inheriting whichever scheme this machine runs.
+	await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "dark" }]);
 	await page.setContent(`<style>${CASCADE}</style>${MARKUP}`);
 	// Theme flips make the pane's shadow transition; read the landed value.
 	await page.addStyleTag({ content: ".gui-liquid-glass{transition:none!important}" });

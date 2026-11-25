@@ -13,8 +13,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { buildPluginConfigArtifacts } from "../packages/coding-agent/scripts/gen-plugin-config";
 import { buildToolViews } from "../packages/client-core/scripts/build-tool-views";
+import { buildPluginConfigArtifacts } from "../packages/coding-agent/scripts/gen-plugin-config";
 import { buildSlotCatalog } from "./gen-slot-catalog";
 
 const ROOT = join(import.meta.dir, "..");

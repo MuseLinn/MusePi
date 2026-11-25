@@ -59,7 +59,7 @@ describe("agent avatar style in appearance", () => {
 		const labels = [...section.querySelectorAll(".gui-settings-row-label")].map(n => n.textContent);
 		expect(labels).toContain(t("settings.petDecorGloss"));
 		expect(labels).toContain(t("settings.petAccessory"));
-		expect(section.querySelector(".gui-pet-accessory-picker")).not.toBeNull();
+		expect(section.querySelector(".gui-pet-accessory-picker") !== null).toBe(true);
 	});
 
 	it("keeps the ball detail off every other preset", () => {
@@ -68,7 +68,7 @@ describe("agent avatar style in appearance", () => {
 			const section = avatarSection(mount());
 			const labels = [...section.querySelectorAll(".gui-settings-row-label")].map(n => n.textContent);
 			expect(labels).not.toContain(t("settings.petDecorGloss"));
-			expect(section.querySelector(".gui-pet-accessory-picker")).toBeNull();
+			expect(section.querySelector(".gui-pet-accessory-picker") === null).toBe(true);
 			act(() => root?.unmount());
 			root = null;
 			host?.remove();

@@ -4278,7 +4278,7 @@
 	flex: none;
 	width: 30px;
 	height: 30px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 	color: var(--color-text-muted);
 	font-size: 13px;
@@ -4341,7 +4341,7 @@
 	place-items: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	color: var(--color-text-faint);
 }
 

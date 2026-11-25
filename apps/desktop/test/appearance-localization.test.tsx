@@ -96,6 +96,6 @@ describe("accent row anatomy", () => {
 
 		// The hint column is the label grid area; the control column is the
 		// right-aligned cluster, where a hint renders beside the swatches.
-		expect(row.querySelector(".gui-settings-field-control .gui-settings-field-hint")).toBeNull();
+		expect(row.querySelector(".gui-settings-field-control .gui-settings-field-hint") === null).toBe(true);
 	});
 });

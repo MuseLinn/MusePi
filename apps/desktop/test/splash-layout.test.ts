@@ -16,6 +16,9 @@ const CSS = ["gui-base.css", "gui-composer.css", "gui-window-drag.css"]
 const SHELL_CSS = `${CSS}\n${fs.readFileSync(
 	path.resolve(import.meta.dir, "../../../packages/client-core/src/components/shell/shell.css"),
 	"utf8",
+)}\n${fs.readFileSync(
+	path.resolve(import.meta.dir, "../../../packages/client/ui-status/src/client/status.css"),
+	"utf8",
 )}`;
 
 const executablePath = await ensureChromiumExecutable();

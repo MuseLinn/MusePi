@@ -1,6 +1,6 @@
 {
 	"note": "Schema label/description strings that have no translation YET. Only shrink this list: a new entry means a new setting shipped untranslated.",
-	"count": 267,
+	"count": 265,
 	"pairs": [
 		"client-locale (GUI)\u00000",
 		"client-locale (GUI)\u00000 KB",
@@ -29,7 +29,6 @@
 		"client-locale (GUI)\u0000100 KB",
 		"client-locale (GUI)\u00001024",
 		"client-locale (GUI)\u000015%",
-		"client-locale (GUI)\u0000190K tokens",
 		"client-locale (GUI)\u00002",
 		"client-locale (GUI)\u00002 hours",
 		"client-locale (GUI)\u00002.5 KB",
@@ -153,7 +152,6 @@
 		"coding-agent (TUI)\u0000100 KB",
 		"coding-agent (TUI)\u00001024",
 		"coding-agent (TUI)\u000015%",
-		"coding-agent (TUI)\u0000190K tokens",
 		"coding-agent (TUI)\u00002",
 		"coding-agent (TUI)\u00002 hours",
 		"coding-agent (TUI)\u00002.5 KB",

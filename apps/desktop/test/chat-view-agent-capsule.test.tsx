@@ -136,7 +136,7 @@ describe("agent identity capsule", () => {
 		expect(heads.length).toBe(1);
 		expect(heads[0]?.querySelectorAll(".gui-agent-capsule").length).toBe(1);
 		// The capsule is chrome, never a second transcript row.
-		expect(host.querySelector(".gui-transcript .gui-agent-capsule")).toBeNull();
+		expect(host.querySelector(".gui-transcript .gui-agent-capsule") === null).toBe(true);
 		await unmount();
 	});
 
@@ -189,7 +189,7 @@ describe("agent identity capsule", () => {
 		expect(capsule?.dataset.agentRole).toBe("advisor");
 		expect(capsule?.querySelector(".gui-agent-capsule-name")?.textContent).toBe("顾问");
 		// The lane tag would repeat the name, so it is not rendered.
-		expect(capsule?.querySelector(".gui-agent-role-tag")).toBeNull();
+		expect(capsule?.querySelector(".gui-agent-role-tag") === null).toBe(true);
 		await unmount();
 	});
 
@@ -220,7 +220,7 @@ describe("agent identity capsule", () => {
 		const store = new GuiSessionStore("session-1", { entries, cursor: 0 }, "C:/workspace");
 		const { host, unmount } = await mount(store, rpc);
 		const transcript = host.querySelector(".gui-transcript");
-		expect(transcript).not.toBeNull();
+		expect(transcript !== null).toBe(true);
 		expect(transcript?.querySelectorAll(".gui-user-avatar").length).toBe(0);
 		expect(transcript?.querySelectorAll(".gui-agent-avatar-cycle").length).toBe(0);
 		for (const gutter of transcript?.querySelectorAll(".tr-gutter") ?? []) {
@@ -263,10 +263,10 @@ describe("agent identity capsule", () => {
 			} as never);
 			const { host, unmount } = await mount(store, rpc);
 			const row = host.querySelector(".presence");
-			expect(row).not.toBeNull();
+			expect(row !== null).toBe(true);
 			const avatar = row?.querySelector(".presence-avatar");
-			expect(avatar).not.toBeNull();
-			expect(avatar?.querySelector("svg, canvas, span")).not.toBeNull();
+			expect(avatar !== null).toBe(true);
+			expect(avatar?.querySelector("svg, canvas, span") !== null).toBe(true);
 			await unmount();
 		} finally {
 			localStorage.setItem("musepi-gui-avatars", "0");

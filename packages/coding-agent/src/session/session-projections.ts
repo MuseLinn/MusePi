@@ -8,9 +8,8 @@
  * a baseline rides the session snapshot and every later change travels as a
  * `projection` stream envelope.
  *
- * This is deliberately dsh's `ctx.sessionProjections` shape, adapted to
- * MusePi's existing journal/stream: the daemon owns computation, clients own
- * per-key caching and rendering only.
+ * The split is the contract: the daemon owns computation, clients own only
+ * per-key caching and rendering, so a client never folds events itself.
  */
 import type {
 	AgentEvent,

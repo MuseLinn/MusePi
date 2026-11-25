@@ -395,18 +395,18 @@ describe("ContextPanel maximize/restore", () => {
 
 	it("shows the width grip only while docked", () => {
 		const { panel } = mountPanel();
-		expect(panel.querySelector(".gui-pane-resize-x")).not.toBeNull();
+		expect(panel.querySelector(".gui-pane-resize-x") !== null).toBe(true);
 
 		click("maximize");
 		finishFlip(panel);
 		// Maximized, the panel covers the card the seam is shared with, so the
 		// seam is a line inside the panel: no band, and no tab stop either.
-		expect(panel.querySelector(".gui-pane-resize-x")).toBeNull();
-		expect(panel.querySelector('[role="separator"]')).toBeNull();
+		expect(panel.querySelector(".gui-pane-resize-x") === null).toBe(true);
+		expect(panel.querySelector('[role="separator"]') === null).toBe(true);
 
 		click("restore");
 		finishFlip(panel);
-		expect(panel.querySelector(".gui-pane-resize-x")).not.toBeNull();
+		expect(panel.querySelector(".gui-pane-resize-x") !== null).toBe(true);
 	});
 
 	it("applies the toggle instantly under reduced motion and stays reversible", () => {
@@ -436,7 +436,7 @@ describe("ContextPanel maximize/restore", () => {
 		let bubbled = 0;
 		panel.addEventListener("click", () => bubbled++);
 		const other = panel.querySelector<HTMLButtonElement>(".gui-pane-tool:not([data-panel-maximize])");
-		expect(other).not.toBeNull();
+		expect(other !== null).toBe(true);
 		if (!other) return;
 		act(() => other.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(getPanelMaximized()).toBe(false);

@@ -49,9 +49,6 @@ describe("presentedEntryFiles", () => {
 				{ path: "/w/b.md" },
 				{ path: "/w/a.md", description: "Updated" },
 			]),
-		).toEqual([
-			{ path: "/w/a.md", description: "Updated" },
-			{ path: "/w/b.md" },
-		]);
+		).toEqual([{ path: "/w/a.md", description: "Updated" }, { path: "/w/b.md" }]);
 	});
 });

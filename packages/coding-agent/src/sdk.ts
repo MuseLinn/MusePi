@@ -31,7 +31,6 @@ import {
 	prewarmOpenAICodexResponses,
 } from "@musepi/pi-ai/providers/openai-codex-responses";
 import { FALLBACK_DIALECT, preferredDialect } from "@musepi/pi-catalog/identity";
-import type { ConnectorConnectOutcome } from "./connectors/connect-outcome";
 import type { Component } from "@musepi/pi-tui";
 import { $env, $flag, getAgentDir, getProjectDir, logger, postmortem, prompt, Snowflake } from "@musepi/pi-utils";
 import { INTENT_FIELD } from "@musepi/pi-wire";
@@ -70,6 +69,7 @@ import { loadPromptTemplates as loadPromptTemplatesInternal, type PromptTemplate
 import { applyProviderGlobalsFromSettings } from "./config/provider-globals";
 import { buildServiceTierByFamily } from "./config/service-tier";
 import { Settings, type SkillsSettings } from "./config/settings";
+import type { ConnectorConnectOutcome } from "./connectors/connect-outcome";
 import { CursorExecHandlers, type CursorMcpResourceAdapter } from "./cursor";
 import { createBridgeEditTool, createBridgeGrepFactory } from "./cursor-bridge-tools";
 import { type CollabToolHandle, collabTool } from "./tools/collab";

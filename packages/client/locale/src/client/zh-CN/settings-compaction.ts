@@ -111,6 +111,10 @@ export const settingsCompaction = {
 	"settings.compaction.idleDelay.option.30m": "30 分钟",
 	"settings.compaction.idleDelay.option.1h": "1 小时",
 
+	"settings.compaction.speculationCacheGuard.title": "缓存冷时跳过预压缩",
+	"settings.compaction.speculationCacheGuard.desc":
+		"只在最近一次响应的提示缓存仍有效时在后台生成摘要；长时间离开后它会让整个前缀重新计费，并和你的下一条请求抢缓存。关闭后始终预压缩。",
+
 	"settings.compaction.editor.title": "按模型编辑",
 	"settings.compaction.editor.model": "模型",
 	"settings.compaction.editor.pick": "选择模型",

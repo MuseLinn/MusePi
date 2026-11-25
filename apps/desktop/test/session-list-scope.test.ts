@@ -90,6 +90,9 @@ function server(rows: Row[]): DaemonServer {
 		knownSessions: async () => rows,
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 		setOnExtensionNotification: () => {},
 	} as unknown as DaemonSessionHost;
 	return new DaemonServer(host);

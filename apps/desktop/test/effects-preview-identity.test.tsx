@@ -50,7 +50,7 @@ describe("effects preview identity", () => {
 	it("renders one centered capsule over the mock conversation", async () => {
 		const { host, unmount } = await mount(false);
 		const identity = host.querySelector(".gui-effect-preview-identity");
-		expect(identity).not.toBeNull();
+		expect(identity !== null).toBe(true);
 		expect(identity?.querySelectorAll(".gui-agent-capsule").length).toBe(1);
 		expect(identity?.querySelector(".gui-agent-capsule-name")?.textContent).toBe("助手");
 		expect(identity?.querySelector(".gui-agent-capsule-status")?.textContent).toBe("空闲");
@@ -68,7 +68,7 @@ describe("effects preview identity", () => {
 		const line = capsule?.querySelector(".gui-agent-capsule-line");
 		const lineOrder = Array.from(line?.children ?? []).map(child => child.className);
 		expect(lineOrder.indexOf("gui-agent-role-tag")).toBe(lineOrder.indexOf("gui-agent-capsule-name") + 1);
-		expect(capsule?.querySelector(".gui-agent-capsule-meta .gui-agent-capsule-status")).not.toBeNull();
+		expect(capsule?.querySelector(".gui-agent-capsule-meta .gui-agent-capsule-status") !== null).toBe(true);
 		await unmount();
 	});
 
@@ -82,7 +82,7 @@ describe("effects preview identity", () => {
 
 	it("drops the capsule orb when the toggle is off, keeping the role and status", async () => {
 		const { host, unmount } = await mount(false);
-		expect(host.querySelector(".gui-agent-capsule .gui-agent-avatar")).toBeNull();
+		expect(host.querySelector(".gui-agent-capsule .gui-agent-avatar") === null).toBe(true);
 		expect(host.querySelector(".gui-agent-capsule-status")?.textContent).toBe("空闲");
 		expect(host.querySelector(".gui-agent-capsule .gui-agent-role-tag")?.textContent).toBe("编码");
 		await unmount();
@@ -90,7 +90,7 @@ describe("effects preview identity", () => {
 
 	it("draws the capsule orb when the toggle is on", async () => {
 		const { host, unmount } = await mount(true);
-		expect(host.querySelector(".gui-agent-capsule .gui-agent-avatar")).not.toBeNull();
+		expect(host.querySelector(".gui-agent-capsule .gui-agent-avatar") !== null).toBe(true);
 		await unmount();
 	});
 
@@ -103,7 +103,7 @@ describe("effects preview identity", () => {
 				expect(gutter.childElementCount).toBe(0);
 			}
 			// The capsule is chrome above the rows, not a transcript row.
-			expect(host.querySelector(".tr-row .gui-agent-capsule")).toBeNull();
+			expect(host.querySelector(".tr-row .gui-agent-capsule") === null).toBe(true);
 			await unmount();
 		}
 	});

@@ -24,18 +24,16 @@ import {
  *  the Agent tab's avatar (new snapshot) for the one-take morph. */
 export const AGENT_AVATAR_TRANSITION = "agent-identity-avatar";
 
-export type AgentRunStatusKey = "waiting" | "working" | "idle";
+type AgentRunStatusKey = "waiting" | "working" | "idle";
 
-export interface AgentRunStatus {
+interface AgentRunStatus {
 	key: AgentRunStatusKey;
 	label: string;
 }
 
 /** The capsule/head's one live-state line. Approvals lead: the agent is
  *  parked on a decision, which is the one state the human can act on. */
-export function agentRunStatus(
-	snap: Pick<GuiSessionState, "approvals" | "working"> | null | undefined,
-): AgentRunStatus {
+function agentRunStatus(snap: Pick<GuiSessionState, "approvals" | "working"> | null | undefined): AgentRunStatus {
 	if ((snap?.approvals.length ?? 0) > 0) {
 		return { key: "waiting", label: t("general.agentCapsuleWaiting") };
 	}

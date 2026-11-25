@@ -33,8 +33,8 @@ describe("typing-effect sample", () => {
 		host = el;
 
 		const sample = el.querySelector(".gui-typing-preview");
-		expect(sample).not.toBeNull();
-		expect(sample?.querySelector(".gui-typewriter")).not.toBeNull();
+		expect(sample !== null).toBe(true);
+		expect(sample?.querySelector(".gui-typewriter") !== null).toBe(true);
 		expect(sample?.querySelector(".gui-chat-preview-label")?.textContent).toBe(t("settings.typingEffect"));
 	});
 });
