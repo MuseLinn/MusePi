@@ -1,5 +1,6 @@
 import { type DiagramColors, renderMermaidASCII, renderMermaidSVG } from "beautiful-mermaid";
 import { t } from "../../i18n/index.js";
+import { blockGlyph } from "./block-glyph";
 import { escapeHtml } from "./highlight";
 
 export type MermaidMode = "svg" | "ascii";
@@ -58,28 +59,31 @@ export function isUsableSvg(svg: unknown): svg is string {
 	return true;
 }
 
-const FS_ICON =
-	'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 3V5H4V9H2V3H8ZM2 21V15H4V19H8V21H2ZM22 21H16V19H20V15H22V21ZM22 9H20V5H16V3H22V9Z" fill="currentColor"/></svg>';
-
 /**
- * Hover toolbar: copy the mermaid SOURCE (svg mode
- * additionally offers zoom in/out and download of the rendered SVG). The
- * copy button shares the code-block hash scheme so its label flips to
- * "copied"; the source rides in data-mermaid-src (escaped) and the SVG is
- * serialized from the DOM at download time. Delegated in the Markdown
- * component.
+ * Hover toolbar: copy the mermaid SOURCE (svg mode additionally offers zoom
+ * in/out, fullscreen and download of the rendered SVG). Every control is the
+ * shared inline-block action button (`tr-code-btn` + an icon), matching the
+ * copy button a fence and a table carry. The copy button shares the
+ * code-block hash scheme so its glyph flips to a check; the source rides in
+ * data-mermaid-src (escaped) and the SVG is serialized from the DOM at
+ * download time. Delegated in the Markdown component.
  */
 const mermaidToolbar = (source: string, mode: MermaidMode): string => {
 	const hash = fnv1a(source).toString(36);
-	const copy = `<button type="button" class="tr-mermaid-copy tr-code-copy" data-copy-hash="${hash}" data-mermaid-src="${escapeHtml(source)}">${t("settings.copy")}</button>`;
+	const copyLabel = escapeHtml(t("settings.copy"));
+	const copyButton =
+		`<button type="button" class="tr-code-btn tr-mermaid-copy tr-code-copy" data-copy-hash="${hash}" data-mermaid-src="${escapeHtml(source)}" aria-label="${copyLabel}" title="${copyLabel}">` +
+		blockGlyph("copy") +
+		`</button>`;
 	if (mode === "ascii") {
-		return `<div class="tr-mermaid-bar">${copy}</div>`;
+		return `<div class="tr-mermaid-bar">${copyButton}</div>`;
 	}
-	const zoomIn = `<button type="button" class="tr-mermaid-zoom tr-code-copy" data-mermaid-zoom="in" title="${t("settings.zoomIn")}">+</button>`;
-	const zoomOut = `<button type="button" class="tr-mermaid-zoom tr-code-copy" data-mermaid-zoom="out" title="${t("settings.zoomOut")}">−</button>`;
-	const fs = `<button type="button" class="tr-mermaid-fs tr-code-copy" data-mermaid-fullscreen title="${t("settings.fullscreen")}">${FS_ICON}</button>`;
-	const dl = `<button type="button" class="tr-mermaid-dl tr-code-copy" data-mermaid-download>${t("settings.download")}</button>`;
-	return `<div class="tr-mermaid-bar">${copy}${zoomIn}${zoomOut}${fs}${dl}</div>`;
+	const zoomIn = `<button type="button" class="tr-code-btn tr-mermaid-zoom" data-mermaid-zoom="in" aria-label="${escapeHtml(t("settings.zoomIn"))}" title="${escapeHtml(t("settings.zoomIn"))}">${blockGlyph("zoomIn")}</button>`;
+	const zoomOut = `<button type="button" class="tr-code-btn tr-mermaid-zoom" data-mermaid-zoom="out" aria-label="${escapeHtml(t("settings.zoomOut"))}" title="${escapeHtml(t("settings.zoomOut"))}">${blockGlyph("zoomOut")}</button>`;
+	const fs = `<button type="button" class="tr-code-btn tr-mermaid-fs" data-mermaid-fullscreen aria-label="${escapeHtml(t("settings.fullscreen"))}" title="${escapeHtml(t("settings.fullscreen"))}">${blockGlyph("expand")}</button>`;
+	const downloadLabel = escapeHtml(t("settings.download"));
+	const dl = `<button type="button" class="tr-code-btn tr-mermaid-dl" data-mermaid-download aria-label="${downloadLabel}" title="${downloadLabel}">${blockGlyph("download")}</button>`;
+	return `<div class="tr-mermaid-bar">${copyButton}${zoomIn}${zoomOut}${fs}${dl}</div>`;
 };
 
 /**

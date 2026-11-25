@@ -106,9 +106,15 @@ describe("Transcript LaTeX math", () => {
 	it("wraps display math with a copy button, inline math does not get one", () => {
 		const html = renderMarkdown("inline $x^2$ and\n$$\ny = a + b\n$$");
 		expect(html).toContain('<span class="tr-math">');
-		expect(html).toMatch(/<button type="button" class="tr-math-copy tr-code-copy" data-math-copy="[a-z0-9]+">/);
+		// The formula's copy control is the same action button a fence carries:
+		// shared `.tr-code-btn` box, an icon instead of the word "copy", and the
+		// hash that flips its glyph to a check.
+		expect(html).toMatch(
+			/<button type="button" class="tr-code-btn tr-math-copy tr-code-copy" data-math-copy="[a-z0-9]+" data-copy-hash="[a-z0-9]+" aria-label="[^"]+"/,
+		);
+		expect(html).toContain('data-glyph="copy"');
 		// exactly one copy button (the display block only)
-		expect(html.match(/class="tr-math-copy/g)).toHaveLength(1);
+		expect(html.match(/tr-math-copy/g)).toHaveLength(1);
 	});
 
 	it("embeds the original LaTeX source in the annotation for copying", () => {
@@ -122,7 +128,7 @@ describe("Transcript LaTeX math", () => {
 	it("renders \\[...\\] display math with the same copy wrapper", () => {
 		const html = renderMarkdown("\\[\\int_0^1 f(x)\\,dx\\]");
 		expect(html).toContain('<span class="tr-math">');
-		expect(html).toContain('class="tr-math-copy tr-code-copy"');
+		expect(html).toContain('class="tr-code-btn tr-math-copy tr-code-copy"');
 	});
 
 	it("labels a fenced block with its language and icon-only actions", () => {
@@ -156,6 +162,25 @@ describe("Transcript mermaid", () => {
 		expect(html).toContain("data-mermaid-download");
 	});
 
+	it("draws the diagram toolbar with the shared inline-block action buttons", () => {
+		const html = renderMarkdown("```mermaid\nflowchart LR\nA-->B\n```");
+		// Every control carries the shared box and an icon. Before this, the
+		// classes below had no rule anywhere — the toolbar rendered as browser
+		// default buttons (grey bevel, system font) while every other block had
+		// icon buttons.
+		for (const name of ["tr-mermaid-copy", "tr-mermaid-zoom", "tr-mermaid-fs", "tr-mermaid-dl"]) {
+			const tag = html.match(new RegExp(`<button[^>]*class="[^"]*${name}[^"]*"[^>]*>`))?.[0] ?? "";
+			expect(tag).toContain("tr-code-btn");
+			expect(tag).toContain("aria-label=");
+		}
+		// Icons, not glyph characters ("+", "−") or words.
+		expect(html).not.toMatch(/data-mermaid-zoom="in"[^>]*>\+</);
+		expect(html).toContain('data-glyph="zoomIn"');
+		expect(html).toContain('data-glyph="zoomOut"');
+		expect(html).toContain('data-glyph="expand"');
+		expect(html).toContain('data-glyph="download"');
+	});
+
 	it("escapes the mermaid source in the data attribute", () => {
 		const html = renderMarkdown('```mermaid\nflowchart LR\nA["x & y"]-->B\n```');
 		expect(html).toContain('data-mermaid-src="flowchart LR');
@@ -176,7 +201,7 @@ describe("Transcript tables", () => {
 		expect(html).toContain('<div class="tr-table" data-table-hash="');
 		expect(html).toContain('<div class="tr-table-bar">');
 		expect(html).toMatch(
-			/<button type="button" class="tr-table-btn tr-table-wide" data-table-wide="[a-z0-9]+" aria-pressed="false"/,
+			/<button type="button" class="tr-code-btn tr-table-btn tr-table-wide" data-table-wide="[a-z0-9]+" aria-pressed="false"/,
 		);
 		expect(html).toContain('data-table-copy="csv"');
 		expect(html).toContain('data-table-copy="tsv"');

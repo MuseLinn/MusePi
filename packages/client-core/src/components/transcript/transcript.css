@@ -1795,11 +1795,14 @@ button.tr-display-context-source:hover {
 	pointer-events: auto;
 }
 
-/* Keyboard focus and touch devices have no reliable hover state. Keep the
- * same actions visible instead of making copy/export capabilities vanish. */
-.tr-md .tr-math:focus-within .tr-math-copy,
-.tr-mermaid-block:focus-within .tr-mermaid-bar,
-.tr-table:focus-within .tr-table-bar {
+/* Keyboard reveal. `.tr-math` / `.tr-mermaid-block` / `.tr-table` are plain
+ * wrappers with no focusability of their own, so `:has(:focus-visible)` is the
+ * only way to notice a tabbed-into action — and it is the repo's contract for
+ * hover-revealed controls: `:focus-within` would also summon them on a pointer
+ * press, which is not a keyboard user asking for them. */
+.tr-md .tr-math:has(.tr-math-copy:focus-visible) .tr-math-copy,
+.tr-mermaid-block:has(.tr-mermaid-bar button:focus-visible) .tr-mermaid-bar,
+.tr-table:has(.tr-table-bar button:focus-visible) .tr-table-bar {
 	opacity: 1;
 	pointer-events: auto;
 }
@@ -1813,42 +1816,14 @@ button.tr-display-context-source:hover {
 	}
 }
 
-/* One button geometry for every action in the bar (width toggle, copy,
- * download, caret) — the code block's `.tr-code-btn` sizing so a table and a
- * fence read as the same family of inline block. */
+/* One button geometry for every inline block's actions: a fence's head, a
+ * table's floating bar, a formula's copy, a mermaid diagram's toolbar. The
+ * features live on `.tr-code-btn` (the class the fence already used), so a new
+ * block opts in by carrying that class plus an icon — it never re-declares the
+ * box. Table-specific pieces only add what a table needs. */
 .tr-table-btn {
-	display: grid;
-	place-items: center;
-	width: 24px;
-	height: 24px;
-	padding: 0;
-	border: 0;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--color-text-muted);
-	cursor: pointer;
-	transition:
-		background 120ms ease-out,
-		color 120ms ease-out;
-}
-
-.tr-table-btn:hover {
-	background: var(--bg-inset);
-	color: var(--color-text);
-}
-
-.tr-table-btn:focus-visible {
-	outline: 2px solid var(--ring);
-	outline-offset: 1px;
-}
-
-.tr-table-btn[data-copied] {
-	color: var(--ok);
-}
-
-.tr-table-btn[aria-pressed="true"] {
-	color: var(--accent);
-	background: var(--bg-inset);
+	width: 26px;
+	height: 26px;
 }
 
 .tr-table-btn[aria-expanded="true"] {
@@ -3780,7 +3755,7 @@ a.tr-tool-search-title:hover {
 	}
 
 	.tr-widget-inplace .tv-widget:hover .tv-widget-actions,
-	.tr-widget-inplace .tv-widget:focus-within .tv-widget-actions {
+	.tr-widget-inplace .tv-widget:has(.tv-widget-fs-btn:focus-visible) .tv-widget-actions {
 		opacity: 1;
 	}
 }

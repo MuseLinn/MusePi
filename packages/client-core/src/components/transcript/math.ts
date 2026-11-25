@@ -18,6 +18,7 @@
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { t } from "../../i18n/index.js";
+import { blockGlyph } from "./block-glyph";
 import { escapeHtml } from "./highlight";
 
 const renderKatex = (source: string, displayMode: boolean): string => {
@@ -50,14 +51,17 @@ const fnv1a = (s: string): number => {
  * browser decodes HTML entities in textContent, so it IS the original
  * source. The button floats on the wrapper, OUTSIDE `.katex-display`'s
  * overflow-x scroll container, so wide formulas scroll under it instead of
- * carrying it away. It reuses `.tr-code-copy`'s visuals (both classes).
+ * carrying it away. Same action button as a fence's copy (`tr-code-btn`).
  */
 const renderDisplay = (source: string): string => {
 	const body = renderKatex(source, true);
 	const hash = fnv1a(source).toString(36);
+	const label = escapeHtml(t("settings.copy"));
 	return (
 		`<span class="tr-math">${body}` +
-		`<button type="button" class="tr-math-copy tr-code-copy" data-math-copy="${hash}">${t("settings.copy")}</button>` +
+		`<button type="button" class="tr-code-btn tr-math-copy tr-code-copy" data-math-copy="${hash}" data-copy-hash="${hash}" aria-label="${label}" title="${label}">` +
+		blockGlyph("copy") +
+		`</button>` +
 		`</span>`
 	);
 };

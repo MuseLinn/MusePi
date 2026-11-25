@@ -2,13 +2,9 @@ import { Marked } from "@musepi/pi-utils/marked";
 import {
 	Check as CheckGlyphData,
 	Copy as CopyGlyphData,
-	Download as DownloadGlyphData,
 	ListOrdered as LinesGlyphData,
-	Ellipsis as MoreGlyphData,
 	AlignJustify as NoLinesGlyphData,
 	StretchHorizontal as NoWrapGlyphData,
-	FoldHorizontal as RestoreWidthGlyphData,
-	UnfoldHorizontal as WidenGlyphData,
 	WrapText as WrapGlyphData,
 } from "lucide";
 import type { IconInput } from "morphicons";
@@ -42,6 +38,7 @@ import {
 	setAnswerMarks,
 } from "../../ui-blocks/answers.js";
 import { isUiBlockLanguage, renderUiBlockFence, splitOpenUiFence } from "../../ui-blocks/render.js";
+import { blockGlyph, setBlockGlyph } from "./block-glyph";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalImageSrc, localImagePath } from "./local-image.js";
@@ -270,45 +267,6 @@ function fnv1a(s: string): number {
 // Cells are extracted from the rendered DOM (textContent), so inline
 // markdown formatting never leaks into CSV/TSV/Markdown output.
 
-/** Table glyphs are inline SVG rather than `<morph-icon>`: the toolbar is
- *  markup produced outside React, and a custom element there depends on the
- *  registry being upgraded before the string lands in the document (it is not
- *  in the SSR/test renderers, where upgrading throws). The shapes come from
- *  the lucide data already imported for the morph icons, so both toolbars draw
- *  the same glyphs. */
-const TABLE_GLYPH = {
-	copy: CopyGlyphData,
-	check: CheckGlyphData,
-	download: DownloadGlyphData,
-	more: MoreGlyphData,
-	widen: WidenGlyphData,
-	reset: RestoreWidthGlyphData,
-} as const;
-
-type TableGlyphName = keyof typeof TABLE_GLYPH;
-
-function tableGlyphSvg(name: TableGlyphName, size: number): string {
-	const parts = TABLE_GLYPH[name].map(([tag, attrs]) => {
-		const rendered = Object.entries(attrs)
-			.map(([key, value]) => `${key}="${value}"`)
-			.join(" ");
-		return `<${tag} ${rendered}></${tag}>`;
-	});
-	// One template (not concatenated literals): the whole element reads as
-	// markup, so the i18n gate sees no untranslated text nodes in it.
-	return `<svg class="tr-table-glyph" data-glyph="${name}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${parts.join("")}</svg>`;
-}
-
-/** Swap a toolbar glyph in place (copy → check after a successful write). */
-function setTableGlyph(button: HTMLElement, name: TableGlyphName, size: number): void {
-	const glyph = button.querySelector<SVGElement>("svg[data-glyph]");
-	if (!glyph || glyph.dataset.glyph === name) return;
-	const host = document.createElement("div");
-	host.innerHTML = tableGlyphSvg(name, size);
-	const next = host.firstElementChild;
-	if (next) glyph.replaceWith(next);
-}
-
 function extractTableData(table: HTMLTableElement): { headers: string[]; rows: string[][] } {
 	const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.textContent?.trim() ?? "");
 	const rows = Array.from(table.querySelectorAll("tbody tr")).map(tr =>
@@ -351,27 +309,27 @@ function tableToolbarHtml(hash: string): string {
 	const formats = escapeHtml(t("general.tableFormats"));
 	const split = (main: string, menu: string): string =>
 		`<span class="tr-table-split">${main}` +
-		`<button type="button" class="tr-table-btn tr-table-caret" data-table-menu aria-haspopup="menu" aria-expanded="false" aria-label="${formats}" title="${formats}">` +
-		tableGlyphSvg("more", 14) +
+		`<button type="button" class="tr-code-btn tr-table-btn tr-table-caret" data-table-menu aria-haspopup="menu" aria-expanded="false" aria-label="${formats}" title="${formats}">` +
+		blockGlyph("more") +
 		`</button>` +
 		`<span class="tr-table-menu" role="menu">${menu}</span>` +
 		`</span>`;
 	return (
 		`<div class="tr-table-bar">` +
-		`<button type="button" class="tr-table-btn tr-table-wide" data-table-wide="${hash}" aria-pressed="false" aria-label="${widen}" title="${widen}">` +
-		tableGlyphSvg("widen", 14) +
+		`<button type="button" class="tr-code-btn tr-table-btn tr-table-wide" data-table-wide="${hash}" aria-pressed="false" aria-label="${widen}" title="${widen}">` +
+		blockGlyph("widen") +
 		`</button>` +
 		split(
-			`<button type="button" class="tr-table-btn tr-code-copy" data-table-copy="markdown" data-copy-hash="${hash}" aria-label="${copy}" title="${copy}">` +
-				tableGlyphSvg("copy", 14) +
+			`<button type="button" class="tr-code-btn tr-table-btn tr-code-copy" data-table-copy="markdown" data-copy-hash="${hash}" aria-label="${copy}" title="${copy}">` +
+				blockGlyph("copy") +
 				`</button>`,
 			`<button type="button" role="menuitem" data-table-copy="csv">CSV</button>` +
 				`<button type="button" role="menuitem" data-table-copy="tsv">TSV</button>` +
 				`<button type="button" role="menuitem" data-table-copy="markdown">Markdown</button>`,
 		) +
 		split(
-			`<button type="button" class="tr-table-btn" data-table-download="csv" aria-label="${download}" title="${download}">` +
-				tableGlyphSvg("download", 14) +
+			`<button type="button" class="tr-code-btn tr-table-btn" data-table-download="csv" aria-label="${download}" title="${download}">` +
+				blockGlyph("download") +
 				`</button>`,
 			`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
 				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>`,
@@ -498,7 +456,7 @@ export function applyTableWideState(
 		button.setAttribute("aria-pressed", wide ? "true" : "false");
 		button.setAttribute("title", label);
 		button.setAttribute("aria-label", label);
-		setTableGlyph(button, wide ? "reset" : "widen", 14);
+		setBlockGlyph(button, wide ? "reset" : "widen");
 	}
 }
 
@@ -1475,8 +1433,9 @@ export const Markdown = memo(function Markdown({
 		}
 	}, [render.html, copiedHash]);
 
-	// Copy feedback for both block kinds. Code blocks morph their `<morph-icon>`;
-	// table toolbars carry a plain inline SVG, so they swap the glyph instead.
+	// Copy feedback for every block kind. A fenced code block morphs its
+	// `<morph-icon>`; the string-built toolbars (table / math / mermaid) carry a
+	// plain inline SVG, so they swap the glyph instead.
 	useLayoutEffect(() => {
 		const host = rootRef.current;
 		if (!host) return;
@@ -1485,8 +1444,8 @@ export const Markdown = memo(function Markdown({
 			button.toggleAttribute("data-copied", copied);
 			button.setAttribute("aria-label", t(copied ? "settings.copied" : "settings.copy"));
 			button.setAttribute("title", t(copied ? "settings.copied" : "settings.copy"));
-			if (button.closest(".tr-table")) {
-				setTableGlyph(button, copied ? "check" : "copy", 14);
+			if (button.querySelector("svg[data-glyph]")) {
+				setBlockGlyph(button, copied ? "check" : "copy");
 				continue;
 			}
 			button
