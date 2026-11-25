@@ -118,9 +118,8 @@ function fixture(): string {
 					<div class="gui-collab-frame gui-scroll-frame">
 						<div class="gui-collab-grid">
 							<section class="gui-collab-col gui-collab-share">
-								<div class="gui-collab-col-head"><h2>Share link</h2></div>
+								<div class="gui-collab-col-head"><h2>Phones and browsers</h2></div>
 								<div class="gui-collab-setup">
-									<p class="gui-collab-desc">Phones and browsers can join this share. Choose a network path, then start sharing.</p>
 									<p class="gui-collab-scope-line">Share the whole workspace — guests see every session</p>
 									<div class="gui-collab-exposures">
 										<div class="gui-collab-group-head"><span>Network path</span><button type="button" class="gui-tool-btn gui-collab-recheck" aria-label="Check again">↻</button></div>
@@ -130,7 +129,7 @@ function fixture(): string {
 							</section>
 							<section class="gui-collab-col gui-collab-channel-col">
 								<div class="gui-collab-col-head"><h2>Chat bots</h2></div>
-								<p class="gui-collab-desc">Connect a chat bot for longer mobile access.</p>
+								<p class="gui-collab-desc">For longer mobile access.</p>
 								<ul class="gui-collab-bots">${CHANNEL_ROWS}</ul>
 								<details class="gui-collab-plugins"><summary><span>Channel plugins</span><span class="gui-collab-plugin-count">6</span></summary></details>
 							</section>
