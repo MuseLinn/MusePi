@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import "./transcript-dom-shim";
 import { isBranchFormingEntry, msgText, Transcript } from "../src/components/transcript/Transcript";

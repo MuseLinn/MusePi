@@ -59,6 +59,7 @@ describe("AssistantBody turn surfaces", () => {
 				results={new Map()}
 				active={new Map()}
 				pending={false}
+				toolPolicy={{ lane: "workbench", hidden: false, summarize: false }}
 				turnFiles={files}
 				sources={sources}
 				{...overrides}

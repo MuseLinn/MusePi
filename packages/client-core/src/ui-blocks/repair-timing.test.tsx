@@ -58,6 +58,8 @@ afterEach(() => {
 	window.localStorage.clear();
 });
 
+const TEST_TOOL_POLICY = { lane: "workbench", hidden: false, summarize: false } as const;
+
 const brokenFence = '```ui\nroot = Stack([Stat("a", 1), Stat("b")])\n```\n';
 
 const assistantMessage = (text: string): AssistantMessage => ({
@@ -89,6 +91,7 @@ describe("diagnostics follow the reply, not the markdown tick", () => {
 		// already-final answer's diagnostics — it only holds back the auto repair.
 		const working = renderToStaticMarkup(
 			<AssistantBody
+				toolPolicy={TEST_TOOL_POLICY}
 				message={assistantMessage(brokenFence)}
 				results={new Map()}
 				active={new Map()}
@@ -98,7 +101,13 @@ describe("diagnostics follow the reply, not the markdown tick", () => {
 		);
 		expect(working).toContain("data-ui-repair");
 		const live = renderToStaticMarkup(
-			<AssistantBody message={assistantMessage(brokenFence)} results={new Map()} active={new Map()} pending />,
+			<AssistantBody
+				toolPolicy={TEST_TOOL_POLICY}
+				message={assistantMessage(brokenFence)}
+				results={new Map()}
+				active={new Map()}
+				pending
+			/>,
 		);
 		expect(live).not.toContain("data-ui-repair");
 	});
@@ -186,12 +195,28 @@ describe("the automatic repair waits for the turn", () => {
 	const autoFence = '```ui\nroot = Stack([Stat("x", 1), Stat("y")])\n```\n';
 	test("a pending reply sends nothing; the settled one sends once", () => {
 		const message = assistantMessage(autoFence);
-		const host = renderClient(<AssistantBody message={message} results={new Map()} active={new Map()} pending />);
+		const host = renderClient(
+			<AssistantBody
+				toolPolicy={TEST_TOOL_POLICY}
+				message={message}
+				results={new Map()}
+				active={new Map()}
+				pending
+			/>,
+		);
 		expect(host.querySelector("[data-ui-repair]")).toBeNull();
 		expect(dispatched).toHaveLength(0);
 
 		act(() =>
-			root?.render(<AssistantBody message={message} results={new Map()} active={new Map()} pending={false} />),
+			root?.render(
+				<AssistantBody
+					toolPolicy={TEST_TOOL_POLICY}
+					message={message}
+					results={new Map()}
+					active={new Map()}
+					pending={false}
+				/>,
+			),
 		);
 		expect(host.querySelectorAll("[data-ui-repair]")).toHaveLength(1);
 		expect(dispatched).toHaveLength(1);
@@ -199,7 +224,15 @@ describe("the automatic repair waits for the turn", () => {
 
 		// One commit later the same answer is drawn again: the repair is spent.
 		act(() =>
-			root?.render(<AssistantBody message={message} results={new Map()} active={new Map()} pending={false} />),
+			root?.render(
+				<AssistantBody
+					toolPolicy={TEST_TOOL_POLICY}
+					message={message}
+					results={new Map()}
+					active={new Map()}
+					pending={false}
+				/>,
+			),
 		);
 		expect(dispatched).toHaveLength(1);
 	});
@@ -209,6 +242,7 @@ describe("the automatic repair waits for the turn", () => {
 		// a later step. The failure note stays, the automatic repair waits.
 		const host = renderClient(
 			<AssistantBody
+				toolPolicy={TEST_TOOL_POLICY}
 				message={assistantMessage(brokenFence)}
 				results={new Map()}
 				active={new Map()}
