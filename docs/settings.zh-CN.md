@@ -635,7 +635,7 @@ memory:
 | `compaction.reserveTokens` | number | `undefined` | 未设百分比时为下一 turn 预留的 token；未设置时解析为 `max(窗口 15%, 16384)`。 |
 | `compaction.keepRecentTokens` | number | `20000` | 压缩后始终保留的近期 token 数。 |
 | `compaction.autoContinue` | boolean | `true` | Compaction 之后自动继续。 |
-| `memory.backend` | enum | `off` | `off`, `local`, `hindsight`, `mnemopi`。每个 backend 都有自己的 `hindsight.*` / `mnemopi.*` / `memories.*` 调优键。 |
+| `memory.backend` | enum | `off` | `off`, `musemem`, `hindsight`, `mnemopi`, `sharpshooter`；`local` 会迁移为 `musemem`。每个 backend 都有自己的 `musemem.*` / `hindsight.*` / `mnemopi.*` / `memories.*` 调优键。 |
 | `autolearn.enabled` | boolean | `false` | 实验性功能：agent 停止后，推动它将经验教训记入 memory，并在 `~/.musepi/agent/managed-skills` 下创建/增强独立的 managed skill。启用 `manage_skill` tool（以及在 memory backend 激活时的 `learn`）。 |
 | `autolearn.autoContinue` | boolean | `false` | 当 `autolearn.enabled` 时，在停止时自动运行一个 capture turn（消耗额外 token）。关闭时 = 一条被动提醒搭你的下一 turn 便车。 |
 | `autolearn.minToolCalls` | number | `5` | 只有在某 turn 使用了至少这个数量的 tool 之后才推动。 |

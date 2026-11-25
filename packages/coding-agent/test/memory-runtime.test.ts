@@ -23,14 +23,14 @@ describe("MemoryRuntimeContext", () => {
 	it("routes backend selection and view through the configured backend", async () => {
 		const dir = TempDir.createSync("@memory-runtime-local-");
 		try {
-			const settings = Settings.isolated({ "memory.backend": "local" });
+			const settings = Settings.isolated({ "memory.backend": "musemem" });
 			const session = {
 				settings,
 				sessionManager: { getCwd: () => dir.path(), getSessionFile: () => null },
 			} as never;
 			const runtime = createMemoryRuntimeContext({ agentDir: dir.path(), cwd: dir.path(), session });
-			expect(await runtime.backend()).toBe("local");
-			expect(await runtime.status()).toMatchObject({ backend: "local", writable: true, searchable: false });
+			expect(await runtime.backend()).toBe("musemem");
+			expect(await runtime.status()).toMatchObject({ backend: "musemem", writable: true, searchable: false });
 			expect(await runtime.view()).toBeUndefined();
 		} finally {
 			await dir.remove();

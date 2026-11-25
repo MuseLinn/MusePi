@@ -5,11 +5,12 @@ import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	buildMemoryToolDeveloperInstructions,
+	getGlobalMemoryRoot,
 	getMemoryRoot,
 	refreshMemoryToolDeveloperInstructionsCacheAfterStartup,
 	saveLearnedLesson,
 } from "@musepi/pi-coding-agent/memories";
-import { localBackend } from "@musepi/pi-coding-agent/memory-backend/local-backend";
+import { musememBackend } from "@musepi/pi-coding-agent/memory-backend/musemem-backend";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { LearnTool } from "@musepi/pi-coding-agent/tools/learn";
@@ -135,15 +136,15 @@ describe("learned-lesson storage (local backend)", () => {
 	});
 
 	it("the local backend's save() delegates to the same file", async () => {
-		const result = await localBackend.save?.({ agentDir, cwd: projCwd }, { content: "Via the backend" });
+		const result = await musememBackend.save?.({ agentDir, cwd: projCwd }, { content: "Via the backend" });
 		expect(result?.stored).toBe(1);
 		expect(await Bun.file(learnedFile).text()).toContain("- Via the backend");
 	});
 
 	it("local backend status reports writable", async () => {
-		const status = await localBackend.status?.({ agentDir, cwd: projCwd });
+		const status = await musememBackend.status?.({ agentDir, cwd: projCwd });
 		expect(status?.writable).toBe(true);
-		expect(status?.backend).toBe("local");
+		expect(status?.backend).toBe("musemem");
 	});
 });
 
@@ -168,7 +169,7 @@ describe("learned-lesson read-back", () => {
 	}
 
 	it("injects lessons even when no consolidated summary exists", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		await saveLearnedLesson(agentDir, settings.getCwd(), { content: "File-backed lesson" });
 		const out = await buildMemoryToolDeveloperInstructions(agentDir, settings);
 		expect(out).toContain("Learned lessons");
@@ -176,7 +177,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("keeps a session's memory prompt stable after a learned lesson is written", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const session = sessionWithFile("session-1.jsonl");
 
 		expect(await buildMemoryToolDeveloperInstructions(agentDir, settings, session)).toBeUndefined();
@@ -189,17 +190,17 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("refreshes the frozen memory prompt after explicit memory clear", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const session = sessionWithFile("session-clear.jsonl");
 		await saveLearnedLesson(agentDir, settings.getCwd(), { content: "Clearable lesson" });
 		expect(await buildMemoryToolDeveloperInstructions(agentDir, settings, session)).toContain("Clearable lesson");
-		await localBackend.clear(agentDir, settings.getCwd(), session as unknown as AgentSession);
+		await musememBackend.clear(agentDir, settings.getCwd(), session as unknown as AgentSession);
 
 		expect(await buildMemoryToolDeveloperInstructions(agentDir, settings, session)).toBeUndefined();
 	});
 
 	it("uses the pre-session learned snapshot when startup refresh has no session cache yet", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		await saveLearnedLesson(agentDir, settings.getCwd(), { content: "Prior-session lesson" });
 		const initial = await buildMemoryToolDeveloperInstructions(agentDir, settings);
 		expect(initial).toContain("Prior-session lesson");
@@ -225,7 +226,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("injects both the summary and lessons when both exist", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const root = getMemoryRoot(agentDir, settings.getCwd());
 		await Bun.write(path.join(root, "memory_summary.md"), "Consolidated guidance here.\n");
 		await saveLearnedLesson(agentDir, settings.getCwd(), { content: "A captured lesson" });
@@ -235,7 +236,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("returns undefined when the memory backend is off", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		await saveLearnedLesson(agentDir, settings.getCwd(), { content: "Present but gated" });
 		const off = Settings.isolated({ "memory.backend": "off" });
 		spyOn(off, "getCwd").mockReturnValue(settings.getCwd());
@@ -243,7 +244,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("sanitizes a raw/hand-edited learned.md on read-back", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const root = getMemoryRoot(agentDir, settings.getCwd());
 		const token = `ghp_${"C".repeat(36)}`;
 		await Bun.write(
@@ -259,7 +260,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("preserves non-list content and stays byte-idempotent across saves", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const root = getMemoryRoot(agentDir, settings.getCwd());
 		// Hand-edit learned.md with a header, prose, and blank lines
 		// interspersed with list entries.
@@ -279,7 +280,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("keeps mixed heading/bullet relative order across saves", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const root = getMemoryRoot(agentDir, settings.getCwd());
 		const file = path.join(root, "learned.md");
 		// Bullets scoped under distinct headings, plus a trailing footer line:
@@ -298,7 +299,7 @@ describe("learned-lesson read-back", () => {
 	});
 
 	it("drops learned lessons when the summary already fills the injection budget", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const root = getMemoryRoot(agentDir, settings.getCwd());
 		// A summary far larger than any injection budget: after truncation it
 		// consumes the whole token budget, leaving no room for lessons.
@@ -330,8 +331,12 @@ describe("learn tool (local backend)", () => {
 		await removeWithRetries(tmp);
 	});
 
-	function localSession(): ToolSession {
-		const settings = Settings.isolated({ "autolearn.enabled": true, "memory.backend": "local" });
+	function localSession(overrides: Record<string, unknown> = {}): ToolSession {
+		const settings = Settings.isolated({
+			"autolearn.enabled": true,
+			"memory.backend": "musemem",
+			...overrides,
+		} as never);
 		spyOn(settings, "getAgentDir").mockReturnValue(agentDir);
 		spyOn(settings, "getCwd").mockReturnValue(projCwd);
 		return {
@@ -355,6 +360,25 @@ describe("learn tool (local backend)", () => {
 	it("execute writes the lesson to learned.md", async () => {
 		await new LearnTool(localSession()).execute("1", { memory: "A local tool lesson" });
 		expect(await Bun.file(learnedFile).text()).toContain("- A local tool lesson");
+	});
+
+	it("execute writes scope global to the shared lessons file", async () => {
+		await new LearnTool(localSession()).execute("1g", { memory: "A shared tool lesson", scope: "global" });
+		const globalFile = path.join(getGlobalMemoryRoot(agentDir), "learned.md");
+		expect(await Bun.file(globalFile).text()).toContain("- A shared tool lesson");
+		expect(await Bun.file(learnedFile).exists()).toBe(false);
+	});
+
+	it("returns a structured refusal when global scope is off", async () => {
+		const result = await new LearnTool(localSession({ "musemem.globalScope": false })).execute("1x", {
+			memory: "Not stored anywhere",
+			scope: "global",
+		});
+		expect(result.isError).toBe(true);
+		expect(result.details).toMatchObject({ scopeUnavailable: true, backend: "musemem" });
+		expect(JSON.stringify(result.content)).toContain("musemem.globalScope");
+		expect(await Bun.file(learnedFile).exists()).toBe(false);
+		expect(await Bun.file(path.join(getGlobalMemoryRoot(agentDir), "learned.md")).exists()).toBe(false);
 	});
 
 	it("execute throws when the lesson is empty after sanitization", async () => {

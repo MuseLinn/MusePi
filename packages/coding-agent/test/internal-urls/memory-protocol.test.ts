@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { InternalUrlRouter } from "@musepi/pi-coding-agent/internal-urls";
-import { getMemoryRoot } from "@musepi/pi-coding-agent/memories";
+import { getGlobalMemoryRoot, getMemoryRoot } from "@musepi/pi-coding-agent/memories";
 import {
 	loadMnemopi,
 	loadMnemopiCore,
@@ -63,7 +63,7 @@ function createGlobTool(cwd: string): GlobTool {
 	const session: ToolSession = {
 		cwd,
 		hasUI: false,
-		settings: Settings.isolated({ "memory.backend": "local" }),
+		settings: Settings.isolated({ "memory.backend": "musemem" }),
 		getSessionFile: () => null,
 		getSessionSpawns: () => null,
 	};
@@ -102,7 +102,7 @@ describe("MemoryProtocolHandler", () => {
 
 		expect(JSON.stringify(tool.parameters.toJsonSchema())).not.toContain("memory://");
 
-		settings.override("memory.backend", "local");
+		settings.override("memory.backend", "musemem");
 		expect(JSON.stringify(tool.parameters.toJsonSchema())).toContain("memory://");
 	});
 
@@ -114,6 +114,21 @@ describe("MemoryProtocolHandler", () => {
 			const resource = await router.resolve("memory://root");
 
 			expect(resource.content).toBe("summary");
+			expect(resource.contentType).toBe("text/markdown");
+		});
+	});
+
+	it("resolves memory://global/learned.md for the MuseMem backend", async () => {
+		await withMemoryFixture(async ({ agentDir, cwd }) => {
+			const globalRoot = getGlobalMemoryRoot(agentDir);
+			await fs.mkdir(globalRoot, { recursive: true });
+			await Bun.write(path.join(globalRoot, "learned.md"), "- shared lesson");
+
+			const router = InternalUrlRouter.instance();
+			const settings = Settings.isolated({ "memory.backend": "musemem" });
+			const resource = await router.resolve("memory://global/learned.md", { settings, cwd });
+
+			expect(resource.content).toContain("shared lesson");
 			expect(resource.contentType).toBe("text/markdown");
 		});
 	});

@@ -30,7 +30,7 @@ describe("resolveMemoryBackend", () => {
 	});
 
 	it("reports local backend runtime status as writable (lessons) without structured search", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const memory = createMemoryRuntimeContext({
 			agentDir: "/tmp/agent",
 			cwd: "/tmp/project",
@@ -38,13 +38,13 @@ describe("resolveMemoryBackend", () => {
 		});
 
 		await expect(memory.status()).resolves.toMatchObject({
-			backend: "local",
+			backend: "musemem",
 			active: true,
 			writable: true,
 			searchable: false,
 		});
 		await expect(memory.search("project preference")).resolves.toMatchObject({
-			backend: "local",
+			backend: "musemem",
 			count: 0,
 		});
 	});

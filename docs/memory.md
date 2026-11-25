@@ -7,17 +7,19 @@ MusePi supports five memory modes. Memory is disabled by default; select one bac
 | `memory.backend` | Storage and behavior                                                                               | Guide                                                   |
 | ---------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | `off`            | No memory backend                                                                                  | —                                                       |
-| `local`          | Project-scoped summaries and lessons generated from persisted sessions                             | This page                                               |
+| `musemem`        | Project-scoped summaries and lessons, plus opt-in cross-project lessons                            | This page                                               |
 | `hindsight`      | Remote, bank-scoped Hindsight memory                                                               | [Hindsight](#hindsight-remote-backend)                  |
 | `mnemopi`        | Local Mnemopi SQLite memory                                                                        | [Mnemopi memory backend](./mnemosyne-memory-backend.md) |
 | `sharpshooter`   | Friction-gated project decision files (architecture/product/style), consolidated in the background | [Sharpshooter](#sharpshooter-backend)                   |
 
-Enable the local summary pipeline:
+Enable the MuseMem summary pipeline:
 
 ```yaml
 memory:
-   backend: local
+   backend: musemem
 ```
+
+`memory.backend: local` from an older config selects the same backend and is migrated to `musemem` on load.
 
 ## Usage
 
@@ -26,6 +28,15 @@ memory:
 At session start, if a consolidated summary or manually captured lesson exists for the current project, it is injected into the system prompt as a **Memory Guidance** block. The summary and lessons share `memories.summaryInjectionTokenLimit`.
 
 If startup consolidation finishes after the first prompt build, the active session's summary snapshot is refreshed. Captured lessons remain pinned to the initial snapshot, so a concurrent `learn` call still affects only later sessions.
+
+### Cross-project lessons
+
+`learn` accepts `scope: "global"` for knowledge that holds outside the current repository — tool behaviour, personal workflow preferences, cross-repo constraints. Those lessons are stored in `memories/_global/learned.md`, separately from every project's `--<cwd>--` directory, and each row records its origin (`_(from <project>, <date>)_`).
+
+- `musemem.globalScope` (on by default) controls the destination. With it off, `scope: "global"` is refused with a message naming the setting; the lesson is not silently downgraded.
+- Project lessons load first; cross-project lessons follow, and are truncated first when `memories.summaryInjectionTokenLimit` runs out. On conflict, the project lesson wins.
+- `/memory clear` clears the current project only; `/memory clear global` clears the shared file.
+- `memory://global/learned.md` reads the full cross-project file.
 
 - Treat memory as heuristic context — useful for process and prior decisions, not authoritative on current repo state.
 - Cite the memory artifact path when memory changes the plan, and pair it with current-repo evidence before acting.
@@ -40,12 +51,13 @@ The agent can read memory files directly using `memory://` URLs with the `read` 
 | `memory://root`                        | Compact summary injected at startup                                                                                                      |
 | `memory://root/MEMORY.md`              | Full long-term memory document                                                                                                           |
 | `memory://root/learned.md`             | Lessons captured by the `learn` tool                                                                                                     |
+| `memory://global/learned.md`           | Cross-project lessons (`scope: "global"`), when MuseMem global scope is on                                                               |
 | `memory://root/skills/<name>/SKILL.md` | A generated skill playbook                                                                                                               |
 | `memory://<memory-id>`                 | Full Mnemopi memory row (working or episodic) with a YAML frontmatter metadata header; only available when `memory.backend` is `mnemopi` |
 
 The `memory://<memory-id>` form returns the full stored row rather than the clipped recall preview (recall content that exceeds the preview cap ends with a trailing `…`); agents are instructed to read it before any `memory_edit update`.
 
-The `memory://root[/…]` rows are file-backed and only exist with `memory.backend: local`, which populates the on-disk memory root via the consolidation pipeline. Under `hindsight` or `mnemopi` the root is never written, so those URLs do not resolve — use `recall`/`reflect` (and `read memory://<memory-id>` on `mnemopi`) instead.
+The `memory://root[/…]` rows are file-backed and only exist with `memory.backend: musemem`, which populates the on-disk memory root via the consolidation pipeline. Under `hindsight` or `mnemopi` the root is never written, so those URLs do not resolve — use `recall`/`reflect` (and `read memory://<memory-id>` on `mnemopi`) instead.
 
 ### `/memory` slash command
 
@@ -56,7 +68,8 @@ The `memory://root[/…]` rows are file-backed and only exist with `memory.backe
 | `diagnose`            | Show backend-specific diagnostics, when supported                                                                        |
 | `queue`               | Show pending memory deltas awaiting consolidation                                                                        |
 | `sync`                | Run memory consolidation now                                                                                             |
-| `clear` / `reset`     | Delete active backend memory data/artifacts                                                                              |
+| `clear` / `reset`     | Delete the active backend's data for the current project                                                                |
+| `clear global`        | Delete only the cross-project lessons (MuseMem)                                                                          |
 | `enqueue` / `rebuild` | Force consolidation/retention work for the active backend                                                                |
 | `mm …`                | Hindsight mental-model maintenance (`list`/`show`/`refresh`/`history`/`seed`/`delete`/`reload`); unsupported in ACP mode |
 
@@ -69,11 +82,11 @@ autolearn:
    enabled: true
 ```
 
-With the local backend active, `learn` saves explicit durable lessons to the project's `learned.md`. Lessons are newest-first, deduplicated, secret-redacted, capped at 100 entries, and injected starting with the next session; a `learn` call does not mutate the active session's prompt-cache prefix. Each lesson's content is capped at 2,000 characters and optional context at 400 characters. Structured memory search, `recall`, `retain`, `reflect`, and `memory_edit` are not available for the local backend.
+With the MuseMem backend active, `learn` saves explicit durable lessons to the project's `learned.md`, or to the shared `_global/learned.md` for `scope: "global"`. Lessons are newest-first, deduplicated, secret-redacted, capped at 100 entries per file, and injected starting with the next session; a `learn` call does not mutate the active session's prompt-cache prefix. Each lesson's content is capped at 2,000 characters and optional context at 400 characters. Structured memory search, `recall`, `retain`, `reflect`, and `memory_edit` are not available for the MuseMem backend.
 
 ## How it works
 
-Local summary memories are built by a background pipeline that runs at startup; `/memory enqueue` marks consolidation work that the next startup picks up. The pipeline is skipped for subagents and for sessions that are not persisted to a session file.
+MuseMem summary memories are built by a background pipeline that runs at startup; `/memory enqueue` marks consolidation work that the next startup picks up. The pipeline is skipped for subagents and for sessions that are not persisted to a session file.
 
 **Phase 1 — per-session extraction:** For each past session that has changed since it was last processed, a model reads the session history and extracts durable signal: technical decisions, constraints, resolved failures, recurring workflows. Sessions that are too recent, too old, currently active, or beyond the configured scan/age limits are skipped. Each extraction produces a raw memory block and a short synopsis for that session.
 
@@ -99,7 +112,7 @@ Memory extraction and consolidation behavior is driven by static prompt files in
 | `stage_one_input.md`      | User-turn template wrapping session content      | `{{thread_id}}`, `{{response_items_json}}`  |
 | `consolidation_system.md` | System prompt for cross-session consolidation    | —                                           |
 | `consolidation.md`        | User-turn prompt for cross-session consolidation | `{{raw_memories}}`, `{{rollout_summaries}}` |
-| `read-path.md`            | Memory guidance injected into live sessions      | `{{memory_summary}}`, `{{learned}}`         |
+| `read-path.md`            | Memory guidance injected into live sessions      | `{{memory_summary}}`, `{{learned}}`, `{{global_learned}}` |
 
 ### Model selection
 
@@ -116,7 +129,8 @@ If the requested memory role is not configured, memory model resolution falls ba
 
 | Setting                               | Default | Description                                                                                                                              |
 | ------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `memory.backend`                      | `off`   | Select `local` for this pipeline; legacy `memories.enabled: true` is migrated to `memory.backend: local` when no explicit backend is set |
+| `memory.backend`                      | `off`   | Select `musemem` for this pipeline; legacy `memories.enabled: true` migrates to `musemem`, and `memory.backend: local` migrates to `musemem` on load |
+| `musemem.globalScope`                 | `true`  | Let `learn` store `scope: "global"` lessons in `memories/_global/learned.md`, recalled by every project; off keeps every lesson project-local |
 | `memories.maxRolloutAgeDays`          | `30`    | Sessions older than this are not processed                                                                                               |
 | `memories.minRolloutIdleHours`        | `12`    | Sessions active more recently than this are skipped                                                                                      |
 | `memories.maxRolloutsPerStartup`      | `64`    | Cap on sessions processed in a single startup                                                                                            |

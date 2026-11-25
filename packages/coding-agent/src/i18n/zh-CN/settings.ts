@@ -940,6 +940,13 @@ export const settings = {
 	"settings.contextFull": "上下文已满",
 	"settings.cooldownExpiry": "冷却到期",
 	"settings.memory.general.backend": "记忆后端",
+	// schema 里以原文作标签的选项，字典按原文翻译
+	"MuseMem (recommended)": "MuseMem（推荐）",
+	"Recommended: project summaries plus optional cross-project lessons, on this machine":
+		"推荐：本机生成的项目摘要，外加可选的跨项目经验",
+	"MuseMem Global Scope": "MuseMem 全局作用域",
+	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
+		"允许 learn 使用 scope: global，使每个项目都能读取这条经验。关闭后所有经验只留在项目内。",
 	"settings.memory.general.model": "记忆模型",
 	"settings.noMemorySubsystemRuns": "无记忆子系统运行",
 	"settings.memory.mnemopi.bank": "Mnemopi 库",
@@ -1602,6 +1609,8 @@ export const settings = {
 	"settings.memoryPayloadEmpty": "记忆载荷为空（记忆后端已关闭、已禁用或不可用）。",
 	"settings.memoryInjectionPayload": "记忆注入载荷",
 	"settings.memoryDataClearedSystem": "记忆数据已清除，系统提示已刷新。",
+	"settings.memoryGlobalClearedSystem": "跨项目经验已清除，系统提示已刷新。",
+	"settings.memoryGlobalClearUnavailableWith0": "当前 {0} 后端没有跨项目记忆可清除。",
 	"settings.memoryClearFailedWith0": "记忆清除失败：{0}",
 	"settings.memoryConsolidationEnqueued": "记忆整合已入队。",
 	"settings.memoryQueueTitle": "记忆队列",
@@ -2956,8 +2965,8 @@ export const settings = {
 		"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers",
 	"Obsidian Vault": "Obsidian 库",
 	Off: "关闭",
-	"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory":
-		"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+	"Off, MuseMem summaries, Mnemopi SQLite, or Hindsight remote memory":
+		"关闭、MuseMem 摘要、Mnemopi SQLite 或 Hindsight 远端记忆",
 	"Ollama Cloud Max Concurrency": "Ollama Cloud 最大并发",
 	"Omit Thinking summaries": "省略思维摘要",
 	"Omit code blocks from thinking summaries and replace them with an ellipsis": "从思维摘要中省略代码块并用省略号替换",
@@ -4187,8 +4196,8 @@ export const settings = {
 	"{0} {1}": "{0} {1}",
 	" · ": " · ",
 	" │ ": " │ ",
-	"Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
-		"关闭、本地摘要、Mnemopi SQLite、Hindsight 远端记忆或 Sharpshooter",
+	"Off, MuseMem summaries, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
+		"关闭、MuseMem 摘要、Mnemopi SQLite、Hindsight 远端记忆或 Sharpshooter",
 	Sharpshooter: "Sharpshooter（项目决策）",
 	"Friction-gated project decision files (architecture/product/style), consolidated in the background":
 		"按摩擦门槛抽取的项目决策文件（架构/产品/风格），后台合并",

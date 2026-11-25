@@ -81,7 +81,7 @@ describe("learn refresh wiring in a real session", () => {
 	async function createMemorySession(): Promise<AgentSession> {
 		const settings = Settings.isolated({
 			"autolearn.enabled": true,
-			"memory.backend": "local",
+			"memory.backend": "musemem",
 			"compaction.enabled": false,
 		});
 		// The local backend resolves the memory root through the settings, so the

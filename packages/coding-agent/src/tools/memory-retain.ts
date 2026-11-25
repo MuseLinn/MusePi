@@ -1,6 +1,6 @@
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
-import { isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
+import { globalScopeHint, isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
 import retainDescription from "../prompts/tools/retain.md" with { type: "text" };
 import type { ToolSession } from ".";
 import { toolIsRegistered } from "./tool-ownership";
@@ -10,7 +10,7 @@ const memoryRetainSchema = type({
 		content: type("string").describe("information to remember"),
 		"context?": type("string").describe("source context"),
 		"scope?": type("'project' | 'global'").describe(
-			"storage scope; defaults to project, global is for durable cross-project knowledge",
+			"storage scope; defaults to project. global stores an item every project recalls, and is only accepted when the active backend and its settings offer one",
 		),
 	})
 		.array()
@@ -41,7 +41,16 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
 	async execute(toolCallId: string, params: MemoryRetainParams): Promise<AgentToolResult> {
 		const backend = this.session.settings.get("memory.backend");
 		if (params.items.some(item => item.scope === "global") && !isGlobalMemoryScopeAvailable(this.session)) {
-			throw new Error(`Global memory scope is not available with the ${backend} memory backend.`);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Global scope is unavailable with the ${backend} memory backend, so nothing was retained. ${globalScopeHint(backend)}. Retry without scope "global" to keep these items for the current project only.`,
+					},
+				],
+				isError: true,
+				details: { scopeUnavailable: true, backend },
+			};
 		}
 		if (backend === "mnemopi") {
 			const state = this.session.getMnemopiSessionState?.();

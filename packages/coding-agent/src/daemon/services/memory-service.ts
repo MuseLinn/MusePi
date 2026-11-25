@@ -104,16 +104,33 @@ export class MemoryService implements DaemonService {
 	}
 
 	async clear(params: unknown): Promise<unknown> {
-		// TUI /memory clear parity:清空后端持久状态。
+		// TUI /memory clear parity:清空后端持久状态。`scope: "global"` 只清跨项目部分。
 		const settings = this.host.settings();
 		if (!settings) throw new Error("settings unavailable");
 		const { resolveMemoryBackend } = await import("../../memory-backend/resolve");
 		const backend = await resolveMemoryBackend(settings);
 		const cwd = this.host.cwd();
+		const globalOnly = (params as { scope?: unknown } | undefined)?.scope === "global";
 		// 路由不绑定单会话:对 cwd 匹配本 host 的每个活动会话执行
 		// 带 session 的清空(失效其记忆快照缓存)并刷新系统提示;
 		// 无活动会话时维持允许的全局清空。
-		const affected = [...this.host.allSessions()].filter(live => live.cwd === cwd);
+		const affected = globalOnly
+			? [...this.host.allSessions()]
+			: [...this.host.allSessions()].filter(live => live.cwd === cwd);
+		if (globalOnly) {
+			if (!backend.clearGlobal) {
+				throw new Error(`The ${backend.id} backend has no cross-project memory to clear.`);
+			}
+			if (affected.length === 0) {
+				await backend.clearGlobal(getAgentDir());
+			} else {
+				for (const live of affected) {
+					await backend.clearGlobal(getAgentDir(), live.agentSession);
+					await live.agentSession.refreshBaseSystemPrompt();
+				}
+			}
+			return { ok: true, scope: "global" };
+		}
 		if (affected.length === 0) {
 			await backend.clear(getAgentDir(), cwd);
 		} else {

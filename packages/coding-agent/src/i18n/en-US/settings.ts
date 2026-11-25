@@ -976,6 +976,13 @@ export const settings: TranslationMap = {
 	"settings.memory.autoLearn.autoLearn": "Auto-Learn (experimental)",
 	"settings.memory.autoLearn.autoRunCaptureStop": "Auto-run capture at stop",
 	"settings.memory.general.backend": "Memory Backend",
+	// Schema options whose label is literal text rather than a key.
+	"MuseMem (recommended)": "MuseMem (recommended)",
+	"Recommended: project summaries plus optional cross-project lessons, on this machine":
+		"Recommended: project summaries plus optional cross-project lessons, on this machine",
+	"MuseMem Global Scope": "MuseMem Global Scope",
+	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
+		"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
 	"settings.memory.general.model": "Memory Model",
 	"settings.memory.hindsight.apiToken": "Hindsight API Token",
 	"settings.memory.hindsight.apiUrl": "Hindsight API URL",
@@ -1010,6 +1017,8 @@ export const settings: TranslationMap = {
 	"settings.memoryQueueUnavailable": "Memory queue is not available for the {0} backend.",
 	"settings.memorySyncRan": "Memory consolidation ran.",
 	"settings.memoryDataClearedSystem": "Memory data cleared and system prompt refreshed.",
+	"settings.memoryGlobalClearedSystem": "Cross-project lessons cleared and system prompt refreshed.",
+	"settings.memoryGlobalClearUnavailableWith0": "The {0} backend has no cross-project memory to clear.",
 	"settings.memoryEnqueueFailedWith0": "Memory enqueue failed: {0}",
 	"settings.memoryFailedWith0With1": "Memory {0} failed: {1}",
 	"settings.memoryInjectionPayload": "Memory Injection Payload",
@@ -1170,7 +1179,7 @@ export const settings: TranslationMap = {
 		"Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers",
 	"settings.off": "off",
 	"settings.off2": "Off",
-	"settings.offLocalSummary.info": "Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+	"settings.offLocalSummary.info": "Off, MuseMem summaries, Mnemopi SQLite, or Hindsight remote memory",
 	"settings.ollama": "ollama",
 	"settings.ollamaCloudMaxConcurrency": "Ollama Cloud Max Concurrency",
 	"settings.omitCodeBlocks.info": "Omit code blocks from thinking summaries and replace them with an ellipsis",

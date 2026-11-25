@@ -4,3 +4,5 @@ Use after solving insight likely to pay off again: a non-obvious fix, discovered
 
 `skill` optional; provide only for a repeatable procedure worth codifying as `SKILL.md`, not a fact. Managed skills: isolated `~/.musepi/agent/managed-skills`; surfaced as normal skills next session; NEVER touch user-authored skills. Frontmatter: generated from `name` and `description`.
 Capture sparingly, specifically: one strong reusable lesson > several vague ones.
+
+`scope` optional. Omit it (or pass `project`) for anything tied to this workspace: paths, build quirks, local conventions. Pass `global` only for knowledge that holds in every project (tooling behaviour, personal workflow preferences, cross-repo constraints); the tool returns an error naming the setting if the active backend has no cross-project destination.

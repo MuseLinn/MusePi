@@ -11,8 +11,8 @@ export type {
 	MnemopiSessionState,
 	MnemopiSessionStateOptions,
 } from "../mnemopi/state";
-export * from "./local-backend";
 export * from "./messages";
+export * from "./musemem-backend";
 export * from "./off-backend";
 export * from "./resolve";
 export * from "./runtime";

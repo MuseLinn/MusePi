@@ -261,7 +261,7 @@ describe("ACP lazy startup", () => {
 			"task.disabledAgents": ["scout"],
 			"task.agentModelOverrides": { task: "claude-sonnet-4-20250514" },
 			"task.agentAdvisor": { task: "on" },
-			"memory.backend": "local",
+			"memory.backend": "musemem",
 			"memories.enabled": true,
 			"advisor.enabled": true,
 			"advisor.syncBacklog": "5",

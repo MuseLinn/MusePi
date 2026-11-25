@@ -17,8 +17,19 @@ import type { AgentSession } from "../session/agent-session";
  * Built-in backend ids. A plugin may contribute another id through
  * `registerMemoryBackendProvider`; the open arm keeps the built-ins discoverable
  * in completion while allowing a provider-owned id through the same type.
+ * `local` is the former id of `musemem`; settings migrate it on load.
  */
-export type MemoryBackendId = "off" | "local" | "hindsight" | "mnemopi" | "sharpshooter" | (string & {});
+export type MemoryBackendId = "off" | "musemem" | "hindsight" | "mnemopi" | "sharpshooter" | (string & {});
+
+/** Whether a backend id selects the MuseMem summary backend (including its former `local` id). */
+export function isMusememBackendId(id: MemoryBackendId | undefined): boolean {
+	return id === "musemem" || id === "local";
+}
+
+/** Whether the backend keeps a lesson store the `learn` tool can write to. */
+export function supportsLearnTool(id: MemoryBackendId | undefined): boolean {
+	return id === "hindsight" || id === "mnemopi" || isMusememBackendId(id);
+}
 
 export interface MemoryBackendStatus {
 	backend: MemoryBackendId;
@@ -65,6 +76,12 @@ export interface MemoryBackendSaveInput {
 	context?: string;
 	source?: string;
 	importance?: number;
+	/**
+	 * Where the item is stored. Backends without a cross-project destination
+	 * ignore the field; the `learn` tool only offers `global` when
+	 * {@link isGlobalMemoryScopeAvailable} agrees.
+	 */
+	scope?: "project" | "global";
 }
 
 export interface MemoryBackendSaveResult {
@@ -146,6 +163,9 @@ export interface MemoryBackend {
 
 	/** Wipe all persisted state for this backend (slash `/memory clear`). */
 	clear(agentDir: string, cwd: string, session?: AgentSession): Promise<void>;
+
+	/** Wipe the cross-project store only (slash `/memory clear global`), when the backend has one. */
+	clearGlobal?(agentDir: string, session?: AgentSession): Promise<void>;
 
 	/** Force consolidation/retain to happen now (slash `/memory enqueue`). */
 	enqueue(agentDir: string, cwd: string, session?: AgentSession): Promise<void>;

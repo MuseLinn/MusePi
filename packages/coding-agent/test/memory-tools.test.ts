@@ -213,7 +213,7 @@ describe("Hindsight tool factories", () => {
 	});
 
 	it("retain/recall/reflect factories return null when memory.backend !== hindsight", () => {
-		const settings = Settings.isolated({ "memory.backend": "local", "memories.enabled": false });
+		const settings = Settings.isolated({ "memory.backend": "musemem", "memories.enabled": false });
 		const session = makeSession(settings);
 		expect(MemoryRetainTool.createIf(session)).toBeNull();
 		expect(MemoryRecallTool.createIf(session)).toBeNull();
@@ -249,7 +249,7 @@ describe("Mnemopi tool factories", () => {
 	it("memory tool factories gate on supported backends", () => {
 		const offSettings = Settings.isolated({ "memory.backend": "off", "memories.enabled": false });
 		const hindsightSettings = Settings.isolated({ "memory.backend": "hindsight" });
-		const localSession = makeSession(Settings.isolated({ "memory.backend": "local", "memories.enabled": false }));
+		const localSession = makeSession(Settings.isolated({ "memory.backend": "musemem", "memories.enabled": false }));
 		expect(MemoryRetainTool.createIf(localSession)).toBeNull();
 		expect(MemoryRecallTool.createIf(localSession)).toBeNull();
 		expect(MemoryReflectTool.createIf(localSession)).toBeNull();

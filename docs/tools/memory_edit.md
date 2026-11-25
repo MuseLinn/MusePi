@@ -41,7 +41,7 @@
 - Session state: reads the active session's Mnemopi state.
 
 ## Limits & Caps
-- Availability requires `memory.backend = "mnemopi"`; Hindsight and local memory backends do not expose this tool.
+- Availability requires `memory.backend = "mnemopi"`; Hindsight and MuseMem backends do not expose this tool.
 - `id` must come from `recall`; the tool does not search by content.
 - `update` with neither `content` nor `importance` is rejected before any backend write.
 

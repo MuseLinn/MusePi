@@ -1,5 +1,6 @@
 import {
 	buildMemoryToolDeveloperInstructions,
+	clearGlobalMemoryData,
 	clearMemoryData,
 	clearMemoryToolDeveloperInstructionsCache,
 	enqueueMemoryConsolidation,
@@ -13,12 +14,13 @@ import type { MemoryBackend } from "./types";
  * Wraps the existing `memories/` module as a `MemoryBackend`.
  *
  * The rollout-summarisation pipeline (rollouts → SQLite → memory_summary.md) is
- * delegated unchanged. On top of it, `save()` persists `learn`-tool lessons to
- * `learned.md` (so `status()` reports `writable: true`); structured search is
- * still unavailable.
+ * delegated unchanged and stays project-scoped. On top of it, `save()` persists
+ * `learn`-tool lessons to the project's `learned.md`, or to the cross-project
+ * `_global/learned.md` when the caller passes `scope: "global"` and
+ * `musemem.globalScope` allows it. Structured search is still unavailable.
  */
-export const localBackend: MemoryBackend = {
-	id: "local",
+export const musememBackend: MemoryBackend = {
+	id: "musemem",
 	start(options) {
 		startMemoryStartupTask(options);
 	},
@@ -31,6 +33,10 @@ export const localBackend: MemoryBackend = {
 		// cannot resurrect cleared lessons into the next session.
 		clearMemoryToolDeveloperInstructionsCache(session);
 		await clearMemoryData(agentDir, cwd);
+	},
+	async clearGlobal(agentDir, session) {
+		clearMemoryToolDeveloperInstructionsCache(session);
+		await clearGlobalMemoryData(agentDir);
 	},
 	async enqueue(agentDir, cwd) {
 		enqueueMemoryConsolidation(agentDir, cwd);
@@ -48,12 +54,12 @@ export const localBackend: MemoryBackend = {
 	},
 	async status() {
 		return {
-			backend: "local" as const,
+			backend: "musemem" as const,
 			active: true,
 			writable: true,
 			searchable: false,
 			message:
-				"Local rollout-summary memory is active; lessons from the `learn` tool are saved to learned.md. Structured search is not available.",
+				"MuseMem is active: project summaries plus lessons from the `learn` tool, with an optional cross-project lessons file. Structured search is not available.",
 		};
 	},
 };

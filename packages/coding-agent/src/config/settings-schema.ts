@@ -3446,24 +3446,25 @@ export const SETTINGS_SCHEMA = {
 
 	"memories.summaryInjectionTokenLimit": { type: "number", default: 5000 },
 
-	// Memory backend selector — picks between local memories pipeline,
+	// Memory backend selector — picks between the MuseMem rollout-summary pipeline,
 	// Mnemopi local SQLite, Hindsight remote memory, or off. The legacy
-	// `memories.enabled` flag is migration input only; see config/settings.ts.
+	// `memories.enabled` flag is migration input only; `memory.backend: "local"`
+	// migrates to `musemem`; see config/settings.ts.
 	"memory.backend": {
 		type: "enum",
-		values: ["off", "local", "hindsight", "mnemopi", "sharpshooter"] as const,
+		values: ["off", "musemem", "hindsight", "mnemopi", "sharpshooter"] as const,
 		default: "off",
 		ui: {
 			tab: "memory",
 			group: "General",
 			label: "Memory Backend",
-			description: "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
+			description: "Off, MuseMem summaries, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
 			options: [
 				{ value: "off", label: "Off", description: "No memory subsystem runs" },
 				{
-					value: "local",
-					label: "Local (recommended)",
-					description: "Recommended: rollout summaries on this machine, consolidated in the background",
+					value: "musemem",
+					label: "MuseMem (recommended)",
+					description: "Recommended: project summaries plus optional cross-project lessons, on this machine",
 				},
 				{ value: "hindsight", label: "Hindsight", description: "Vectorize Hindsight remote memory service" },
 				{
@@ -3543,6 +3544,21 @@ export const SETTINGS_SCHEMA = {
 	},
 	// Config-file-only knob (numbers without `options` are hidden from the UI).
 	"autolearn.minToolCalls": { type: "number", default: 5 },
+
+	// MuseMem backend: the project-scoped rollout-summary pipeline plus an
+	// explicit cross-project lessons file under `memories/_global`.
+	"musemem.globalScope": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "memory",
+			group: "MuseMem",
+			label: "MuseMem Global Scope",
+			description:
+				"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
+			condition: "musememActive",
+		},
+	},
 
 	// Mnemopi local SQLite memory backend.
 	"mnemopi.dbPath": {

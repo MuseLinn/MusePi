@@ -7,6 +7,7 @@ Rules:
 4. Memory changes plan → cite artifact path (e.g. `memory://root/skills/<name>/SKILL.md`) and current-repo evidence.
 5. Memory disagreement with repo state/user instruction → stale; corrected behavior, then update/regenerate memory artifacts.
 6. Confidence only after repository verification; memory alone NEVER sufficient proof.
+7. Cross-project lessons load under `memory://global/learned.md`; project lessons above take precedence.
 {{#if memory_summary}}
 Memory summary:
 {{memory_summary}}
@@ -14,4 +15,8 @@ Memory summary:
 {{#if learned}}
 Learned lessons (`learn`-captured; durable but may be stale—verify against repo before relying):
 {{learned}}
+{{/if}}
+{{#if global_learned}}
+Cross-project lessons (saved with `scope: global`; every project sees them—project lessons above take precedence):
+{{global_learned}}
 {{/if}}

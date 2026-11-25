@@ -856,10 +856,10 @@ describe("wave 3 commands", () => {
 
 	it("/memory stats: still names the backend when a real backend simply has no stats hook", async () => {
 		const { output, runtime } = createRuntime();
-		runtime.settings.set("memory.backend" as never, "local" as never);
+		runtime.settings.set("memory.backend" as never, "musemem" as never);
 		const result = await executeAcpBuiltinSlashCommand("/memory stats", runtime);
 		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toBe("Memory stats is not available for the local backend.");
+		expect(output[0]).toBe("Memory stats is not available for the musemem backend.");
 	});
 
 	// /todo start fuzzy match

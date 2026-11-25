@@ -16,7 +16,7 @@ afterEach(() => {
 	for (const dispose of disposers.splice(0)) dispose();
 });
 
-function fakeBackend(id: "local" | "mnemopi"): MemoryBackend {
+function fakeBackend(id: "musemem" | "mnemopi"): MemoryBackend {
 	return {
 		id,
 		start() {},
@@ -30,29 +30,31 @@ function fakeBackend(id: "local" | "mnemopi"): MemoryBackend {
 
 describe("memory backend providers", () => {
 	it("resolves a registered provider and restores the built-in backend on dispose", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
-		const dispose = registerMemoryBackendProvider({ id: "local", create: () => fakeBackend("local") });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
+		const dispose = registerMemoryBackendProvider({ id: "musemem", create: () => fakeBackend("musemem") });
 		disposers.push(dispose);
 
 		expect(await resolveMemoryBackend(settings)).toMatchObject({
-			id: "local",
+			id: "musemem",
 			buildDeveloperInstructions: expect.any(Function),
 		});
 		expect(await (await resolveMemoryBackend(settings)).buildDeveloperInstructions("", "", settings, undefined)).toBe(
-			"provider:local",
+			"provider:musemem",
 		);
 
 		dispose();
 		const builtIn = await resolveMemoryBackend(settings);
-		expect(await builtIn.buildDeveloperInstructions("/tmp", "/tmp", settings, undefined)).not.toBe("provider:local");
+		expect(await builtIn.buildDeveloperInstructions("/tmp", "/tmp", settings, undefined)).not.toBe(
+			"provider:musemem",
+		);
 	});
 
 	it("lets the provider decide whether a browsable workspace exists", async () => {
-		const settings = Settings.isolated({ "memory.backend": "local" });
+		const settings = Settings.isolated({ "memory.backend": "musemem" });
 		const builtIn = await resolveMemoryBackend(settings);
 		expect(builtIn.workspaceDir?.("/tmp/agent", "/tmp/project")).toBe(getMemoryRoot("/tmp/agent", "/tmp/project"));
 
-		const dispose = registerMemoryBackendProvider({ id: "local", create: () => fakeBackend("local") });
+		const dispose = registerMemoryBackendProvider({ id: "musemem", create: () => fakeBackend("musemem") });
 		disposers.push(dispose);
 		const replaced = await resolveMemoryBackend(settings);
 		expect(replaced.workspaceDir).toBeUndefined();

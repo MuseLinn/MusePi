@@ -1,6 +1,6 @@
 import { logger } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
-import { localBackend } from "./local-backend";
+import { musememBackend } from "./musemem-backend";
 import { offBackend } from "./off-backend";
 import { findMemoryBackendProvider } from "./providers";
 import type { MemoryBackend } from "./types";
@@ -15,7 +15,7 @@ import type { MemoryBackend } from "./types";
  *   - anything unknown is the no-op backend.
  *
  * Every built-in backend also ships as a host-scope package
- * (`memory-off` / `memory-local` / `memory-hindsight` / `memory-mnemopi` /
+ * (`memory-off` / `memory-musemem` / `memory-hindsight` / `memory-mnemopi` /
  * `memory-sharpshooter`), so a mounted host resolves through the provider seam
  * and the branches below are the fallback for hosts that mount nothing.
  *
@@ -38,6 +38,8 @@ export async function resolveMemoryBackend(settings: Settings): Promise<MemoryBa
 	if (id === "hindsight") return (await import("../hindsight/backend")).hindsightBackend;
 	if (id === "mnemopi") return (await import("../mnemopi/backend")).mnemopiBackend;
 	if (id === "sharpshooter") return (await import("../sharpshooter/backend")).sharpshooterBackend;
-	if (id === "local") return localBackend;
+	// `local` is the pre-rename id. Config files migrate it before this runs;
+	// programmatic overrides can still reach the same backend through it.
+	if (id === "musemem" || (id as string) === "local") return musememBackend;
 	return offBackend;
 }

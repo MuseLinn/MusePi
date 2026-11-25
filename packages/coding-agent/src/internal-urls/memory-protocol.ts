@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getAgentDir, isEnoent } from "@musepi/pi-utils";
-import { getMemoryRoot } from "../memories";
+import { getGlobalMemoryRoot, getMemoryRoot } from "../memories";
 import { getMnemopiSessionState, type MnemopiScopedMemoryHit, type MnemopiSessionState } from "../mnemopi/state";
 import { AgentRegistry } from "../registry/agent-registry";
 import { isMarkdownPath } from "../utils/lang-from-path";
@@ -12,6 +12,8 @@ import type { InternalResource, InternalUrl, ProtocolHandler, ResolveContext, Ur
 
 const DEFAULT_MEMORY_FILE = "memory_summary.md";
 const MEMORY_NAMESPACE = "root";
+/** Cross-project lessons under `memories/_global`, addressable with the MuseMem backend. */
+const GLOBAL_MEMORY_NAMESPACE = "global";
 
 /**
  * Snapshot of memory roots for every registered session, deduped.
@@ -114,13 +116,17 @@ export function splitMemoryGlobPattern(input: string): MemoryGlobPattern {
 /**
  * Resolve a memory:// URL to an absolute filesystem path under memory root.
  */
-export function resolveMemoryUrlToPath(url: InternalUrl, memoryRoot: string): string {
+export function resolveMemoryUrlToPath(
+	url: InternalUrl,
+	memoryRoot: string,
+	expectedNamespace: string = MEMORY_NAMESPACE,
+): string {
 	const namespace = url.rawHost || url.hostname;
 	if (!namespace) {
 		throw new Error("memory:// URL requires a namespace: memory://root");
 	}
-	if (namespace !== MEMORY_NAMESPACE) {
-		throw new Error(`Unknown memory namespace: ${namespace}. Supported: ${MEMORY_NAMESPACE}`);
+	if (namespace !== expectedNamespace) {
+		throw new Error(`Unknown memory namespace: ${namespace}. Supported: ${expectedNamespace}`);
 	}
 
 	const rawPathname = url.rawPathname ?? url.pathname;
@@ -144,7 +150,11 @@ export function resolveMemoryUrlToPath(url: InternalUrl, memoryRoot: string): st
 	return path.resolve(memoryRoot, relativePath);
 }
 
-async function tryResolveInRoot(url: InternalUrl, memoryRoot: string): Promise<InternalResource | undefined> {
+async function tryResolveInRoot(
+	url: InternalUrl,
+	memoryRoot: string,
+	expectedNamespace: string = MEMORY_NAMESPACE,
+): Promise<InternalResource | undefined> {
 	const resolved = path.resolve(memoryRoot);
 	let resolvedRoot: string;
 	try {
@@ -154,7 +164,7 @@ async function tryResolveInRoot(url: InternalUrl, memoryRoot: string): Promise<I
 		throw error;
 	}
 
-	const targetPath = resolveMemoryUrlToPath(url, resolvedRoot);
+	const targetPath = resolveMemoryUrlToPath(url, resolvedRoot, expectedNamespace);
 	ensureWithinRoot(targetPath, resolvedRoot);
 
 	if (targetPath !== resolvedRoot) {
@@ -300,10 +310,20 @@ export class MemoryProtocolHandler implements ProtocolHandler {
 		}
 
 		// Mnemopi rows live in SQLite banks per session, keyed by memory id.
-		// Any host other than the file-backed `root` namespace is treated as a
-		// mnemopi memory id lookup. This is the read counterpart to
+		// Any host other than the file-backed `root`/`global` namespaces is treated
+		// as a mnemopi memory id lookup. This is the read counterpart to
 		// `memory_edit update` and lets agents inspect the full content of a
 		// clipped recall preview before overwriting it (issue #4443).
+		if (namespace === GLOBAL_MEMORY_NAMESPACE && (backend === "musemem" || backend === "local")) {
+			const root = getGlobalMemoryRoot(getAgentDir());
+			try {
+				const result = await tryResolveInRoot(url, root, GLOBAL_MEMORY_NAMESPACE);
+				if (result) return result;
+			} catch (error) {
+				if (!isEnoent(error)) throw error;
+			}
+			throw new Error('No cross-project lessons exist yet. Save one with the `learn` tool and scope "global".');
+		}
 		if (namespace !== MEMORY_NAMESPACE) {
 			const mnemopiStates = mnemopiSessionStatesFromRegistry();
 			const hindsightActive =
@@ -368,6 +388,12 @@ export class MemoryProtocolHandler implements ProtocolHandler {
 		const completions: UrlCompletion[] = [];
 		if (memoryRootsForContext(context).length > 0) {
 			completions.push({ value: MEMORY_NAMESPACE, description: "Project memory summary" });
+		}
+		if (memoryBackendFromContext(context) === "musemem" || memoryBackendFromContext(context) === "local") {
+			completions.push({
+				value: GLOBAL_MEMORY_NAMESPACE,
+				description: "Cross-project lessons",
+			});
 		}
 		if (mnemopiSessionStatesFromRegistry().length > 0) {
 			completions.push({

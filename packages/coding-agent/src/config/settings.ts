@@ -1814,10 +1814,17 @@ export class Settings {
 		const memoryBackendSet = memoryBackendObj && typeof memoryBackendObj.backend === "string";
 		const memoriesObj = raw.memories as Record<string, unknown> | undefined;
 		if (!memoryBackendSet && memoriesObj && typeof memoriesObj.enabled === "boolean") {
-			const next = memoriesObj.enabled ? "local" : "off";
+			const next = memoriesObj.enabled ? "musemem" : "off";
 			const memoryRoot = (memoryBackendObj ?? {}) as Record<string, unknown>;
 			memoryRoot.backend = next;
 			raw.memory = memoryRoot;
+		}
+
+		// Rename the former `local` memory backend to `musemem`. The pipeline is
+		// no longer project-only, so the old id outlived its name; configs written
+		// before the rename keep selecting the same backend. Idempotent.
+		if (memoryBackendObj && memoryBackendObj.backend === "local") {
+			memoryBackendObj.backend = "musemem";
 		}
 
 		// Rename the legacy local `mnemosyne` memory backend to `mnemopi`.

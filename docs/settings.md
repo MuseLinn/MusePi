@@ -633,7 +633,7 @@ memory:
 | `compaction.reserveTokens` | number | `undefined` | Tokens reserved for the next turn when the percentage is unset; unset resolves to `max(15% of window, 16384)`. |
 | `compaction.keepRecentTokens` | number | `20000` | Recent tokens always preserved after compaction. |
 | `compaction.autoContinue` | boolean | `true` | Continue automatically after compaction. |
-| `memory.backend` | enum | `off` | `off`, `local`, `hindsight`, `mnemopi`. Each backend has its own `hindsight.*` / `mnemopi.*` / `memories.*` tuning keys. |
+| `memory.backend` | enum | `off` | `off`, `musemem`, `hindsight`, `mnemopi`, `sharpshooter`; `local` is migrated to `musemem`. Each backend has its own `musemem.*` / `hindsight.*` / `mnemopi.*` / `memories.*` tuning keys. |
 | `autolearn.enabled` | boolean | `false` | Experimental: after the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills under `~/.musepi/agent/managed-skills`. Enables the `manage_skill` tool (and `learn` when a memory backend is active). |
 | `autolearn.autoContinue` | boolean | `false` | When `autolearn.enabled`, auto-run one capture turn at stop (uses extra tokens). Off = a passive reminder rides your next turn. |
 | `autolearn.minToolCalls` | number | `5` | Only nudge after a turn that used at least this many tools. |

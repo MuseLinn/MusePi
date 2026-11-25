@@ -1,10 +1,10 @@
 {
-	"name": "musepi-memory-local",
+	"name": "musepi-memory-musemem",
 	"version": "0.7.7",
 	"private": true,
 	"type": "module",
 	"license": "Apache-2.0",
-	"description": "Host-half adapter that registers the local rollout-summary backend as a provider.",
+	"description": "Host-half adapter that registers the MuseMem rollout-summary backend as a provider.",
 	"main": "./lib/index.js",
 	"types": "./lib/types/index.d.ts",
 	"exports": {
@@ -31,8 +31,8 @@
 		"check": "tsgo -p tsconfig.json --noEmit"
 	},
 	"musepi": {
-		"label": "Local Summary Memory Backend",
-		"description": "Host-half adapter that registers the local rollout-summary backend as a provider.",
+		"label": "MuseMem Memory Backend",
+		"description": "Host-half adapter that registers the MuseMem rollout-summary backend as a provider.",
 		"icon": "▤",
 		"scope": "host",
 		"extensions": [

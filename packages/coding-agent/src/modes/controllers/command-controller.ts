@@ -655,10 +655,23 @@ export class CommandController {
 		}
 
 		if (action === "reset" || action === "clear") {
+			// `clear global` removes only the cross-project store; every other form
+			// clears the current project so a global lesson cannot vanish by accident.
+			const globalOnly = /^global\b/i.test(argumentText.slice(action.length).trim());
 			try {
-				await backend.clear(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
-				await this.ctx.session.refreshBaseSystemPrompt();
-				this.ctx.showStatus(t("settings.memoryDataClearedSystem"));
+				if (globalOnly) {
+					if (!backend.clearGlobal) {
+						this.ctx.showError(t("settings.memoryGlobalClearUnavailableWith0").replace("{0}", backend.id));
+						return;
+					}
+					await backend.clearGlobal(agentDir, this.ctx.session);
+					await this.ctx.session.refreshBaseSystemPrompt();
+					this.ctx.showStatus(t("settings.memoryGlobalClearedSystem"));
+				} else {
+					await backend.clear(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
+					await this.ctx.session.refreshBaseSystemPrompt();
+					this.ctx.showStatus(t("settings.memoryDataClearedSystem"));
+				}
 			} catch (error) {
 				this.ctx.showError(
 					t("settings.memoryClearFailedWith0").replace(

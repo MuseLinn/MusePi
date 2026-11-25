@@ -1,6 +1,13 @@
 export const settings = {
 	// ── Memory + Files & LSP settings (schema-driven; keys = schema ui labels) ──
 	"settings.memory.general.backend": "记忆后端",
+	// schema 里以原文作标签的选项，字典按原文翻译
+	"MuseMem (recommended)": "MuseMem（推荐）",
+	"Recommended: project summaries plus optional cross-project lessons, on this machine":
+		"推荐：本机生成的项目摘要，外加可选的跨项目经验",
+	"MuseMem Global Scope": "MuseMem 全局作用域",
+	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
+		"允许 learn 使用 scope: global，使每个项目都能读取这条经验。关闭后所有经验只留在项目内。",
 	"settings.offLocalSummary.info": "关闭、本地摘要管线、Mnemopi SQLite 或 Hindsight 远程记忆",
 	"settings.general": "常规",
 	"settings.noMemorySubsystemRuns": "不运行任何记忆子系统",
@@ -7116,8 +7123,8 @@ export const settings = {
 	"Tool only": "仅工具",
 	"Read assistant replies aloud — the desktop speaks the settled reply sentence-by-sentence, the terminal speaks it as it streams":
 		"朗读助手回复——桌面按句流式朗读已完成的回复，终端在生成过程中流式朗读",
-	"Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
-		"关闭、本地摘要、Mnemopi SQLite、Hindsight 远端记忆或 Sharpshooter",
+	"Off, MuseMem summaries, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
+		"关闭、MuseMem 摘要、Mnemopi SQLite、Hindsight 远端记忆或 Sharpshooter",
 	Sharpshooter: "Sharpshooter（项目决策）",
 	"Friction-gated project decision files (architecture/product/style), consolidated in the background":
 		"按摩擦门槛抽取的项目决策文件（架构/产品/风格），后台合并",
@@ -7137,17 +7144,6 @@ export const settings = {
 	"settings.memoryStatusEmpty": "此外端没有可显示的统计。",
 	"settings.memoryWorkspaceEmptyHint": "本地摘要流水线尚未写入记忆文件。",
 	"settings.memory.group.maintenance": "记忆维护",
-	"settings.memory.idleEnqueue.title": "空闲时整理记忆",
-	"settings.memory.idleEnqueue.desc":
-		"会话安静一段时间后，在后台把陈旧的短期记忆折叠成长期摘要。哪些算「旧」由记忆后端自己的时间线决定；没有可整合的内容时不做任何事。",
-	"settings.memory.idleEnqueueMinutes.title": "空闲整理延迟",
-	"settings.memory.idleEnqueueMinutes.desc": "会话安静多久之后开始整理。",
-	"settings.memory.idleEnqueueMinutes.option.15m": "15 分钟",
-	"settings.memory.idleEnqueueMinutes.option.30m": "30 分钟",
-	"settings.memory.idleEnqueueMinutes.option.1h": "1 小时",
-	"settings.memory.idleEnqueueMinutes.option.3h": "3 小时",
-	"settings.memory.idleEnqueueMinutes.option.12h": "12 小时",
-	"settings.memory.idleEnqueueMinutes.option.24h": "24 小时",
 	"settings.memoryBackends": "后端",
 	"settings.memoryStatusDescription": "实时后端状态与维护操作。",
 	"settings.secrets": "保险库",

@@ -146,6 +146,13 @@ const CONDITIONS: Record<string, () => boolean> = {
 			return false;
 		}
 	},
+	musememActive: () => {
+		try {
+			return Settings.instance.get("memory.backend") === "musemem";
+		} catch {
+			return false;
+		}
+	},
 	autolearnActive: () => {
 		try {
 			return Settings.instance.get("autolearn.enabled") === true;

@@ -9,7 +9,7 @@ import {
 	refreshMemoryToolDeveloperInstructionsCacheAfterStartup,
 	saveLearnedLesson,
 } from "@musepi/pi-coding-agent/memories";
-import { localBackend } from "@musepi/pi-coding-agent/memory-backend/local-backend";
+import { musememBackend } from "@musepi/pi-coding-agent/memory-backend/musemem-backend";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { removeWithRetries } from "@musepi/pi-utils";
 
@@ -33,7 +33,7 @@ describe("clear drops the by-root instruction baseline", () => {
 	beforeEach(async () => {
 		tmp = await fs.mkdtemp(path.join(os.tmpdir(), "omp-memory-clear-baseline-"));
 		agentDir = path.join(tmp, "agent");
-		settings = Settings.isolated({ "memory.backend": "local" });
+		settings = Settings.isolated({ "memory.backend": "musemem" });
 	});
 	afterEach(async () => {
 		await removeWithRetries(tmp);
@@ -56,7 +56,7 @@ describe("clear drops the by-root instruction baseline", () => {
 
 		// Authoritative clear through the production backend path.
 		const clearingSession = sessionWithFile("session-clear.jsonl");
-		await localBackend.clear(agentDir, cwd, clearingSession as unknown as AgentSession);
+		await musememBackend.clear(agentDir, cwd, clearingSession as unknown as AgentSession);
 
 		// A new session starts with no per-session cache; the startup refresh
 		// must not fold the pre-clear baseline back into its snapshot.

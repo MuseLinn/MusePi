@@ -3,8 +3,9 @@ import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import { sanitizeSkillName, writeManagedSkill } from "../autolearn/managed-skills";
 import { isNameClaimedByAuthoredSkill } from "../extensibility/skills";
-import { isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
-import { localBackend } from "../memory-backend/local-backend";
+import { globalScopeHint, isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
+import { musememBackend } from "../memory-backend/musemem-backend";
+import { isMusememBackendId, supportsLearnTool } from "../memory-backend/types";
 import learnDescription from "../prompts/tools/learn.md" with { type: "text" };
 import type { ToolSession } from ".";
 import { toolIsRegistered } from "./tool-ownership";
@@ -14,7 +15,7 @@ const learnSchema = type({
 	memory: type("string").describe("the durable, self-contained lesson to remember (what, when, why)"),
 	"context?": type("string").describe("optional source context for the lesson"),
 	"scope?": type("'project' | 'global'").describe(
-		"storage scope; defaults to project, global is for durable cross-project knowledge",
+		"storage scope; defaults to project. global stores a lesson every project recalls, and is only accepted when the active backend and its settings offer one",
 	),
 	"skill?": type({
 		action: "'create' | 'update'",
@@ -36,7 +37,7 @@ export type LearnParams = typeof learnSchema.infer;
 export class LearnTool implements AgentTool<typeof learnSchema> {
 	readonly name = "learn";
 	readonly approval = (args: unknown) =>
-		(args as Partial<LearnParams>).skill || this.session.settings.get("memory.backend") === "local"
+		(args as Partial<LearnParams>).skill || isMusememBackendId(this.session.settings.get("memory.backend"))
 			? "write"
 			: "read";
 	readonly label = "Learn";
@@ -52,7 +53,7 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 		if (toolIsRegistered(session, "learn")) return null;
 		if (!session.settings.get("autolearn.enabled")) return null;
 		const backend = session.settings.get("memory.backend");
-		if (backend !== "hindsight" && backend !== "mnemopi" && backend !== "local") return null;
+		if (!supportsLearnTool(backend)) return null;
 		return new LearnTool(session);
 	}
 
@@ -60,7 +61,16 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 		// 1) Persist or queue the lesson to long-term memory (mirrors MemoryRetainTool).
 		const backend = this.session.settings.get("memory.backend");
 		if (params.scope === "global" && !isGlobalMemoryScopeAvailable(this.session)) {
-			throw new Error(`Global memory scope is not available with the ${backend} memory backend.`);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Global scope is unavailable with the ${backend} memory backend, so nothing was stored. ${globalScopeHint(backend)}. Retry with scope "project" to keep this lesson for the current project only.`,
+					},
+				],
+				isError: true,
+				details: { scopeUnavailable: true, backend },
+			};
 		}
 		let memoryMessage = "Lesson stored";
 		if (backend === "mnemopi") {
@@ -93,10 +103,16 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 			if (!id) {
 				throw new Error("Mnemopi did not store the lesson (no memory id returned).");
 			}
-		} else if (backend === "local") {
-			const result = await localBackend.save?.(
+		} else if (isMusememBackendId(backend)) {
+			const result = await musememBackend.save?.(
 				{ agentDir: this.session.settings.getAgentDir(), cwd: this.session.settings.getCwd() },
-				{ content: params.memory, context: params.context, source: "coding-agent-learn", importance: 0.8 },
+				{
+					content: params.memory,
+					context: params.context,
+					source: "coding-agent-learn",
+					importance: 0.8,
+					scope: params.scope,
+				},
 			);
 			if (!result || result.stored === 0) {
 				throw new Error("Lesson was empty after sanitization; nothing stored.");

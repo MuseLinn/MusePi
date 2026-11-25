@@ -32,7 +32,7 @@ describe("daemon memory.clear RPC", () => {
 		tmp = `${os.tmpdir()}/omp-memory-clear-rpc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		agentDir = path.join(tmp, "agent");
 		setAgentDir(agentDir);
-		settings = Settings.isolated({ "memory.backend": "local" });
+		settings = Settings.isolated({ "memory.backend": "musemem" });
 	});
 	afterEach(async () => {
 		setAgentDir(originalAgentDir);

@@ -38,7 +38,7 @@ describe("memory instructions truncation contract", () => {
 	beforeEach(async () => {
 		tmp = await fs.mkdtemp(path.join(os.tmpdir(), "omp-memory-contract-"));
 		agentDir = path.join(tmp, "agent");
-		settings = Settings.isolated({ "memory.backend": "local" });
+		settings = Settings.isolated({ "memory.backend": "musemem" });
 	});
 	afterEach(async () => {
 		await removeWithRetries(tmp);
@@ -51,7 +51,10 @@ describe("memory instructions truncation contract", () => {
 	it("bounds a huge summary to the token budget and marks the clip", () => {
 		const limit = tokenLimit();
 		const huge = `${"summary ".repeat(limit * 2)}\n`;
-		const out = renderMemoryToolDeveloperInstructionsSnapshot({ summary: huge, learned: "" }, settings);
+		const out = renderMemoryToolDeveloperInstructionsSnapshot(
+			{ summary: huge, learned: "", globalLearned: "" },
+			settings,
+		);
 		expect(out).toBeDefined();
 		expect(out).toContain("[truncated]");
 		// Budgeted summary (limit * chars-per-token) plus the marker and the
@@ -63,7 +66,7 @@ describe("memory instructions truncation contract", () => {
 	it("drops the lessons when the truncated summary fills the whole budget", () => {
 		const limit = tokenLimit();
 		const out = renderMemoryToolDeveloperInstructionsSnapshot(
-			{ summary: `${"summary ".repeat(limit * 2)}\n`, learned: "- UNIQUE_LESSON_MARKER" },
+			{ summary: `${"summary ".repeat(limit * 2)}\n`, learned: "- UNIQUE_LESSON_MARKER", globalLearned: "" },
 			settings,
 		);
 		expect(out).toBeDefined();
@@ -73,7 +76,7 @@ describe("memory instructions truncation contract", () => {
 
 	it("keeps summary and lessons intact below the budget with no clip marker", () => {
 		const out = renderMemoryToolDeveloperInstructionsSnapshot(
-			{ summary: "Short summary.", learned: "- A captured lesson" },
+			{ summary: "Short summary.", learned: "- A captured lesson", globalLearned: "" },
 			settings,
 		);
 		expect(out).toContain("Short summary.");
@@ -83,7 +86,9 @@ describe("memory instructions truncation contract", () => {
 
 	it("renders nothing for an empty snapshot", () => {
 		expect(renderMemoryToolDeveloperInstructionsSnapshot(undefined, settings)).toBeUndefined();
-		expect(renderMemoryToolDeveloperInstructionsSnapshot({ summary: "", learned: "" }, settings)).toBeUndefined();
+		expect(
+			renderMemoryToolDeveloperInstructionsSnapshot({ summary: "", learned: "", globalLearned: "" }, settings),
+		).toBeUndefined();
 	});
 
 	it("applies the same contract through the disk-backed builder", async () => {
@@ -107,7 +112,7 @@ describe("memory instructions update triggers a session refresh", () => {
 	beforeEach(async () => {
 		tmp = await fs.mkdtemp(path.join(os.tmpdir(), "omp-memory-refresh-"));
 		agentDir = path.join(tmp, "agent");
-		settings = Settings.isolated({ "memory.backend": "local" });
+		settings = Settings.isolated({ "memory.backend": "musemem" });
 	});
 	afterEach(async () => {
 		await removeWithRetries(tmp);
@@ -133,7 +138,7 @@ describe("memory instructions update triggers a session refresh", () => {
 	});
 
 	function localSession(hooks: { refreshMemoryInstructions?: () => Promise<void> } = {}): ToolSession {
-		const toolSettings = Settings.isolated({ "autolearn.enabled": true, "memory.backend": "local" });
+		const toolSettings = Settings.isolated({ "autolearn.enabled": true, "memory.backend": "musemem" });
 		spyOn(toolSettings, "getAgentDir").mockReturnValue(agentDir);
 		spyOn(toolSettings, "getCwd").mockReturnValue(settings.getCwd());
 		return {

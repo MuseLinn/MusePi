@@ -7,16 +7,16 @@ MusePi 支持五种记忆模式。记忆默认关闭；通过 `/settings` 或 `c
 | `memory.backend` | 存储与行为                                                                 | 指南                                                    |
 | ---------------- | -------------------------------------------------------------------------- | ------------------------------------------------------- |
 | `off`            | 不运行记忆后端                                                             | —                                                       |
-| `local`          | 从已持久化会话生成项目级摘要与经验                                         | 本页                                                    |
+| `musemem`        | 项目级摘要与经验，外加可选的跨项目经验                                     | 本页                                                    |
 | `hindsight`      | 远端、按 bank 隔离的 Hindsight 记忆                                        | [Hindsight](#hindsight-远端后端)                        |
 | `mnemopi`        | 本地 Mnemopi SQLite 记忆                                                   | [Mnemopi 记忆后端](./mnemosyne-memory-backend.zh-CN.md) |
 | `sharpshooter`   | 按摩擦门槛抽取的项目决策文件（架构/产品/风格），后台合并                   | [Sharpshooter](#sharpshooter-后端)                      |
 
-启用本地摘要流水线：
+启用 MuseMem 摘要流水线：
 
 ```yaml
 memory:
-   backend: local
+   backend: musemem
 ```
 
 ## 使用方式
@@ -26,6 +26,15 @@ memory:
 会话启动时，如果当前项目存在已合并摘要或手动捕获的经验，它们会作为 **记忆引导** 块注入系统提示。摘要与经验共享 `memories.summaryInjectionTokenLimit`。
 
 如果启动合并晚于首次提示构建，活动会话的摘要快照会刷新。已捕获的经验仍固定在初始快照中，因此并发的 `learn` 调用只影响后续会话。
+
+### 跨项目经验
+
+`learn` 接受 `scope: "global"`，用于记录不属于当前仓库的知识——工具行为、个人工作流偏好、跨仓库约束。这类经验写入 `memories/_global/learned.md`，与每个项目的 `--<cwd>--` 目录分开，每行记录来源（`_(from <项目>, <日期>)_`）。
+
+- `musemem.globalScope`（默认开启）决定这个目标是否存在。关闭时 `scope: "global"` 会被拒绝，并在结果里点名该设置；不会静默降级为项目级。
+- 项目经验先注入，跨项目经验随后，并在 `memories.summaryInjectionTokenLimit` 不足时先被截断。冲突时以项目经验为准。
+- `/memory clear` 只清当前项目；`/memory clear global` 只清共享文件。
+- `memory://global/learned.md` 可读取完整的跨项目文件。
 
 - 把记忆视为启发式上下文——对流程和既往决策有用，但对当前 repo 状态不具权威性。
 - 记忆改变计划时引用记忆产物路径，并在行动前用当前 repo 证据核对。
@@ -40,12 +49,13 @@ agent 可以用 `read` 工具直接读取 `memory://` URL：
 | `memory://root`                        | 启动时注入的紧凑摘要                                                                                              |
 | `memory://root/MEMORY.md`              | 完整长期记忆文档                                                                                                  |
 | `memory://root/learned.md`             | `learn` 工具捕获的经验                                                                                            |
+| `memory://global/learned.md`           | 跨项目经验（`scope: "global"`），MuseMem 全局作用域开启时存在                                                      |
 | `memory://root/skills/<name>/SKILL.md` | 生成的技能手册                                                                                                    |
 | `memory://<memory-id>`                 | 完整 Mnemopi 记忆行（working 或 episodic），带 YAML frontmatter 元数据头；仅 `memory.backend` 为 `mnemopi` 时可用 |
 
 `memory://<memory-id>` 返回完整存储行，而不是被裁剪的 recall 预览（超过预览上限的内容以 `…` 结尾）；agent 在 `memory_edit update` 前会先读取它。
 
-`memory://root[/…]` 由文件支撑，仅在 `memory.backend: local` 时存在，由合并流水线写入磁盘记忆根。`hindsight` 或 `mnemopi` 下不会写入该根，这些 URL 无法解析——改用 `recall`/`reflect`（`mnemopi` 还可用 `read memory://<memory-id>`）。
+`memory://root[/…]` 由文件支撑，仅在 `memory.backend: musemem` 时存在，由合并流水线写入磁盘记忆根。`hindsight` 或 `mnemopi` 下不会写入该根，这些 URL 无法解析——改用 `recall`/`reflect`（`mnemopi` 还可用 `read memory://<memory-id>`）。
 
 ### `/memory` 斜杠命令
 
@@ -56,7 +66,8 @@ agent 可以用 `read` 工具直接读取 `memory://` URL：
 | `diagnose`            | 显示后端特定的诊断（受支持时）                                                                       |
 | `queue`               | 显示等待合并的记忆增量                                                                               |
 | `sync`                | 立即运行记忆合并                                                                                     |
-| `clear` / `reset`     | 删除活动后端的记忆数据/产物                                                                          |
+| `clear` / `reset`     | 删除活动后端在当前项目的数据                                                                         |
+| `clear global`        | 只删除跨项目经验（MuseMem）                                                                          |
 | `enqueue` / `rebuild` | 强制活动后端执行合并/保留工作                                                                        |
 | `mm …`                | Hindsight mental model 维护（`list`/`show`/`refresh`/`history`/`seed`/`delete`/`reload`）；ACP 模式不支持 |
 
@@ -69,7 +80,7 @@ autolearn:
    enabled: true
 ```
 
-local 后端下，`learn` 把明确的持久经验写入项目的 `learned.md`。经验按最新在前、去重、脱敏，最多 100 条，从下一次会话开始注入；`learn` 调用不会改动活动会话的 prompt-cache 前缀。每条经验正文最多 2,000 字符，可选上下文最多 400 字符。local 后端不提供结构化记忆搜索、`recall`、`retain`、`reflect` 和 `memory_edit`。
+MuseMem 后端下，`learn` 把明确的持久经验写入项目的 `learned.md`；`scope: "global"` 时写入共享的 `_global/learned.md`。经验按最新在前、去重、脱敏，每个文件最多 100 条，从下一次会话开始注入；`learn` 调用不会改动活动会话的 prompt-cache 前缀。每条经验正文最多 2,000 字符，可选上下文最多 400 字符。MuseMem 后端不提供结构化记忆搜索、`recall`、`retain`、`reflect` 和 `memory_edit`。
 
 ## 工作原理
 
@@ -99,7 +110,7 @@ local 后端下，`learn` 把明确的持久经验写入项目的 `learned.md`�
 | `stage_one_input.md`      | 包装会话内容的用户轮模板             | `{{thread_id}}`, `{{response_items_json}}`  |
 | `consolidation_system.md` | 跨会话合并的系统提示                 | —                                           |
 | `consolidation.md`        | 跨会话合并的用户轮提示               | `{{raw_memories}}`, `{{rollout_summaries}}` |
-| `read-path.md`            | 注入活动会话的记忆引导               | `{{memory_summary}}`, `{{learned}}`         |
+| `read-path.md`            | 注入活动会话的记忆引导               | `{{memory_summary}}`, `{{learned}}`, `{{global_learned}}` |
 
 ### 模型选择
 
@@ -116,7 +127,8 @@ local 后端下，`learn` 把明确的持久经验写入项目的 `learned.md`�
 
 | 设置                                  | 默认值  | 说明                                                                                                              |
 | ------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `memory.backend`                      | `off`   | 本流水线选择 `local`；未显式设置后端时，旧 `memories.enabled: true` 会迁移为 `memory.backend: local`             |
+| `memory.backend`                      | `off`   | 本流水线选择 `musemem`；旧 `memories.enabled: true` 迁移为 `musemem`，`memory.backend: local` 也会在加载时迁移为 `musemem` |
+| `musemem.globalScope`                 | `true`  | 允许 `learn` 把 `scope: "global"` 的经验写入 `memories/_global/learned.md`，供每个项目读取；关闭后所有经验都只留在项目内 |
 | `memories.maxRolloutAgeDays`          | `30`    | 更旧的会话不处理                                                                                                  |
 | `memories.minRolloutIdleHours`        | `12`    | 最近仍在活动的会话跳过                                                                                            |
 | `memories.maxRolloutsPerStartup`      | `64`    | 单次启动处理的会话上限                                                                                            |

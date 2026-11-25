@@ -40,6 +40,7 @@ import {
 
 interface MemoryRuntimeConfig {
 	enabled: boolean;
+	globalScope: boolean;
 	maxRolloutsPerStartup: number;
 	maxRolloutAgeDays: number;
 	minRolloutIdleHours: number;
@@ -59,6 +60,7 @@ interface MemoryRuntimeConfig {
 
 const DEFAULTS: MemoryRuntimeConfig = {
 	enabled: false,
+	globalScope: true,
 	maxRolloutsPerStartup: 64,
 	maxRolloutAgeDays: 30,
 	minRolloutIdleHours: 12,
@@ -161,6 +163,12 @@ interface MemoryInstructionSession {
 interface MemoryToolDeveloperInstructionsSnapshot {
 	summary: string;
 	learned: string;
+	/**
+	 * `learn`-captured lessons from `memories/_global/learned.md`: the items
+	 * every project recalls under `musemem.globalScope`. Empty when the scope is
+	 * off or nothing was captured there.
+	 */
+	globalLearned: string;
 }
 
 interface CachedMemoryToolDeveloperInstructions {
@@ -207,7 +215,8 @@ async function readMemoryToolDeveloperInstructionsSnapshot(
 		// so any captured lessons still surface on their own.
 	}
 	const learned = await readLearnedLessons(memoryRoot);
-	return { summary, learned };
+	const globalLearned = cfg.globalScope ? await readLearnedLessons(getGlobalMemoryRoot(agentDir)) : "";
+	return { summary, learned, globalLearned };
 }
 
 /**
@@ -229,7 +238,7 @@ export function renderMemoryToolDeveloperInstructionsSnapshot(
 	if (!snapshot) return undefined;
 	const cfg = loadMemoryConfig(settings);
 	if (!cfg.enabled) return undefined;
-	if (!snapshot.summary && !snapshot.learned) return undefined;
+	if (!snapshot.summary && !snapshot.learned && !snapshot.globalLearned) return undefined;
 
 	const summaryOut = snapshot.summary
 		? truncateByApproxTokens(snapshot.summary, cfg.summaryInjectionTokenLimit).trim()
@@ -246,11 +255,19 @@ export function renderMemoryToolDeveloperInstructionsSnapshot(
 	);
 	const learnedOut =
 		snapshot.learned && learnedBudget > 0 ? truncateByApproxTokens(snapshot.learned, learnedBudget).trim() : "";
-	if (!summaryOut && !learnedOut) return undefined;
+	// Global lessons get whatever project lessons left over. Project rules win on
+	// conflict, so they are rendered first and truncated last.
+	const globalBudget = Math.max(0, learnedBudget - Math.ceil(learnedOut.length / MEMORY_INSTRUCTIONS_CHARS_PER_TOKEN));
+	const globalLearnedOut =
+		snapshot.globalLearned && globalBudget > 0
+			? truncateByApproxTokens(snapshot.globalLearned, globalBudget).trim()
+			: "";
+	if (!summaryOut && !learnedOut && !globalLearnedOut) return undefined;
 
 	return prompt.render(readPathTemplate, {
 		memory_summary: summaryOut,
 		learned: learnedOut,
+		global_learned: globalLearnedOut,
 	});
 }
 
@@ -304,7 +321,10 @@ export async function refreshMemoryToolDeveloperInstructionsCacheAfterStartup(
 	const cachedLearned =
 		cached && cached.sessionFile === sessionFile && cached.root === root ? cached.snapshot?.learned : undefined;
 	const learned = cachedLearned ?? baseline?.learned ?? "";
-	const snapshot = current ? { summary: current.summary, learned } : undefined;
+	const cachedGlobal =
+		cached && cached.sessionFile === sessionFile && cached.root === root ? cached.snapshot?.globalLearned : undefined;
+	const globalLearned = cachedGlobal ?? baseline?.globalLearned ?? "";
+	const snapshot = current ? { summary: current.summary, learned, globalLearned } : undefined;
 	cacheMemoryToolDeveloperInstructions(session, sessionFile, snapshot, settings, agentDir);
 }
 
@@ -355,6 +375,16 @@ export async function clearMemoryData(agentDir: string, cwd: string): Promise<vo
 }
 
 /**
+ * Wipe `memories/_global/learned.md`. Project summaries and lessons stay; the
+ * by-root baselines are dropped because they carry the global lessons forward.
+ * Callers that hold a session must also drop its snapshot.
+ */
+export async function clearGlobalMemoryData(agentDir: string): Promise<void> {
+	await fs.rm(getGlobalMemoryRoot(agentDir), { recursive: true, force: true });
+	memoryToolDeveloperInstructionsByRoot.clear();
+}
+
+/**
  * Force-enqueue global consolidation maintenance work.
  */
 export function enqueueMemoryConsolidation(agentDir: string, cwd: string, sourceUpdatedAt = unixNow()): void {
@@ -376,7 +406,8 @@ interface MemoryStartupOptions {
 }
 
 function isMemoryStartupActive(options: MemoryStartupOptions): boolean {
-	return !options.signal.aborted && !options.session.isDisposed && options.settings.get("memory.backend") === "local";
+	const backend = options.settings.get("memory.backend") as string;
+	return !options.signal.aborted && !options.session.isDisposed && (backend === "musemem" || backend === "local");
 }
 
 async function runMemoryStartup(options: MemoryStartupOptions): Promise<void> {
@@ -1301,8 +1332,10 @@ async function resolveMemoryModel(options: {
 }
 
 function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
+	const backend = settings.get("memory.backend") as string;
 	return {
-		enabled: settings.get("memory.backend") === "local",
+		enabled: backend === "musemem" || backend === "local",
+		globalScope: settings.get("musemem.globalScope") !== false,
 		maxRolloutsPerStartup: settings.get("memories.maxRolloutsPerStartup") ?? DEFAULTS.maxRolloutsPerStartup,
 		maxRolloutAgeDays: settings.get("memories.maxRolloutAgeDays") ?? DEFAULTS.maxRolloutAgeDays,
 		minRolloutIdleHours: settings.get("memories.minRolloutIdleHours") ?? DEFAULTS.minRolloutIdleHours,
@@ -1324,6 +1357,19 @@ function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
 
 export function getMemoryRoot(agentDir: string, cwd: string): string {
 	return path.join(getMemoriesDir(agentDir), encodeProjectPath(cwd));
+}
+
+/**
+ * Cross-project lesson root under the agent memories directory.
+ *
+ * `_global` cannot collide with the `--<encoded-cwd>--` project directories and
+ * never takes part in the per-project consolidation that writes
+ * `memory_summary.md`; only explicit `scope: "global"` lessons land here.
+ */
+export const GLOBAL_MEMORY_SCOPE_DIR = "_global";
+
+export function getGlobalMemoryRoot(agentDir: string): string {
+	return path.join(getMemoriesDir(agentDir), GLOBAL_MEMORY_SCOPE_DIR);
 }
 
 /**
@@ -1387,16 +1433,24 @@ export async function saveLearnedLesson(
 ): Promise<MemoryBackendSaveResult> {
 	const content = normalizeLearnedText(input.content, MAX_LEARNED_CONTENT_CHARS);
 	if (!content) {
-		return { backend: "local", stored: 0, message: "Empty lesson; nothing stored." };
+		return { backend: "musemem", stored: 0, message: "Empty lesson; nothing stored." };
 	}
 	const context = input.context ? normalizeLearnedText(input.context, MAX_LEARNED_CONTEXT_CHARS) : "";
+	const global = input.scope === "global";
 	const line = context ? `- ${content} _(context: ${context})_` : `- ${content}`;
-	const filePath = path.join(getMemoryRoot(agentDir, cwd), LEARNED_LESSONS_FILE);
+	const project = path.basename(cwd) || cwd;
+	const storedLine = global ? `${line} _(from ${project}, ${new Date().toISOString().slice(0, 10)})_` : line;
+	const filePath = path.join(
+		global ? getGlobalMemoryRoot(agentDir) : getMemoryRoot(agentDir, cwd),
+		LEARNED_LESSONS_FILE,
+	);
 
 	// Serialize the read-modify-write per file: parallel `learn` calls (sibling
 	// subagents, or two shared tool calls in one turn) share the project memory
 	// root, so an unguarded RMW would let the last writer drop the other's lesson.
-	const run = (learnedWriteChains.get(filePath) ?? Promise.resolve()).then(() => appendLearnedLine(filePath, line));
+	const run = (learnedWriteChains.get(filePath) ?? Promise.resolve()).then(() =>
+		appendLearnedLine(filePath, storedLine, global ? stripLessonProvenance : undefined),
+	);
 	const guarded = run.catch(() => {});
 	learnedWriteChains.set(filePath, guarded);
 	try {
@@ -1406,10 +1460,19 @@ export async function saveLearnedLesson(
 		// retain one promise per distinct memory root for the process lifetime.
 		if (learnedWriteChains.get(filePath) === guarded) learnedWriteChains.delete(filePath);
 	}
-	return { backend: "local", stored: 1, message: `Lesson saved to ${LEARNED_LESSONS_FILE}.` };
+	return {
+		backend: "musemem",
+		stored: 1,
+		message: global ? `Lesson saved to _global/${LEARNED_LESSONS_FILE}.` : `Lesson saved to ${LEARNED_LESSONS_FILE}.`,
+	};
 }
 
-async function appendLearnedLine(filePath: string, line: string): Promise<void> {
+/** Drop the source annotation so the same fact learned again replaces the row. */
+function stripLessonProvenance(line: string): string {
+	return line.replace(/\s*_\(from [^)]*\)_\s*$/, "");
+}
+
+async function appendLearnedLine(filePath: string, line: string, dedupeKey?: (line: string) => string): Promise<void> {
 	let existing = "";
 	try {
 		existing = await Bun.file(filePath).text();
@@ -1428,7 +1491,9 @@ async function appendLearnedLine(filePath: string, line: string): Promise<void> 
 	// repeated saves stay idempotent instead of growing a blank line each time.
 	if (lines.at(-1) === "") lines.pop();
 	const isLesson = (l: string) => l.trimStart().startsWith("- ");
-	const out = lines.filter(l => !(isLesson(l) && l.trim() === line));
+	const key = dedupeKey ?? ((l: string) => l);
+	const incoming = key(line);
+	const out = lines.filter(l => !(isLesson(l) && key(l.trim()) === incoming));
 	const firstBullet = out.findIndex(isLesson);
 	if (firstBullet === -1) out.push(line);
 	else out.splice(firstBullet, 0, line);

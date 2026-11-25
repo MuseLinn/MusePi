@@ -14,11 +14,11 @@ import { resolveMemoryBackend } from "../../src/memory-backend/resolve";
  */
 describe("memory backend package definitions", () => {
 	it("every real backend module exports a backend under its own id", async () => {
-		const { localBackend } = await import("../../src/memory-backend/local-backend");
+		const { musememBackend } = await import("../../src/memory-backend/musemem-backend");
 		const { hindsightBackend } = await import("../../src/hindsight/backend");
 		const { mnemopiBackend } = await import("../../src/mnemopi/backend");
 		const { sharpshooterBackend } = await import("../../src/sharpshooter/backend");
-		expect(localBackend.id).toBe("local");
+		expect(musememBackend.id).toBe("musemem");
 		expect(hindsightBackend.id).toBe("hindsight");
 		expect(mnemopiBackend.id).toBe("mnemopi");
 		expect(sharpshooterBackend.id).toBe("sharpshooter");

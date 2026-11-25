@@ -3,7 +3,14 @@ import type { SettingsKey } from "../zh-CN/settings.js";
 export const settings = {
 	// ── Memory + Files & LSP settings (schema-driven; keys = schema ui labels) ──
 	"settings.memory.general.backend": "Memory Backend",
-	"settings.offLocalSummary.info": "Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+	// Schema options whose label is literal text rather than a key.
+	"MuseMem (recommended)": "MuseMem (recommended)",
+	"Recommended: project summaries plus optional cross-project lessons, on this machine":
+		"Recommended: project summaries plus optional cross-project lessons, on this machine",
+	"MuseMem Global Scope": "MuseMem Global Scope",
+	"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.":
+		"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
+	"settings.offLocalSummary.info": "Off, MuseMem summaries, Mnemopi SQLite, or Hindsight remote memory",
 	"settings.general": "General",
 	"settings.noMemorySubsystemRuns": "No memory subsystem runs",
 	"settings.localRolloutSummarisationPipeline": "Local rollout summarisation pipeline (memory_summary.md)",
@@ -7434,8 +7441,8 @@ export const settings = {
 	"Tool only": "Tool only",
 	"Read assistant replies aloud — the desktop speaks the settled reply sentence-by-sentence, the terminal speaks it as it streams":
 		"Read assistant replies aloud — the desktop speaks the settled reply sentence-by-sentence, the terminal speaks it as it streams",
-	"Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
-		"Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
+	"Off, MuseMem summaries, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
+		"Off, MuseMem summaries, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
 	Sharpshooter: "Sharpshooter",
 	"Friction-gated project decision files (architecture/product/style), consolidated in the background":
 		"Friction-gated project decision files (architecture/product/style), consolidated in the background",
@@ -7458,17 +7465,6 @@ export const settings = {
 	"settings.memoryStatusEmpty": "This backend has no status metrics to show.",
 	"settings.memoryWorkspaceEmptyHint": "The local summary pipeline has not written memory files yet.",
 	"settings.memory.group.maintenance": "Memory Maintenance",
-	"settings.memory.idleEnqueue.title": "Consolidate Memory When Idle",
-	"settings.memory.idleEnqueue.desc":
-		"After a quiet spell, fold aged working memory into durable summaries in the background. The backend's own cutoff decides what is old enough; a run with nothing eligible does nothing.",
-	"settings.memory.idleEnqueueMinutes.title": "Idle Consolidation Delay",
-	"settings.memory.idleEnqueueMinutes.desc": "How long the session stays quiet before consolidation runs.",
-	"settings.memory.idleEnqueueMinutes.option.15m": "15 minutes",
-	"settings.memory.idleEnqueueMinutes.option.30m": "30 minutes",
-	"settings.memory.idleEnqueueMinutes.option.1h": "1 hour",
-	"settings.memory.idleEnqueueMinutes.option.3h": "3 hours",
-	"settings.memory.idleEnqueueMinutes.option.12h": "12 hours",
-	"settings.memory.idleEnqueueMinutes.option.24h": "24 hours",
 	"settings.memoryBackends": "Backends",
 	"settings.memoryStatusDescription": "Live backend status and maintenance actions.",
 	"settings.secrets": "Vault",

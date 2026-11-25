@@ -42,11 +42,11 @@ describe("CommandController /memory stats and /memory diagnose", () => {
 	});
 
 	it("still names the backend when a real backend simply has no stats hook", async () => {
-		const { ctx, showWarning } = createMemoryContext("local");
+		const { ctx, showWarning } = createMemoryContext("musemem");
 		const controller = new CommandController(ctx);
 
 		await controller.handleMemoryCommand("/memory stats");
 
-		expect(showWarning).toHaveBeenCalledWith("Memory stats is not available for the local backend.");
+		expect(showWarning).toHaveBeenCalledWith("Memory stats is not available for the musemem backend.");
 	});
 });

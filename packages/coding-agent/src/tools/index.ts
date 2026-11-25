@@ -6,6 +6,7 @@ import { checkRubyKernelAvailability } from "../eval/rb/kernel";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import { GoalTool } from "../goals/tools/goal-tool";
 import { LspTool } from "../lsp";
+import { supportsLearnTool } from "../memory-backend/types";
 import { TaskTool } from "../task";
 import { canSpawnAtDepth } from "../task/types";
 import { isInspectImageToolActive } from "../utils/inspect-image-mode";
@@ -282,10 +283,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		// tool whitelist must never be silently widened with write-capable tools.
 		if (session.settings.get("autolearn.enabled") && (session.taskDepth ?? 0) === 0) {
 			if (!requestedTools.includes("manage_skill")) requestedTools.push("manage_skill");
-			if (
-				["hindsight", "mnemopi", "local"].includes(session.settings.get("memory.backend") ?? "") &&
-				!requestedTools.includes("learn")
-			) {
+			if (supportsLearnTool(session.settings.get("memory.backend")) && !requestedTools.includes("learn")) {
 				requestedTools.push("learn");
 			}
 		}
@@ -368,7 +366,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 			return (
 				session.settings.get("autolearn.enabled") &&
 				((session.taskDepth ?? 0) === 0 || requestedTools !== undefined) &&
-				["hindsight", "mnemopi", "local"].includes(session.settings.get("memory.backend") ?? "")
+				supportsLearnTool(session.settings.get("memory.backend"))
 			);
 		}
 		if (name === "task") {

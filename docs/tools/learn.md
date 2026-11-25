@@ -26,7 +26,7 @@
 - Authored-skill name conflict returns `isError: true` after storing/queueing the lesson and reports `details = { skill: null, shadowed: true }`.
 
 ## Flow
-1. `LearnTool.createIf(...)` exposes the tool only when `autolearn.enabled` is true and `memory.backend` is `"hindsight"`, `"mnemopi"`, or `"local"`.
+1. `LearnTool.createIf(...)` exposes the tool only when `autolearn.enabled` is true and `memory.backend` is `"hindsight"`, `"mnemopi"`, or `"musemem"` (`"local"` is the migrated former id).
 2. `execute(...)` stores the lesson first:
    - Mnemopi: calls `rememberScoped(...)` with `source: "coding-agent-learn"`, `importance: 0.8`, `scope: "bank"`, extraction enabled, `veracity: "tool"`, and `memoryType: "fact"`.
    - Local backend: appends through `localBackend.save(...)` with the same source and importance.
