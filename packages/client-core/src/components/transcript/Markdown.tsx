@@ -17,8 +17,7 @@ interface MorphIconElement extends HTMLElement {
 }
 
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type TranslationKey, t } from "../../i18n/index.js";
 
 const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
@@ -29,7 +28,6 @@ const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
 
 import {
 	advanceTail,
-	blockGlyph,
 	EMPTY_TAIL,
 	type MarkdownBlockLabels,
 	type MarkdownTableCellPayload,
@@ -38,8 +36,7 @@ import {
 	setBlockGlyph,
 	type TailState,
 } from "@musepi/client-markdown";
-import { useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
-import { downloadBlob } from "../../lib/download";
+import { useDeepScrollShadow } from "@musepi/client-ui-primitives/client";
 import { electronBridge } from "../../lib/electron-bridge";
 import {
 	applyAnswers,
@@ -332,10 +329,6 @@ function rememberCodeBlock(hash: string, payload: { code: string; lang: string; 
 }
 
 /** A parsed table payload by content hash (the pipeline's lookup for a block). */
-export function markdownTableBlock(hash: string): MarkdownTablePayload | undefined {
-	return tableBlocks.get(hash);
-}
-
 function rememberTableBlock(hash: string, payload: MarkdownTablePayload): void {
 	tableBlocks.set(hash, payload);
 	if (tableBlocks.size <= TABLE_BLOCKS_LIMIT) return;
@@ -347,230 +340,6 @@ function rememberTableBlock(hash: string, payload: MarkdownTablePayload): void {
 	}
 }
 
-// ---- Table copy/download helpers (openchamber parity) ---------------------
-// Cells are extracted from the rendered DOM (textContent), so inline
-// markdown formatting never leaks into CSV/TSV/Markdown output.
-
-function extractTableData(table: HTMLTableElement): { headers: string[]; rows: string[][] } {
-	const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.textContent?.trim() ?? "");
-	const rows = Array.from(table.querySelectorAll("tbody tr")).map(tr =>
-		Array.from(tr.querySelectorAll("td")).map(td => td.textContent?.trim() ?? ""),
-	);
-	return { headers, rows };
-}
-
-const escapeCsv = (value: string): string => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
-
-function tableToCSV({ headers, rows }: { headers: string[]; rows: string[][] }): string {
-	return [headers, ...rows].map(row => row.map(escapeCsv).join(",")).join("\n");
-}
-
-function tableToTSV({ headers, rows }: { headers: string[]; rows: string[][] }): string {
-	return [headers, ...rows].map(row => row.join("\t")).join("\n");
-}
-
-function tableToMarkdown({ headers, rows }: { headers: string[]; rows: string[][] }): string {
-	const sep = `| ${headers.map(() => "---").join(" | ")} |`;
-	const line = (row: string[]): string => `| ${row.join(" | ")} |`;
-	return [line(headers), sep, ...rows.map(line)].join("\n");
-}
-
-/**
- * Table toolbar HTML: the same icon buttons as a fenced code block's head
- * (26px ghost targets, `<morph-icon>` glyphs, hover/focus reveal) instead of
- * the text buttons that used to float over the header cells.
- *
- * Copy and download each act on their default format (Markdown / CSV) in one
- * click; the formats that need a choice live behind ONE "more formats" menu
- * instead of a caret on each control — two identical carets read as two
- * different things and cost a button. Both share the code-block
- * `data-copy-hash` scheme, so the copy glyph flips to a check through the same
- * feedback effect. The width toggle carries the table hash so the component can
- * re-apply its pressed state after a rebuild.
- */
-function tableToolbarHtml(hash: string): string {
-	const widen = escapeHtml(t("general.widenTable"));
-	const copy = escapeHtml(t("settings.copy"));
-	const download = escapeHtml(t("settings.download"));
-	const expand = escapeHtml(t("general.tableExpand"));
-	const formats = escapeHtml(t("general.tableFormats"));
-	const item = (attrs: string, label: string): string =>
-		`<button type="button" role="menuitem" ${attrs}>${escapeHtml(label)}</button>`;
-	return (
-		`<div class="tr-table-bar">` +
-		`<button type="button" class="tr-code-btn tr-table-btn tr-table-wide" data-table-wide="${hash}" aria-pressed="false" aria-label="${widen}" title="${widen}">` +
-		blockGlyph("widen") +
-		`</button>` +
-		`<button type="button" class="tr-code-btn tr-table-btn tr-code-copy" data-table-copy="markdown" data-copy-hash="${hash}" aria-label="${copy}" title="${copy}">` +
-		blockGlyph("copy") +
-		`</button>` +
-		`<button type="button" class="tr-code-btn tr-table-btn" data-table-download="csv" aria-label="${download}" title="${download}">` +
-		blockGlyph("download") +
-		`</button>` +
-		`<span class="tr-table-split">` +
-		`<button type="button" class="tr-code-btn tr-table-btn tr-table-caret" data-table-menu aria-haspopup="menu" aria-expanded="false" aria-label="${formats}" title="${formats}">` +
-		blockGlyph("more") +
-		`</button>` +
-		`<span class="tr-table-menu" role="menu">` +
-		// Both groups list formats, and a menu of two unlabelled "CSV"s does not
-		// say which one copies and which one downloads.
-		`<span class="tr-table-menu-label" role="presentation">${copy}</span>` +
-		item(`data-table-copy="csv"`, "CSV") +
-		item(`data-table-copy="tsv"`, "TSV") +
-		item(`data-table-copy="markdown"`, "Markdown") +
-		`<span class="tr-table-menu-sep" role="separator"></span>` +
-		`<span class="tr-table-menu-label" role="presentation">${download}</span>` +
-		item(`data-table-download="csv"`, "CSV") +
-		item(`data-table-download="markdown"`, "Markdown") +
-		`</span>` +
-		`</span>` +
-		`<button type="button" class="tr-code-btn tr-table-btn" data-table-expand aria-label="${expand}" title="${expand}">` +
-		blockGlyph("expand") +
-		`</button>` +
-		`</div>`
-	);
-}
-
-/**
- * Expanded table view: a native `<dialog>` with `showModal()`, which supplies
- * the focus trap, Escape, the inert background and focus restoration that a
- * hand-rolled overlay has to re-implement (and gets subtly wrong). The table is
- * cloned in, so a wide one can scroll at full window width without touching the
- * message it came from.
- *
- * Two details make the expanded table legible and continuous:
- *
- * - The clone is wrapped in `.tr-md`, the scope every table rule hangs off. A
- *   bare clone in the dialog lost the card frame, the cell inset and the header
- *   fill, and rendered as the browser's default table on a white sheet.
- * - It flies out of the source table and back into it (`flyFrame`, the same
- *   one-take shared-element recipe the lightbox and the standalone widget use),
- *   so the reader can tell which table opened instead of a panel appearing from
- *   nowhere.
- */
-export function openTableExpandDialog(table: HTMLTableElement): void {
-	const existing = document.querySelector<HTMLDialogElement>("dialog.tr-table-expand");
-	existing?.remove();
-
-	const dialog = document.createElement("dialog");
-	dialog.className = "tr-table-expand";
-	const head = document.createElement("div");
-	head.className = "tr-table-expand-head";
-	const title = document.createElement("span");
-	title.textContent = t("general.tableExpand");
-	const close = document.createElement("button");
-	close.type = "button";
-	close.className = "tr-code-btn";
-	close.setAttribute("aria-label", t("settings.close"));
-	close.title = t("settings.close");
-	close.innerHTML = blockGlyph("close");
-	head.append(title, close);
-
-	const body = document.createElement("div");
-	// `.tr-md` is the scope the table's frame, dividers and header fill hang off;
-	// without it the clone renders as an unstyled browser table.
-	body.className = "tr-md tr-table-expand-body";
-	body.appendChild(table.cloneNode(true));
-	dialog.append(head, body);
-	document.body.appendChild(dialog);
-
-	const origin = table.getBoundingClientRect();
-	dialog.showModal();
-
-	// Fly out of the source table so the reader can tell which table opened.
-	if (!motionDisabled()) {
-		flyFrame(dialog, origin, dialog.getBoundingClientRect());
-	}
-
-	let closing = false;
-	const dismiss = (): void => {
-		dialog.close();
-		dialog.remove();
-	};
-	/** Fly home first; `close()` would drop the element before the animation. */
-	const requestClose = (): void => {
-		if (closing) return;
-		closing = true;
-		const current = table.getBoundingClientRect();
-		const flight = motionDisabled()
-			? null
-			: flyFrame(dialog, current, dialog.getBoundingClientRect(), { reverse: true, fill: "forwards" });
-		if (!flight) {
-			dismiss();
-			return;
-		}
-		flight.onfinish = dismiss;
-	};
-
-	close.addEventListener("click", requestClose);
-	// A click on the backdrop (the dialog element itself, outside the body).
-	dialog.addEventListener("click", event => {
-		if (event.target === dialog) requestClose();
-	});
-	// Escape arrives as `cancel`: take it over so the flight can play.
-	dialog.addEventListener("cancel", event => {
-		event.preventDefault();
-		requestClose();
-	});
-	dialog.addEventListener("close", () => dialog.remove());
-	// Restoring focus is the browser's job on close; make the close button the
-	// initial target so keyboard users land inside the dialog.
-	close.focus();
-}
-
-/** Documents whose dismissal listeners are already installed. Keyed by the
- *  document, not by a module flag: a rebuilt document (test harness, host
- *  reload) has no listeners on it, and a module-level boolean would then skip
- *  installing them and leave every menu un-closable. */
-const tableMenuDismissDocs = new WeakSet<Document>();
-
-function closeTableMenus(except?: Element | null): void {
-	for (const wrap of document.querySelectorAll<HTMLElement>(".tr-table-split[data-menu-open]")) {
-		if (except && wrap.contains(except)) continue;
-		wrap.removeAttribute("data-menu-open");
-		wrap.querySelector<HTMLElement>("[data-table-menu]")?.setAttribute("aria-expanded", "false");
-	}
-}
-
-function installTableMenuDismiss(): void {
-	if (typeof document === "undefined" || tableMenuDismissDocs.has(document)) return;
-	tableMenuDismissDocs.add(document);
-	document.addEventListener(
-		"pointerdown",
-		event => {
-			const target = event.target as Element | null;
-			if (target?.closest?.(".tr-table-split")) return;
-			closeTableMenus();
-		},
-		true,
-	);
-	document.addEventListener(
-		"keydown",
-		event => {
-			if (event.key === "Escape") closeTableMenus();
-		},
-		true,
-	);
-}
-
-/** Toggle one format menu; returns the resulting open state. */
-function toggleTableMenu(button: HTMLElement): void {
-	const wrap = button.closest<HTMLElement>(".tr-table-split");
-	if (!wrap) return;
-	const open = wrap.hasAttribute("data-menu-open");
-	closeTableMenus(wrap);
-	if (open) wrap.removeAttribute("data-menu-open");
-	else wrap.setAttribute("data-menu-open", "");
-	button.setAttribute("aria-expanded", open ? "false" : "true");
-}
-
-/**
- * Wrap rendered `<table>` blocks with the hover toolbar. Post-process
- * instead of a renderer override: this marked fork dispatches `table`
- * tokens straight to the default renderer (the other tokens go through
- * the overrides path), so a custom `renderer.table` is silently ignored.
- * Tables are block-level and never nest, so the regex is safe.
- */
 /**
  * True when `s` has no open code fence (``` / ~~~) or block math ($$)
  * at its end. Block tokenization is local across a balanced "\n\n"
@@ -746,71 +515,6 @@ export function splitTableFragments(html: string): MessageFragment[] {
 	}
 	if (cursor < html.length) fragments.push({ kind: "html", html: html.slice(cursor) });
 	return fragments;
-}
-
-/**
- * Apply the component's wide-table state to the rendered DOM.
- *
- * The state is keyed by table hash and lives in the Markdown component, but
- * the table markup is regenerated by every markdown re-render (a stream tick
- * re-parses whole blocks), so a class toggled once on the element would be
- * lost. Re-applying after each render also keeps tables independent inside a
- * message that holds several: only the matching hashes flip.
- */
-export function applyTableWideState(
-	root: ParentNode,
-	wideHashes: ReadonlySet<string>,
-	labels: { widen: string; reset: string },
-): void {
-	for (const table of root.querySelectorAll<HTMLElement>(".tr-table[data-table-hash]")) {
-		const wide = wideHashes.has(table.dataset.tableHash ?? "");
-		table.classList.toggle("tr-table--wide", wide);
-		const button = table.querySelector<HTMLElement>("[data-table-wide]");
-		if (!button) continue;
-		const label = wide ? labels.reset : labels.widen;
-		button.setAttribute("aria-pressed", wide ? "true" : "false");
-		button.setAttribute("title", label);
-		button.setAttribute("aria-label", label);
-		setBlockGlyph(button, wide ? "reset" : "widen");
-	}
-}
-
-const WIDE_TABLES_KEY = "musepi-gui-wide-tables";
-/** Bound on remembered hashes. A streamed table hashes its content, so every
- *  row that lands while the user has it widened is a new key; the list would
- *  otherwise grow with the conversation and never shrink. */
-const WIDE_TABLES_LIMIT = 200;
-
-/** Read the widened-table hashes. Anything unreadable (private mode, a value
- *  from an older shape) means "nothing widened" rather than a broken table. */
-function loadWideTables(): Set<string> {
-	if (typeof window === "undefined") return new Set();
-	try {
-		const raw = window.localStorage.getItem(WIDE_TABLES_KEY);
-		const parsed: unknown = raw ? JSON.parse(raw) : [];
-		if (!Array.isArray(parsed)) return new Set();
-		const hashes = parsed.filter((entry): entry is string => typeof entry === "string");
-		return new Set(hashes.slice(-WIDE_TABLES_LIMIT));
-	} catch {
-		return new Set();
-	}
-}
-
-/** Persist the widened-table hashes. Restoring a table to its default width
- *  removes its record, so a remount renders it at the default width again. */
-function saveWideTables(hashes: Set<string>): void {
-	if (typeof window === "undefined") return;
-	const overflow = hashes.size - WIDE_TABLES_LIMIT;
-	if (overflow > 0) {
-		const iterator = hashes.values();
-		for (let i = 0; i < overflow; i++) hashes.delete(iterator.next().value as string);
-	}
-	try {
-		if (hashes.size === 0) window.localStorage.removeItem(WIDE_TABLES_KEY);
-		else window.localStorage.setItem(WIDE_TABLES_KEY, JSON.stringify(Array.from(hashes)));
-	} catch {
-		// storage quota / private mode — best effort
-	}
 }
 
 /**
@@ -1123,84 +827,6 @@ const HIGHLIGHT_CACHE_MAX = 300;
  *  output from paying the full parse/highlight cost on every scroll/remount. */
 const LONG_TEXT_CHARS = 12000;
 
-/**
- * Fullscreen mermaid preview (image/widget lightbox parity): frosted
- * overlay (same .tr-img-lb chrome as the image lightbox), the rendered SVG
- * scaled with CSS zoom, and its own zoom/copy/download controls. Esc or
- * the floating close button dismisses.
- */
-function MermaidLightbox({
-	value,
-	zoom,
-	onZoom,
-	onClose,
-}: {
-	value: { html: string; source: string; hash: string };
-	zoom: number;
-	onZoom(next: number): void;
-	onClose(): void;
-}): ReactNode {
-	// 横向羽化:fullscreen 预览的滚动容器(深扫描挂在 raw-HTML 根上够不到
-	// 这个 portal 里的盒子,单独挂)。
-	const lbScrollRef = useRef<HTMLDivElement | null>(null);
-	useScrollShadow(lbScrollRef);
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") onClose();
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
-	const step = (dir: 1 | -1): void => {
-		onZoom(Math.min(4, Math.max(0.5, zoom * (dir === 1 ? 1.2 : 1 / 1.2))));
-	};
-	return createPortal(
-		<div className="tr-img-lb tr-mm-lb" onClick={onClose}>
-			<button
-				type="button"
-				className="tr-img-lb-x"
-				aria-label={t("settings.close")}
-				title={t("settings.close")}
-				onClick={onClose}
-			>
-				✕
-			</button>
-			<div className="tr-mm-lb-body" onClick={e => e.stopPropagation()}>
-				<div className="tr-mm-lb-toolbar">
-					<button type="button" className="tr-mm-lb-btn" title={t("settings.zoomOut")} onClick={() => step(-1)}>
-						−
-					</button>
-					<span className="tr-mm-lb-zoom">{Math.round(zoom * 100)}%</span>
-					<button type="button" className="tr-mm-lb-btn" title={t("settings.zoomIn")} onClick={() => step(1)}>
-						+
-					</button>
-					<button
-						type="button"
-						className="tr-mm-lb-btn"
-						title={t("settings.copy")}
-						onClick={() => {
-							if (value.source) void navigator.clipboard.writeText(value.source).catch(() => {});
-						}}
-					>
-						{t("settings.copy")}
-					</button>
-					<button
-						type="button"
-						className="tr-mm-lb-btn"
-						title={t("settings.download")}
-						onClick={() => downloadBlob("diagram.svg", value.html, "image/svg+xml;charset=utf-8")}
-					>
-						{t("settings.download")}
-					</button>
-				</div>
-				<div ref={lbScrollRef} className="tr-mm-lb-scroll">
-					<div className="tr-mm-lb-svg" style={{ zoom }} dangerouslySetInnerHTML={{ __html: value.html }} />
-				</div>
-			</div>
-		</div>,
-		document.body,
-	);
-}
 function cacheSet(map: Map<string, unknown>, key: string, value: unknown): void {
 	map.set(key, value);
 	if (map.size > HIGHLIGHT_CACHE_MAX) {
@@ -1274,12 +900,6 @@ export const Markdown = memo(function Markdown({
 	// markdown innerHTML, which would drop code highlighting and scroll position
 	// for the whole message. The observer effect below re-applies the set
 	// whenever that html is rebuilt anyway (stream tick, copy-label swap, settle).
-	// Lazy state seeds the ref once per mount; reading storage on every render
-	// would put a JSON parse on the streaming path.
-	const [seededWideTables] = useState(loadWideTables);
-	const wideTablesRef = useRef<Set<string>>(seededWideTables);
-	const [mermaidFull, setMermaidFull] = useState<{ html: string; source: string; hash: string } | null>(null);
-	const [mermaidFsZoom, setMermaidFsZoom] = useState(1);
 	// 平滑流式渲染: character-level reveal (逐字输出). The setting writes
 	// `gui-chat-no-smooth` on <html> when off; guest pages carry no class,
 	// so they default to smooth on. `text` below is the reveal prefix — all
@@ -1396,168 +1016,18 @@ export const Markdown = memo(function Markdown({
 			}
 			return;
 		}
-		const mermaidZoom = target.closest<HTMLElement>("[data-mermaid-zoom]");
-		if (mermaidZoom) {
-			// P3: scale the rendered SVG with CSS `zoom` (layout scaling —
-			// the wrapper's overflow:auto gains real scrollbars, unlike
-			// transform, which only scales visually and spills). Stored as
-			// a data-zoom fraction so repeated clicks compound 1.2× / ÷1.2.
-			// svg has max-width:100% in CSS, which would pin the zoomed
-			// layout — clear it while zoomed (restored at 1×).
-			const svgWrap = mermaidZoom
-				.closest<HTMLElement>(".tr-mermaid-block")
-				?.querySelector<HTMLElement>(".tr-mermaid");
-			if (!svgWrap) return;
-			const dir = mermaidZoom.dataset.mermaidZoom;
-			const cur = Number.parseFloat(svgWrap.dataset.zoom ?? "1") || 1;
-			const next = Math.min(4, Math.max(0.5, dir === "in" ? cur * 1.2 : cur / 1.2));
-			svgWrap.dataset.zoom = String(next);
-			const svg = svgWrap.querySelector<HTMLElement>("svg");
-			if (svg) {
-				svg.style.zoom = String(next);
-				svg.style.maxWidth = next === 1 ? "" : "none";
-			}
-			return;
-		}
-		const mermaidFs = target.closest<HTMLElement>("[data-mermaid-fullscreen]");
-		if (mermaidFs) {
-			// Fullscreen preview (image/widget lightbox parity): lift the
-			// rendered SVG into a frosted overlay with its own zoom/copy/
-			// download controls.
-			const block = mermaidFs.closest<HTMLElement>(".tr-mermaid-block");
-			const svg = block?.querySelector<SVGElement>(".tr-mermaid svg");
-			if (!svg || !block) return;
-			const src = block.querySelector<HTMLElement>("[data-mermaid-src]")?.getAttribute("data-mermaid-src") ?? "";
-			setMermaidFull({ html: svg.outerHTML, source: src, hash: src });
-			setMermaidFsZoom(1);
-			return;
-		}
-		const mermaidCopy = target.closest<HTMLElement>("[data-mermaid-src]");
-		if (mermaidCopy) {
-			const text = mermaidCopy.getAttribute("data-mermaid-src") ?? "";
-			if (!text) return;
-			const hash = mermaidCopy.getAttribute("data-copy-hash") ?? "";
-			void navigator.clipboard.writeText(text).then(() => {
-				setCopiedHash(hash);
-				window.setTimeout(() => setCopiedHash(cur => (cur === hash ? null : cur)), 1400);
-			});
-			return;
-		}
-		const mermaidDl = target.closest<HTMLElement>("[data-mermaid-download]");
-		if (mermaidDl) {
-			const svg = mermaidDl.closest<HTMLElement>(".tr-mermaid-block")?.querySelector(".tr-mermaid svg");
-			if (!svg) return;
-			const xml = new XMLSerializer().serializeToString(svg);
-			downloadBlob("diagram.svg", xml, "image/svg+xml;charset=utf-8");
-			return;
-		}
-		const tableMenuBtn = target.closest<HTMLElement>("[data-table-menu]");
-		if (tableMenuBtn) {
-			toggleTableMenu(tableMenuBtn);
-			return;
-		}
-		const tableExpand = target.closest<HTMLElement>("[data-table-expand]");
-		if (tableExpand) {
-			const table = tableExpand.closest<HTMLElement>(".tr-table")?.querySelector("table");
-			if (table) openTableExpandDialog(table);
-			return;
-		}
-		const tableWide = target.closest<HTMLElement>("[data-table-wide]");
-		if (tableWide) {
-			const hash = tableWide.dataset.tableWide ?? "";
-			if (hash === "") return;
-			// Same table again restores the default width. Applied straight to
-			// the DOM: a state update here would re-render (and rewrite) the
-			// whole markdown html just to flip one class.
-			const widened = wideTablesRef.current;
-			if (widened.has(hash)) widened.delete(hash);
-			else widened.add(hash);
-			saveWideTables(widened);
-			const root = rootRef.current;
-			if (root) {
-				applyTableWideState(root, widened, {
-					widen: t("general.widenTable"),
-					reset: t("general.resetTableWidth"),
-				});
-			}
-			return;
-		}
-		const tableCopy = target.closest<HTMLElement>("[data-table-copy]");
-		if (tableCopy) {
-			const table = tableCopy.closest<HTMLElement>(".tr-table")?.querySelector("table");
-			if (!table) return;
-			const data = extractTableData(table);
-			const fmt = tableCopy.dataset.tableCopy ?? "csv";
-			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
-			const copyBtn = tableCopy.closest<HTMLElement>(".tr-table")?.querySelector<HTMLElement>("[data-copy-hash]");
-			const hash = copyBtn?.getAttribute("data-copy-hash") ?? "";
-			closeTableMenus();
-			if (!text || hash === "") return;
-			void navigator.clipboard.writeText(text).then(() => {
-				setCopiedHash(hash);
-				window.setTimeout(() => setCopiedHash(cur => (cur === hash ? null : cur)), 1400);
-			});
-			return;
-		}
-		const tableDl = target.closest<HTMLElement>("[data-table-download]");
-		if (tableDl) {
-			const table = tableDl.closest<HTMLElement>(".tr-table")?.querySelector("table");
-			if (!table) return;
-			const data = extractTableData(table);
-			const fmt = tableDl.dataset.tableDownload ?? "csv";
-			const markdown = fmt === "markdown";
-			closeTableMenus();
-			// CSV opens in Excel, which reads a UTF-8 file as the local codepage
-			// without a BOM — every CJK cell then arrives as mojibake. Markdown
-			// is read by text editors that assume UTF-8, so it stays clean.
-			downloadBlob(
-				markdown ? "table.md" : "table.csv",
-				markdown ? tableToMarkdown(data) : `\uFEFF${tableToCSV(data)}`,
-				markdown ? "text/markdown" : "text/csv",
-			);
-			return;
-		}
-		const linesBtn = target.closest<HTMLElement>(".tr-code-lines");
-		if (linesBtn) {
-			const block = linesBtn.closest<HTMLElement>(".tr-code");
-			if (!block) return;
-			const globalOn = document.documentElement.classList.contains("gui-code-lines");
-			const on =
-				block.classList.contains("tr-code--lines") || (globalOn && !block.classList.contains("tr-code--no-lines"));
-			block.classList.toggle("tr-code--lines", !on);
-			block.classList.toggle("tr-code--no-lines", on);
-			linesBtn.setAttribute("aria-pressed", on ? "false" : "true");
-			linesBtn
-				.querySelector<MorphIconElement>("morph-icon")
-				?.morphTo(on ? NoLinesGlyphData : LinesGlyphData, "snappy");
-			return;
-		}
-		const wrapBtn = target.closest<HTMLElement>(".tr-code-wrap");
-		if (wrapBtn) {
-			const block = wrapBtn.closest<HTMLElement>(".tr-code");
-			if (!block) return;
-			const wrapped = block.classList.toggle("tr-code--wrap");
-			wrapBtn.setAttribute("aria-pressed", wrapped ? "true" : "false");
-			wrapBtn
-				.querySelector<MorphIconElement>("morph-icon")
-				?.morphTo(wrapped ? WrapGlyphData : NoWrapGlyphData, "snappy");
-			return;
-		}
-		const btn = target.closest<HTMLElement>(".tr-code-copy, .tr-math-copy");
+		// Only INLINE math still lives in the message string and needs this.
+		// A display formula, a code fence and a diagram are React blocks now, and
+		// they carry `.tr-code-copy` too — handling those here meant two writers
+		// for one button: this branch copied the wrong text (a display formula's
+		// wrapper includes the copy control's own label) and the block's own
+		// feedback was overwritten by the hash-keyed one.
+		const btn = target.closest<HTMLElement>(".tr-math-copy");
 		if (!btn) return;
-		let text: string | undefined;
-		if (btn.classList.contains("tr-math-copy")) {
-			const wrap = btn.closest<HTMLElement>(".tr-math");
-			text =
-				wrap?.querySelector<HTMLElement>('annotation[encoding="application/x-tex"]')?.textContent ??
-				wrap?.textContent ??
-				"";
-		} else {
-			const code = btn.closest<HTMLElement>(".tr-code")?.querySelector("code");
-			text = code?.textContent ?? undefined;
-		}
-		if (text === undefined) return;
-		const hash = btn.dataset.copyHash ?? btn.dataset.mathCopy ?? "";
+		const wrap = btn.closest<HTMLElement>(".tr-math");
+		const text = wrap?.querySelector<HTMLElement>('annotation[encoding="application/x-tex"]')?.textContent ?? "";
+		if (text === "") return;
+		const hash = btn.dataset.mathCopy ?? "";
 		void navigator.clipboard.writeText(text).then(() => {
 			setCopiedHash(hash);
 			window.setTimeout(() => setCopiedHash(cur => (cur === hash ? null : cur)), 1400);
@@ -1725,9 +1195,12 @@ export const Markdown = memo(function Markdown({
 		}
 	}, [render.html, copiedHash]);
 
-	// Copy feedback for every block kind. A fenced code block morphs its
-	// `<morph-icon>`; the string-built toolbars (table / math / mermaid) carry a
-	// plain inline SVG, so they swap the glyph instead.
+	// Copy feedback for the HTML-built blocks. A fenced code block morphs its
+	// `<morph-icon>`; the math toolbar still comes out of the string (math lives
+	// inside a paragraph, so it cannot be cut into a block), and it carries a
+	// plain inline SVG, which is swapped instead. Table and diagram blocks are
+	// React components and own their copy state — writing here as well would be
+	// a second writer for the same attribute.
 	useLayoutEffect(() => {
 		const host = rootRef.current;
 		if (!host) return;
@@ -1743,14 +1216,6 @@ export const Markdown = memo(function Markdown({
 			button
 				.querySelector<MorphIconElement>("morph-icon")
 				?.morphTo(copied ? CheckGlyphData : CopyGlyphData, "snappy");
-		}
-		for (const table of host.querySelectorAll<HTMLElement>(".tr-table[data-table-hash]")) {
-			const status = table.querySelector<HTMLElement>(".tr-table-status");
-			if (!status) continue;
-			const copied = copiedHash != null && copiedHash === table.dataset.tableHash;
-			// Assigning the same text twice announces nothing; clearing back to ""
-			// on revert lets the next copy announce again.
-			status.textContent = copied ? t("settings.copied") : "";
 		}
 	}, [copiedHash]);
 
@@ -1784,25 +1249,6 @@ export const Markdown = memo(function Markdown({
 		}),
 		[widenLabel, resetWideLabel],
 	);
-	// One document-level dismisser for the table format menus (click-away and
-	// Escape). Installed once per page; the menus themselves live inside the
-	// message's innerHTML, which React never binds listeners to.
-	useLayoutEffect(() => {
-		installTableMenuDismiss();
-	}, []);
-	const htmlRef = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		const host = htmlRef.current;
-		if (!host) return;
-		const apply = (): void => {
-			applyTableWideState(host, wideTablesRef.current, { widen: widenLabel, reset: resetWideLabel });
-		};
-		apply();
-		const observer = new MutationObserver(apply);
-		observer.observe(host, { childList: true });
-		return () => observer.disconnect();
-	}, [widenLabel, resetWideLabel]);
-
 	// Effect class on the streaming root: typewriter carries one too so
 	// the caret (CSS ::after) can be scoped to the typewriter preset only.
 	const effectCls = streaming ? ` gui-chat-effect-${effect}` : "";
@@ -1848,14 +1294,6 @@ export const Markdown = memo(function Markdown({
 				 * the markdown html above). */}
 				{streaming && render.tail !== null && (
 					<div ref={tailRef} className="tr-md-streaming-tail" aria-live="polite" />
-				)}
-				{mermaidFull && (
-					<MermaidLightbox
-						value={mermaidFull}
-						zoom={mermaidFsZoom}
-						onZoom={setMermaidFsZoom}
-						onClose={() => setMermaidFull(null)}
-					/>
 				)}
 			</div>
 			{truncated && (

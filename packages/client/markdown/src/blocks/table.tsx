@@ -554,16 +554,34 @@ function ExpandDialog({
 	const dialogRef = useRef<HTMLDialogElement | null>(null);
 	const [closing, setClosing] = useState(false);
 	const titleId = useId();
+	// The flight runs once, from the source table to the panel's final box.
+	// The host passes `origin` as an inline callback, so a re-render of the
+	// table block (a stream tick while the panel is open) produces a new
+	// identity; routing the latest values through a ref keeps the effect
+	// running on mount only. Otherwise the second call hit `showModal()` on an
+	// already-open dialog (throws) and restarted the animation mid-flight.
+	const latest = useRef({ origin, fly, motionDisabled });
+	latest.current = { origin, fly, motionDisabled };
 
 	useLayoutEffect(() => {
 		const dialog = dialogRef.current;
 		if (!dialog) return;
-		const from = origin();
-		dialog.showModal();
-		if (from && fly && !(motionDisabled?.() ?? false)) {
-			fly(dialog, from, dialog.getBoundingClientRect());
-		}
-	}, [fly, motionDisabled, origin]);
+		// Measured before the panel is shown: the source table still holds its
+		// place on screen.
+		const from = latest.current.origin();
+		if (!dialog.open) dialog.showModal();
+		const { fly, motionDisabled } = latest.current;
+		if (!from || !fly || (motionDisabled?.() ?? false)) return;
+		// One frame later: `showModal()` moved the element to the top layer in
+		// this commit, and its final rect only means something once the browser
+		// has laid it out at the centred size. Flying from the stale (unlaid)
+		// rect is why the transition read as a jump instead of a shared-element
+		// flight.
+		const frame = requestAnimationFrame(() => {
+			if (dialog.open) fly(dialog, from, dialog.getBoundingClientRect());
+		});
+		return () => cancelAnimationFrame(frame);
+	}, []);
 
 	const requestClose = useCallback(() => {
 		if (closing) return;

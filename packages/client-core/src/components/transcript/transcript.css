@@ -1607,46 +1607,6 @@ button.tr-display-context-source:hover {
 	min-width: min(560px, 90vw);
 }
 
-.tr-mm-lb-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	align-self: center;
-	padding: 4px 8px;
-	border-radius: 999px;
-	background: color-mix(in oklab, #fff 10%, transparent);
-	border: 1px solid color-mix(in oklab, #fff 16%, transparent);
-	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
-}
-
-.tr-mm-lb-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 26px;
-	height: 24px;
-	padding: 0 8px;
-	border-radius: 999px;
-	font-size: var(--ui-font-size-xs);
-	font-weight: 600;
-	color: oklch(0.96 0 0);
-	background: transparent;
-	cursor: pointer;
-}
-
-.tr-mm-lb-btn:hover {
-	background: color-mix(in oklab, #fff 14%, transparent);
-}
-
-.tr-mm-lb-zoom {
-	min-width: 44px;
-	text-align: center;
-	font-size: var(--ui-font-size-xs);
-	font-variant-numeric: tabular-nums;
-	color: oklch(0.9 0 0);
-}
-
 .tr-mm-lb-scroll {
 	overflow: auto;
 	overflow: overlay;
@@ -1790,7 +1750,7 @@ button.tr-display-context-source:hover {
 
 .tr-table:hover .tr-table-bar,
 .tr-table-bar:has(.tr-table-btn:focus-visible),
-.tr-table-bar:has([data-menu-open]) {
+.tr-table-bar:has(.tr-table-menu) {
 	opacity: 1;
 	pointer-events: auto;
 }
@@ -1845,11 +1805,15 @@ button.tr-display-context-source:hover {
 	color: var(--fg-faint);
 }
 
+/* The menu exists in the DOM only while its table has it open (the block owns
+ * that as state), so it is visible by default and the animation runs on
+ * mount. An attribute-gated rule would leave it permanently `display: none` —
+ * nothing writes `data-menu-open` any more. */
 .tr-table-menu {
 	position: absolute;
 	top: calc(100% + 4px);
 	right: 0;
-	display: none;
+	display: flex;
 	flex-direction: column;
 	min-width: 92px;
 	padding: 3px;
@@ -1857,12 +1821,6 @@ button.tr-display-context-source:hover {
 	border-radius: var(--radius);
 	background: var(--bg-raised);
 	box-shadow: 0 8px 22px rgb(0 0 0 / 20%);
-}
-
-/* Opened by the caret (data-menu-open) — not by hovering the wrap: a hover
- * menu opened under the pointer and closed on the way to its items. */
-.tr-table-split[data-menu-open] .tr-table-menu {
-	display: flex;
 	animation: tr-table-menu-in 120ms var(--ease-appear-snappy);
 }
 
@@ -1888,7 +1846,7 @@ button.tr-display-context-source:hover {
 	.tr-table-menu-label {
 		display: none;
 	}
-	.tr-table-split[data-menu-open] .tr-table-menu {
+	.tr-table-menu {
 		position: static;
 		flex-direction: row;
 		flex-wrap: wrap;
@@ -1993,11 +1951,17 @@ button.tr-display-context-source:hover {
 
 /* Expanded table: a native modal dialog (focus trap, Escape, inert backdrop and
  * focus restoration come from the element). The body scrolls both ways so a
- * wide table is readable at window width instead of inside the message column. */
+ * wide table is readable at window width instead of inside the message column.
+ *
+ * `margin: auto` is not decoration: a modal dialog centres itself through the
+ * UA stylesheet's `margin: auto`, and the base reset is a universal
+ * `* { margin: 0 }` in `@layer base` — an author rule that outranks the UA
+ * sheet, so without this the panel pins to the top-left corner. */
 .tr-table-expand {
 	width: min(94vw, 1400px);
 	max-width: none;
 	max-height: 92vh;
+	margin: auto;
 	padding: 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-xl);
@@ -2006,10 +1970,14 @@ button.tr-display-context-source:hover {
 	box-shadow: 0 24px 64px rgb(0 0 0 / 40%);
 }
 
+/* The scrim is a flat tint, no blur: `backdrop-filter` on a full-window
+ * `::backdrop` is an offscreen pass over every pixel behind the panel, and it
+ * runs for the whole time the panel is open — including the flight, where the
+ * panel is also being transformed. Every other overlay in the app already
+ * drops its backdrop blur on Windows for the same reason
+ * (`styles/overlay-fallback.css`); this one was the exception. */
 .tr-table-expand::backdrop {
 	background: rgb(0 0 0 / 55%);
-	backdrop-filter: blur(3px);
-	-webkit-backdrop-filter: blur(3px);
 }
 
 .tr-table-expand-head {
