@@ -2616,7 +2616,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "interaction",
 			group: "Collab",
 			label: "Relay URL",
-			description: "Relay used by /collab (wss://host[:port])",
+			description:
+				"Relay a share connects through (wss://host[:port]). Empty by default: this build ships no relay. Point it at a self-hosted relay, a LAN address, or a tunnel origin you control",
 		},
 	},
 
@@ -2707,7 +2708,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Collab",
 			label: "Share Server",
 			description:
-				"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>)",
+				"Share viewer/upload base used by /share (encrypted blob upload + viewer; links are <base>/<id>#<key>). Empty by default: this build ships no share server, so set your own or use the gist store",
 		},
 	},
 

@@ -17,7 +17,7 @@
 ```
 Collab session started!
  • Join from another terminal: musepi join "mgAYTZwEnpRQtca0CTgn-Q.gdJUbTovD94ofDaa8YvhY0-ty16w4fn8PgB6PLnoA30"
- • or any web browser: my.omp.sh/#mgAYTZwEnpRQtca0CTgn-Q.gdJUbTovD94ofDaa8YvhY0-ty16w4fn8PgB6PLnoA30"
+ • or any web browser: <your-relay>/r/<roomId>#<secret>"
 ```
 
 浏览器那一行可直接点击加入（指向完整 `https://` deep link 的 OSC 8 超链接）：relay 在 `/` 提供 web 访客客户端，room id 和 key 携带在 URL fragment 中。在另一台 musepi（任意目录、任意机器）中，两种方式都可以：
@@ -25,7 +25,7 @@ Collab session started!
 运行 `/collab` 或 `/collab view` 会启动或展示当前正在共享的会话，同时渲染终端/浏览器加入链接及其对应二维码。
 
 ```
-/join my.omp.sh/#mgAYTZwEnpRQtca0CTgn-Q.gdJU…
+/join <your-relay>/r/<roomId>#<secret>
 ```
 
 访客在 `/leave`（或主机停止）时会恢复之前的会话。
@@ -45,7 +45,7 @@ Collab session started!
 | `/join <link>` | 以访客身份加入共享会话 |
 | `/leave` | 离开（访客）或停止共享（主机） |
 
-## 默认 relay 之外的共享
+## 选择 relay
 
 `/collab` 默认走生产 relay。需要 agent 留在本机时，分享可以改用本地 relay，变化的只是访客抵达它的路径——加密房间协议在所有模式下完全相同。
 
@@ -92,9 +92,18 @@ Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求
 - **公网隧道** — Cloudflare 或 ngrok 在边缘终结 TLS，能看到连接元数据，但看不到房间内容（内容端到端密封）。公网 URL 本身不是秘密：fragment 里带着房间密钥，拿到完整链接的人就能操控会话。
 - **Tailscale** — relay 只在你的 tailnet 内可达；访客需要安装 Tailscale 并登录同一个 tailnet。
 
+### 自己运行一个 relay
+
+本版本不自带 relay，因此需要跨网络的分享得有一个你自己运营的 relay。目前有两种可行形态：
+
+- **自有域名上的公网 wss:// relay。** 把分享本来就在用的 relay server（`collab/relay-server.ts`，也可作为插件使用——局域网分享时 `LocalShareManager` 启动的正是它）跑在 Caddy 或 nginx 这类 TLS 终结器后面，然后把 `collab.relayUrl` 设为该 origin。访客可以从任何地方加入；除了这个终结器，你的机器不会接受来自公网的入站连接。
+- **两端本来就共享的网络内的 relay** —— 局域网，或 tailnet。把 `collab.relayUrl` 指向它的地址，或使用局域网／Tailscale 分享模式，它们会按需启动 relay。
+
+`packages/client-core` 里的 `scripts/local-relay.ts` 是一个离线替身，契约与真实 relay 相同，是把配置放到 TLS 后面之前最快的自检方式。
+
 ### 扩展曝光方式
 
-自托管 relay 是插件而不是内置功能：在你的插件加载时向进程级 registry 注册一个传输实现。
+传输方式也可以作为插件加入：在插件加载时向进程级 registry 注册一个传输实现。
 
 ```ts
 import { BaseExposure, exposureRegistry } from "@musepi/pi-coding-agent/collab/exposure";
@@ -106,7 +115,7 @@ exposureRegistry.register("my-relay", () => new MyRelayExposure());
 
 ### 什么时候不该用公网隧道
 
-- 两端都能上网、且不需要 agent 留在本机时，默认 relay 就够了。
+- 两端都能连到同一个 relay、且不需要 agent 留在本机时即可；本版本不自带 relay，请把 `collab.relayUrl` 指向你自己的。
 - 同网络设备优先用局域网，两端都在同一 tailnet 时优先用 Tailscale。
 - 不要只图方便就把机器暴露到公网：完整链接能读取整个会话历史并操控 agent。
 - 企业网络常屏蔽 `trycloudflare.com`；改用局域网或自有域名上的 named 隧道。
@@ -116,7 +125,7 @@ exposureRegistry.register("my-relay", () => new MyRelayExposure());
 `/join <link>` 与 `musepi join "<link>"` 可接受的格式：
 
 ```
-<roomId>.<secret>                                                 → 默认 relay（wss://my.omp.sh）
+<roomId>.<secret>                                                 → 不含 origin：只有传入 relay 时才能解析
 <roomId>#<secret>                                                 → 旧版裸格式
 host[:port]/r/<roomId>#<secret>                                   → 自定义 relay，推断为 wss://
 host[:port]/r/<roomId>.<secret>                                   → 旧版直接 relay 格式
@@ -130,7 +139,7 @@ https://web-host[:port][/<path>]/#<relay-link>                    → 浏览器 
 https://web.example/collab/#relay.example.com/r/<roomId>.<secret> → web UI 与 relay 在不同主机
 ```
 
-新生成的直接链接把 room secret 放在 fragment 里（`/r/<roomId>#<secret>`）：URL path 会发送给最外层的代理并被它记录——隧道分享里就是隧道边缘——而 fragment 永远不离开客户端。旧版 path 形态（`/r/<roomId>.<secret>`）仍会被解析。仍有两种形态继续生成它：默认 relay 的裸格式（`<roomId>.<secret>`，没有 origin 或 path 可以携带 `#`），以及浏览器 deep link 的内层链接（fragment 里再出现一个 `#` 会被严格的 URL 栈转义）。
+新生成的直接链接把 room secret 放在 fragment 里（`/r/<roomId>#<secret>`）：URL path 会发送给最外层的代理并被它记录——隧道分享里就是隧道边缘——而 fragment 永远不离开客户端。旧版 path 形态（`/r/<roomId>.<secret>`）仍会被解析。仍有一种形态继续生成它：浏览器 deep link 的内层链接（fragment 里再出现一个 `#` 会被严格的 URL 栈转义）。点号连写的 `<roomId>.<secret>` 只作为输入保留——本版本没有内置 relay，也就没有可以折叠到的宿主。
 
 `<link>` / `<relay-link>` 会递归解析为上述任意可接受格式。对于带有可解析 fragment 的 `http(s)` 浏览器包装链接，fragment 优先，HTTP host/path 才被视为 relay。这使得 `https://web.example/collab/#relay.example.com/r/<roomId>.<secret>` 可以在 `web.example` 打开 web UI，同时加入 `wss://relay.example.com/r/<roomId>`。如果 fragment 不是完整的 collab 链接，解析会回退到旧版直接 relay 格式，因此 `https://relay.example.com/r/<roomId>#<secret>` 仍表示 relay `relay.example.com`。
 
@@ -179,13 +188,13 @@ https://web.example/collab/#relay.example.com/r/<roomId>.<secret> → web UI 与
 
 | 设置 | 默认值 | 含义 |
 |---|---|---|
-| `collab.relayUrl` | `wss://my.omp.sh` | `/collab` 未内联传入 relay 时使用的默认 relay |
+| `collab.relayUrl` | *（空）* | `/collab` 与裸链接使用的 relay。默认空：本版本不运营 relay |
 | `collab.webUrl` | empty | `/collab` 链接使用的浏览器 UI URL；为空时从 relay 推导；显式 `http://` 仅允许 localhost 或私有地址 |
 | `collab.displayName` | OS username | 对其他参与者显示的名称 |
 | `collab.exposure` | `cloudflared` | `/collab tunnel` 与未指定传输的隧道分享使用的默认曝光 id |
 | `collab.cloudflaredHostname` | empty | named Cloudflare 隧道的 hostname；为空时使用 quick 隧道 |
 | `collab.shareTtlMinutes` | `0` | 局域网或隧道分享在多少分钟后自动停止；`0` 表示一直共享到手动停止 |
-| `share.serverUrl` | `https://my.omp.sh/s` | `/share` 使用的 viewer/upload base（链接为 `<base>/<id>#<key>`） |
+| `share.serverUrl` | *（空）* | `/share` 使用的 viewer/upload base（链接为 `<base>/<id>#<key>`）。默认空：请自备，或改用 `share.store=gist` |
 | `share.redactSecrets` | `true` | `/share` 快照上传前运行密钥混淆器 |
 
 ## 自托管 relay

@@ -383,7 +383,7 @@ export const commands: TranslationMap = {
 	"commands.noMessagesYet": "No messages yet.",
 	"commands.noPluginsAvailable": "No plugins available",
 	"commands.noRelayConfigured.info":
-		"No relay configured. Set collab.relayUrl in /settings or pass one: /collab relay.example.com",
+		"No relay configured. MusePi ships no relay of its own: set collab.relayUrl in /settings (a self-hosted relay, a LAN address, or a tunnel origin you control), or pass one: /collab relay.example.com",
 	"commands.noSessionFileAvailable": "No session file available yet.",
 	"commands.noSessionsCurrent.info": "No sessions in current folder. Press Tab to view all.",
 	"commands.noStoredAccountsLog": "No stored accounts to log out",

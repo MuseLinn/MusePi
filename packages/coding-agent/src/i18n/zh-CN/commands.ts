@@ -133,7 +133,7 @@ export const commands = {
 	"commands.readOnlyCollabSession": "只读协作会话进行中",
 	"commands.collabSessionActive": "协作会话进行中",
 	"commands.noRelayConfigured.info":
-		"未配置中继。在 /settings 中设置 collab.relayUrl，或直接传入：/collab relay.example.com",
+		"未配置中继。MusePi 不自带中继，请在 /settings 设置 collab.relayUrl（自托管 relay、局域网地址或你控制的隧道域名），或直接传入：/collab relay.example.com",
 	"commands.failedStartCollabSessionWith0": "启动协作会话失败：{0}",
 	"commands.usageJoinLink": "用法：/join <链接>",
 	"commands.collabLinkReadOnly": "此协作链接为只读",

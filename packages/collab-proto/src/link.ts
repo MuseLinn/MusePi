@@ -233,13 +233,24 @@ export function formatCollabWebLink(
 }
 
 /** Parse any accepted link form back into its parts. Errors carry a message. */
-export function parseCollabLink(link: string): ParsedCollabLink | { error: string } {
+export function parseCollabLink(link: string, defaultRelay = DEFAULT_RELAY_URL): ParsedCollabLink | { error: string } {
 	// Lenient input: terminals that open OSC 8 links through strict URL stacks
 	// (macOS Foundation) percent-encode the legacy second `#` to `%23`.
 	let text = link.trim().replace(/%23/gi, "#");
-	// Bare `<roomId>.<key>` (legacy `<roomId>#<key>`) → default relay.
+	// Bare `<roomId>.<key>` (legacy `<roomId>#<key>`) carries no origin at all,
+	// so it needs a relay supplied from outside — either the configured one or
+	// an explicit argument. Without one the link names no reachable host, and
+	// guessing is not available: this build ships no default relay.
 	const bare = BARE_LINK_RE.exec(text);
-	if (bare) text = `${DEFAULT_RELAY_URL}/r/${bare[1]}.${bare[2]}`;
+	if (bare) {
+		const relay = defaultRelay.trim();
+		if (!relay) {
+			return {
+				error: "This link has no relay: configure collab.relayUrl (or paste the full wss:// link) so its origin is known",
+			};
+		}
+		text = `${relay}/r/${bare[1]}.${bare[2]}`;
+	}
 	// Scheme-less `host[:port]/r/…` → wss.
 	else if (!text.includes("://")) text = `wss://${text}`;
 	let url: URL;
@@ -250,7 +261,12 @@ export function parseCollabLink(link: string): ParsedCollabLink | { error: strin
 	}
 	if ((url.protocol === "http:" || url.protocol === "https:") && url.hash) {
 		const inner = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
-		const parsed = parseCollabLink(inner);
+		// A web deep link names its relay twice: as the page origin and, when it
+		// is bare, only inside the fragment. The page origin is therefore the
+		// correct default for a bare inner link — the link itself carries the
+		// host, so no built-in relay has to be assumed.
+		const wrapperOrigin = url.origin.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+		const parsed = parseCollabLink(inner, defaultRelay.trim() || wrapperOrigin);
 		if (!("error" in parsed)) return parsed;
 	}
 	const normalized = normalizeRelayOrigin(url.origin);
@@ -261,7 +277,7 @@ export function parseCollabLink(link: string): ParsedCollabLink | { error: strin
 		// fragment. http(s) links are handled once above so invalid fragments
 		// fall through to direct relay validation instead of double-recursing.
 		const inner = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
-		if (inner && url.protocol !== "http:" && url.protocol !== "https:") return parseCollabLink(inner);
+		if (inner && url.protocol !== "http:" && url.protocol !== "https:") return parseCollabLink(inner, defaultRelay);
 		return { error: "Collab link must contain a /r/<roomId> path" };
 	}
 	const roomId = match[1]!;

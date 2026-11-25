@@ -38,12 +38,15 @@ describe("collab link format", () => {
 	const key = generateRoomKey();
 	const roomId = generateRoomId();
 
-	it("collapses the default relay to a bare roomId.key link", () => {
-		const link = formatCollabLink(DEFAULT_RELAY_URL, roomId, key);
-		expect(link).toBe(`${roomId}.${Buffer.from(key).toString("base64url")}`);
-		const parsed = parseCollabLink(link);
+	it("refuses a bare link without a relay and resolves one that names its origin", () => {
+		// No relay is published by this build, so a bare `<roomId>.<key>` link
+		// cannot be produced: there is no origin to collapse onto.
+		expect(() => formatCollabLink("", roomId, key)).toThrow(/Invalid relay URL/);
+		const bare = `${roomId}.${Buffer.from(key).toString("base64url")}`;
+		expect("error" in parseCollabLink(bare)).toBe(true);
+		const parsed = parseCollabLink(bare, "wss://relay.example.com");
 		if ("error" in parsed) throw new Error(parsed.error);
-		expect(parsed.wsUrl).toBe(`${DEFAULT_RELAY_URL}/r/${roomId}`);
+		expect(parsed.wsUrl).toBe(`wss://relay.example.com/r/${roomId}`);
 		expect(parsed.roomId).toBe(roomId);
 		expect(parsed.key).toEqual(key);
 	});

@@ -1244,13 +1244,25 @@ export const ROOM_KEY_BYTES = 32;
 export const WRITE_TOKEN_BYTES = 16;
 
 /**
- * Default public relay; generated links for it collapse to the bare
- * `<roomId>.<key>` form (no origin, no path), which resolves here.
+ * Relay origin a collab link resolves against when it carries no origin of its
+ * own. EMPTY on purpose: this repository does not operate a relay, so nothing
+ * here can promise that a share reaches the internet. A user configures
+ * `collab.relayUrl` (a self-hosted relay, a LAN address, or a tunnel origin)
+ * and the value flows through as an ordinary string.
+ *
+ * It used to name a third-party relay inherited from the upstream project.
+ * That made an unconfigured `/collab` silently send a session's sealed traffic
+ * to a service this project neither runs nor has any agreement with.
  */
-export const DEFAULT_RELAY_URL = "wss://my.omp.sh";
+export const DEFAULT_RELAY_URL = "";
 
-/** Default share viewer/upload base; `/share` links resolve against `<base>/<id>#<key>`. */
-export const DEFAULT_SHARE_URL = "https://my.omp.sh/s";
+/**
+ * Share viewer/upload base for `/share` links (`<base>/<id>#<key>`). Empty for
+ * the same reason as {@link DEFAULT_RELAY_URL}: uploading a session export to
+ * somebody else's server is not a default this project can make on the user's
+ * behalf. `share.serverUrl` (or the gist store) provides one.
+ */
+export const DEFAULT_SHARE_URL = "";
 
 export interface ParsedCollabLink {
 	/** wss://host[:port]/r/<roomId> — no query, no fragment. */

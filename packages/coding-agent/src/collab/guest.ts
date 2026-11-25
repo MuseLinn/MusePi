@@ -252,7 +252,10 @@ export class CollabGuestLink {
 	}
 
 	async join(link: string): Promise<void> {
-		const parsed = parseCollabLink(link);
+		// A bare `<roomId>.<key>` link carries no origin, so the configured relay
+		// is what makes it resolvable. Passed per call rather than baked into the
+		// package: the wire layer ships no relay of its own.
+		const parsed = parseCollabLink(link, this.#ctx.settings.get("collab.relayUrl") || "");
 		if ("error" in parsed) throw new Error(parsed.error);
 		this.#roomId = parsed.roomId;
 		this.#writeToken = parsed.writeToken ? Buffer.from(parsed.writeToken).toString("base64url") : undefined;

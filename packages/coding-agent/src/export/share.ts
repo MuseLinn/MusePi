@@ -639,6 +639,13 @@ export async function shareSession(sm: SessionManager, options?: ShareSessionOpt
 	const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt"]);
 	const keyText = Buffer.from(keyBytes).toString("base64url");
 	const base = normalizeShareServerUrl(options?.serverUrl);
+	// No server configured and no gist to fall back on: say so instead of
+	// composing a URL against an empty base and failing at the request.
+	if (!base && options?.store !== "gist") {
+		throw new Error(
+			"No share server configured: set share.serverUrl, pass a server URL, or use the gist store (share.store)",
+		);
+	}
 
 	if (options?.store === "gist") {
 		const forGist = await sealToFit(key, data, GIST_MAX_SEALED_BYTES);

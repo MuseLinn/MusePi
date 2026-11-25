@@ -541,11 +541,13 @@ describe("buildShareSnapshot", () => {
 });
 
 describe("normalizeShareServerUrl", () => {
-	test("strips trailing slashes and falls back to the default", () => {
-		expect(normalizeShareServerUrl("https://my.omp.sh/s/")).toBe("https://my.omp.sh/s");
+	test("strips trailing slashes and leaves an unconfigured server empty", () => {
+		expect(normalizeShareServerUrl("https://example.com/s/")).toBe("https://example.com/s");
 		expect(normalizeShareServerUrl("https://example.com/s///")).toBe("https://example.com/s");
-		expect(normalizeShareServerUrl(undefined)).toBe("https://my.omp.sh/s");
-		expect(normalizeShareServerUrl("   ")).toBe("https://my.omp.sh/s");
+		// No shipped default: an empty base is what tells shareSession to refuse
+		// rather than upload to a server this project does not run.
+		expect(normalizeShareServerUrl(undefined)).toBe("");
+		expect(normalizeShareServerUrl("   ")).toBe("");
 	});
 });
 

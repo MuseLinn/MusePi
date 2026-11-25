@@ -47,10 +47,19 @@ describe("generated join links", () => {
 		expect(parsed(link).wsUrl).toBe(`ws://192.168.1.5:7466/r/${ROOM}`);
 	});
 
-	it("keeps the bare default-relay form", () => {
-		const link = formatCollabLink(DEFAULT_RELAY_URL, ROOM, KEY, TOKEN);
-		expect(link).toBe(`${ROOM}.${SECRET_TEXT}`);
-		expect(parsed(link).roomId).toBe(ROOM);
+	it("refuses to generate a link without a relay, and resolves a bare one only when given its origin", () => {
+		// A bare `<roomId>.<key>` names no host. It used to be produced by
+		// collapsing onto a built-in default relay, which meant a link quietly
+		// pointed at somebody else's server. Now the origin must be supplied.
+		expect(() => formatCollabLink("", ROOM, KEY, TOKEN)).toThrow(/Invalid relay URL/);
+		const bare = `${ROOM}.${SECRET_TEXT}`;
+		const unresolved = parseCollabLink(bare);
+		// Still parseable, but it must say what is missing rather than pick a host.
+		expect("error" in unresolved && /collab\.relayUrl/.test(unresolved.error)).toBe(true);
+		const resolved = parseCollabLink(bare, "wss://relay.example.com");
+		if ("error" in resolved) throw new Error(resolved.error);
+		expect(resolved.wsUrl).toBe(`wss://relay.example.com/r/${ROOM}`);
+		expect(resolved.roomId).toBe(ROOM);
 	});
 
 	it("round-trips key and write token through the fragment form", () => {

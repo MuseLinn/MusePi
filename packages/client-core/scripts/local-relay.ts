@@ -1,5 +1,6 @@
 /**
- * Offline stand-in for the public collab relay (`wss://my.omp.sh`).
+ * Offline stand-in for a collab relay. Speaks the same contract the shipped
+ * clients expect, so a local room needs no hosted relay at all.
  *
  * Speaks the exact relay contract the real clients expect:
  * - `GET /r/<roomId>?role=host|guest` upgrades to a WebSocket.

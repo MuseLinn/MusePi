@@ -17,7 +17,7 @@ prints
 ```
 Collab session started!
  • Join from another terminal: musepi join "mgAYTZwEnpRQtca0CTgn-Q.gdJUbTovD94ofDaa8YvhY0-ty16w4fn8PgB6PLnoA30"
- • or any web browser: my.omp.sh/#mgAYTZwEnpRQtca0CTgn-Q.gdJUbTovD94ofDaa8YvhY0-ty16w4fn8PgB6PLnoA30
+ • or any web browser: <your-relay>/r/<roomId>#<secret>
 ```
 
 The browser line is click-to-join (an OSC 8 hyperlink to the full `https://` deep link): the relay serves the web guest client at `/`, and the room id + key ride in the URL fragment. From another musepi (any directory, any machine), either form works:
@@ -25,7 +25,7 @@ The browser line is click-to-join (an OSC 8 hyperlink to the full `https://` dee
 Running `/collab` or `/collab view` starts or displays the active hosting session, rendering both the terminal/browser join links and their corresponding QR codes.
 
 ```
-/join my.omp.sh/#mgAYTZwEnpRQtca0CTgn-Q.gdJU…
+/join <your-relay>/r/<roomId>#<secret>
 ```
 
 The guest's previous session is restored on `/leave` (or when the host stops).
@@ -45,7 +45,7 @@ The guest's previous session is restored on `/leave` (or when the host stops).
 | `/join <link>` | Join a shared session as a guest |
 | `/leave` | Leave (guest) or stop sharing (host) |
 
-## Sharing outside the default relay
+## Choosing a relay
 
 `/collab` uses the production relay by default. When the agent must stay on your machine, a share can run a local relay instead, and only the path guests reach it through changes — the encrypted room protocol is identical in every mode.
 
@@ -92,9 +92,18 @@ Every tunnel watches its child process and probes the public host every 30 secon
 - **Public tunnels** — Cloudflare or ngrok terminates TLS at its edge and can see connection metadata, never room content, which is sealed end to end. The public URL alone is not a secret: the fragment carries the room key, and anyone with the full link can steer the session.
 - **Tailscale** — the relay is reachable only inside your tailnet; guests need Tailscale installed and signed in to the same tailnet.
 
+### Running a relay yourself
+
+This build ships no relay, so a share that has to cross networks needs one you operate. Two shapes work today:
+
+- **A public wss:// relay on your own domain.** Run the relay server the share already uses (`collab/relay-server.ts`, also reachable as a plugin — `LocalShareManager` starts exactly this server for LAN shares) behind a TLS terminator such as Caddy or nginx, then set `collab.relayUrl` to that origin. Guests join from anywhere; nothing on your machine accepts inbound connections from the internet beyond that terminator.
+- **A relay inside a network both sides already share** — the LAN, or a tailnet. Set `collab.relayUrl` to its address, or use the LAN/Tailscale exposure modes, which start the relay on demand.
+
+`scripts/local-relay.ts` in `packages/client-core` is an offline stand-in that speaks the same contract, which is the quickest way to confirm a configuration before putting it behind TLS.
+
 ### Extending exposures
 
-Self-hosting a relay is a plugin, not a built-in: register a transport in the process-wide registry when your plugin loads.
+A transport can also be added as a plugin: register it in the process-wide registry when your plugin loads.
 
 ```ts
 import { BaseExposure, exposureRegistry } from "@musepi/pi-coding-agent/collab/exposure";
@@ -106,7 +115,7 @@ An exposure declares `id`, `label`, `capabilities` (`guestInstall`, `publicExpos
 
 ### When not to use a public tunnel
 
-- The default relay is enough when both sides can reach the internet and the agent does not need to stay on your machine.
+- A relay both sides can reach is enough when the agent does not need to stay on your machine; this build ships none, so point `collab.relayUrl` at your own.
 - Prefer LAN for devices on the same network, and Tailscale when both ends are in your tailnet.
 - Do not expose a machine to the public internet just because it is convenient: a full link reads the entire session history and can steer the agent.
 - Corporate networks often block `trycloudflare.com`; use LAN or a named tunnel on your own domain.
@@ -116,7 +125,7 @@ An exposure declares `id`, `label`, `capabilities` (`guestInstall`, `publicExpos
 Accepted by `/join <link>` and `musepi join "<link>"`:
 
 ```
-<roomId>.<secret>                                                 → default relay (wss://my.omp.sh)
+<roomId>.<secret>                                                 → no origin: resolves only against a supplied relay
 <roomId>#<secret>                                                 → legacy bare form
 host[:port]/r/<roomId>#<secret>                                   → custom relay, wss:// inferred
 host[:port]/r/<roomId>.<secret>                                   → legacy direct relay form
@@ -130,7 +139,7 @@ https://web-host[:port][/<path>]/#<relay-link>                    → browser UI
 https://web.example/collab/#relay.example.com/r/<roomId>.<secret> → web UI and relay on different hosts
 ```
 
-Newly generated direct links put the room secret in the fragment (`/r/<roomId>#<secret>`): a URL path is sent to, and logged by, the outermost proxy — with a tunnel share that is the tunnel edge — while a fragment never leaves the client. The legacy path form (`/r/<roomId>.<secret>`) is still parsed. Two forms keep generating it: the bare default-relay form (`<roomId>.<secret>`, which has no origin or path to carry a `#`) and the inner link of a browser deep link (a second `#` inside a fragment is what strict URL stacks percent-encode).
+Newly generated direct links put the room secret in the fragment (`/r/<roomId>#<secret>`): a URL path is sent to, and logged by, the outermost proxy — with a tunnel share that is the tunnel edge — while a fragment never leaves the client. The legacy path form (`/r/<roomId>.<secret>`) is still parsed. One form keeps generating it: the inner link of a browser deep link, because a second `#` inside a fragment is what strict URL stacks percent-encode. The dot-joined `<roomId>.<secret>` form survives only as an input; with no built-in relay there is nothing for it to collapse onto.
 
 `<link>` / `<relay-link>` are parsed recursively as any accepted link above. For `http(s)` browser wrappers with a parseable fragment, the fragment wins before the HTTP host/path are treated as a relay. This lets `https://web.example/collab/#relay.example.com/r/<roomId>.<secret>` open the web UI at `web.example` while joining `wss://relay.example.com/r/<roomId>`. If the fragment is not a complete collab link, parsing falls back to the legacy direct relay form, so `https://relay.example.com/r/<roomId>#<secret>` still means relay `relay.example.com`.
 
@@ -179,13 +188,13 @@ Set `collab.webUrl` when the browser UI is hosted separately from the websocket 
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `collab.relayUrl` | `wss://my.omp.sh` | Relay used by `/collab` when no relay is passed inline |
+| `collab.relayUrl` | *(empty)* | Relay `/collab` and bare links use. Empty by default: this build operates no relay |
 | `collab.webUrl` | empty | Browser UI URL for `/collab` links; empty derives from relay; explicit `http://` is allowed only for localhost or a private address |
 | `collab.displayName` | OS username | Name shown to other participants |
 | `collab.exposure` | `cloudflared` | Default transport for `/collab tunnel` and tunnel shares that do not name one (a registered exposure id) |
 | `collab.cloudflaredHostname` | empty | Hostname for a named Cloudflare tunnel; empty uses a quick tunnel |
 | `collab.shareTtlMinutes` | `0` | Stop a LAN or tunnel share after this many minutes; `0` keeps it until stopped |
-| `share.serverUrl` | `https://my.omp.sh/s` | Share viewer/upload base used by `/share` (links are `<base>/<id>#<key>`) |
+| `share.serverUrl` | *(empty)* | Share viewer/upload base used by `/share` (links are `<base>/<id>#<key>`). Empty by default: set your own or use `share.store=gist` |
 | `share.redactSecrets` | `true` | Run the secret obfuscator over `/share` snapshots before upload |
 
 ## Self-hosting the relay

@@ -36,14 +36,18 @@ const TOKEN16 = new Uint8Array(16);
 for (let i = 0; i < 16; i++) TOKEN16[i] = 0x41 + i; // A..P
 
 describe("link format golden vectors", () => {
-	it("view link on default relay collapses to <roomId>.<key>", () => {
-		const link = formatCollabLink("wss://my.omp.sh", "abcdefghij0123456789", KEY32);
-		expect(link).toBe("abcdefghij0123456789.AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA");
+	it("view link names its relay and keeps the secret in the fragment", () => {
+		// The dot-joined `<roomId>.<key>` collapse only existed to stand in for a
+		// built-in relay. With none shipped, every generated link names its host.
+		const link = formatCollabLink("wss://relay.example.com", "abcdefghij0123456789", KEY32);
+		expect(link).toBe("relay.example.com/r/abcdefghij0123456789#AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA");
 	});
 
 	it("full link appends write token", () => {
-		const link = formatCollabLink("wss://my.omp.sh", "abcdefghij0123456789", KEY32, TOKEN16);
-		expect(link).toBe("abcdefghij0123456789.AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyBBQkNERUZHSElKS0xNTk9Q");
+		const link = formatCollabLink("wss://relay.example.com", "abcdefghij0123456789", KEY32, TOKEN16);
+		expect(link).toBe(
+			"relay.example.com/r/abcdefghij0123456789#AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyBBQkNERUZHSElKS0xNTk9Q",
+		);
 	});
 
 	it("non-default wss relay drops the scheme and keeps the secret in the fragment", () => {
