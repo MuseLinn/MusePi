@@ -14,7 +14,7 @@
 
 import type { ToolResultMessage } from "@musepi/pi-wire";
 import { Check as CheckIconData, Code2 as Code2IconData, Copy as CopyIconData, Eye as EyeIconData } from "lucide";
-import { Download, ImageDown, Images, Maximize2, MoreHorizontal, X } from "lucide-react";
+import { Check, Download, ImageDown, Images, LoaderCircle, Maximize2, MoreHorizontal, X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -205,8 +205,8 @@ function WidgetCardMenu({
 }: {
 	source: WidgetSource;
 	/** Absent when the host has no rasterizer — the item then hides. */
-	saveImage?: () => void;
-	copyImage?: () => void;
+	saveImage?: () => Promise<void>;
+	copyImage?: () => Promise<void>;
 	showCode: boolean;
 	onToggleCode(): void;
 }): ReactNode {
@@ -214,6 +214,11 @@ function WidgetCardMenu({
 	const menuRef = useRef<HTMLDivElement | null>(null);
 	const [at, setAt] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
 	const [copied, setCopied] = useState(false);
+	/** Which image action is in flight. Rasterizing a card takes a moment
+	 *  (shadow re-render + canvas); without this the menu closed on click and
+	 *  the user had no sign the action was running. */
+	const [busy, setBusy] = useState<"save" | "copy" | null>(null);
+	const [imageDone, setImageDone] = useState<"save" | "copy" | null>(null);
 
 	// One anchoring function for the first open and every re-anchor. Identical
 	// positions keep the previous object: a fresh one each call would re-render
@@ -265,6 +270,21 @@ function WidgetCardMenu({
 		});
 	};
 
+	/** Run one image action in place: the menu stays open, the item shows a
+	 *  spinner, and the label flips to the result before the menu dismisses. */
+	const runImageAction = (kind: "save" | "copy", action: () => Promise<void>): void => {
+		if (busy) return;
+		setBusy(kind);
+		setImageDone(null);
+		void action()
+			.then(() => {
+				setImageDone(kind);
+				window.setTimeout(() => setAt(null), 900);
+			})
+			.catch(() => setAt(null))
+			.finally(() => setBusy(null));
+	};
+
 	return (
 		<span className="tv-widget-menu-wrap">
 			<button
@@ -312,26 +332,36 @@ function WidgetCardMenu({
 							<button
 								type="button"
 								role="menuitem"
-								onClick={() => {
-									saveImage();
-									setAt(null);
-								}}
+								disabled={busy !== null}
+								data-busy={busy === "save" ? "" : undefined}
+								onClick={() => runImageAction("save", saveImage)}
 							>
-								<ImageDown size={13} />
-								{t("settings.widgetDownloadImage")}
+								{busy === "save" ? (
+									<LoaderCircle size={13} className="tv-widget-menu-spin" />
+								) : imageDone === "save" ? (
+									<Check size={13} />
+								) : (
+									<ImageDown size={13} />
+								)}
+								{imageDone === "save" ? t("settings.savedImage") : t("settings.widgetDownloadImage")}
 							</button>
 						)}
 						{copyImage && (
 							<button
 								type="button"
 								role="menuitem"
-								onClick={() => {
-									copyImage();
-									setAt(null);
-								}}
+								disabled={busy !== null}
+								data-busy={busy === "copy" ? "" : undefined}
+								onClick={() => runImageAction("copy", copyImage)}
 							>
-								<Images size={13} />
-								{t("settings.copyImage2")}
+								{busy === "copy" ? (
+									<LoaderCircle size={13} className="tv-widget-menu-spin" />
+								) : imageDone === "copy" ? (
+									<Check size={13} />
+								) : (
+									<Images size={13} />
+								)}
+								{imageDone === "copy" ? t("settings.copied") : t("settings.copyImage2")}
 							</button>
 						)}
 						<button type="button" role="menuitem" onClick={copySource}>
@@ -381,15 +411,15 @@ export function WidgetCard({
 	// absent in hosts that have no rasterizer (plain browser, HTML export)
 	// rather than dead.
 	const saveImage = host?.saveImage
-		? () => {
+		? async () => {
 				const element = cardRef.current;
-				if (element) void host.saveImage?.(element, source.imageFilename);
+				if (element) await host.saveImage?.(element, source.imageFilename);
 			}
 		: undefined;
 	const copyImage = host?.copyImage
-		? () => {
+		? async () => {
 				const element = cardRef.current;
-				if (element) void host.copyImage?.(element);
+				if (element) await host.copyImage?.(element);
 			}
 		: undefined;
 	const copySource = (): void => {

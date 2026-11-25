@@ -18,9 +18,9 @@ import {
 	t,
 } from "@musepi/client-core";
 import { openPlanFromChat } from "@musepi/client-core/src/components/transcript/canvas-jump";
-import { toolActivityKind } from "@musepi/client-core/src/lib/tool-activity";
 import { TurnTracePanel } from "@musepi/client-core/src/components/transcript/TurnTracePanel";
 import type { TurnTrace } from "@musepi/client-core/src/components/transcript/turn-trace";
+import { toolActivityKind } from "@musepi/client-core/src/lib/tool-activity";
 import {
 	createChatQuoteContext,
 	type DisplayContext,
@@ -120,7 +120,6 @@ import { morphSurfaceBack, morphSurfaceFrom } from "../lib/view-transition";
 import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
-import { DialogFrame } from "./DialogFrame";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
@@ -131,6 +130,7 @@ import { Composer, type HeroComposerProps } from "./Composer";
 import { type ConnectorRequest, ConnectorRequestCard } from "./ConnectorRequestCard";
 import type { CreationMessage } from "./CreationModeRow";
 import { flushPendingConnectorSelection } from "./composer/connector-panel";
+import { DialogFrame } from "./DialogFrame";
 import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
@@ -2827,48 +2827,42 @@ export function ChatView({
 			openPlanFromChat(request.directory, request.id, request.title),
 		// Widget card "下载为图片"/"复制为图片": rasterize the card and hand
 		// the blob to the download/clipboard helper. html-to-image is imported
-		// dynamically inside rasterizeToBlob on purpose (same as
-		// SaveImageDialog): a static import would pull a large dependency into
-		// the main bundle for a rarely used action. The rasterizer rebuilds
-		// sandboxed iframe faces as same-origin shadows — a plain toBlob clones
-		// the opaque-origin frames as EMPTY boxes, which is what exported blank
-		// widget images. Failures surface through the toast channel — a silent
+		// dynamically inside rasterizeToBlob on purpose (same as SaveImageDialog):
+		// a static import would pull a large dependency into the main bundle for
+		// a rarely used action. rasterizeToBlob also rebuilds sandboxed iframe
+		// faces into same-origin shadows — the library's own iframe clone yields
+		// an empty frame for them, which is what exported blank widget images.
+		// Both actions return their promise so the card menu can show progress
+		// and the result; failures surface through the toast channel — a silent
 		// catch is what once made a blocked export read as a dead button.
-		saveImage: (element: HTMLElement, filename: string): void => {
-			void (async () => {
-				try {
-					const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
-					const blob = await rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
-					downloadBlob(filename, blob);
-				} catch (err) {
-					const detail = err instanceof Error ? err.message : String(err);
-					window.dispatchEvent(
-						new CustomEvent("musepi-gui-toast", { detail: `${t("settings.widgetDownloadImage")}: ${detail}` }),
-					);
-				}
-			})();
+		saveImage: async (element: HTMLElement, filename: string): Promise<void> => {
+			try {
+				const blob = await rasterizeToBlob(element, { pixelRatio: 2 });
+				downloadBlob(filename, blob);
+			} catch (err) {
+				const detail = err instanceof Error ? err.message : String(err);
+				window.dispatchEvent(
+					new CustomEvent("musepi-gui-toast", { detail: `${t("settings.widgetDownloadImage")}: ${detail}` }),
+				);
+				throw err;
+			}
 		},
-		copyImage: (element: HTMLElement): void => {
-			void (async () => {
-				try {
-					const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
-					const blob = await rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
-					await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-				} catch (err) {
-					const detail = err instanceof Error ? err.message : String(err);
-					window.dispatchEvent(
-						new CustomEvent("musepi-gui-toast", { detail: `${t("settings.copyImage2")}: ${detail}` }),
-					);
-				}
-			})();
+		copyImage: async (element: HTMLElement): Promise<void> => {
+			try {
+				const blob = await rasterizeToBlob(element, { pixelRatio: 2 });
+				await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+			} catch (err) {
+				const detail = err instanceof Error ? err.message : String(err);
+				window.dispatchEvent(
+					new CustomEvent("musepi-gui-toast", { detail: `${t("settings.copyImage2")}: ${detail}` }),
+				);
+				throw err;
+			}
 		},
 		// The annotation tool's card-capture step: rasterize the card element
 		// to a PNG blob; the overlay compositor merges it with the annotation
 		// marks. The card hides the annotate action when this is absent.
-		rasterizeCard: (element: HTMLElement) => {
-			const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
-			return rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
-		},
+		rasterizeCard: (element: HTMLElement) => rasterizeToBlob(element, { pixelRatio: 2 }),
 	};
 	// Stop is immediate, matching bare Escape: the daemon keeps queued
 	// messages. A blocking confirm made the button a no-op whenever its

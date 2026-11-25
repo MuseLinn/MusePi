@@ -579,6 +579,7 @@ export const general = {
 	"general.copiedFinalSummary": "已复制最终总结",
 	"general.copyFailed": "复制失败",
 	"general.widenTable": "加宽表格",
+	"general.tableFormats": "更多格式",
 	"general.resetTableWidth": "恢复默认宽度",
 	"general.deleteSession": "删除会话",
 	"general.deleteSession2": "删除这个会话？该操作不可撤销。",

@@ -2,9 +2,13 @@ import { Marked } from "@musepi/pi-utils/marked";
 import {
 	Check as CheckGlyphData,
 	Copy as CopyGlyphData,
+	Download as DownloadGlyphData,
 	ListOrdered as LinesGlyphData,
+	Ellipsis as MoreGlyphData,
 	AlignJustify as NoLinesGlyphData,
 	StretchHorizontal as NoWrapGlyphData,
+	FoldHorizontal as RestoreWidthGlyphData,
+	UnfoldHorizontal as WidenGlyphData,
 	WrapText as WrapGlyphData,
 } from "lucide";
 import type { IconInput } from "morphicons";
@@ -266,6 +270,45 @@ function fnv1a(s: string): number {
 // Cells are extracted from the rendered DOM (textContent), so inline
 // markdown formatting never leaks into CSV/TSV/Markdown output.
 
+/** Table glyphs are inline SVG rather than `<morph-icon>`: the toolbar is
+ *  markup produced outside React, and a custom element there depends on the
+ *  registry being upgraded before the string lands in the document (it is not
+ *  in the SSR/test renderers, where upgrading throws). The shapes come from
+ *  the lucide data already imported for the morph icons, so both toolbars draw
+ *  the same glyphs. */
+const TABLE_GLYPH = {
+	copy: CopyGlyphData,
+	check: CheckGlyphData,
+	download: DownloadGlyphData,
+	more: MoreGlyphData,
+	widen: WidenGlyphData,
+	reset: RestoreWidthGlyphData,
+} as const;
+
+type TableGlyphName = keyof typeof TABLE_GLYPH;
+
+function tableGlyphSvg(name: TableGlyphName, size: number): string {
+	const parts = TABLE_GLYPH[name].map(([tag, attrs]) => {
+		const rendered = Object.entries(attrs)
+			.map(([key, value]) => `${key}="${value}"`)
+			.join(" ");
+		return `<${tag} ${rendered}></${tag}>`;
+	});
+	// One template (not concatenated literals): the whole element reads as
+	// markup, so the i18n gate sees no untranslated text nodes in it.
+	return `<svg class="tr-table-glyph" data-glyph="${name}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${parts.join("")}</svg>`;
+}
+
+/** Swap a toolbar glyph in place (copy → check after a successful write). */
+function setTableGlyph(button: HTMLElement, name: TableGlyphName, size: number): void {
+	const glyph = button.querySelector<SVGElement>("svg[data-glyph]");
+	if (!glyph || glyph.dataset.glyph === name) return;
+	const host = document.createElement("div");
+	host.innerHTML = tableGlyphSvg(name, size);
+	const next = host.firstElementChild;
+	if (next) glyph.replaceWith(next);
+}
+
 function extractTableData(table: HTMLTableElement): { headers: string[]; rows: string[][] } {
 	const headers = Array.from(table.querySelectorAll("thead th")).map(th => th.textContent?.trim() ?? "");
 	const rows = Array.from(table.querySelectorAll("tbody tr")).map(tr =>
@@ -291,35 +334,96 @@ function tableToMarkdown({ headers, rows }: { headers: string[]; rows: string[][
 }
 
 /**
- * Table toolbar HTML: hover-revealed width toggle, copy
- * (CSV/TSV/Markdown) + download (CSV/Markdown) menus. The copy button
- * shares the code-block hash scheme so its label flips to "settings.copied"; menu
- * items are delegated in the component below. The width toggle carries the
+ * Table toolbar HTML: the same icon buttons as a fenced code block's head
+ * (26px ghost targets, `<morph-icon>` glyphs, hover/focus reveal) instead of
+ * the text buttons that used to float over the header cells.
+ *
+ * Copy and download are split controls: the glyph acts on the default format
+ * (Markdown / CSV) in one click, the caret beside it opens the other formats.
+ * Both share the code-block `data-copy-hash` scheme, so the copy glyph morphs
+ * to a check through the same feedback effect. The width toggle carries the
  * table hash so the component can re-apply its pressed state after a rebuild.
  */
 function tableToolbarHtml(hash: string): string {
-	const menuWrap = (children: string): string => `<span class="tr-table-menu-wrap">${children}</span>`;
 	const widen = escapeHtml(t("general.widenTable"));
+	const copy = escapeHtml(t("settings.copy"));
+	const download = escapeHtml(t("settings.download"));
+	const formats = escapeHtml(t("general.tableFormats"));
+	const split = (main: string, menu: string): string =>
+		`<span class="tr-table-split">${main}` +
+		`<button type="button" class="tr-table-btn tr-table-caret" data-table-menu aria-haspopup="menu" aria-expanded="false" aria-label="${formats}" title="${formats}">` +
+		tableGlyphSvg("more", 14) +
+		`</button>` +
+		`<span class="tr-table-menu" role="menu">${menu}</span>` +
+		`</span>`;
 	return (
 		`<div class="tr-table-bar">` +
-		`<button type="button" class="tr-table-btn tr-table-wide" data-table-wide="${hash}" aria-pressed="false" title="${widen}">${widen}</button>` +
-		menuWrap(
-			`<button type="button" class="tr-table-btn tr-code-copy" data-copy-hash="${hash}">${t("settings.copy")}</button>` +
-				`<span class="tr-table-menu" role="menu">` +
-				`<button type="button" role="menuitem" data-table-copy="csv">CSV</button>` +
+		`<button type="button" class="tr-table-btn tr-table-wide" data-table-wide="${hash}" aria-pressed="false" aria-label="${widen}" title="${widen}">` +
+		tableGlyphSvg("widen", 14) +
+		`</button>` +
+		split(
+			`<button type="button" class="tr-table-btn tr-code-copy" data-table-copy="markdown" data-copy-hash="${hash}" aria-label="${copy}" title="${copy}">` +
+				tableGlyphSvg("copy", 14) +
+				`</button>`,
+			`<button type="button" role="menuitem" data-table-copy="csv">CSV</button>` +
 				`<button type="button" role="menuitem" data-table-copy="tsv">TSV</button>` +
-				`<button type="button" role="menuitem" data-table-copy="markdown">Markdown</button>` +
-				`</span>`,
+				`<button type="button" role="menuitem" data-table-copy="markdown">Markdown</button>`,
 		) +
-		menuWrap(
-			`<button type="button" class="tr-table-btn tr-code-copy">${t("settings.download")}</button>` +
-				`<span class="tr-table-menu" role="menu">` +
-				`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
-				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>` +
-				`</span>`,
+		split(
+			`<button type="button" class="tr-table-btn" data-table-download="csv" aria-label="${download}" title="${download}">` +
+				tableGlyphSvg("download", 14) +
+				`</button>`,
+			`<button type="button" role="menuitem" data-table-download="csv">CSV</button>` +
+				`<button type="button" role="menuitem" data-table-download="markdown">Markdown</button>`,
 		) +
 		`</div>`
 	);
+}
+
+/** Documents whose dismissal listeners are already installed. Keyed by the
+ *  document, not by a module flag: a rebuilt document (test harness, host
+ *  reload) has no listeners on it, and a module-level boolean would then skip
+ *  installing them and leave every menu un-closable. */
+const tableMenuDismissDocs = new WeakSet<Document>();
+
+function closeTableMenus(except?: Element | null): void {
+	for (const wrap of document.querySelectorAll<HTMLElement>(".tr-table-split[data-menu-open]")) {
+		if (except && wrap.contains(except)) continue;
+		wrap.removeAttribute("data-menu-open");
+		wrap.querySelector<HTMLElement>("[data-table-menu]")?.setAttribute("aria-expanded", "false");
+	}
+}
+
+function installTableMenuDismiss(): void {
+	if (typeof document === "undefined" || tableMenuDismissDocs.has(document)) return;
+	tableMenuDismissDocs.add(document);
+	document.addEventListener(
+		"pointerdown",
+		event => {
+			const target = event.target as Element | null;
+			if (target?.closest?.(".tr-table-split")) return;
+			closeTableMenus();
+		},
+		true,
+	);
+	document.addEventListener(
+		"keydown",
+		event => {
+			if (event.key === "Escape") closeTableMenus();
+		},
+		true,
+	);
+}
+
+/** Toggle one format menu; returns the resulting open state. */
+function toggleTableMenu(button: HTMLElement): void {
+	const wrap = button.closest<HTMLElement>(".tr-table-split");
+	if (!wrap) return;
+	const open = wrap.hasAttribute("data-menu-open");
+	closeTableMenus(wrap);
+	if (open) wrap.removeAttribute("data-menu-open");
+	else wrap.setAttribute("data-menu-open", "");
+	button.setAttribute("aria-expanded", open ? "false" : "true");
 }
 
 /**
@@ -388,7 +492,8 @@ export function applyTableWideState(
 		const label = wide ? labels.reset : labels.widen;
 		button.setAttribute("aria-pressed", wide ? "true" : "false");
 		button.setAttribute("title", label);
-		button.textContent = label;
+		button.setAttribute("aria-label", label);
+		setTableGlyph(button, wide ? "reset" : "widen", 14);
 	}
 }
 
@@ -1068,6 +1173,11 @@ export const Markdown = memo(function Markdown({
 			downloadBlob("diagram.svg", xml, "image/svg+xml;charset=utf-8");
 			return;
 		}
+		const tableMenuBtn = target.closest<HTMLElement>("[data-table-menu]");
+		if (tableMenuBtn) {
+			toggleTableMenu(tableMenuBtn);
+			return;
+		}
 		const tableWide = target.closest<HTMLElement>("[data-table-wide]");
 		if (tableWide) {
 			const hash = tableWide.dataset.tableWide ?? "";
@@ -1095,11 +1205,9 @@ export const Markdown = memo(function Markdown({
 			const data = extractTableData(table);
 			const fmt = tableCopy.dataset.tableCopy ?? "csv";
 			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
-			const hash =
-				tableCopy
-					.closest<HTMLElement>(".tr-table")
-					?.querySelector("[data-copy-hash]")
-					?.getAttribute("data-copy-hash") ?? "";
+			const copyBtn = tableCopy.closest<HTMLElement>(".tr-table")?.querySelector<HTMLElement>("[data-copy-hash]");
+			const hash = copyBtn?.getAttribute("data-copy-hash") ?? "";
+			closeTableMenus();
 			if (!text || hash === "") return;
 			void navigator.clipboard.writeText(text).then(() => {
 				setCopiedHash(hash);
@@ -1114,6 +1222,7 @@ export const Markdown = memo(function Markdown({
 			const data = extractTableData(table);
 			const fmt = tableDl.dataset.tableDownload ?? "csv";
 			const content = fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			closeTableMenus();
 			downloadBlob(
 				fmt === "markdown" ? "table.md" : "table.csv",
 				content,
@@ -1358,6 +1467,8 @@ export const Markdown = memo(function Markdown({
 		}
 	}, [render.html, copiedHash]);
 
+	// Copy feedback for both block kinds. Code blocks morph their `<morph-icon>`;
+	// table toolbars carry a plain inline SVG, so they swap the glyph instead.
 	useLayoutEffect(() => {
 		const host = rootRef.current;
 		if (!host) return;
@@ -1366,6 +1477,10 @@ export const Markdown = memo(function Markdown({
 			button.toggleAttribute("data-copied", copied);
 			button.setAttribute("aria-label", t(copied ? "settings.copied" : "settings.copy"));
 			button.setAttribute("title", t(copied ? "settings.copied" : "settings.copy"));
+			if (button.closest(".tr-table")) {
+				setTableGlyph(button, copied ? "check" : "copy", 14);
+				continue;
+			}
 			button
 				.querySelector<MorphIconElement>("morph-icon")
 				?.morphTo(copied ? CheckGlyphData : CopyGlyphData, "snappy");
@@ -1380,6 +1495,12 @@ export const Markdown = memo(function Markdown({
 	// scroll position are never rebuilt.
 	const widenLabel = t("general.widenTable");
 	const resetWideLabel = t("general.resetTableWidth");
+	// One document-level dismisser for the table format menus (click-away and
+	// Escape). Installed once per page; the menus themselves live inside the
+	// message's innerHTML, which React never binds listeners to.
+	useLayoutEffect(() => {
+		installTableMenuDismiss();
+	}, []);
 	const htmlRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
 		const host = htmlRef.current;

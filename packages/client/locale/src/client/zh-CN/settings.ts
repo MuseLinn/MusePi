@@ -1277,6 +1277,7 @@ export const settings = {
 	"settings.copyImage": "复制图片",
 	"settings.copyImageFailed": "复制图片失败",
 	"settings.savingImage": "正在保存图片…",
+	"settings.savedImage": "图片已下载",
 	"settings.border": "边框",
 	"settings.watermark": "水印",
 	"settings.imageTitlePlaceholder": "可选，显示在图片顶部",

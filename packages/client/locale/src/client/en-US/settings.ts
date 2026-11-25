@@ -1344,6 +1344,7 @@ export const settings = {
 	"settings.copyImage": "Copy image",
 	"settings.copyImageFailed": "Copying the image failed",
 	"settings.savingImage": "Saving image…",
+	"settings.savedImage": "Image saved",
 	"settings.border": "Border",
 	"settings.watermark": "Watermark",
 	"settings.imageTitlePlaceholder": "Optional, shown at the top of the image",

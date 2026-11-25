@@ -3,6 +3,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Markdown } from "../src/components/transcript/Markdown";
+import { t } from "../src/i18n/index.js";
 
 // Wide-table toggling is a DOM state transition (class + aria-pressed after a
 // delegated click), which bun:test's default environment cannot exercise.
@@ -202,5 +203,124 @@ describe("table width toggle", () => {
 		const { container, root } = await mount(TABLE_A);
 		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(false);
 		await act(async () => root.unmount());
+	});
+});
+
+describe("table toolbar interaction", () => {
+	function caret(table: HTMLElement): HTMLButtonElement {
+		const button = table.querySelector<HTMLButtonElement>("[data-table-menu]");
+		expect(button).not.toBeNull();
+		return button!;
+	}
+
+	function split(table: HTMLElement): HTMLElement {
+		const wrap = table.querySelector<HTMLElement>(".tr-table-split");
+		expect(wrap).not.toBeNull();
+		return wrap!;
+	}
+
+	it("opens a format menu on the caret and closes it on a second press", async () => {
+		const { container, root } = await mount(TABLE_A);
+		const table = tables(container)[0]!;
+		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+		expect(caret(table).getAttribute("aria-expanded")).toBe("false");
+
+		await act(async () => caret(table).click());
+		expect(split(table).hasAttribute("data-menu-open")).toBe(true);
+		expect(caret(table).getAttribute("aria-expanded")).toBe("true");
+
+		await act(async () => caret(table).click());
+		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+		expect(caret(table).getAttribute("aria-expanded")).toBe("false");
+		await unmount({ container, root });
+	});
+
+	it("keeps only one table's menu open at a time", async () => {
+		const { container, root } = await mount(`${TABLE_A}\n\n${TABLE_B}`);
+		const [first, second] = tables(container);
+		await act(async () => caret(first!).click());
+		await act(async () => caret(second!).click());
+		expect(split(first!).hasAttribute("data-menu-open")).toBe(false);
+		expect(split(second!).hasAttribute("data-menu-open")).toBe(true);
+		await unmount({ container, root });
+	});
+
+	it("closes the open menu on an outside pointer press and on Escape", async () => {
+		const { container, root } = await mount(TABLE_A);
+		const table = tables(container)[0]!;
+
+		await act(async () => caret(table).click());
+		expect(split(table).hasAttribute("data-menu-open")).toBe(true);
+		await act(async () => {
+			document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+		});
+		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+
+		await act(async () => caret(table).click());
+		expect(split(table).hasAttribute("data-menu-open")).toBe(true);
+		await act(async () => {
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+		});
+		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+		await unmount({ container, root });
+	});
+
+	it("swaps the copy glyph for a check after a successful write", async () => {
+		const writes: string[] = [];
+		const original = navigator.clipboard;
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: { writeText: async (text: string) => void writes.push(text) },
+		});
+		try {
+			const { container, root } = await mount(TABLE_A);
+			const table = tables(container)[0]!;
+			const copy = table.querySelector<HTMLElement>("[data-table-copy]")!;
+			expect(copy.querySelector("svg")?.getAttribute("data-glyph")).toBe("copy");
+
+			await act(async () => copy.click());
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			// One click copies the DEFAULT format: Markdown, not CSV.
+			expect(writes).toHaveLength(1);
+			expect(writes[0]).toContain("| a | b |");
+			expect(writes[0]).toContain("| --- | --- |");
+			// The copy state re-renders the message's innerHTML, so the feedback
+			// lands on the nodes that are in the document now — re-query from the
+			// mount root, never hold the pre-click reference.
+			const fresh = container.querySelector<HTMLElement>(".tr-table [data-table-copy]")!;
+			expect(fresh.querySelector("svg")?.getAttribute("data-glyph")).toBe("check");
+			expect(fresh.hasAttribute("data-copied")).toBe(true);
+			expect(fresh.getAttribute("aria-label")).toBe(t("settings.copied"));
+			await unmount({ container, root });
+		} finally {
+			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
+		}
+	});
+
+	it("copies the chosen format from the menu", async () => {
+		const writes: string[] = [];
+		const original = navigator.clipboard;
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: { writeText: async (text: string) => void writes.push(text) },
+		});
+		try {
+			const { container, root } = await mount(TABLE_A);
+			const table = tables(container)[0]!;
+			const csv = table.querySelector<HTMLElement>('[role="menuitem"][data-table-copy="csv"]')!;
+			await act(async () => csv.click());
+			await act(async () => {
+				await Promise.resolve();
+			});
+			expect(writes).toEqual(["a,b\n1,2"]);
+			// Choosing from the menu also dismisses it.
+			expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+			await unmount({ container, root });
+		} finally {
+			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
+		}
 	});
 });

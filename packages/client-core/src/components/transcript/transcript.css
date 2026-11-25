@@ -1703,11 +1703,12 @@ button.tr-display-context-source:hover {
 .tr-md th,
 .tr-md td {
 	border: none;
-	border-right: 1px solid var(--border);
-	border-bottom: 1px solid var(--border);
+	border-right: 1px solid color-mix(in oklab, var(--border) 62%, transparent);
+	border-bottom: 1px solid color-mix(in oklab, var(--border) 62%, transparent);
 	padding: 7px 12px;
 	text-align: left;
 	vertical-align: top;
+	transition: background 100ms ease-out;
 }
 
 .tr-md th:last-child,
@@ -1726,10 +1727,23 @@ button.tr-display-context-source:hover {
 	color: var(--color-text-muted);
 }
 
-/* Table toolbar (openchamber parity): hover-revealed copy/download menu in
- * the table's top-right corner. The menu opens on hover of its wrap; items
- * carry data-table-copy / data-table-download and are delegated in the
- * Markdown component. Copy label reuses the shared .tr-code-copy visuals. */
+/* Row hover: the row under the pointer lifts a hair, so a wide table read
+ * across several columns keeps its line. Cells paint it (not the row) because
+ * `border-collapse: separate` keeps a row's own background off the cell
+ * edges, and the last row's missing bottom border would leave a gap. */
+.tr-md tbody tr:hover > td {
+	background: color-mix(in oklab, var(--color-text) 3.5%, transparent);
+}
+
+/* Table toolbar: the same icon buttons as a fenced code block's head — 26px
+ * ghost targets, 14px glyphs, hover + `:focus-visible` reveal (never
+ * `:focus-within`: a pointer press must not summon them), permanently visible
+ * on coarse pointers. They float in the table's top-right corner instead of
+ * taking a header row: a table has no header chrome to host them, and a
+ * dedicated bar would push every table down by its own height.
+ *
+ * The floating bar sits on a translucent surface, because the corner it
+ * covers is a header CELL — bare glyphs over `项 / 结果` read as stray text. */
 .tr-table {
 	position: relative;
 	margin: 8px 0;
@@ -1737,21 +1751,31 @@ button.tr-display-context-source:hover {
 
 .tr-table-scroll {
 	overflow-x: auto;
+	scrollbar-width: thin;
 }
 
 .tr-table-bar {
 	position: absolute;
-	top: 2px;
-	right: 2px;
+	top: 3px;
+	right: 3px;
 	display: flex;
+	align-items: center;
 	gap: 2px;
+	padding: 1px;
+	border-radius: var(--radius);
+	background: color-mix(in oklab, var(--bg-raised) 82%, transparent);
+	box-shadow: 0 1px 6px rgb(0 0 0 / 8%);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity 120ms ease-out;
-	z-index: 1;
+	z-index: 2;
 }
 
-.tr-table:hover .tr-table-bar {
+.tr-table:hover .tr-table-bar,
+.tr-table-bar:has(.tr-table-btn:focus-visible),
+.tr-table-bar:has([data-menu-open]) {
 	opacity: 1;
 	pointer-events: auto;
 }
@@ -1774,37 +1798,104 @@ button.tr-display-context-source:hover {
 	}
 }
 
-.tr-table-menu-wrap {
+/* One button geometry for every action in the bar (width toggle, copy,
+ * download, caret) — the code block's `.tr-code-btn` sizing so a table and a
+ * fence read as the same family of inline block. */
+.tr-table-btn {
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.tr-table-btn:hover {
+	background: var(--bg-inset);
+	color: var(--color-text);
+}
+
+.tr-table-btn:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+
+.tr-table-btn[data-copied] {
+	color: var(--ok);
+}
+
+.tr-table-btn[aria-pressed="true"] {
+	color: var(--accent);
+	background: var(--bg-inset);
+}
+
+.tr-table-btn[aria-expanded="true"] {
+	background: var(--bg-inset);
+	color: var(--color-text);
+}
+
+/* Split control: the glyph performs the default format, the caret beside it
+ * opens the rest. The two halves share one visual pill so they read as one
+ * action with a menu, not two unrelated buttons. */
+.tr-table-split {
 	position: relative;
+	display: inline-flex;
+	align-items: center;
+}
+
+.tr-table-caret {
+	width: 15px;
+	color: var(--fg-faint);
 }
 
 .tr-table-menu {
 	position: absolute;
-	top: calc(100% + 2px);
+	top: calc(100% + 4px);
 	right: 0;
 	display: none;
 	flex-direction: column;
-	min-width: 84px;
+	min-width: 92px;
 	padding: 3px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius);
 	background: var(--bg-raised);
-	box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+	box-shadow: 0 8px 22px rgb(0 0 0 / 20%);
 }
 
-.tr-table-menu-wrap:hover .tr-table-menu,
-.tr-table-menu-wrap:focus-within .tr-table-menu,
-.tr-table-menu:hover {
+/* Opened by the caret (data-menu-open) — not by hovering the wrap: a hover
+ * menu opened under the pointer and closed on the way to its items. */
+.tr-table-split[data-menu-open] .tr-table-menu {
 	display: flex;
+	animation: tr-table-menu-in 120ms var(--ease-appear-snappy);
+}
+
+@keyframes tr-table-menu-in {
+	from {
+		opacity: 0;
+		transform: translateY(-3px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
 }
 
 /* Touch has no hover: inline the menu under the toolbar instead of hiding it
  * behind a hover-only popover — the old rule made export / widen-table
  * completely unreachable on phones and tablets. */
 @media (hover: none) {
-	.tr-table-menu-wrap .tr-table-menu {
+	.tr-table-split {
 		position: static;
-		display: flex;
+	}
+	.tr-table-split[data-menu-open] .tr-table-menu {
+		position: static;
 		flex-direction: row;
 		flex-wrap: wrap;
 		justify-content: flex-end;
@@ -1815,6 +1906,7 @@ button.tr-display-context-source:hover {
 		border: 0;
 		background: transparent;
 		box-shadow: none;
+		animation: none;
 	}
 	.tr-table-menu button {
 		min-height: 44px;
@@ -1829,10 +1921,10 @@ button.tr-display-context-source:hover {
 .tr-table-menu button {
 	border: 0;
 	border-radius: var(--radius-sm);
-	padding: 3px 8px;
+	padding: 4px 8px;
 	background: transparent;
 	color: var(--fg-muted);
-	font-size: 11px;
+	font-size: 11.5px;
 	font-family: inherit;
 	text-align: left;
 	cursor: pointer;
@@ -1841,6 +1933,11 @@ button.tr-display-context-source:hover {
 .tr-table-menu button:hover {
 	background: var(--bg-inset);
 	color: var(--fg);
+}
+
+.tr-table-menu button:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: -2px;
 }
 
 /* Wide table (toolbar 加宽表格 / 恢复默认宽度). The default table is clamped to
@@ -1933,19 +2030,14 @@ button.tr-display-context-source:hover {
 }
 
 /* Table cells need `anywhere` so long URLs/identifiers contribute a shrinkable
- * intrinsic width instead of expanding under the transcript's clipped overflow. */
+ * intrinsic width instead of expanding under the transcript's clipped overflow.
+ * Cell chrome (padding, dividers, header fill) belongs to the card rule above;
+ * this block only adds what the layout needs, so it cannot drift from it. */
 .tr-md th,
 .tr-md td {
-	padding: 3px 8px;
-	border: 1px solid var(--border);
 	overflow-wrap: anywhere;
 	text-align: left;
 	word-break: keep-all;
-}
-
-.tr-md th {
-	background: var(--bg-inset);
-	font-weight: 600;
 }
 
 .tr-md a {
@@ -3731,6 +3823,35 @@ a.tr-tool-search-title:hover {
 
 .tv-widget-menu button:hover {
 	background: var(--color-hover);
+}
+
+/* An image export is in flight: the item keeps its row (no layout jump) and
+ * the spinner replaces the glyph. `aria-busy` on the card would announce the
+ * whole widget as busy, so the row disables itself and says so visually. */
+.tv-widget-menu button[disabled] {
+	cursor: default;
+	opacity: 0.9;
+}
+
+.tv-widget-menu button[data-busy] {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.tv-widget-menu-spin {
+	animation: tv-widget-menu-spin 0.9s linear infinite;
+}
+
+@keyframes tv-widget-menu-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tv-widget-menu-spin {
+		animation: none;
+	}
 }
 
 .tv-widget-menu button svg {

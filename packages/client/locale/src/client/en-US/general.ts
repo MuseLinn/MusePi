@@ -592,6 +592,7 @@ export const general = {
 	"general.copiedFinalSummary": "Copied the final summary",
 	"general.copyFailed": "Copy failed",
 	"general.widenTable": "Widen table",
+	"general.tableFormats": "More formats",
 	"general.resetTableWidth": "Reset width",
 	"general.deleteSession": "Delete session",
 	"general.deleteSession2": "Delete this session? This action cannot be undone.",
