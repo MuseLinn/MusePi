@@ -50,6 +50,18 @@ describe("prompt cache session header", () => {
 		expect(Object.keys(setup.headers).some(name => name.includes(" "))).toBe(false);
 	});
 
+	test("the field survives a models.yml-shaped provider compat", () => {
+		// The plugin writes this at PROVIDER level, and custom-models merges it
+		// into each model. Model this by handing the merged compat straight in:
+		// the value must reach the header, not be dropped as an unknown key.
+		const setup = resolveOpenAIRequestSetup(model("x-session-affinity"), {
+			apiKey: "k",
+			messages: context.messages,
+			promptCacheSessionId: "pc_abc",
+		} as never);
+		expect(Object.keys(setup.headers)).toContain("x-session-affinity");
+	});
+
 	test("no header is written without a session id", () => {
 		const setup = resolveOpenAIRequestSetup(model("x-session-affinity"), {
 			apiKey: "k",

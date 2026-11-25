@@ -46,6 +46,10 @@ export const getModelsConfigSchemaBundle = once(() => {
 		"vercelGatewayRouting?": VercelGatewayRoutingSchema,
 		"extraBody?": { "[string]": "unknown" },
 		"cacheControlFormat?": '"anthropic"',
+		/** Request header that mirrors the prompt-cache key, for a gateway that
+		 *  pins a session to one upstream (e.g. `x-session-affinity`). Any HTTP
+		 *  header token; the setup validates it before writing. */
+		"promptCacheSessionHeader?": "string",
 		"supportsStrictMode?": "boolean",
 		"toolStrictMode?": '"all_strict" | "none"',
 		"streamIdleTimeoutMs?": "number >= 0",
