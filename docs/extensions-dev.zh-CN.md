@@ -422,7 +422,25 @@ pi.registerWidget({
 - **与 registerToolView 的区别**：后者按工具名替换整条工具渲染；本项按卡片类型新增/替换一个 widget 渲染器。
 - **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` / `clock` 试点，`widget-compile.test.ts` 端到端校验编译产物）。
 
-## 10.2 主题 bundle：滚动进度轨皮肤（registerScrollbarSkin）
+## 10.2 扩展 markdown 块渲染器（registerMarkdownBlock）
+
+消息里的表格、代码块、图表各由一个**块组件**渲染。扩展可以按 kind 接管其中一类，或声明一个新 kind 给自己的围栏内容：
+
+```ts
+pi.registerMarkdownBlock({
+	kind: "table",            // 内置 kind 即替换；新的 kind 由插件自己的 fence 渲染器发出
+	label: "紧凑表格",
+	moduleUrl: "./ui/table.tsx",
+});
+```
+
+- **kind 是路由单位**：消息被切成 `html` 片段与块片段，块片段按 kind 交给注册表里的组件；没有登记的 kind 回落到渲染器输出的 HTML。内置 kind 目前是 `table` / `code` / `diagram`。
+- **组件收到的是什么**：`{ source, html, hash, streaming, labels, ... }`，另带按 kind 的载荷——表格是 `table`（已解析的 header/rows，单元格只有内联标记与纯文本两种形态），代码块是 `code`/`lang`/`label`/`highlighted`，图表是 `diagram`/`svg`/`usable` 及异步渲染入口。`labels` 由宿主解析（包里不带语料），`fly` 与 `motionDisabled` 也由宿主注入，块自己不拥有动效令牌。
+- **为什么是组件而不是 HTML**：一段消息的 HTML 是一整串，React 每次更新都重写 `innerHTML` —— 实测追加一段文本会把已完成表格的横向滚动从 40 归零。块自己持有 `<table>`/`<pre>`，节点才在流式期间稳定。
+- **分派**：daemon 编译 → `extensions.list.markdownBlocks` → 宿主 `loadExtensionMarkdownBlocks`（`client-core`）blob-import 并 `registerMarkdownBlocks`。坏模块只丢自己那个 kind，其余消息照常渲染。
+- **与 registerWidget 的区别**：后者是会话里的一张卡片（工具体裁），本项是回复正文里的一个块（内容体裁）。
+
+## 10.3 主题 bundle：滚动进度轨皮肤（registerScrollbarSkin）
 
 主题 bundle 可以贡献横向/纵向浮动滚动轨的皮肤。皮肤是**数据**，不携带渲染器模块——轨道由宿主绘制，插件只声明外观：
 
