@@ -138,7 +138,9 @@ describe("CI runtime and delivery contracts", () => {
 		const push = workflow.on?.push as { tags?: string[] };
 		expect(push?.tags).toEqual(["v*"]);
 		const steps = allSteps(workflow);
-		expect(steps.some(step => step.run?.includes("scripts/ci-tui-release-recover.ts"))).toBe(true);
+		const dispatch = steps.find(step => step.run?.includes("scripts/ci-tui-release-recover.ts"));
+		expect(dispatch?.run).toBe("bun scripts/ci-tui-release-recover.ts");
+		expect(dispatch?.run).not.toContain("${{");
 		expect(steps.some(step => step.uses?.startsWith("softprops/action-gh-release@"))).toBe(false);
 		const metadata = allSteps(readYaml(".github/workflows/ci.yml").jobs?.release_metadata);
 		expect(metadata.some(step => step.run?.includes("HEAD carries release tag"))).toBe(true);
