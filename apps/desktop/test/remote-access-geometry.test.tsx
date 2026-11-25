@@ -160,10 +160,25 @@ async function mount(width: number, height: number): Promise<void> {
 		</style>
 		${fixture()}
 	`);
+	// Layout is measured twice and compared, so a first paint that still shifts
+	// (webfont swap, image decode) would read as the footer having moved. Wait
+	// for the document's own load event and one settled frame instead.
+	await page.evaluate(
+		() =>
+			new Promise<void>(resolve => {
+				if (document.readyState === "complete") return resolve();
+				window.addEventListener("load", () => resolve(), { once: true });
+			}),
+	);
+	await page.evaluate(
+		() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+	);
 }
 
 interface Measured {
 	dialogHeight: number;
+	/** Content box height: `max-height` caps this, so the border is not in it. */
+	dialogClientHeight: number;
 	viewportHeight: number;
 	bodyScrollHeight: number;
 	bodyClientHeight: number;
@@ -188,6 +203,7 @@ async function measure(): Promise<Measured> {
 		const columnOverflow = Math.max(...columns.map(column => Math.max(0, column.scrollWidth - column.clientWidth)));
 		return {
 			dialogHeight: dialogRect.height,
+			dialogClientHeight: dialog.clientHeight,
 			viewportHeight: window.innerHeight,
 			bodyScrollHeight: body.scrollHeight,
 			bodyClientHeight: body.clientHeight,
@@ -221,8 +237,10 @@ describe("remote access dialog geometry", () => {
 			const first = await measure();
 
 			// The dialog is capped at 84vh, so the content must fit by scrolling
-			// rather than by growing past the window.
-			expect(first.dialogHeight).toBeLessThanOrEqual(height * 0.84 + 1);
+			// rather than by growing past the window. `max-height` caps the
+			// content box, so the 1px borders are outside it — comparing the
+			// border box would fail by exactly those two pixels.
+			expect(first.dialogClientHeight).toBeLessThanOrEqual(Math.round(height * 0.84) + 1);
 			expect(first.bodyScrollHeight).toBeGreaterThan(first.bodyClientHeight);
 
 			// The action is inside the dialog box, not clipped by its bottom edge.
