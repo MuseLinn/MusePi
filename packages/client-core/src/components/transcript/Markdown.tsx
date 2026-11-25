@@ -28,12 +28,15 @@ const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
 };
 
 import {
+	advanceTail,
 	blockGlyph,
+	EMPTY_TAIL,
 	type MarkdownBlockLabels,
 	type MarkdownTableCellPayload,
 	type MarkdownTablePayload,
 	markdownBlockDef,
 	setBlockGlyph,
+	type TailState,
 } from "@musepi/client-markdown";
 import { useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { downloadBlob } from "../../lib/download";
@@ -61,7 +64,7 @@ import {
 	renderDiagramSync,
 	renderMermaidAsyncHtml,
 } from "./mermaid";
-import { graphemeSpans } from "./reveal";
+
 import "../../ui-blocks/ui-blocks.css";
 import { useStreamingReveal } from "./use-streaming-reveal";
 
@@ -1610,41 +1613,14 @@ export const Markdown = memo(function Markdown({
 	// new tail is unrelated text — rebuild once, no animation replay of
 	// already-shown chars).
 	const tailRef = useRef<HTMLDivElement | null>(null);
-	const tailAppendedRef = useRef<string>("");
+	const tailStateRef = useRef<TailState>(EMPTY_TAIL);
 	useLayoutEffect(() => {
 		const el = tailRef.current;
 		if (!el) return;
-		const target = render.tail ?? "";
-		const prev = tailAppendedRef.current;
-		if (target === prev) return;
-		if (!target.startsWith(prev)) {
-			// Cut advanced (or a non-append reset): the previous tail moved
-			// into the head, or the stream restarted — drop everything and
-			// re-append the current tail fresh.
-			el.textContent = "";
-			tailAppendedRef.current = "";
-		}
-		const frag = document.createDocumentFragment();
-		const delta = target.slice(tailAppendedRef.current.length);
-		// shimmer is a root-level CSS sweep (no per-char spans); every other
-		// preset animates each new char exactly once via its CSS class.
-		if (effect === "shimmer") {
-			frag.appendChild(document.createTextNode(delta));
-		} else {
-			const effCls = effect === "typewriter" ? "tr-char tr-char--typewriter" : `tr-char tr-char--${effect}`;
-			for (const { word } of graphemeSpans(delta)) {
-				if (word === "\n") {
-					frag.appendChild(document.createTextNode("\n"));
-					continue;
-				}
-				const span = document.createElement("span");
-				span.className = effCls;
-				span.textContent = word;
-				frag.appendChild(span);
-			}
-		}
-		el.appendChild(frag);
-		tailAppendedRef.current = target;
+		// The effect itself is the package's (`advanceTail`): it appends only the
+		// delta and starts over when the streaming cut advanced, so a character's
+		// entrance plays once and no rule about replaying lives here.
+		tailStateRef.current = advanceTail(el, render.tail ?? "", effect, tailStateRef.current);
 	}, [render.tail, effect]);
 
 	// UI block answers: the markdown HTML is rewritten on every commit, so the
