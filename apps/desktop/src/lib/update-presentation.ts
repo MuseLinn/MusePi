@@ -8,10 +8,10 @@ export interface RestartHint {
 }
 
 /**
- * Pick the banner copy for a downloaded update (dsh `update-presentation`
- * parity: the main process ships stable ids and counts, the renderer owns the
- * wording). `count` is the number of requests still running — what the user is
- * actually waiting for — and never the total session count.
+ * Pick the banner copy for a downloaded update: the main process ships stable
+ * ids and counts, the renderer owns the wording. `count` is the number of
+ * requests still running — what the user is actually waiting for — and never
+ * the total session count.
  */
 export function restartHint(restart: UpdateRestartProgress | undefined | null): RestartHint | null {
 	if (!restart || restart.status === "idle") return null;

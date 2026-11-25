@@ -1,6 +1,5 @@
 /**
- * Work-in-progress summary for the desktop update handoff (dsh `updateTasks`
- * parity).
+ * Work-in-progress summary for the desktop update handoff.
  *
  * One definition of "busy" feeds both the quit confirmation and the update
  * restart gate. The shell asks at handoff time, not from a cached poll, so a

@@ -1,6 +1,5 @@
 /**
- * Daemon admission lock for the desktop update handoff
- * (dsh `updateTasks('lock')` parity).
+ * Daemon admission lock for the desktop update handoff.
  *
  * The shell engages it only after an idle inspection, immediately before it
  * stops the daemon and hands the process to the installer. Refusing new work
