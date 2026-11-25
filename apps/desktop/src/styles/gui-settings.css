@@ -2325,17 +2325,41 @@
 	overflow: hidden;
 }
 
+/* The morph wrapper is a block by default, which silently disables the
+ * scroller's `flex: 1 1 auto`: the two columns then grow past `max-height`
+ * and the dialog clips them, so nothing below the fold is reachable (the
+ * start action sat there). It must continue the dialog's flex column for the
+ * body to shrink and scroll. */
+.gui-dialog.gui-collab-dialog > .gui-dialog-morph {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
 .gui-collab-dialog-title {
 	margin: 0;
-	font-size: 14px;
+	font-size: var(--ui-font-size-lg);
 	font-weight: 600;
+}
+
+/* The body is the only scroller; the footer is a sibling, so the state's one
+ * decisive action never scrolls out of reach. */
+.gui-collab-frame {
+	--edge-blur-size: 26px;
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
 }
 
 .gui-collab-grid {
 	display: grid;
 	flex: 1 1 auto;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	align-items: start;
+	/* Both columns take the body's height: the divider between them must reach
+	 * the footer instead of stopping where the shorter column's content does. */
+	align-items: stretch;
 	gap: 0;
 	min-height: 0;
 	overflow-y: auto;
@@ -2343,11 +2367,28 @@
 	overflow-x: clip;
 }
 
+.gui-collab-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex: 0 0 auto;
+	padding: 10px 20px;
+	border-top: 1px solid var(--border);
+	background: var(--color-surface);
+}
+
+.gui-collab-foot-action {
+	justify-content: center;
+	min-width: 132px;
+	min-height: 34px;
+}
+
 .gui-collab-col {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
-	padding: 22px 24px;
+	gap: 12px;
+	padding: 18px 22px;
 	min-width: 0;
 }
 
@@ -2642,17 +2683,219 @@
 
 .gui-collab-desc {
 	margin: 0;
-	font-size: 12.5px;
+	font-size: 12px;
 	line-height: 1.55;
 	color: var(--color-text-muted);
+}
+
+/* What is being shared is a fact with consequences, not a description: it
+ * reads at full strength where the intro copy above it stays muted. */
+.gui-collab-scope-line {
+	margin: 0;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.5;
+	color: var(--color-text);
+}
+
+.gui-collab-exposures {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-collab-group-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-collab-group-head > span {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-collab-recheck {
+	width: 26px;
+	height: 26px;
+	flex: 0 0 auto;
+}
+
+.gui-collab-exposure-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-collab-exposure {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: transparent;
+	transition:
+		border-color var(--transition-fast),
+		background-color var(--transition-fast);
+}
+
+/* The chosen path must outweigh an optional prerequisite card: an accent tint
+ * and border, not a hairline that reads like the three untouched rows. */
+.gui-collab-exposure[data-selected="true"] {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+}
+
+.gui-collab-exposure:hover:not([data-selected="true"]) {
+	background: var(--color-surface-raised);
+}
+
+.gui-collab-exposure-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 11px 12px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-collab-radio {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+	margin-top: 1px;
+	border: 1px solid var(--border);
+	border-radius: 50%;
+}
+
+.gui-collab-radio[data-on="true"] {
+	border-color: var(--color-accent);
+}
+
+.gui-collab-radio[data-on="true"] > span {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--color-accent);
+}
+
+.gui-collab-exposure-copy {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.gui-collab-exposure-name {
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 1.35;
+}
+
+.gui-collab-exposure-state {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-exposure-facts {
+	color: var(--color-text-faint);
+}
+
+/* Prerequisite guidance belongs to the option that needs it, not to the
+ * column: collapsed, it costs one line and stops competing with the choice. */
+.gui-collab-exposure-more {
+	border-top: 1px solid var(--border);
+}
+
+.gui-collab-exposure-more > summary {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 12px;
+	font-size: 11px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	list-style: none;
+}
+
+.gui-collab-exposure-more > summary::-webkit-details-marker {
+	display: none;
+}
+
+.gui-collab-exposure-more > summary::before {
+	content: "▸" / "";
+}
+
+.gui-collab-exposure-more[open] > summary::before {
+	content: "▾" / "";
+}
+
+.gui-collab-install-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 0 12px 12px;
+}
+
+.gui-collab-install-body p {
+	margin: 0;
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+/* The transport's own sentence: a fact about the tool, held below the
+ * localized line so an English diagnostic never leads the disclosure. */
+.gui-collab-install-source {
+	color: var(--color-text-faint);
+}
+
+.gui-collab-platform {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.gui-collab-platform > span {
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+
+.gui-collab-platform code {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--color-text-muted);
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+
+.gui-collab-install-body .gui-btn {
+	align-self: flex-start;
+	margin-top: 2px;
 }
 
 .gui-collab-setup,
 .gui-collab-hosting {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
-	padding-top: 4px;
+	gap: 12px;
+	padding-top: 2px;
 }
 
 .gui-collab-scope.gui-seg {
@@ -2692,12 +2935,6 @@
 	color: var(--color-text-muted);
 }
 
-.gui-collab-start {
-	justify-content: center;
-	width: 100%;
-	min-height: 38px;
-}
-
 .gui-collab-recovery {
 	display: flex;
 	align-items: flex-start;
@@ -2734,6 +2971,11 @@
 	color: var(--color-text-muted);
 }
 
+.gui-collab-technical p {
+	margin: 6px 0 0;
+	line-height: 1.5;
+}
+
 .gui-collab-technical summary {
 	width: fit-content;
 	cursor: pointer;
@@ -2753,13 +2995,22 @@
 .gui-collab-status {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	font-size: var(--ui-font-size-sm);
+	flex-wrap: wrap;
+	gap: 6px 8px;
+	font-size: 12px;
 	color: var(--color-text-muted);
 }
 
-.gui-collab-stop {
-	margin-left: auto;
+.gui-collab-status-meta {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+/* A deadline changes what the user may hand out, so it reads above the
+ * scope/path metadata it sits beside. */
+.gui-collab-status-deadline {
+	font-size: 11px;
+	color: var(--color-text-muted);
 }
 
 .gui-collab-participants {
@@ -2768,12 +3019,27 @@
 	gap: 6px;
 }
 
-.gui-collab-participants > span {
+.gui-collab-participant {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
 	padding: 2px 8px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-full);
 	font-size: 11px;
 	color: var(--color-text-muted);
+}
+
+.gui-collab-participant-sep {
+	color: var(--color-text-faint);
+}
+
+.gui-collab-participant-lock {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--color-text-faint);
 }
 
 .gui-collab-dot {
@@ -3032,7 +3298,10 @@
 }
 
 .gui-collab-plugins {
-	margin-top: 4px;
+	/* Sits on the column's bottom edge when the other column is taller, so the
+	 * leftover space reads as the column's own margin instead of a cut list. */
+	margin-top: auto;
+	padding-top: 4px;
 	border-top: 1px solid var(--border);
 }
 
@@ -3227,6 +3496,11 @@
 }
 
 @media (max-width: 520px) {
+	.gui-collab-foot {
+		flex-wrap: wrap;
+		padding: 10px 16px;
+	}
+
 	.gui-collab-bot {
 		flex-wrap: wrap;
 	}

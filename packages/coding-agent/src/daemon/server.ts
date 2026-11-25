@@ -4448,6 +4448,7 @@ export class DaemonServer {
 							sessionId: hosted.sessionId ?? null,
 							exposure: hosted.exposure,
 							health: hosted.health,
+							...(hosted.transport.shareExpiresAt ? { expiresAt: hosted.transport.shareExpiresAt } : {}),
 							...(hosted.warning ? { warning: hosted.warning } : {}),
 						};
 					}
@@ -4655,6 +4656,9 @@ export class DaemonServer {
 					sessionId: shareRef.sessionId ?? null,
 					exposure: requestedExposure,
 					health: shareRef.health,
+					// A time-limited share tells the caller when it will end, so the
+					// panel can count down instead of surprising guests with a cut.
+					...(transport.shareExpiresAt ? { expiresAt: transport.shareExpiresAt } : {}),
 					...(shareRef.warning ? { warning: shareRef.warning } : {}),
 				};
 			}
@@ -4738,6 +4742,7 @@ export class DaemonServer {
 					link: current.host.link,
 					webLink: current.host.webLink,
 					viewLink: current.host.viewLink,
+					...(current.transport.shareExpiresAt ? { expiresAt: current.transport.shareExpiresAt } : {}),
 					...(current.warning ? { warning: current.warning } : {}),
 				};
 			}

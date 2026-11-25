@@ -154,6 +154,18 @@ function clickRadio(dialog: HTMLElement, groupLabel: string, name: string): void
 	act(() => radio.click());
 }
 
+function exposureCard(dialog: HTMLElement, name: string): HTMLElement {
+	const card = Array.from(dialog.querySelectorAll<HTMLElement>(".gui-collab-exposure")).find(el =>
+		el.textContent?.includes(name),
+	);
+	if (!card) throw new Error(`exposure card not found: ${name}`);
+	return card;
+}
+
+function buttonLabels(dialog: HTMLElement): string[] {
+	return Array.from(dialog.querySelectorAll("button")).map(el => el.textContent?.trim() ?? "");
+}
+
 describe("RemoteAccessDialog sharing surface", () => {
 	test("an unavailable exposure renders per-platform install guidance without starting", async () => {
 		const harness = await renderDialog(rpcStub());
@@ -456,6 +468,126 @@ describe("RemoteAccessDialog sharing surface", () => {
 	});
 });
 
+describe("RemoteAccessDialog hierarchy", () => {
+	test("the decisive action sits in the footer, never inside the scrolling body", async () => {
+		const harness = await renderDialog(rpcStub());
+		try {
+			const dialog = harness.dialog();
+			const start = findButton(dialog, "开始共享");
+			const foot = dialog.querySelector(".gui-collab-foot");
+			const body = dialog.querySelector(".gui-collab-grid");
+			// Burning the start action below an optional install guide is what
+			// made it unreachable: the two-column body grows past the dialog's
+			// max-height and the overflow is clipped, not scrolled.
+			expect(foot?.contains(start)).toBe(true);
+			expect(body?.contains(start)).toBe(false);
+			expect(foot?.previousElementSibling?.className).toContain("gui-collab-frame");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("a live share keeps its stop action in the footer", async () => {
+		const harness = await renderDialog(
+			rpcStub({
+				status: {
+					hosting: true,
+					exposure: "lan",
+					webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654",
+					health: { health: "ready" },
+				},
+			}),
+		);
+		try {
+			const dialog = harness.dialog();
+			const stop = findButton(dialog, "停止共享");
+			expect(dialog.querySelector(".gui-collab-foot")?.contains(stop)).toBe(true);
+			expect(dialog.querySelector(".gui-collab-grid")?.contains(stop)).toBe(false);
+			// Copying the link is the live state's primary in-body action; the
+			// page itself is the way to prove the link works before inviting.
+			expect(buttonLabels(dialog)).toContain("在浏览器打开");
+			expect(buttonLabels(dialog)).not.toContain("刷新");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("install guidance is folded into the option that needs it", async () => {
+		const harness = await renderDialog(rpcStub());
+		try {
+			const dialog = harness.dialog();
+			const card = exposureCard(dialog, "Cloudflare Tunnel");
+			const details = card.querySelector("details");
+			// Collapsed by default so a missing prerequisite cannot outrank the
+			// choice it belongs to, and scoped to that option rather than
+			// repeated as a standalone card.
+			expect(details?.open).toBe(false);
+			expect(details?.textContent).toContain("brew install cloudflared");
+			expect(dialog.querySelectorAll(".gui-collab-exposure-more").length).toBe(1);
+			expect(exposureCard(dialog, "局域网").querySelector("details") === null).toBe(true);
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("each option states who can reach it and who carries the traffic", async () => {
+		const harness = await renderDialog(rpcStub());
+		try {
+			const dialog = harness.dialog();
+			// The capabilities come from the probe; the choice between four
+			// paths is not readable from their names alone.
+			expect(exposureCard(dialog, "局域网").textContent).toContain("仅同一网络");
+			const tunnel = exposureCard(dialog, "Cloudflare Tunnel");
+			expect(tunnel.textContent).toContain("公网可达");
+			expect(tunnel.textContent).toContain("经第三方中转");
+		} finally {
+			await harness.unmount();
+		}
+	});
+});
+
+describe("RemoteAccessDialog share lifetime", () => {
+	test("a time-limited share counts down the deadline it was given", async () => {
+		const harness = await renderDialog(
+			rpcStub({
+				status: {
+					hosting: true,
+					exposure: "lan",
+					webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654",
+					health: { health: "ready" },
+					expiresAt: Date.now() + 90_000,
+				},
+			}),
+		);
+		try {
+			const dialog = harness.dialog();
+			// A share that dies on its own must say so up front; guests should
+			// not be the ones to discover the cut.
+			expect(dialog.textContent).toMatch(/分享将在 \d+m\d+s 后自动结束/);
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("a share without a time limit shows no countdown", async () => {
+		const harness = await renderDialog(
+			rpcStub({
+				status: {
+					hosting: true,
+					exposure: "lan",
+					webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654",
+					health: { health: "ready" },
+				},
+			}),
+		);
+		try {
+			expect(harness.dialog().textContent).not.toContain("后自动结束");
+		} finally {
+			await harness.unmount();
+		}
+	});
+});
+
 describe("RemoteAccessDialog channels", () => {
 	test("a channel-list failure offers retry instead of claiming no channels exist", async () => {
 		const harness = await renderDialog(
@@ -471,6 +603,29 @@ describe("RemoteAccessDialog channels", () => {
 			expect(alert?.textContent).toContain("无法加载");
 			expect(alert?.textContent).not.toContain("尚未配置渠道");
 			expect(Array.from(alert?.querySelectorAll("button") ?? []).some(el => el.textContent === "重试")).toBe(true);
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("a channel states whether it is running instead of relying on an unlabelled dot", async () => {
+		const harness = await renderDialog(
+			rpcStub({
+				channelsList: () => [
+					{ kind: "discord", state: "off", config: {} },
+					{ kind: "telegram", state: "connected", config: {} },
+				],
+			}),
+		);
+		try {
+			const dialog = harness.dialog();
+			const rows = Array.from(dialog.querySelectorAll(".gui-collab-bot"));
+			const discord = rows.find(row => row.textContent?.includes("Discord"));
+			const telegram = rows.find(row => row.textContent?.includes("Telegram"));
+			// Every channel used to carry a 7px grey dot and no words, so six
+			// never-configured rows looked like six configured ones.
+			expect(discord?.textContent).toContain("未连接");
+			expect(telegram?.textContent).toContain("已连接");
 		} finally {
 			await harness.unmount();
 		}

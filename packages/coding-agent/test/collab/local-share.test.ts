@@ -179,6 +179,27 @@ describe("LocalShareManager exposures", () => {
 		expect(manager.exposureStatus).toBeNull();
 	}, 10_000);
 
+	it("publishes the TTL deadline and clears it when the share stops", async () => {
+		const manager = new LocalShareManager({ port: 0, registry: stubRegistry(), shareTtlMinutes: 5 });
+		expect(manager.shareExpiresAt).toBeNull();
+		await manager.startExposure("stub", { verifyReachable: false });
+		const expiresAt = manager.shareExpiresAt;
+		// The panel counts down from this value, so it must be a real wall-clock
+		// deadline rather than the configured duration.
+		expect(typeof expiresAt).toBe("number");
+		expect(expiresAt!).toBeGreaterThan(Date.now() + 4 * 60_000);
+		expect(expiresAt!).toBeLessThanOrEqual(Date.now() + 5 * 60_000 + 1_000);
+		await manager.stop();
+		expect(manager.shareExpiresAt).toBeNull();
+	}, 10_000);
+
+	it("has no deadline when sharing is not time-limited", async () => {
+		const manager = new LocalShareManager({ port: 0, registry: stubRegistry() });
+		await manager.startExposure("stub", { verifyReachable: false });
+		expect(manager.shareExpiresAt).toBeNull();
+		await manager.stop();
+	});
+
 	it("a degraded exposure revokes the relay without a stop() call", async () => {
 		const statuses: string[] = [];
 		const manager = new LocalShareManager({

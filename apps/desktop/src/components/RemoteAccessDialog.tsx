@@ -1,14 +1,16 @@
-import { t } from "@musepi/client-core";
+import { fmtDuration, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { useConfirm } from "../lib/prompt-dialog";
 import { channelStateText } from "../lib/remote-access";
 import type { RpcClient } from "../lib/rpc";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { QrCode } from "../vendor/qrcode";
 import { DialogFrame } from "./DialogFrame";
 import { Reveal } from "./Reveal";
+import { ScrollEdgeBlur } from "./ScrollEdgeBlur";
 
 type ShareScope = "workspace" | "session";
 type ExposureHealth = "unavailable" | "starting" | "ready" | "degraded" | "stopped";
@@ -39,6 +41,8 @@ interface RemoteAccessInfo {
 	webLink?: string;
 	viewLink?: string;
 	participants?: RemoteAccessGuest[];
+	/** Wall-clock end of a time-limited share; absent when it runs until stopped. */
+	expiresAt?: number;
 	lastEnd?: ShareEnd;
 	/** A configuration value made part of the share unusable (e.g. collab.webUrl). */
 	warning?: string;
@@ -315,11 +319,14 @@ export function RemoteAccessDialog({
 		return () => window.clearInterval(timer);
 	}, [open, pendingChannel, rpc, refreshChannels]);
 
+	const shareExpiresAt = info?.hosting === true ? (info.expiresAt ?? null) : null;
 	useEffect(() => {
-		if (pairCodeExpiresAt === null) return;
+		// One ticker for every countdown the panel shows (pair code, share TTL);
+		// both are wall-clock deadlines, so a single second step keeps them live.
+		if (pairCodeExpiresAt === null && shareExpiresAt === null) return;
 		const timer = window.setInterval(() => setNow(Date.now()), 1000);
 		return () => window.clearInterval(timer);
-	}, [pairCodeExpiresAt]);
+	}, [pairCodeExpiresAt, shareExpiresAt]);
 
 	const reloadPlugins = async (): Promise<void> => {
 		if (!rpc || reloadingPlugins) return;
@@ -547,6 +554,7 @@ export function RemoteAccessDialog({
 	const exposureAvailable = selectedExposure !== null && selectedExposure.health !== "unavailable";
 	const hostingScope = info?.mode ?? initialScope;
 	const pairSecondsLeft = pairCodeExpiresAt === null ? null : Math.max(0, Math.ceil((pairCodeExpiresAt - now) / 1000));
+	const shareSecondsLeft = shareExpiresAt === null ? null : Math.max(0, Math.ceil((shareExpiresAt - now) / 1000));
 	const canShare =
 		!busy &&
 		rpc !== null &&
@@ -566,8 +574,22 @@ export function RemoteAccessDialog({
 				? t("settings.shareSessionScopeHint", { title: sessionTitle ?? t("general.currentSession") })
 				: t("settings.openCreateSessionFirst")
 			: t("general.shareWholeWorkspaceGuests");
-	const installs = (exposures ?? []).filter(entry => entry.health === "unavailable" && entry.install);
+	// Who can reach this share and who carries the traffic are the facts that
+	// separate the four paths; a probe already reports them, so the option
+	// states them instead of leaving the choice to the names alone.
+	const exposureFacts = (entry: ExposureOption): string[] => {
+		const caps = entry.capabilities;
+		if (!caps) return [];
+		const facts = [caps.publicExposure ? t("settings.exposurePublic") : t("settings.exposureLanOnly")];
+		if (caps.thirdParty) facts.push(t("settings.exposureThirdParty"));
+		if (caps.guestInstall) facts.push(t("settings.exposureGuestInstall"));
+		if (caps.stableUrl) facts.push(t("settings.exposureStableUrl"));
+		return facts.slice(0, 2);
+	};
 	const titleIcon = initialScope === "session" ? "share-2" : "global";
+
+	const scrollRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(scrollRef);
 
 	const errorBlock = error ? (
 		<div className="gui-collab-recovery" role="alert">
@@ -575,12 +597,6 @@ export function RemoteAccessDialog({
 			<div className="gui-collab-recovery-content">
 				<h3>{errorAction === "start" ? t("settings.shareStartFailed") : t("settings.shareActionFailed")}</h3>
 				<p>{t("settings.shareFailedHint")}</p>
-				<div className="gui-collab-recovery-actions">
-					<button type="button" className="gui-btn gui-btn-primary" disabled={!canRetry} onClick={retryError}>
-						<Icon name="refresh" className="h-3.5 w-3.5" />
-						<span>{busy ? t("settings.starting") : t("settings.retry")}</span>
-					</button>
-				</div>
 				<details className="gui-collab-technical">
 					<summary>{t("settings.technicalDetails")}</summary>
 					<pre>{error}</pre>
@@ -618,509 +634,537 @@ export function RemoteAccessDialog({
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
-			<div className="gui-collab-grid">
-				<section className="gui-collab-col gui-collab-share">
-					<div className="gui-collab-col-head">
-						<Icon name={titleIcon} className="h-4 w-4" />
-						<h2>{t("settings.shareLink")}</h2>
-					</div>
-					{live ? (
-						<div className="gui-collab-hosting">
-							<div className="gui-collab-status">
-								<span className="gui-collab-dot" aria-hidden="true" />
-								<span>{t("settings.shareWaitingGuests")}</span>
-								<span className="text-[11px] text-[var(--color-text-faint)]">
-									{hostingScope === "workspace" ? t("tools.workspace") : t("general.currentSession")} ·{" "}
-									{exposureName(currentExposureId)}
-								</span>
-								<button
-									type="button"
-									className="gui-btn gui-btn-stop gui-collab-stop"
-									disabled={busy}
-									onClick={() => void stopShare()}
-								>
-									<Icon name="stop" className="h-3 w-3" />
-									<span>{t("settings.stopSharing")}</span>
-								</button>
-							</div>
-							{(info?.participants?.length ?? 0) > 0 ? (
-								<div className="gui-collab-participants">
-									{(info?.participants ?? []).map(p => (
-										<span key={`${p.role}:${p.name}`} className="inline-flex items-center gap-1">
-											<span>{p.name}</span>
-											<span className="text-[var(--color-text-faint)]">·</span>
-											<span>
-												{p.role === "host"
-													? t("settings.participantHost")
-													: t("settings.participantDevice")}
-											</span>
-											{p.readOnly ? (
-												<span className="inline-flex items-center gap-0.5 rounded-full border border-[var(--border)] px-1.5 text-[10px] text-[var(--color-text-faint)]">
-													<Icon name="lock-2" className="h-2.5 w-2.5" />
-													{t("general.readOnly")}
-												</span>
-											) : null}
-											<span className="text-[var(--color-text-faint)]">·</span>
-											<span>{exposureName(currentExposureId)}</span>
-										</span>
-									))}
-								</div>
-							) : null}
-							{error ? errorBlock : null}
-							{warningBlock}
-							{webLink ? (
-								<>
-									<div className="gui-collab-qr">
-										<canvas ref={qrRef} aria-label={t("settings.scanQrCode")} />
-									</div>
-									<div className="gui-collab-actions">
-										<button type="button" className="gui-btn" onClick={() => void refresh()}>
-											<Icon name="refresh" className="h-3.5 w-3.5" />
-											<span>{t("settings.refresh")}</span>
-										</button>
-										<button type="button" className="gui-btn" onClick={() => void copyLink()}>
-											<Icon name={copied ? "check" : "file-copy"} className="h-3.5 w-3.5" />
-											<span aria-live="polite">
-												{copied ? t("settings.copied") : t("settings.copyLink")}
-											</span>
-										</button>
-										{info?.viewLink ? (
-											<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
-												<Icon name="eye" className="h-3.5 w-3.5" />
-												<span aria-live="polite">
-													{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}
-												</span>
-											</button>
-										) : null}
-									</div>
-									{currentExposureId === "lan" ? (
-										<div className="gui-collab-pair">
-											<span className="gui-collab-pair-title">{t("settings.useMusepiMobilePair")}</span>
-											<div className="gui-collab-pair-row">
-												<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
-												<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
-													<Icon name="refresh" className="h-3.5 w-3.5" />
-													<span>{t("settings.getCode")}</span>
-												</button>
-											</div>
-											<span className="gui-collab-pair-hint">
-												{pairHost
-													? t("settings.pairCodeWithAddress", { host: pairHost })
-													: pairSecondsLeft === null
-														? t("settings.enter6DigitCodeMusepiMobile")
-														: pairSecondsLeft > 0
-															? t("settings.singleUseExpiresSWithSeconds", {
-																	seconds: String(pairSecondsLeft),
-																})
-															: t("settings.codeHasExpiredGet")}
-											</span>
-										</div>
-									) : (
-										<div className="gui-collab-pair">
-											<span className="gui-collab-pair-title">{t("settings.shareDirectLink")}</span>
-											<code className="select-text break-all rounded-lg border border-[var(--border)] bg-[var(--color-surface-raised)] p-2 font-mono text-[11px] text-[var(--color-text-muted)]">
-												{webLink}
-											</code>
-											<span className="gui-collab-pair-hint">{t("settings.shareDirectLinkHint")}</span>
-										</div>
-									)}
-								</>
-							) : null}
+			<div className="gui-collab-frame gui-scroll-frame">
+				<div ref={scrollRef} className="gui-collab-grid">
+					<section className="gui-collab-col gui-collab-share">
+						<div className="gui-collab-col-head">
+							<h2>{t("settings.shareLink")}</h2>
 						</div>
-					) : (
-						<div className="gui-collab-setup">
-							<p className="gui-collab-desc">{t("settings.remoteAccessIntro")}</p>
-							{degraded ? (
-								<div className="gui-collab-recovery" role="alert">
-									<Icon name="error-warning" className="h-5 w-5" />
-									<div className="gui-collab-recovery-content">
-										<h3>{t("settings.shareDegraded")}</h3>
-										<p>{t("settings.shareDegradedHint")}</p>
-									</div>
-								</div>
-							) : null}
-							{info?.lastEnd ? (
-								<div className="gui-collab-scope-summary" role="status">
-									<Icon name="information" className="h-4 w-4" />
-									<div>
-										<h3>{t("settings.shareEnded")}</h3>
-										<p>{shareEndReason(info.lastEnd)}</p>
-										<p>{info.lastEnd.hint ?? t("settings.shareEndedNextStep")}</p>
-										{info.lastEnd.detail ? (
-											<details className="gui-collab-technical">
-												<summary>{t("settings.technicalDetails")}</summary>
-												<pre>{info.lastEnd.detail}</pre>
-											</details>
-										) : null}
-									</div>
-								</div>
-							) : null}
-							{warningBlock}
-							<p className="gui-collab-desc">{scopeHint}</p>
-							<div className="flex flex-col gap-2">
-								<div className="flex items-center justify-between gap-2">
-									<span className="text-[12px] font-medium text-[var(--color-text-muted)]">
-										{t("settings.shareExposure")}
+						{live ? (
+							<div className="gui-collab-hosting">
+								<div className="gui-collab-status">
+									<span className="gui-collab-dot" aria-hidden="true" />
+									<span>{t("settings.shareWaitingGuests")}</span>
+									<span className="gui-collab-status-meta">
+										{hostingScope === "workspace" ? t("tools.workspace") : t("general.currentSession")} ·{" "}
+										{exposureName(currentExposureId)}
 									</span>
-									<button
-										type="button"
-										className="gui-btn gui-btn-sm"
-										disabled={busy || exposuresLoading}
-										onClick={() => void refreshExposures()}
-									>
-										<Icon name="refresh" className={`h-3 w-3${exposuresLoading ? " animate-spin" : ""}`} />
-										<span>{t("settings.recheckExposures")}</span>
-									</button>
+									{shareSecondsLeft !== null && shareSecondsLeft > 0 ? (
+										<span className="gui-collab-status-deadline">
+											{t("settings.shareEndsIn", { time: fmtDuration(shareSecondsLeft * 1000) })}
+										</span>
+									) : null}
 								</div>
-								{exposuresError ? (
-									<div className="gui-collab-channel-message" role="alert">
-										<Icon name="error-warning" className="h-4 w-4" />
-										<div>
-											<strong>{t("settings.exposuresLoadFailed")}</strong>
-											<p>{t("settings.exposuresLoadFailedHint")}</p>
+								{(info?.participants?.length ?? 0) > 0 ? (
+									<div className="gui-collab-participants">
+										{(info?.participants ?? []).map(p => (
+											<span key={`${p.role}:${p.name}`} className="gui-collab-participant">
+												<span>{p.name}</span>
+												<span className="gui-collab-participant-sep" aria-hidden="true">
+													·
+												</span>
+												<span>
+													{p.role === "host"
+														? t("settings.participantHost")
+														: t("settings.participantDevice")}
+												</span>
+												{p.readOnly ? (
+													<span className="gui-collab-participant-lock">
+														<Icon name="lock-2" className="h-3 w-3" aria-hidden="true" />
+														{t("general.readOnly")}
+													</span>
+												) : null}
+											</span>
+										))}
+									</div>
+								) : null}
+								{error ? errorBlock : null}
+								{warningBlock}
+								{webLink ? (
+									<>
+										<div className="gui-collab-qr">
+											<canvas ref={qrRef} aria-label={t("settings.scanQrCode")} />
+										</div>
+										<div className="gui-collab-actions">
 											<button
 												type="button"
-												className="gui-btn gui-btn-sm"
-												onClick={() => void refreshExposures()}
+												className="gui-btn gui-btn-primary"
+												onClick={() => void copyLink()}
 											>
-												<Icon name="refresh" className="h-3 w-3" />
-												<span>{t("settings.retry")}</span>
+												<Icon name={copied ? "check" : "file-copy"} className="h-3.5 w-3.5" />
+												<span aria-live="polite">
+													{copied ? t("settings.copied") : t("settings.copyLink")}
+												</span>
 											</button>
-										</div>
-									</div>
-								) : exposures === null && exposuresLoading ? (
-									<div className="gui-collab-loading">
-										<Icon name="loader" className="h-3.5 w-3.5 animate-spin" />
-										<span>{t("settings.loadingExposures")}</span>
-									</div>
-								) : (
-									<div
-										role="radiogroup"
-										aria-label={t("settings.shareExposure")}
-										className="flex flex-col gap-1.5"
-									>
-										{(exposures ?? []).map(entry => {
-											const selected = entry.id === exposureId;
-											const ready = entry.health === "ready";
-											return (
-												<button
-													key={entry.id}
-													type="button"
-													role="radio"
-													aria-checked={selected}
-													disabled={busy}
-													onClick={() => {
-														setExposureId(entry.id);
-														setError(null);
-													}}
-													className={`flex w-full items-start gap-2.5 rounded-xl border bg-transparent p-3 text-left transition-colors ${
-														selected
-															? "border-[var(--color-accent)]"
-															: "border-[var(--border)] hover:bg-[var(--color-surface-raised)]"
-													}`}
-												>
-													<span
-														className={`mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border ${
-															selected ? "border-[var(--color-accent)]" : "border-[var(--border)]"
-														}`}
-													>
-														{selected ? (
-															<span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
-														) : null}
-													</span>
-													<span className="flex min-w-0 flex-1 flex-col gap-0.5">
-														<span className="flex items-center gap-1.5 text-[12.5px] font-medium">
-															<span>{exposureName(entry.id)}</span>
-															{entry.capabilities?.publicExposure ? (
-																<span className="rounded-full border border-[var(--border)] px-1.5 text-[10px] font-normal text-[var(--color-text-faint)]">
-																	{t("settings.exposurePublic")}
-																</span>
-															) : null}
-														</span>
-														<span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-faint)]">
-															<span
-																className={`gui-collab-dot${ready ? "" : " gui-collab-dot--off"}`}
-																aria-hidden="true"
-															/>
-															<span>{healthText(entry.health)}</span>
-														</span>
+											<button
+												type="button"
+												className="gui-btn"
+												onClick={() => void openExternalUrl(webLink)}
+											>
+												<Icon name="external-link" className="h-3.5 w-3.5" />
+												<span>{t("settings.openShareInBrowser")}</span>
+											</button>
+											{info?.viewLink ? (
+												<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
+													<Icon name="eye" className="h-3.5 w-3.5" />
+													<span aria-live="polite">
+														{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}
 													</span>
 												</button>
-											);
-										})}
-									</div>
-								)}
-								{selectedExposure?.hint ? <p className="gui-collab-desc">{selectedExposure.hint}</p> : null}
-								{selectedExposure?.detail ? (
-									<details className="gui-collab-technical">
-										<summary>{t("settings.technicalDetails")}</summary>
-										<pre>{selectedExposure.detail}</pre>
-									</details>
-								) : null}
-							</div>
-							{installs.length > 0 ? (
-								<div className="flex flex-col gap-2">
-									{installs.map(entry => (
-										<div key={entry.id} className="gui-collab-scope-summary">
-											<Icon name="download-cloud" className="h-4 w-4" />
-											<div className="flex min-w-0 flex-1 flex-col gap-1.5">
-												<h3>
-													{t("settings.exposureInstallTitle", {
-														name: exposureName(entry.id),
-													})}
-												</h3>
-												<p>{entry.install?.note ?? t("settings.exposureInstallNote")}</p>
-												<div className="flex flex-col gap-1">
-													{Object.entries(entry.install?.commands ?? {}).map(([platform, command]) => (
-														<div key={platform} className="flex flex-col gap-0.5">
-															<span className="text-[10px] uppercase tracking-wide text-[var(--color-text-faint)]">
-																{PLATFORM_NAMES[platform] ?? platform}
-															</span>
-															<code className="select-text break-all font-mono text-[11px] text-[var(--color-text-muted)]">
-																{command}
-															</code>
-														</div>
-													))}
-												</div>
-												<div className="gui-collab-recovery-actions">
-													<button
-														type="button"
-														className="gui-btn gui-btn-sm"
-														onClick={() => void openExternalUrl(entry.install?.url ?? "")}
-													>
-														<Icon name="external-link" className="h-3 w-3" />
-														<span>{t("settings.viewInstallGuide")}</span>
+											) : null}
+										</div>
+										{currentExposureId === "lan" ? (
+											<div className="gui-collab-pair">
+												<span className="gui-collab-pair-title">{t("settings.useMusepiMobilePair")}</span>
+												<div className="gui-collab-pair-row">
+													<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
+													<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
+														<Icon name="refresh" className="h-3.5 w-3.5" />
+														<span>{t("settings.getCode")}</span>
 													</button>
 												</div>
+												<span className="gui-collab-pair-hint">
+													{pairHost
+														? t("settings.pairCodeWithAddress", { host: pairHost })
+														: pairSecondsLeft === null
+															? t("settings.enter6DigitCodeMusepiMobile")
+															: pairSecondsLeft > 0
+																? t("settings.singleUseExpiresSWithSeconds", {
+																		seconds: String(pairSecondsLeft),
+																	})
+																: t("settings.codeHasExpiredGet")}
+												</span>
+											</div>
+										) : (
+											<div className="gui-collab-pair">
+												<span className="gui-collab-pair-title">{t("settings.shareDirectLink")}</span>
+												<code className="select-text break-all rounded-lg border border-[var(--border)] bg-[var(--color-surface-raised)] p-2 font-mono text-[11px] text-[var(--color-text-muted)]">
+													{webLink}
+												</code>
+												<span className="gui-collab-pair-hint">{t("settings.shareDirectLinkHint")}</span>
+											</div>
+										)}
+									</>
+								) : null}
+							</div>
+						) : (
+							<div className="gui-collab-setup">
+								<p className="gui-collab-desc">{t("settings.remoteAccessIntro")}</p>
+								{degraded ? (
+									<div className="gui-collab-recovery" role="alert">
+										<Icon name="error-warning" className="h-5 w-5" />
+										<div className="gui-collab-recovery-content">
+											<h3>{t("settings.shareDegraded")}</h3>
+											<p>{t("settings.shareDegradedHint")}</p>
+										</div>
+									</div>
+								) : null}
+								{info?.lastEnd ? (
+									<div className="gui-collab-scope-summary" role="status">
+										<Icon name="information" className="h-4 w-4" />
+										<div>
+											<h3>{t("settings.shareEnded")}</h3>
+											<p>{shareEndReason(info.lastEnd)}</p>
+											<p>{info.lastEnd.hint ?? t("settings.shareEndedNextStep")}</p>
+											{info.lastEnd.detail ? (
+												<details className="gui-collab-technical">
+													<summary>{t("settings.technicalDetails")}</summary>
+													<pre>{info.lastEnd.detail}</pre>
+												</details>
+											) : null}
+										</div>
+									</div>
+								) : null}
+								{warningBlock}
+								<p className="gui-collab-scope-line">{scopeHint}</p>
+								<div className="gui-collab-exposures">
+									<div className="gui-collab-group-head">
+										<span>{t("settings.shareExposure")}</span>
+										<button
+											type="button"
+											className="gui-tool-btn gui-collab-recheck"
+											disabled={busy || exposuresLoading}
+											aria-label={t("settings.recheckExposures")}
+											title={t("settings.recheckExposures")}
+											onClick={() => void refreshExposures()}
+										>
+											<Icon
+												name="refresh"
+												className={`h-3.5 w-3.5${exposuresLoading ? " animate-spin" : ""}`}
+											/>
+										</button>
+									</div>
+									{exposuresError ? (
+										<div className="gui-collab-channel-message" role="alert">
+											<Icon name="error-warning" className="h-4 w-4" />
+											<div>
+												<strong>{t("settings.exposuresLoadFailed")}</strong>
+												<p>{t("settings.exposuresLoadFailedHint")}</p>
+												<button
+													type="button"
+													className="gui-btn gui-btn-sm"
+													onClick={() => void refreshExposures()}
+												>
+													<Icon name="refresh" className="h-3 w-3" />
+													<span>{t("settings.retry")}</span>
+												</button>
 											</div>
 										</div>
-									))}
-								</div>
-							) : null}
-							{error ? (
-								errorBlock
-							) : (
-								<button
-									type="button"
-									className="gui-btn gui-btn-primary gui-collab-start"
-									disabled={!canShare}
-									onClick={() => void startShare()}
-								>
-									<Icon name="send-plane" className="h-3.5 w-3.5" />
-									<span>{busy ? t("settings.starting") : t("settings.startSharing")}</span>
-								</button>
-							)}
-						</div>
-					)}
-				</section>
-				<section className="gui-collab-col gui-collab-channel-col">
-					<div className="gui-collab-col-head">
-						<Icon name="robot" className="h-4 w-4" />
-						<h2>{t("settings.useBotChannel")}</h2>
-					</div>
-					<p className="gui-collab-desc">{t("settings.connectChatBotLonger")}</p>
-					<div className="gui-collab-channels">
-						{channelsError ? (
-							<div className="gui-collab-channel-message" role="alert">
-								<Icon name="error-warning" className="h-4 w-4" />
-								<div>
-									<strong>{t("settings.channelsLoadFailed")}</strong>
-									<p>{t("settings.channelsLoadFailedHint")}</p>
-									<button type="button" className="gui-btn gui-btn-sm" onClick={() => void refreshChannels()}>
-										<Icon name="refresh" className="h-3 w-3" />
-										<span>{t("settings.retry")}</span>
-									</button>
-								</div>
-							</div>
-						) : channels === null ? (
-							<div className="gui-collab-loading">
-								<Icon name="loader" className="h-3.5 w-3.5 animate-spin" />
-								<span>{t("settings.loadingChannels")}</span>
-							</div>
-						) : channels.length === 0 ? (
-							<div className="gui-collab-loading">{t("settings.noChannelsConfigured")}</div>
-						) : (
-							<ul className="gui-collab-bots">
-								{channels.map(c => {
-									const label =
-										plugins?.find(plugin => plugin.kind === c.kind)?.label ?? CHANNEL_NAMES[c.kind] ?? c.kind;
-									const on = c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
-									const fields = channelFields[c.kind];
-									const needsForm = !!fields && fields.some(field => !field.optional);
-									const qrUrl = typeof c.config?.qrUrl === "string" ? c.config.qrUrl : "";
-									const waitingScan = c.state === "waiting_scan";
-									const channelBusy = busyChannel === c.kind;
-									const stateKind = channelStateText(c.state, c.detail);
-									const stateText =
-										stateKind === "connected"
-											? (c.detail ?? t("settings.connected"))
-											: stateKind === "connecting"
-												? (c.detail ?? t("settings.connecting"))
-												: stateKind === "waiting"
-													? (c.detail ?? t("settings.waitingForScan"))
-													: stateKind === "detail"
-														? c.detail
-														: null;
-									return (
-										<li key={c.kind} className="gui-collab-bot-wrap">
-											<div className="gui-collab-bot">
-												<span
-													className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`}
-													aria-hidden="true"
-												>
-													{channelLogo(c.kind)}
-												</span>
-												<div className="gui-collab-bot-copy">
-													<div className="gui-collab-bot-title">
-														<span>{label}</span>
-														<span
-															className={`gui-collab-dot${on ? "" : " gui-collab-dot--off"}`}
-															aria-hidden="true"
-														/>
-													</div>
-													{stateText ? <div className="gui-collab-bot-status">{stateText}</div> : null}
-												</div>
-												{on ? (
-													<div className="gui-collab-bot-actions">
+									) : exposures === null && exposuresLoading ? (
+										<div className="gui-collab-loading">
+											<Icon name="loader" className="h-3.5 w-3.5 animate-spin" />
+											<span>{t("settings.loadingExposures")}</span>
+										</div>
+									) : (
+										<div
+											role="radiogroup"
+											aria-label={t("settings.shareExposure")}
+											className="gui-collab-exposure-list"
+										>
+											{(exposures ?? []).map(entry => {
+												const selected = entry.id === exposureId;
+												const ready = entry.health === "ready";
+												const facts = exposureFacts(entry);
+												return (
+													<div
+														key={entry.id}
+														className="gui-collab-exposure"
+														data-selected={selected ? "true" : "false"}
+													>
 														<button
 															type="button"
-															className="gui-btn gui-btn-sm"
-															disabled={channelBusy || c.state === "connecting"}
-															aria-label={t("settings.stopChannelWithName", { name: label })}
-															onClick={() => void stopChannel(c.kind)}
-														>
-															{channelBusy ? t("settings.stopping") : t("settings.stop")}
-														</button>
-														<button
-															type="button"
-															className="gui-btn gui-btn-sm gui-collab-icon-action"
-															title={t("settings.unlinkChannelWithName", { name: label })}
-															aria-label={t("settings.unlinkChannelWithName", { name: label })}
-															disabled={channelBusy}
-															onClick={() => void unlinkChannel(c.kind)}
-														>
-															<Icon name="link-unlink-m" className="h-3.5 w-3.5" />
-														</button>
-													</div>
-												) : (
-													<div className="gui-collab-bot-actions">
-														<button
-															type="button"
-															className="gui-btn gui-btn-sm"
-															disabled={channelBusy}
-															aria-label={t("settings.connectChannelWithName", { name: label })}
+															role="radio"
+															aria-checked={selected}
+															disabled={busy}
 															onClick={() => {
-																if (needsForm) toggleConfig(c.kind);
-																else void startChannel(c.kind);
+																setExposureId(entry.id);
+																setError(null);
 															}}
+															className="gui-collab-exposure-row"
 														>
-															{channelBusy ? t("settings.connecting") : t("settings.connect")}
+															<span
+																className="gui-collab-radio"
+																data-on={selected ? "true" : "false"}
+																aria-hidden="true"
+															>
+																{selected ? <span /> : null}
+															</span>
+															<span className="gui-collab-exposure-copy">
+																<span className="gui-collab-exposure-name">
+																	{exposureName(entry.id)}
+																</span>
+																<span className="gui-collab-exposure-state">
+																	<span
+																		className={`gui-collab-dot${ready ? "" : " gui-collab-dot--off"}`}
+																		aria-hidden="true"
+																	/>
+																	<span>{healthText(entry.health)}</span>
+																	{facts.length > 0 ? (
+																		<span className="gui-collab-exposure-facts">
+																			{facts.join(" · ")}
+																		</span>
+																	) : null}
+																</span>
+															</span>
 														</button>
-														{fields ? (
+														{entry.health === "unavailable" && entry.install ? (
+															<details className="gui-collab-exposure-more">
+																<summary>
+																	{t("settings.exposureInstallTitle", {
+																		name: exposureName(entry.id),
+																	})}
+																</summary>
+																<div className="gui-collab-install-body">
+																	<p>{t("settings.exposureInstallNote")}</p>
+																	{entry.install?.note ? (
+																		<p className="gui-collab-install-source">{entry.install.note}</p>
+																	) : null}
+																	{Object.entries(entry.install?.commands ?? {}).map(
+																		([platform, command]) => (
+																			<div key={platform} className="gui-collab-platform">
+																				<span>{PLATFORM_NAMES[platform] ?? platform}</span>
+																				<code>{command}</code>
+																			</div>
+																		),
+																	)}
+																	<button
+																		type="button"
+																		className="gui-btn gui-btn-sm"
+																		onClick={() => void openExternalUrl(entry.install?.url ?? "")}
+																	>
+																		<Icon name="external-link" className="h-3 w-3" />
+																		<span>{t("settings.viewInstallGuide")}</span>
+																	</button>
+																</div>
+															</details>
+														) : null}
+													</div>
+												);
+											})}
+										</div>
+									)}
+									{selectedExposure?.hint || selectedExposure?.detail ? (
+										<details className="gui-collab-technical">
+											<summary>{t("settings.technicalDetails")}</summary>
+											{selectedExposure.hint ? <p>{selectedExposure.hint}</p> : null}
+											{selectedExposure.detail ? <pre>{selectedExposure.detail}</pre> : null}
+										</details>
+									) : null}
+								</div>
+								{error ? errorBlock : null}
+							</div>
+						)}
+					</section>
+					<section className="gui-collab-col gui-collab-channel-col">
+						<div className="gui-collab-col-head">
+							<Icon name="robot" className="h-4 w-4" />
+							<h2>{t("settings.useBotChannel")}</h2>
+						</div>
+						<p className="gui-collab-desc">{t("settings.connectChatBotLonger")}</p>
+						<div className="gui-collab-channels">
+							{channelsError ? (
+								<div className="gui-collab-channel-message" role="alert">
+									<Icon name="error-warning" className="h-4 w-4" />
+									<div>
+										<strong>{t("settings.channelsLoadFailed")}</strong>
+										<p>{t("settings.channelsLoadFailedHint")}</p>
+										<button
+											type="button"
+											className="gui-btn gui-btn-sm"
+											onClick={() => void refreshChannels()}
+										>
+											<Icon name="refresh" className="h-3 w-3" />
+											<span>{t("settings.retry")}</span>
+										</button>
+									</div>
+								</div>
+							) : channels === null ? (
+								<div className="gui-collab-loading">
+									<Icon name="loader" className="h-3.5 w-3.5 animate-spin" />
+									<span>{t("settings.loadingChannels")}</span>
+								</div>
+							) : channels.length === 0 ? (
+								<div className="gui-collab-loading">{t("settings.noChannelsConfigured")}</div>
+							) : (
+								<ul className="gui-collab-bots">
+									{channels.map(c => {
+										const label =
+											plugins?.find(plugin => plugin.kind === c.kind)?.label ??
+											CHANNEL_NAMES[c.kind] ??
+											c.kind;
+										const on =
+											c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
+										const fields = channelFields[c.kind];
+										const needsForm = !!fields && fields.some(field => !field.optional);
+										const qrUrl = typeof c.config?.qrUrl === "string" ? c.config.qrUrl : "";
+										const waitingScan = c.state === "waiting_scan";
+										const channelBusy = busyChannel === c.kind;
+										const stateKind = channelStateText(c.state, c.detail);
+										const stateText =
+											stateKind === "connected"
+												? (c.detail ?? t("settings.connected"))
+												: stateKind === "connecting"
+													? (c.detail ?? t("settings.connecting"))
+													: stateKind === "waiting"
+														? (c.detail ?? t("settings.waitingForScan"))
+														: stateKind === "detail"
+															? c.detail
+															: t("settings.notConnected");
+										return (
+											<li key={c.kind} className="gui-collab-bot-wrap">
+												<div className="gui-collab-bot">
+													<span
+														className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`}
+														aria-hidden="true"
+													>
+														{channelLogo(c.kind)}
+													</span>
+													<div className="gui-collab-bot-copy">
+														<div className="gui-collab-bot-title">
+															<span>{label}</span>
+															{c.state === "connected" ? (
+																<span className="gui-collab-dot" aria-hidden="true" />
+															) : null}
+														</div>
+														<div className="gui-collab-bot-status">{stateText}</div>
+													</div>
+													{on ? (
+														<div className="gui-collab-bot-actions">
+															<button
+																type="button"
+																className="gui-btn gui-btn-sm"
+																disabled={channelBusy || c.state === "connecting"}
+																aria-label={t("settings.stopChannelWithName", { name: label })}
+																onClick={() => void stopChannel(c.kind)}
+															>
+																{channelBusy ? t("settings.stopping") : t("settings.stop")}
+															</button>
 															<button
 																type="button"
 																className="gui-btn gui-btn-sm gui-collab-icon-action"
-																title={t("settings.configureChannelWithName", { name: label })}
-																aria-label={t("settings.configureChannelWithName", { name: label })}
-																aria-expanded={expandedKind === c.kind}
-																onClick={() => toggleConfig(c.kind)}
+																title={t("settings.unlinkChannelWithName", { name: label })}
+																aria-label={t("settings.unlinkChannelWithName", { name: label })}
+																disabled={channelBusy}
+																onClick={() => void unlinkChannel(c.kind)}
 															>
-																<Icon name="settings-3" className="h-3.5 w-3.5" />
+																<Icon name="link-unlink-m" className="h-3.5 w-3.5" />
 															</button>
-														) : null}
-													</div>
-												)}
-											</div>
-											<Reveal open={waitingScan && !!qrUrl}>
-												{qrUrl ? (
-													<div className="gui-collab-channel-qr">
-														<img src={channelQrSrc(qrUrl)} alt={t("WeChat login QR")} />
-														<span>{c.detail ?? t("settings.scanQrCode")}</span>
-													</div>
-												) : null}
-											</Reveal>
-											{startErrors[c.kind] ? (
-												<div className="gui-collab-error" role="alert">
-													<Icon name="error-warning" className="h-4 w-4" />
-													<span>{startErrors[c.kind]}</span>
+														</div>
+													) : (
+														<div className="gui-collab-bot-actions">
+															<button
+																type="button"
+																className="gui-btn gui-btn-sm"
+																disabled={channelBusy}
+																aria-label={t("settings.connectChannelWithName", { name: label })}
+																onClick={() => {
+																	if (needsForm) toggleConfig(c.kind);
+																	else void startChannel(c.kind);
+																}}
+															>
+																{channelBusy ? t("settings.connecting") : t("settings.connect")}
+															</button>
+															{fields ? (
+																<button
+																	type="button"
+																	className="gui-btn gui-btn-sm gui-collab-icon-action"
+																	title={t("settings.configureChannelWithName", { name: label })}
+																	aria-label={t("settings.configureChannelWithName", { name: label })}
+																	aria-expanded={expandedKind === c.kind}
+																	onClick={() => toggleConfig(c.kind)}
+																>
+																	<Icon name="settings-3" className="h-3.5 w-3.5" />
+																</button>
+															) : null}
+														</div>
+													)}
 												</div>
-											) : null}
-											<Reveal open={expandedKind === c.kind && !!fields}>
-												{fields ? (
-													<div className="gui-collab-channel-config">
-														{fields.map(field => (
-															<label key={field.key} className="gui-collab-channel-field">
-																<span>{field.label}</span>
-																<input
-																	className="gui-collab-channel-input"
-																	type={field.secret ? "password" : "text"}
-																	aria-label={field.label}
-																	required={!field.optional}
-																	value={configDraft[field.key] ?? ""}
-																	onChange={event =>
-																		setConfigDraft(draft => ({
-																			...draft,
-																			[field.key]: event.target.value,
-																		}))
-																	}
-																	autoComplete="off"
-																/>
-															</label>
-														))}
-														<button
-															type="button"
-															className="gui-btn gui-btn-primary gui-btn-sm"
-															disabled={
-																channelBusy ||
-																!fields.every(
-																	field => field.optional || (configDraft[field.key] ?? "").trim(),
-																)
-															}
-															onClick={() => void saveConfig(c.kind)}
-														>
-															{channelBusy ? t("settings.connecting") : t("settings.saveStart")}
-														</button>
+												<Reveal open={waitingScan && !!qrUrl}>
+													{qrUrl ? (
+														<div className="gui-collab-channel-qr">
+															<img src={channelQrSrc(qrUrl)} alt={t("WeChat login QR")} />
+															<span>{c.detail ?? t("settings.scanQrCode")}</span>
+														</div>
+													) : null}
+												</Reveal>
+												{startErrors[c.kind] ? (
+													<div className="gui-collab-error" role="alert">
+														<Icon name="error-warning" className="h-4 w-4" />
+														<span>{startErrors[c.kind]}</span>
 													</div>
 												) : null}
-											</Reveal>
-										</li>
-									);
-								})}
-							</ul>
-						)}
-					</div>
-					<details className="gui-collab-plugins">
-						<summary>
-							<span>{t("settings.channelPlugins")}</span>
-							<span className="gui-collab-plugin-count">{plugins?.length ?? 0}</span>
-						</summary>
-						<div className="gui-collab-plugin-body">
-							<button
-								type="button"
-								className="gui-btn gui-btn-sm"
-								disabled={reloadingPlugins}
-								onClick={() => void reloadPlugins().catch(() => {})}
-							>
-								<Icon name="refresh" className={`h-3 w-3${reloadingPlugins ? " animate-spin" : ""}`} />
-								<span>{reloadingPlugins ? t("settings.loading") : t("settings.reloadPlugins")}</span>
-							</button>
-							<div className="gui-collab-plugin-list">
-								{(plugins ?? []).map(plugin => (
-									<span key={plugin.kind} title={plugin.origin}>
-										{plugin.label}
-									</span>
-								))}
-								{(plugins ?? []).length === 0 ? (
-									<span className="gui-collab-no-plugins">{t("settings.noPlugins")}</span>
-								) : null}
-							</div>
+												<Reveal open={expandedKind === c.kind && !!fields}>
+													{fields ? (
+														<div className="gui-collab-channel-config">
+															{fields.map(field => (
+																<label key={field.key} className="gui-collab-channel-field">
+																	<span>{field.label}</span>
+																	<input
+																		className="gui-collab-channel-input"
+																		type={field.secret ? "password" : "text"}
+																		aria-label={field.label}
+																		required={!field.optional}
+																		value={configDraft[field.key] ?? ""}
+																		onChange={event =>
+																			setConfigDraft(draft => ({
+																				...draft,
+																				[field.key]: event.target.value,
+																			}))
+																		}
+																		autoComplete="off"
+																	/>
+																</label>
+															))}
+															<button
+																type="button"
+																className="gui-btn gui-btn-primary gui-btn-sm"
+																disabled={
+																	channelBusy ||
+																	!fields.every(
+																		field => field.optional || (configDraft[field.key] ?? "").trim(),
+																	)
+																}
+																onClick={() => void saveConfig(c.kind)}
+															>
+																{channelBusy ? t("settings.connecting") : t("settings.saveStart")}
+															</button>
+														</div>
+													) : null}
+												</Reveal>
+											</li>
+										);
+									})}
+								</ul>
+							)}
 						</div>
-					</details>
-				</section>
+						<details className="gui-collab-plugins">
+							<summary>
+								<span>{t("settings.channelPlugins")}</span>
+								<span className="gui-collab-plugin-count">{plugins?.length ?? 0}</span>
+							</summary>
+							<div className="gui-collab-plugin-body">
+								<button
+									type="button"
+									className="gui-btn gui-btn-sm"
+									disabled={reloadingPlugins}
+									onClick={() => void reloadPlugins().catch(() => {})}
+								>
+									<Icon name="refresh" className={`h-3 w-3${reloadingPlugins ? " animate-spin" : ""}`} />
+									<span>{reloadingPlugins ? t("settings.loading") : t("settings.reloadPlugins")}</span>
+								</button>
+								<div className="gui-collab-plugin-list">
+									{(plugins ?? []).map(plugin => (
+										<span key={plugin.kind} title={plugin.origin}>
+											{plugin.label}
+										</span>
+									))}
+									{(plugins ?? []).length === 0 ? (
+										<span className="gui-collab-no-plugins">{t("settings.noPlugins")}</span>
+									) : null}
+								</div>
+							</div>
+						</details>
+					</section>
+				</div>
+				<ScrollEdgeBlur edge="top" />
+				<ScrollEdgeBlur edge="end" />
 			</div>
-			<button type="button" className="gui-remote-disclaimer-link" onClick={onOpenDisclaimer}>
-				{t("settings.viewRemoteDisclaimer")}
-			</button>
+			<div className="gui-collab-foot">
+				<button type="button" className="gui-remote-disclaimer-link" onClick={onOpenDisclaimer}>
+					{t("settings.viewRemoteDisclaimer")}
+				</button>
+				{live ? (
+					<button
+						type="button"
+						className="gui-btn gui-btn-stop gui-collab-foot-action"
+						disabled={busy}
+						onClick={() => void stopShare()}
+					>
+						<Icon name="stop" className="h-3.5 w-3.5" />
+						<span>{t("settings.stopSharing")}</span>
+					</button>
+				) : error ? (
+					<button
+						type="button"
+						className="gui-btn gui-btn-primary gui-collab-foot-action"
+						disabled={!canRetry}
+						onClick={retryError}
+					>
+						<Icon name="refresh" className="h-3.5 w-3.5" />
+						<span>{busy ? t("settings.starting") : t("settings.retry")}</span>
+					</button>
+				) : (
+					<button
+						type="button"
+						className="gui-btn gui-btn-primary gui-collab-foot-action"
+						disabled={!canShare}
+						onClick={() => void startShare()}
+					>
+						<Icon name="send-plane" className="h-3.5 w-3.5" />
+						<span>{busy ? t("settings.starting") : t("settings.startSharing")}</span>
+					</button>
+				)}
+			</div>
 		</DialogFrame>
 	);
 }

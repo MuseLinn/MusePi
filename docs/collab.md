@@ -80,7 +80,7 @@ Serve exposes the relay at `https://<machine>.<tailnet>.ts.net`. It does not req
 
 Every tunnel watches its child process and probes the public host every 30 seconds. A tunnel that dies is revoked immediately: the URL is cleared, health becomes `degraded` with the reason and a next step, and the relay behind it is closed. Share state is authoritative — `remote-access.status` returns `mode`, `sessionId`, `exposure`, and `health`, and reports `hosting: false` once the host ends, the session switches, or the exposure fails, so a share panel never keeps a dead link. The reason survives that clearing: while `hosting` is `false`, the same reply carries `lastEnd {exposure, health, at, reason, detail, hint}` (cleared by the next `collab.start`), which is where a failed tunnel's `detail` and next-step `hint` reach the UI. A reply also carries `warning` when a configuration value makes part of the share unusable — for example an unusable `collab.webUrl`, whose origin the relay rejects with `403`. The same warning comes back while the share runs, when an identical share is reused, and after it stops; starting a share recomputes it.
 
-`collab.shareTtlMinutes` (default `0`, no limit) stops a share automatically after the configured number of minutes.
+`collab.shareTtlMinutes` (default `0`, no limit) stops a share automatically after the configured number of minutes. A time-limited share reports its deadline as `expiresAt` (epoch ms) in both `remote-access.start` and `remote-access.status`, so the panel can count down to the stop instead of letting guests discover it; the field is absent when no limit is configured and disappears once the share ends.
 
 ### Privacy boundary
 

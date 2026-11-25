@@ -233,6 +233,8 @@ export class LocalShareManager {
 	#exposureStatus: ExposureStatus | null = null;
 	#unsubscribeExposure: (() => void) | null = null;
 	#ttlTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Wall-clock end of the armed share TTL, null when no limit is configured. */
+	#ttlExpiresAt: number | null = null;
 	/** One room registry shared by the plaintext + TLS relay instances: the
 	 *  host joins the plaintext port while browsers join the TLS port, and
 	 *  both must see the same rooms or the browser guest is rejected with
@@ -256,6 +258,11 @@ export class LocalShareManager {
 	/** Health of the active share (LAN or exposure), null while stopped. */
 	get exposureStatus(): ExposureStatus | null {
 		return this.#exposureStatus;
+	}
+
+	/** When the share stops on its own; null when sharing has no time limit. */
+	get shareExpiresAt(): number | null {
+		return this.#ttlExpiresAt;
 	}
 
 	/**
@@ -399,6 +406,7 @@ export class LocalShareManager {
 		this.#clearTtl();
 		const minutes = this.#shareTtlMinutes ?? configuredShareTtlMinutes();
 		if (!Number.isFinite(minutes) || minutes <= 0) return;
+		this.#ttlExpiresAt = Date.now() + minutes * 60_000;
 		this.#ttlTimer = setTimeout(() => {
 			this.#ttlTimer = null;
 			const expired = this.#onTtlExpired;
@@ -410,6 +418,7 @@ export class LocalShareManager {
 	}
 
 	#clearTtl(): void {
+		this.#ttlExpiresAt = null;
 		if (!this.#ttlTimer) return;
 		clearTimeout(this.#ttlTimer);
 		this.#ttlTimer = null;

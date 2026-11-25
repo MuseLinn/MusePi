@@ -81,6 +81,8 @@
 可滚动列表硬裁在圆角边框上，看起来像渲染故障。
 
 - 滚动容器必须有 `min-height: 0` 和 `overflow-y: auto`，并且在 flex 链上拿到剩余空间（`flex: 1 1 auto`）。
+- **弹窗的主动作在滚动区之外。** 内容可能超过 `max-height` 的弹窗由三段组成：固定标题、唯一滚动容器、承载当前状态唯一决定性动作的底栏。按钮留在滚动内容末尾，等于在小窗口里把它藏起来。
+- **`DialogFrame` 的 `.gui-dialog-morph` 默认是块级。** 块级包装会让正文的 `flex: 1 1 auto` 静默失效，内容随 `max-height` 被裁掉而不是滚动；需要滚动的弹窗必须自己把这一层续成 flex 列（`display: flex; flex-direction: column; min-height: 0; overflow: hidden`），再让滚动容器声明 `flex: 1 1 auto; min-height: 0`。参照 `.gui-collab-dialog`。
 - **不要写固定 `mask` 羽化。** 内容装得下时固定 mask 会把首行和末行也淡化，那是错的。正确做法是由组件按实时滚动位置设 `data-scrolled-top` / `data-scrolled-bottom`，CSS 只对被遮住的一侧加渐变。
 - 参照实现：`.gui-shortcuts-grid` + `ShortcutsDialog` 的 `measure()`。
 - **不要用 `gap-N` 之类的 Tailwind 工具类表达栏间距。** 生成产物 `tailwind.out.css` 是 content-scan 的，只含被扫到的工具类；任意写一个 `gap-8` 不会报错也不会生效。间距写进自有 CSS 规则。

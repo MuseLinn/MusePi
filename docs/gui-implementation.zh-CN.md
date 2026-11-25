@@ -256,6 +256,7 @@ daemon RPC:
 - 渠道启动、配置、停止和解绑共用按 kind 区分的忙碌守卫。切换渠道 kind 会重置配置草稿，保存失败则保留草稿；列表请求失败提供重试，不显示为空配置状态。聚焦组件测试覆盖入口绑定的作用域与 start 载荷、安装指引、`lastEnd`/degraded 分享、仅局域网配对码、列表失败和凭据常驻标签。
 - 共享 `Segmented` 根据标签固有宽度及 padding、图标和间距计算 `--seg-min`，不再使用分段被拉伸后的 `clientWidth`。flex 空闲空间不会推高最小宽度并阻止控件随父列收窄。回归测试使用实际只需 52px、却被拉伸到 156px 的分段；桌面浏览器套件同时验证等宽分段、标签不裁切和滑块几何。
 - `RemoteAccessDisclaimerDialog` 在远程控制和实例管理之间共用一份版本化同意记录（`musepi-gui-remote-access-consent = "1"`）。`requestRemoteAccess` 先保留目标打开动作，同意后才调用一次；关闭会清除该动作且不允许进入，同意后记录当前版本。`InstanceButton` 把自己的实例管理打开动作传入同一门禁，因此侧栏和 rail 行为一致。缺失、旧版本和非法值均不视为同意。测试覆盖存储、首用同意/拒绝和同意后查看行为。
+- 对话框每个状态只有一个决定：底栏承载该状态唯一决定性动作，缺失的前置工具折叠在需要它的选项下，未运行的渠道显示「未连接」。几何见 `docs/gui-dialog-spec.md` §4；测试：`test/remote-access-dialog.test.tsx`、`test/remote-access-geometry.test.tsx`。
 
 ## 5. 伙伴实现细节（pet.html + bubbles.html）
 
