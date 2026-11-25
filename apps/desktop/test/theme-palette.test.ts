@@ -145,7 +145,7 @@ describe("no pre-rebrand blue accent literals survive in shared chrome", () => {
 
 	test("both locales expose the follow-theme copy", () => {
 		for (const locale of ["en-US", "zh-CN"]) {
-			const src = read(`packages/client-core/src/i18n/${locale}/settings.ts`);
+			const src = read(`packages/client/locale/src/client/${locale}/settings.ts`);
 			expect(src).toContain('"settings.accentTheme":');
 			expect(src).toContain('"settings.accentThemeHint":');
 		}
