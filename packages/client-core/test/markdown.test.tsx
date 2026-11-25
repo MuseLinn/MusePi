@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown, markdownCodeBlock, renderStreamingMarkdown } from "../src/components/transcript/Markdown";
+import { displayMathSource } from "../src/components/transcript/math";
 import {
 	diagramBlockSource,
 	mermaidFallbackHtml,
@@ -71,12 +72,18 @@ describe("Transcript LaTeX math", () => {
 		expect(html).not.toContain("$\\text");
 	});
 
-	it("renders $$...$$ display math including aligned environments", () => {
-		const html = renderMarkdown(
-			"$$\n\\begin{aligned}\n\\text{应纳税所得额} &= 2{,}000 \\times (1 - 20\\%) \\\\\n\\end{aligned}\n$$",
-		);
-		expect(html).toContain('class="katex-display"');
-		expect(html).toContain('class="katex"');
+	it("routes an own-line $$ block to the formula block, keeping the source", () => {
+		// No backslashes here on purpose: the assertion is about the seam, and a
+		// LaTeX-heavy fixture only makes the fixture harder to read.
+		const latex = "y = a + b";
+		const text = ["$$", latex, "$$"].join(String.fromCharCode(10));
+		const html = renderStreamingMarkdown(text, false, null, {}).html;
+		const hash = /data-math-block="([^"]+)"/.exec(html)?.[1];
+		expect(hash).toBeTruthy();
+		// The block renders the formula; the pipeline carries only the source,
+		// which is also exactly what the copy control hands over.
+		expect(displayMathSource(hash!)).toBe(latex);
+		expect(html).not.toContain("katex-display");
 	});
 
 	it("renders \\(...\\) inline and \\[...\\] display math", () => {
@@ -120,14 +127,6 @@ describe("Transcript LaTeX math", () => {
 		expect(display).toContain("katex-display");
 		// Exactly one copy control: display math only.
 		expect(display.match(/tr-math-copy/g)).toHaveLength(1);
-	});
-
-	it("embeds the original LaTeX source in the annotation for copying", () => {
-		const html = renderMarkdown("$$\n\\begin{aligned}\n\\text{a} &= b \\\\\nc &= d\n\\end{aligned}\n$$");
-		const annotation = html.match(/<annotation encoding="application\/x-tex">([\s\S]*?)<\/annotation>/)?.[1];
-		expect(annotation).toContain("\\text{a} &amp;= b");
-		// entity-decoded textContent is the raw source the copy button reads
-		expect(annotation).not.toContain("&amp;amp;");
 	});
 
 	it("renders \\[...\\] display math through the same wrapper", () => {

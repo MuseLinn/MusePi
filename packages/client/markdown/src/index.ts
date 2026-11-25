@@ -1,4 +1,5 @@
 export { MarkdownCodeBlock, type MarkdownCodeBlockProps } from "./blocks/code";
+export { katexMarkupToReact, MarkdownMathBlock, type MarkdownMathBlockProps } from "./blocks/math";
 export { MarkdownMermaidBlock, type MarkdownMermaidBlockProps } from "./blocks/mermaid";
 export { MarkdownTableBlock } from "./blocks/table";
 export { BLOCK_GLYPH_SIZE, type BlockGlyphName, blockGlyph, setBlockGlyph } from "./glyphs";
@@ -14,9 +15,9 @@ export {
 	subscribeMarkdownBlocks,
 } from "./registry";
 export {
-	lexedText,
-	type LexicalRenderer,
 	type FrozenPrefix,
+	type LexicalRenderer,
+	lexedText,
 	NO_PREFIX,
 	renderStreamingBlocks,
 	stableTokenCount,

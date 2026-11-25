@@ -266,10 +266,16 @@ export interface RendererExtension {
 	renderer: RendererExtensionFunction;
 }
 /** A combined tokenizer/renderer extension. */
+export interface TokenizerExtensionWithTokenType extends TokenizerExtension {
+	/** Token type the tokenizer emits, when it differs from `name`. Registering
+	 *  a renderer under `name` alone then never fires. */
+	tokenType?: string;
+}
+
 export type TokenizerAndRendererExtension =
-	| TokenizerExtension
+	| TokenizerExtensionWithTokenType
 	| RendererExtension
-	| (TokenizerExtension & RendererExtension);
+	| (TokenizerExtensionWithTokenType & RendererExtension);
 
 /** Overrides for built-in tokenizer methods. */
 export interface TokenizerObject {
@@ -1454,7 +1460,15 @@ function mergeExtensions(
 			registry[extension.level].unshift(extension);
 			if (extension.childTokens) registry.childTokens[extension.name] = extension.childTokens;
 		}
-		if ("renderer" in extension) registry.renderers[extension.name] = extension.renderer;
+		// Registered under the extension name AND the token type it emits.
+		// `Parser` looks a renderer up with `token.type`, so an extension whose
+		// name differs from its token type used to register a renderer that never
+		// fired — silent, and only visible as "my extension renders as text".
+		if ("renderer" in extension) {
+			registry.renderers[extension.name] = extension.renderer;
+			const tokenType = (extension as { tokenType?: string }).tokenType;
+			if (tokenType !== undefined) registry.renderers[tokenType] = extension.renderer;
+		}
 	}
 	return registry;
 }

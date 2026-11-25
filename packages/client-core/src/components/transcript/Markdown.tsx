@@ -54,7 +54,7 @@ import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalImageSrc, localImagePath } from "./local-image.js";
 import { isLocalFilePath } from "./markdown-shared";
-import { mathExtensions } from "./math";
+import { displayMathSource, mathExtensions, renderDisplayHtml } from "./math";
 import {
 	diagramBlockSource,
 	emitDiagramBlock,
@@ -635,6 +635,26 @@ function TableFragment({
 	);
 }
 
+/** A display formula's block: the marker travels in the string, the formula is
+ *  re-rendered by its component (KaTeX markup → React nodes), so its scroll box
+ *  and copy control are React's and survive a re-render. */
+function MathFragment({ hash, labels }: { hash: string; labels: MarkdownBlockLabels }): ReactNode {
+	const latex = displayMathSource(hash);
+	const Block = markdownBlockDef("math")?.Component;
+	if (latex === undefined || !Block) return null;
+	return (
+		<Block
+			source={latex}
+			html={null}
+			hash={hash}
+			streaming={false}
+			labels={labels}
+			rendered={renderDisplayHtml(latex)}
+			latex={latex}
+		/>
+	);
+}
+
 /** A diagram's block: the stored source plus the renderers it needs. The
  *  block awaits the async render itself, so no observer watches the DOM for
  *  placeholders any more. */
@@ -694,7 +714,8 @@ export type MessageFragment =
 	| { kind: "html"; html: string }
 	| { kind: "table"; hash: string }
 	| { kind: "code"; hash: string }
-	| { kind: "diagram"; hash: string };
+	| { kind: "diagram"; hash: string }
+	| { kind: "math"; hash: string };
 
 /**
  * Split the rendered HTML at the block placeholders the renderer emits.
@@ -706,14 +727,20 @@ export type MessageFragment =
  */
 export function splitTableFragments(html: string): MessageFragment[] {
 	const fragments: MessageFragment[] = [];
-	const pattern = /<div data-(table|code|diagram)-block="([^"]+)"><\/div>/g;
+	// A math marker is a bare, empty span: the formula's markup is rendered by
+	// its block, never carried through the string.
+	const pattern = /<div data-(table|code|diagram)-block="([^"]+)"><\/div>|<span data-math-block="([^"]+)"><\/span>/g;
 	let cursor = 0;
 	let match: RegExpExecArray | null = pattern.exec(html);
 	while (match !== null) {
 		if (match.index > cursor) fragments.push({ kind: "html", html: html.slice(cursor, match.index) });
-		const hash = match[2] ?? "";
-		const kind = match[1] === "code" ? "code" : match[1] === "diagram" ? "diagram" : "table";
-		fragments.push({ kind, hash } as MessageFragment);
+		if (match[3] !== undefined) {
+			fragments.push({ kind: "math", hash: match[3] });
+		} else {
+			const hash = match[2] ?? "";
+			const kind = match[1] === "code" ? "code" : match[1] === "diagram" ? "diagram" : "table";
+			fragments.push({ kind, hash } as MessageFragment);
+		}
 		cursor = match.index + match[0].length;
 		match = pattern.exec(html);
 	}
@@ -1808,8 +1835,10 @@ export const Markdown = memo(function Markdown({
 							labels={blockLabels}
 							highlighted={highlightHtml.get(fragment.hash) ?? null}
 						/>
-					) : (
+					) : fragment.kind === "diagram" ? (
 						<DiagramFragment key={`diagram:${fragment.hash}`} hash={fragment.hash} labels={blockLabels} />
+					) : (
+						<MathFragment key={`math:${fragment.hash}`} hash={fragment.hash} labels={blockLabels} />
 					),
 				)}
 				{/* Stable streaming-tail container: React never rebuilds this

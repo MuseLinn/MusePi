@@ -136,6 +136,69 @@ export const displayMathExtension = {
 	},
 };
 
+/**
+ * `$$...$$` on its OWN LINES is a block, not paragraph content.
+ *
+ * This is what lets a display formula be a real block, like a table or a fence:
+ * it leaves the paragraph it used to sit in, so the message pipeline can hand it
+ * to a component (and keep its scroll position and copy animation across a
+ * re-render). The earlier inline tokenizer above stays for the single-line
+ * `$$a+b$$` form, whose meaning inside prose must not change.
+ *
+ * Own-line only on purpose: `^$$` followed by a line break. A `$$` that shares
+ * its line with text keeps the inline path.
+ */
+export const displayMathBlockExtension = {
+	name: "displayMathOwnLine",
+	// The renderer is looked up by TOKEN type; this extension's name differs.
+	tokenType: "displayMathBlock",
+	level: "block" as const,
+	tokenizer(src: string) {
+		const match = /^ {0,3}\$\$[ \t]*\n([\s\S]*?)\n[ \t]*\$\$[ \t]*(?:\n|$)/.exec(src);
+		if (!match) return undefined;
+		const text = (match[1] ?? "").trim();
+		if (text === "") return undefined;
+		return { type: "displayMathBlock", raw: match[0], text };
+	},
+	renderer(token: MathToken) {
+		return renderDisplayBlock(token.text);
+	},
+};
+
+/**
+ * A display formula as a block: the pipeline gets a marker and renders the
+ * formula through its block component, so the KaTeX subtree is a React node
+ * rather than a piece of a rewritten HTML blob.
+ */
+const renderDisplayBlock = (source: string): string => {
+	const hash = fnv1a(source).toString(36);
+	rememberDisplayMath(hash, source);
+	return `<span data-math-block="${hash}"></span>`;
+};
+
+/** KaTeX markup for a display formula (the block turns it into React nodes). */
+export function renderDisplayHtml(source: string): string {
+	return renderKatex(source, true);
+}
+
+/** Display-formula sources by hash (the pipeline's lookup for the block). */
+const displayMathBlocks = new Map<string, string>();
+const DISPLAY_MATH_LIMIT = 100;
+
+/** A display formula's LaTeX source by hash. */
+export function displayMathSource(hash: string): string | undefined {
+	return displayMathBlocks.get(hash);
+}
+
+function rememberDisplayMath(hash: string, source: string): void {
+	displayMathBlocks.set(hash, source);
+	while (displayMathBlocks.size > DISPLAY_MATH_LIMIT) {
+		const oldest = displayMathBlocks.keys().next().value;
+		if (oldest === undefined) break;
+		displayMathBlocks.delete(oldest);
+	}
+}
+
 /** `\(...\)` inline math (backslash delimiters survive escape tokenizing
  *  only because extensions run first). */
 export const inlineParenMathExtension = {
@@ -175,6 +238,7 @@ export const blockBracketMathExtension = {
 };
 
 export const mathExtensions = [
+	displayMathBlockExtension,
 	displayMathExtension,
 	inlineMathExtension,
 	inlineParenMathExtension,

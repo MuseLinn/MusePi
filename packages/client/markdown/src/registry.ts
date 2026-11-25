@@ -14,6 +14,7 @@
 
 import type { ComponentType } from "react";
 import { MarkdownCodeBlock } from "./blocks/code";
+import { MarkdownMathBlock } from "./blocks/math";
 import { MarkdownMermaidBlock } from "./blocks/mermaid";
 import { MarkdownTableBlock } from "./blocks/table";
 
@@ -70,6 +71,10 @@ export interface MarkdownBlockProps {
 	readonly label?: string;
 	/** Present for `code`: highlighted inner markup, when the host produced it. */
 	readonly highlighted?: string | null;
+	/** Present for `math`: KaTeX-rendered markup. */
+	readonly rendered?: string;
+	/** Present for `math`: the LaTeX source the copy control hands over. */
+	readonly latex?: string;
 	/** Present for `diagram`: the fenced source. */
 	readonly diagram?: string;
 	/** Present for `diagram`: synchronous SVG markup (or an ASCII `<pre>`). */
@@ -109,6 +114,7 @@ export interface MarkdownBlockDef {
 const BUILTIN_BLOCKS: readonly MarkdownBlockDef[] = [
 	{ kind: "table", Component: MarkdownTableBlock },
 	{ kind: "code", Component: MarkdownCodeBlock },
+	{ kind: "math", Component: MarkdownMathBlock },
 	{ kind: "diagram", Component: MarkdownMermaidBlock },
 ];
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Marked } from "@musepi/pi-utils/marked";
-import { lexedText, NO_PREFIX, renderStreamingBlocks, type LexicalRenderer } from "../src/stream-boundary";
+import { type LexicalRenderer, lexedText, NO_PREFIX, renderStreamingBlocks } from "../src/stream-boundary";
 
 const md = new Marked({ gfm: true, breaks: true });
 
