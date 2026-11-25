@@ -13,8 +13,9 @@
  */
 
 import type { ComponentType } from "react";
+import { MarkdownTableBlock } from "./blocks/table";
 
-/** A table's parsed payload: the cells' source text and their inline tokens. */
+/** A table's parsed payload. */
 export interface MarkdownTablePayload {
 	align: ReadonlyArray<"center" | "left" | "right" | null>;
 	header: ReadonlyArray<MarkdownTableCellPayload>;
@@ -22,8 +23,11 @@ export interface MarkdownTablePayload {
 }
 
 export interface MarkdownTableCellPayload {
-	/** The cell's inline tokens, rendered to HTML by the pipeline. */
-	tokens: readonly unknown[];
+	/** The cell's inline markup, already rendered by the pipeline (emphasis,
+	 *  code spans, links, inline math). Only this goes through `innerHTML`; the
+	 *  table, rows and cells are React nodes, which is what keeps a finished
+	 *  table's DOM — and its scroll position — stable across stream ticks. */
+	html: string;
 	/** Plain text, for CSV / clipboard output. */
 	text: string;
 }
@@ -33,6 +37,7 @@ export interface MarkdownTableCellPayload {
  * dictionary), which is the same contract `AnnotationOverlayLabels` uses.
  */
 export interface MarkdownBlockLabels {
+	readonly close: string;
 	readonly copied: string;
 	readonly copy: string;
 	readonly download: string;
@@ -50,13 +55,22 @@ export interface MarkdownBlockProps {
 	readonly html: string | null;
 	/** Present for `table`. */
 	readonly table?: MarkdownTablePayload;
-	/** Renders inline tokens (emphasis, code spans, math…) to HTML. */
-	renderInline(tokens: readonly unknown[]): string;
+	/** Content hash, stable while the block's content is unchanged. */
+	readonly hash: string;
 	/** Whether the reply that holds this block is still streaming. */
 	readonly streaming: boolean;
 	readonly labels: MarkdownBlockLabels;
 	/** Quote text into the composer (same channel as a quoted paragraph). */
 	quoteText?(text: string): void;
+	/** Shared-element flight (the host owns the one-take motion tokens). */
+	fly?(
+		element: HTMLElement,
+		from: DOMRect,
+		to: DOMRect,
+		options?: { reverse?: boolean; fill?: FillMode },
+	): Animation | null;
+	/** Whether the host asks for reduced motion. */
+	motionDisabled?(): boolean;
 }
 
 export interface MarkdownBlockDef {
@@ -66,7 +80,7 @@ export interface MarkdownBlockDef {
 
 /** Kinds the pipeline routes to a component. A kind absent here keeps the
  *  renderer's HTML output. */
-const BUILTIN_BLOCKS: readonly MarkdownBlockDef[] = [];
+const BUILTIN_BLOCKS: readonly MarkdownBlockDef[] = [{ kind: "table", Component: MarkdownTableBlock }];
 
 let externalBlocks: MarkdownBlockDef[] = [];
 const listeners = new Set<() => void>();

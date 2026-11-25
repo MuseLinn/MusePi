@@ -291,6 +291,7 @@ interface RendererTokenMap {
 	list: Tokens.List;
 	listitem: Tokens.ListItem;
 	paragraph: Tokens.Paragraph;
+	table: Tokens.Table;
 	strong: Tokens.Strong;
 	em: Tokens.Em;
 	codespan: Tokens.Codespan;
@@ -1355,7 +1356,11 @@ export class Parser {
 					out += this.call("paragraph", token, () => this.renderer.paragraph(token));
 					break;
 				case "table":
-					out += this.renderer.table(token);
+					// Every other block goes through `call`, which is what lets a
+					// `renderer.table` override apply. Bypassing it meant a custom
+					// table renderer was silently ignored — the reason table chrome
+					// used to be bolted on with a regex pass over the output.
+					out += this.call("table", token, () => this.renderer.table(token));
 					break;
 				case "text":
 					out += token.tokens ? this.parseInline(token.tokens) : this.renderer.text(token);

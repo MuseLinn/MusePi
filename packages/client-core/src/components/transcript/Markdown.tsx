@@ -1,4 +1,4 @@
-import { Marked } from "@musepi/pi-utils/marked";
+import { Marked, type Renderer, type Tokens } from "@musepi/pi-utils/marked";
 import {
 	Check as CheckGlyphData,
 	Copy as CopyGlyphData,
@@ -27,7 +27,14 @@ const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
 	nit: "general.advisoryNit",
 };
 
-import { blockGlyph, setBlockGlyph } from "@musepi/client-markdown";
+import {
+	blockGlyph,
+	type MarkdownBlockLabels,
+	type MarkdownTableCellPayload,
+	type MarkdownTablePayload,
+	markdownBlockDef,
+	setBlockGlyph,
+} from "@musepi/client-markdown";
 import { useDeepScrollShadow, useScrollShadow } from "@musepi/client-ui-primitives/client";
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
@@ -47,7 +54,6 @@ import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
 import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
 import { graphemeSpans } from "./reveal";
-import { installTableSelection } from "./table-selection";
 import "../../ui-blocks/ui-blocks.css";
 import { useStreamingReveal } from "./use-streaming-reveal";
 
@@ -149,6 +155,28 @@ const md = new Marked({
 	gfm: true,
 	extensions: mathExtensions,
 	renderer: {
+		// A table is handed to its React block instead of being serialized: the
+		// block owns `<table>`/`<tr>`/`<td>`, so a stream tick cannot tear a
+		// finished table down (and reset its scroll position). Cells keep only
+		// their inline markup — that is the one `innerHTML` inside a cell.
+		table(this: Renderer, token) {
+			// `text` is what CSV and the clipboard carry, so it holds the cell's
+			// content without its inline markup (`**x**` copies as `x`); `html` is
+			// what the cell renders. The plain form is derived without a DOM: this
+			// runs during parse, which also happens on the server and in tests.
+			const cell = (value: Tokens.TableCell): MarkdownTableCellPayload => {
+				const html = this.parser.parseInline(value.tokens).trim();
+				return { text: plainTextOf(html), html };
+			};
+			const payload = {
+				align: token.align,
+				header: token.header.map(cell),
+				rows: token.rows.map(row => row.map(cell)),
+			};
+			const hash = fnv1a(JSON.stringify(payload)).toString(36);
+			rememberTableBlock(hash, payload);
+			return `<div data-table-block="${hash}"></div>`;
+		},
 		// Raw HTML tokens (block + inline both arrive here) are escaped, never emitted.
 		// `<advisory>` blocks (the advisor tool's note format) become styled
 		// aside cards instead: severity drives the accent, the advisor name
@@ -263,6 +291,52 @@ function fnv1a(s: string): number {
 		hash = Math.imul(hash, 0x01000193);
 	}
 	return hash >>> 0;
+}
+
+/**
+ * Parsed table payloads, keyed by content hash.
+ *
+ * The renderer hands a table to its React block through a placeholder div
+ * (`data-table-block`), and this map is how the block gets its cells back: the
+ * renderer's output is one HTML string, so the only thing that can travel with
+ * it is a hash. Entries are bounded — a long streaming reply would otherwise
+ * keep every intermediate version of a table alive.
+ */
+const tableBlocks = new Map<string, MarkdownTablePayload>();
+const TABLE_BLOCKS_LIMIT = 200;
+
+const NL = String.fromCharCode(10);
+
+/** Text content of inline HTML, without a DOM: tags are dropped, entities
+ *  decoded, and `<br>` keeps a line break. This is the clipboard/CSV form of a
+ *  table cell, so it must not carry the markup the cell renders. */
+export function plainTextOf(html: string): string {
+	return html
+		.replace(/<br\s*\/?>/gi, NL)
+		.replace(/<[^>]*>/g, "")
+		.replace(/&nbsp;/g, " ")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&amp;/g, "&")
+		.trim();
+}
+
+/** A parsed table payload by content hash (the pipeline's lookup for a block). */
+export function markdownTableBlock(hash: string): MarkdownTablePayload | undefined {
+	return tableBlocks.get(hash);
+}
+
+function rememberTableBlock(hash: string, payload: MarkdownTablePayload): void {
+	tableBlocks.set(hash, payload);
+	if (tableBlocks.size <= TABLE_BLOCKS_LIMIT) return;
+	const overflow = tableBlocks.size - TABLE_BLOCKS_LIMIT;
+	const iterator = tableBlocks.keys();
+	for (let i = 0; i < overflow; i++) {
+		const key = iterator.next().value;
+		if (key !== undefined) tableBlocks.delete(key);
+	}
 }
 
 // ---- Table copy/download helpers (openchamber parity) ---------------------
@@ -515,20 +589,68 @@ function fencesBalanced(s: string): boolean {
 	return code === 0 && math === 0;
 }
 
-function decorateTables(html: string): string {
-	return html.replace(/<table>([\s\S]*?)<\/table>/g, (_full, inner: string) => {
-		const hash = fnv1a(inner).toString(36);
-		return (
-			`<div class="tr-table" data-table-hash="${hash}">` +
-			tableToolbarHtml(hash) +
-			`<div class="tr-table-scroll"><table>${inner}</table></div>` +
-			// Announced on copy: the button's own label flips, but a name change on
-			// a focused control is announced unevenly across screen readers — a
-			// status region is the reliable channel.
-			`<span class="tr-table-status" role="status" aria-live="polite"></span>` +
-			`</div>`
-		);
-	});
+/**
+ * Bridge between the rendered HTML and the block registry.
+ *
+ * The renderer only leaves a hash behind (its output is one string); the parsed
+ * cells live in `tableBlocks`. Reading the payload here, at render time, is why
+ * the lookup is not in the block: a block receives props, and the map is the
+ * pipeline's, not the component's.
+ */
+function TableFragment({
+	hash,
+	labels,
+	quoteText,
+}: {
+	hash: string;
+	labels: MarkdownBlockLabels;
+	quoteText(text: string): void;
+}): ReactNode {
+	const payload = tableBlocks.get(hash);
+	const def = markdownBlockDef("table");
+	const Block = def?.Component;
+	if (!payload || !Block) return null;
+	// The flight and the motion check come from the host: the one-take tokens
+	// are the app's, and a block package must not own them.
+	return (
+		<Block
+			source=""
+			table={payload}
+			hash={hash}
+			html={null}
+			streaming={false}
+			labels={labels}
+			quoteText={quoteText}
+			fly={flyFrame}
+			motionDisabled={motionDisabled}
+		/>
+	);
+}
+
+/** One run of the rendered HTML, or one table handed to its block component. */
+export type MessageFragment = { kind: "html"; html: string } | { kind: "table"; hash: string };
+
+/**
+ * Split the rendered HTML at the table placeholders the renderer emits.
+ *
+ * Everything else stays one `innerHTML` blob; a table becomes a React block of
+ * its own, which is what keeps a finished table's `<table>` alive across a
+ * stream tick (an element rebuilt from `innerHTML` loses its scroll position —
+ * measured, not assumed).
+ */
+export function splitTableFragments(html: string): MessageFragment[] {
+	const fragments: MessageFragment[] = [];
+	const pattern = /<div data-table-block="([^"]+)"><\/div>/g;
+	let cursor = 0;
+	let match: RegExpExecArray | null = pattern.exec(html);
+	while (match !== null) {
+		if (match.index > cursor) fragments.push({ kind: "html", html: html.slice(cursor, match.index) });
+		fragments.push({ kind: "table", hash: match[1] ?? "" });
+		cursor = match.index + match[0].length;
+		match = pattern.exec(html);
+	}
+	if (cursor < html.length) fragments.push({ kind: "html", html: html.slice(cursor) });
+	return fragments;
 }
 
 /**
@@ -714,7 +836,7 @@ function parseMarkdown(text: string, settled: boolean, repair: boolean): string 
 	uiFenceSettled = settled;
 	uiFenceRepair = repair;
 	try {
-		return decorateTables(md.parse(text, { async: false }));
+		return md.parse(text, { async: false });
 	} finally {
 		uiFenceSettled = true;
 		uiFenceRepair = true;
@@ -1510,6 +1632,7 @@ export const Markdown = memo(function Markdown({
 	// morphicon), not by rewriting the markdown HTML — a string swap replaced
 	// the whole body and dropped the icon element with it.
 	const body = render.html;
+	const fragments = useMemo(() => splitTableFragments(body), [body]);
 
 	// `morphicons` needs the element instance: plant the resting glyph after
 	// each HTML commit (streaming rebuilds the body), keeping the copy state
@@ -1574,21 +1697,29 @@ export const Markdown = memo(function Markdown({
 	// scroll position are never rebuilt.
 	const widenLabel = t("general.widenTable");
 	const resetWideLabel = t("general.resetTableWidth");
+	const quoteText = useCallback((text: string): void => {
+		window.dispatchEvent(new CustomEvent("musepi-gui-quote-append", { detail: { text } }));
+	}, []);
+	const blockLabels = useMemo<MarkdownBlockLabels>(
+		() => ({
+			close: t("settings.close"),
+			copied: t("settings.copied"),
+			copy: t("settings.copy"),
+			download: t("settings.download"),
+			expand: t("general.tableExpand"),
+			moreFormats: t("general.tableFormats"),
+			quoteRegion: t("general.quoteTableRegion"),
+			resetWidth: resetWideLabel,
+			widen: widenLabel,
+		}),
+		[widenLabel, resetWideLabel],
+	);
 	// One document-level dismisser for the table format menus (click-away and
 	// Escape). Installed once per page; the menus themselves live inside the
 	// message's innerHTML, which React never binds listeners to.
 	useLayoutEffect(() => {
 		installTableMenuDismiss();
 	}, []);
-	// Region selection on tables: drag a rectangle (or click a header for its
-	// column) and quote it. The listeners live on the message root rather than
-	// on cells, because the message's markup is regenerated on every stream tick.
-	const quoteSelectionLabel = t("general.quoteTableRegion");
-	useLayoutEffect(() => {
-		const host = rootRef.current;
-		if (!host) return;
-		return installTableSelection(host, quoteSelectionLabel);
-	}, [quoteSelectionLabel]);
 	const htmlRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
 		const host = htmlRef.current;
@@ -1613,7 +1744,22 @@ export const Markdown = memo(function Markdown({
 				onClick={onCopy}
 				onInput={onBlockInput}
 			>
-				<div ref={htmlRef} dangerouslySetInnerHTML={{ __html: body }} />
+				{fragments.map((fragment, index) =>
+					fragment.kind === "html" ? (
+						<div
+							key={`html:${index}`}
+							className="tr-md-fragment"
+							dangerouslySetInnerHTML={{ __html: fragment.html }}
+						/>
+					) : (
+						<TableFragment
+							key={`table:${fragment.hash}`}
+							hash={fragment.hash}
+							labels={blockLabels}
+							quoteText={quoteText}
+						/>
+					),
+				)}
 				{/* Stable streaming-tail container: React never rebuilds this
 				 * element's children — the per-char spans are appended by the
 				 * layout effect above, so each char's entrance animation plays

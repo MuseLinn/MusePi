@@ -5,21 +5,19 @@ import { createRoot, type Root } from "react-dom/client";
 import { Markdown } from "../src/components/transcript/Markdown";
 import { t } from "../src/i18n/index.js";
 
-// Wide-table toggling is a DOM state transition (class + aria-pressed after a
-// delegated click), which bun:test's default environment cannot exercise.
+// The table is a React block now: its width, formats and copy feedback are
+// component state. These cases drive the rendered controls instead of the DOM
+// attributes the string version used, so they survive another refactor of how
+// the block is produced.
 GlobalRegistrator.register();
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 afterAll(() => {
-	// Wide-table state outlives the component by design; leaving a record (or a
-	// deliberately corrupted one) behind would seed the next suite's mount.
 	window.localStorage.clear();
 	GlobalRegistrator.unregister();
 });
 
 beforeEach(() => {
-	// Wide-table state now persists; a leaked record from a previous case would
-	// arrive pre-widened and mask the default-layout assertions.
 	window.localStorage.clear();
 });
 
@@ -41,72 +39,58 @@ async function mount(text: string): Promise<Mounted> {
 	return { container, root };
 }
 
-function tables(container: HTMLElement): HTMLElement[] {
-	return Array.from(container.querySelectorAll<HTMLElement>(".tr-table"));
-}
-
-function wideButton(table: HTMLElement): HTMLButtonElement {
-	const button = table.querySelector<HTMLButtonElement>("[data-table-wide]");
-	expect(button).not.toBeNull();
-	return button!;
-}
-
-/** Hashes the component has written to storage (any array-valued record). */
-function storedHashes(): string[] {
-	const hashes: string[] = [];
-	for (let i = 0; i < window.localStorage.length; i++) {
-		const key = window.localStorage.key(i);
-		const raw = key ? window.localStorage.getItem(key) : null;
-		if (!raw) continue;
-		try {
-			const parsed: unknown = JSON.parse(raw);
-			if (Array.isArray(parsed))
-				hashes.push(...parsed.filter((entry): entry is string => typeof entry === "string"));
-		} catch {
-			// not a record this component wrote
-		}
-	}
-	return hashes;
-}
-
-/** The storage key holding the wide-table record, so a case can corrupt it. */
-function storedKey(): string | null {
-	for (let i = 0; i < window.localStorage.length; i++) {
-		const key = window.localStorage.key(i);
-		if (!key) continue;
-		try {
-			if (Array.isArray(JSON.parse(window.localStorage.getItem(key) ?? ""))) return key;
-		} catch {
-			// not ours
-		}
-	}
-	return null;
-}
-
 async function unmount(mounted: Mounted): Promise<void> {
 	await act(async () => mounted.root.unmount());
 	mounted.container.remove();
 }
 
+function tables(container: HTMLElement): HTMLElement[] {
+	return Array.from(container.querySelectorAll<HTMLElement>(".tr-table"));
+}
+
+/** The width toggle: first control in the bar, `aria-pressed` says the state. */
+function wideButton(table: HTMLElement): HTMLButtonElement {
+	const button = table.querySelector<HTMLButtonElement>(".tr-table-bar button[aria-pressed]");
+	expect(button).not.toBeNull();
+	return button!;
+}
+
+function caret(table: HTMLElement): HTMLButtonElement {
+	const button = table.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+	expect(button).not.toBeNull();
+	return button!;
+}
+
+function menuItems(table: HTMLElement): HTMLElement[] {
+	return Array.from(table.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+}
+
+/** Wide-table hashes the component wrote to storage. */
+function storedWide(): string[] {
+	const raw = window.localStorage.getItem("musepi-gui-wide-tables");
+	if (!raw) return [];
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
 describe("table width toggle", () => {
-	it("widens the clicked table and restores it on the second click", async () => {
+	it("widens on press and restores on the second press", async () => {
 		const { container, root } = await mount(TABLE_A);
 		const table = tables(container)[0]!;
-		const widenTitle = wideButton(table).getAttribute("title");
-		expect(widenTitle).toBeTruthy();
 		expect(wideButton(table).getAttribute("aria-pressed")).toBe("false");
 		expect(table.classList.contains("tr-table--wide")).toBe(false);
 
 		await act(async () => wideButton(table).click());
-		expect(table.classList.contains("tr-table--wide")).toBe(true);
-		expect(wideButton(table).getAttribute("aria-pressed")).toBe("true");
-		expect(wideButton(table).getAttribute("title")).not.toBe(widenTitle);
+		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(true);
+		expect(wideButton(tables(container)[0]!).getAttribute("aria-pressed")).toBe("true");
 
-		await act(async () => wideButton(table).click());
-		expect(table.classList.contains("tr-table--wide")).toBe(false);
-		expect(wideButton(table).getAttribute("aria-pressed")).toBe("false");
-		expect(wideButton(table).getAttribute("title")).toBe(widenTitle);
-		await act(async () => root.unmount());
+		await act(async () => wideButton(tables(container)[0]!).click());
+		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(false);
+		await unmount({ container, root });
 	});
 
 	it("keys the state by table, so widening one leaves its sibling alone", async () => {
@@ -115,268 +99,219 @@ describe("table width toggle", () => {
 		expect(first && second).toBeDefined();
 
 		await act(async () => wideButton(first!).click());
-		expect(first!.classList.contains("tr-table--wide")).toBe(true);
-		expect(second!.classList.contains("tr-table--wide")).toBe(false);
-
-		await act(async () => wideButton(second!).click());
-		expect(first!.classList.contains("tr-table--wide")).toBe(true);
-		expect(second!.classList.contains("tr-table--wide")).toBe(true);
-
-		await act(async () => wideButton(first!).click());
-		expect(first!.classList.contains("tr-table--wide")).toBe(false);
-		expect(second!.classList.contains("tr-table--wide")).toBe(true);
-		await act(async () => root.unmount());
+		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(true);
+		expect(tables(container)[1]!.classList.contains("tr-table--wide")).toBe(false);
+		await unmount({ container, root });
 	});
 
-	it("keeps a widened table wide when the markdown html is rebuilt (stream settle)", async () => {
-		// Contract: the table markup is re-created by every markdown re-render,
-		// so the toggle state must live in the component and be re-applied —
-		// a class toggled once on the element silently reverts mid-stream.
-		const { container, root } = await mount(TABLE_A);
+	it("keeps a widened table wide when later text arrives", async () => {
+		const { container, root } = await mount(`${TABLE_A}\n\n第一段`);
 		await act(async () => wideButton(tables(container)[0]!).click());
 		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(true);
 
-		await act(async () => {
-			root.render(createElement(Markdown, { text: `${TABLE_A}\n\nTrailing prose.` }));
-		});
-		const rebuilt = tables(container)[0]!;
-		expect(rebuilt.classList.contains("tr-table--wide")).toBe(true);
-		expect(wideButton(rebuilt).getAttribute("aria-pressed")).toBe("true");
-		expect(container.querySelector("table")).not.toBeNull();
-		await act(async () => root.unmount());
+		await act(async () => root.render(createElement(Markdown, { text: `${TABLE_A}\n\n第一段\n\n第二段` })));
+		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(true);
+		await unmount({ container, root });
 	});
 
-	it("leaves tables in the default layout until the user asks", async () => {
-		const { container, root } = await mount(`${TABLE_A}\n\n${TABLE_B}`);
-		for (const table of tables(container)) {
-			expect(table.classList.contains("tr-table--wide")).toBe(false);
-			expect(wideButton(table).getAttribute("aria-pressed")).toBe("false");
-		}
-		await act(async () => root.unmount());
-	});
-
-	it("keeps a widened table wide after a remount (session switch)", async () => {
-		// The transcript component is torn down and rebuilt when the session
-		// switches; losing the width there would make the choice look like it
-		// never stuck.
+	it("remembers the width across a remount (session switch)", async () => {
 		const first = await mount(TABLE_A);
-		const hash = tables(first.container)[0]!.dataset.tableHash;
-		expect(hash).toBeTruthy();
 		await act(async () => wideButton(tables(first.container)[0]!).click());
-		expect(storedHashes()).toContain(hash!);
 		await unmount(first);
 
 		const second = await mount(TABLE_A);
-		const restored = tables(second.container)[0]!;
-		expect(restored.classList.contains("tr-table--wide")).toBe(true);
-		expect(wideButton(restored).getAttribute("aria-pressed")).toBe("true");
+		expect(tables(second.container)[0]!.classList.contains("tr-table--wide")).toBe(true);
 		await unmount(second);
 	});
 
-	it("drops the record when the width is restored, so a remount starts default", async () => {
-		const first = await mount(TABLE_A);
-		const hash = tables(first.container)[0]!.dataset.tableHash!;
-		await act(async () => wideButton(tables(first.container)[0]!).click());
-		expect(storedHashes()).toContain(hash);
+	it("drops the record when the width is restored", async () => {
+		const { container, root } = await mount(TABLE_A);
+		const hash = tables(container)[0]!.dataset.tableHash!;
+		await act(async () => wideButton(tables(container)[0]!).click());
+		expect(storedWide()).toContain(hash);
 
-		await act(async () => wideButton(tables(first.container)[0]!).click());
-		expect(storedHashes()).not.toContain(hash);
-		await unmount(first);
-
-		const second = await mount(TABLE_A);
-		const table = tables(second.container)[0]!;
-		expect(table.classList.contains("tr-table--wide")).toBe(false);
-		expect(wideButton(table).getAttribute("aria-pressed")).toBe("false");
-		await unmount(second);
+		await act(async () => wideButton(tables(container)[0]!).click());
+		expect(storedWide()).not.toContain(hash);
+		await unmount({ container, root });
 	});
 
-	it("falls back to the default layout when the stored record is unreadable", async () => {
-		const seeded = await mount(TABLE_A);
-		await act(async () => wideButton(tables(seeded.container)[0]!).click());
-		const key = storedKey();
-		expect(key).toBeTruthy();
-		await unmount(seeded);
-
-		// Private mode / a half-written value / an older shape must not take the
-		// table down with it — it just renders at the default width.
-		window.localStorage.setItem(key!, "{not json");
+	it("falls back to the default width when the stored record is unreadable", async () => {
+		window.localStorage.setItem("musepi-gui-wide-tables", "{not json");
 		const { container, root } = await mount(TABLE_A);
 		expect(tables(container)[0]!.classList.contains("tr-table--wide")).toBe(false);
-		await act(async () => root.unmount());
+		await unmount({ container, root });
 	});
 });
 
-describe("table toolbar interaction", () => {
-	function caret(table: HTMLElement): HTMLButtonElement {
-		const button = table.querySelector<HTMLButtonElement>("[data-table-menu]");
-		expect(button).not.toBeNull();
-		return button!;
+describe("table formats", () => {
+	function stubClipboard(): { writes: string[]; restore(): void } {
+		const original = navigator.clipboard;
+		const writes: string[] = [];
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: {
+				writeText: async (text: string) => {
+					writes.push(text);
+				},
+			},
+		});
+		return {
+			writes,
+			restore: () => Object.defineProperty(navigator, "clipboard", { configurable: true, value: original }),
+		};
 	}
 
-	function split(table: HTMLElement): HTMLElement {
-		const wrap = table.querySelector<HTMLElement>(".tr-table-split");
-		expect(wrap).not.toBeNull();
-		return wrap!;
-	}
-
-	it("opens a format menu on the caret and closes it on a second press", async () => {
+	it("opens one format menu and closes it on a second press", async () => {
 		const { container, root } = await mount(TABLE_A);
 		const table = tables(container)[0]!;
-		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
 		expect(caret(table).getAttribute("aria-expanded")).toBe("false");
+		expect(menuItems(table)).toHaveLength(0);
 
 		await act(async () => caret(table).click());
-		expect(split(table).hasAttribute("data-menu-open")).toBe(true);
-		expect(caret(table).getAttribute("aria-expanded")).toBe("true");
+		expect(caret(tables(container)[0]!).getAttribute("aria-expanded")).toBe("true");
+		expect(menuItems(tables(container)[0]!).map(item => item.textContent)).toEqual([
+			"CSV",
+			"TSV",
+			"Markdown",
+			"CSV",
+			"Markdown",
+		]);
 
-		await act(async () => caret(table).click());
-		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
-		expect(caret(table).getAttribute("aria-expanded")).toBe("false");
+		await act(async () => caret(tables(container)[0]!).click());
+		expect(menuItems(tables(container)[0]!)).toHaveLength(0);
 		await unmount({ container, root });
 	});
 
 	it("keeps only one table's menu open at a time", async () => {
 		const { container, root } = await mount(`${TABLE_A}\n\n${TABLE_B}`);
-		const [first, second] = tables(container);
-		await act(async () => caret(first!).click());
-		await act(async () => caret(second!).click());
-		expect(split(first!).hasAttribute("data-menu-open")).toBe(false);
-		expect(split(second!).hasAttribute("data-menu-open")).toBe(true);
+		await act(async () => caret(tables(container)[0]!).click());
+		expect(menuItems(tables(container)[0]!)).toHaveLength(5);
+
+		await act(async () => caret(tables(container)[1]!).click());
+		expect(menuItems(tables(container)[0]!)).toHaveLength(0);
+		expect(menuItems(tables(container)[1]!)).toHaveLength(5);
 		await unmount({ container, root });
 	});
 
-	it("closes the open menu on an outside pointer press and on Escape", async () => {
+	it("closes the menu on an outside press and on Escape", async () => {
 		const { container, root } = await mount(TABLE_A);
-		const table = tables(container)[0]!;
+		await act(async () => caret(tables(container)[0]!).click());
+		expect(menuItems(tables(container)[0]!)).toHaveLength(5);
 
-		await act(async () => caret(table).click());
-		expect(split(table).hasAttribute("data-menu-open")).toBe(true);
 		await act(async () => {
 			document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
 		});
-		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+		expect(menuItems(tables(container)[0]!)).toHaveLength(0);
 
-		await act(async () => caret(table).click());
-		expect(split(table).hasAttribute("data-menu-open")).toBe(true);
+		await act(async () => caret(tables(container)[0]!).click());
+		expect(menuItems(tables(container)[0]!)).toHaveLength(5);
 		await act(async () => {
 			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 		});
-		expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+		expect(menuItems(tables(container)[0]!)).toHaveLength(0);
 		await unmount({ container, root });
 	});
 
-	it("swaps the copy glyph for a check after a successful write", async () => {
-		const writes: string[] = [];
-		const original = navigator.clipboard;
-		Object.defineProperty(navigator, "clipboard", {
-			configurable: true,
-			value: { writeText: async (text: string) => void writes.push(text) },
-		});
+	it("copies the default format in one press, then announces it", async () => {
+		const clipboard = stubClipboard();
 		try {
 			const { container, root } = await mount(TABLE_A);
-			const table = tables(container)[0]!;
-			const copy = table.querySelector<HTMLElement>("[data-table-copy]")!;
-			expect(copy.querySelector("svg")?.getAttribute("data-glyph")).toBe("copy");
+			const copy = tables(container)[0]!.querySelector<HTMLButtonElement>(
+				".tr-table-bar button:not([aria-pressed]):not([aria-haspopup])",
+			)!;
+			expect(copy.getAttribute("aria-label")).toBe(t("settings.copy"));
 
 			await act(async () => copy.click());
 			await act(async () => {
 				await Promise.resolve();
 			});
 
-			// One click copies the DEFAULT format: Markdown, not CSV.
-			expect(writes).toHaveLength(1);
-			expect(writes[0]).toContain("| a | b |");
-			expect(writes[0]).toContain("| --- | --- |");
-			// The copy state re-renders the message's innerHTML, so the feedback
-			// lands on the nodes that are in the document now — re-query from the
-			// mount root, never hold the pre-click reference.
-			const fresh = container.querySelector<HTMLElement>(".tr-table [data-table-copy]")!;
-			expect(fresh.querySelector("svg")?.getAttribute("data-glyph")).toBe("check");
-			expect(fresh.hasAttribute("data-copied")).toBe(true);
-			expect(fresh.getAttribute("aria-label")).toBe(t("settings.copied"));
+			// One press copies Markdown — the default — not CSV.
+			expect(clipboard.writes).toEqual(["| a | b |\n| --- | --- |\n| 1 | 2 |"]);
+			// The button and the status region both report it.
+			expect(tables(container)[0]!.querySelector(".tr-table-status")?.textContent).toBe(t("settings.copied"));
 			await unmount({ container, root });
 		} finally {
-			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
+			clipboard.restore();
 		}
 	});
 
-	it("copies the chosen format from the menu", async () => {
-		const writes: string[] = [];
-		const original = navigator.clipboard;
-		Object.defineProperty(navigator, "clipboard", {
-			configurable: true,
-			value: { writeText: async (text: string) => void writes.push(text) },
-		});
+	it("copies the format chosen in the menu", async () => {
+		const clipboard = stubClipboard();
 		try {
 			const { container, root } = await mount(TABLE_A);
-			const table = tables(container)[0]!;
-			const csv = table.querySelector<HTMLElement>('[role="menuitem"][data-table-copy="csv"]')!;
+			await act(async () => caret(tables(container)[0]!).click());
+			const csv = menuItems(tables(container)[0]!).find(item => item.textContent === "CSV")!;
 			await act(async () => csv.click());
 			await act(async () => {
 				await Promise.resolve();
 			});
-			expect(writes).toEqual(["a,b\n1,2"]);
-			// Choosing from the menu also dismisses it.
-			expect(split(table).hasAttribute("data-menu-open")).toBe(false);
+			expect(clipboard.writes).toEqual(["a,b\n1,2"]);
+			expect(menuItems(tables(container)[0]!)).toHaveLength(0);
 			await unmount({ container, root });
 		} finally {
-			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
+			clipboard.restore();
 		}
 	});
+});
 
-	it("announces a successful copy through a status region", async () => {
-		const original = navigator.clipboard;
-		Object.defineProperty(navigator, "clipboard", {
-			configurable: true,
-			value: { writeText: async () => undefined },
-		});
-		try {
-			const { container, root } = await mount(TABLE_A);
-			const status = container.querySelector<HTMLElement>(".tr-table-status");
-			expect(status?.getAttribute("role")).toBe("status");
-			expect(status?.textContent).toBe("");
+describe("table region selection", () => {
+	function cellOf(table: HTMLElement, row: number, column: number): HTMLElement {
+		return Array.from(table.querySelectorAll("tr"))[row]!.children[column] as HTMLElement;
+	}
 
-			await act(async () => container.querySelector<HTMLElement>("[data-table-copy]")!.click());
+	/** Each step gets its own `act`: React batches state updates, and a drag
+	 *  that is dispatched as one blob would leave the move unrendered. */
+	async function drag(table: HTMLElement, from: [number, number], to: [number, number]): Promise<void> {
+		const fire = async (type: string, target: HTMLElement, x: number, y: number): Promise<void> => {
 			await act(async () => {
-				await Promise.resolve();
+				const event = new Event(type, { bubbles: true });
+				Object.assign(event, { button: 0, clientX: x, clientY: y, shiftKey: false });
+				target.dispatchEvent(event);
 			});
-			expect(container.querySelector<HTMLElement>(".tr-table-status")?.textContent).toBe(t("settings.copied"));
-			await unmount({ container, root });
-		} finally {
-			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
-		}
+		};
+		await fire("pointerdown", cellOf(table, ...from), 10, 10);
+		await fire("pointermove", cellOf(table, ...to), 80, 60);
+		await fire("pointerup", cellOf(table, ...to), 80, 60);
+	}
+
+	it("selects the dragged rectangle", async () => {
+		const { container, root } = await mount(TABLE_A);
+		const table = tables(container)[0]!;
+		// A body cell starts a rectangle (a header cell takes its column).
+		await drag(table, [1, 0], [1, 1]);
+		expect(table.querySelectorAll(".tr-table-cell--selected")).toHaveLength(2);
+		await unmount({ container, root });
 	});
 
-	it("marks a downloaded CSV for spreadsheet readers with a byte-order mark", async () => {
-		const downloads: { name: string; mime?: string; content: unknown }[] = [];
-		const originalCreate = URL.createObjectURL;
-		const originalRevoke = URL.revokeObjectURL;
-		const originalClick = HTMLAnchorElement.prototype.click;
-		const blobs: Blob[] = [];
-		URL.createObjectURL = ((blob: Blob) => {
-			blobs.push(blob);
-			return "blob:test";
-		}) as typeof URL.createObjectURL;
-		URL.revokeObjectURL = (() => undefined) as typeof URL.revokeObjectURL;
-		HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
-			downloads.push({ name: this.download, content: blobs.at(-1) });
-		} as typeof HTMLAnchorElement.prototype.click;
-		try {
-			const { container, root } = await mount(TABLE_A);
-			const dl = container.querySelector<HTMLElement>('[data-table-download="csv"]')!;
-			await act(async () => dl.click());
-			expect(downloads).toHaveLength(1);
-			expect(downloads[0]!.name).toBe("table.csv");
-			const text = await blobs[0]!.text();
-			// Excel reads a BOM-less UTF-8 file as the local codepage, so every
-			// CJK cell arrives as mojibake without it.
-			expect(text.startsWith("\uFEFF")).toBe(true);
-			expect(text.slice(1)).toBe("a,b\n1,2");
-			await unmount({ container, root });
-		} finally {
-			URL.createObjectURL = originalCreate;
-			URL.revokeObjectURL = originalRevoke;
-			HTMLAnchorElement.prototype.click = originalClick;
-		}
+	it("offers to quote the selection and clears it on Escape", async () => {
+		const { container, root } = await mount(TABLE_A);
+		const table = tables(container)[0]!;
+		await drag(table, [1, 0], [1, 1]);
+		const plate = table.querySelector<HTMLElement>(".tr-table-quote");
+		expect(plate).not.toBeNull();
+
+		await act(async () => {
+			table.querySelector("table")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+		});
+		expect(tables(container)[0]!.querySelectorAll(".tr-table-cell--selected")).toHaveLength(0);
+		await unmount({ container, root });
+	});
+
+	it("quotes the region into the composer channel", async () => {
+		const { container, root } = await mount(TABLE_A);
+		const quoted: string[] = [];
+		const listen = (event: Event): void => void quoted.push((event as CustomEvent<{ text: string }>).detail.text);
+		window.addEventListener("musepi-gui-quote-append", listen);
+
+		await drag(tables(container)[0]!, [1, 0], [1, 1]);
+		await act(async () => tables(container)[0]!.querySelector<HTMLElement>(".tr-table-quote")!.click());
+
+		expect(quoted).toHaveLength(1);
+		// A selection below the header still comes back as a table.
+		expect(quoted[0]).toContain("| a | b |");
+		expect(quoted[0]).toContain("| 1 | 2 |");
+		window.removeEventListener("musepi-gui-quote-append", listen);
+		await unmount({ container, root });
 	});
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Markdown } from "../src/components/transcript/Markdown";
+import { Markdown, markdownTableBlock, renderStreamingMarkdown } from "../src/components/transcript/Markdown";
 import { t } from "../src/i18n/index.js";
 
 function renderMarkdown(text: string): string {
@@ -196,32 +196,27 @@ describe("Transcript mermaid", () => {
 });
 
 describe("Transcript tables", () => {
-	it("wraps tables with a hover toolbar: width toggle + copy menu + download menu", () => {
-		const html = renderMarkdown("| a | b |\n|---|---|\n| 1 | 2 |");
-		expect(html).toContain('<div class="tr-table" data-table-hash="');
-		expect(html).toContain('<div class="tr-table-bar">');
-		expect(html).toMatch(
-			/<button type="button" class="tr-code-btn tr-table-btn tr-table-wide" data-table-wide="[a-z0-9]+" aria-pressed="false"/,
-		);
-		expect(html).toContain('data-table-copy="csv"');
-		expect(html).toContain('data-table-copy="tsv"');
-		expect(html).toContain('data-table-copy="markdown"');
-		expect(html).toContain('data-table-download="csv"');
-		expect(html).toContain('data-table-download="markdown"');
+	it("routes a table to its block component instead of serializing it", () => {
+		const text = "| a | b |\n|---|---|\n| 1 | 2 |";
+		const html = renderStreamingMarkdown(text, false, null, {}).html;
+		// The renderer leaves a placeholder; the table's markup comes from the
+		// React block, which is what keeps `<table>` stable across stream ticks.
+		expect(html).toMatch(/data-table-block="[a-z0-9]+"/);
+		expect(html).not.toContain("<table>");
 	});
 
-	it("keeps one format menu instead of a caret on every control", () => {
-		const html = renderMarkdown("| a | b |\n|---|---|\n| 1 | 2 |");
-		const bar = html.match(/<div class="tr-table-bar">[\s\S]*?<\/div>/)?.[0] ?? "";
-		expect(bar).not.toBe("");
-		// Five actions: widen, copy, download, more formats, expand. The menu
-		// items are buttons too, so count the toolbar's own controls.
-		expect(bar.match(/class="tr-code-btn/g)).toHaveLength(5);
-		// Two identical carets read as two different things and cost a button.
-		expect(bar.match(/data-table-menu(?![-a-z])/g)).toHaveLength(1);
-		// Six interchangeable format entries would not say which group copies.
-		expect(bar.match(/tr-table-menu-label/g)).toHaveLength(2);
-		expect(bar).toContain('aria-label="');
+	it("hands the block the cells' inline markup, pipes and code spans intact", () => {
+		const text = "| a | b |\n|---|---|\n| **x** | `y` |";
+		const html = renderStreamingMarkdown(text, false, null, {}).html;
+		const hash = /data-table-block="([^"]+)"/.exec(html)?.[1];
+		expect(hash).toBeTruthy();
+		const payload = markdownTableBlock(hash!);
+		expect(payload).toBeTruthy();
+		expect(payload!.header.map(cell => cell.text)).toEqual(["a", "b"]);
+		// Emphasis arrives as markup for the cell, and as plain text for CSV.
+		expect(payload!.rows[0]![0]!.html).toContain("<strong>x</strong>");
+		expect(payload!.rows[0]![0]!.text).toBe("x");
+		expect(payload!.rows[0]![1]!.html).toContain("<code>y</code>");
 	});
 
 	it("renders table cells with inline markdown and escaped content", () => {
