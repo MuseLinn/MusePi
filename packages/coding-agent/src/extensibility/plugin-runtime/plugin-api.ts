@@ -62,6 +62,7 @@ import type {
 	ExtensionCredentialStore,
 	ExtensionFactory,
 	ExtensionMagicKeyword,
+	ExtensionMarkdownBlock,
 	ExtensionModeDefinition,
 	ExtensionNotificationMessage,
 	ExtensionPromptSection,
@@ -473,6 +474,7 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 		this.slots = {
 			register: this.registerComponent.bind(this),
 			registerWidget: this.registerWidget.bind(this),
+			registerMarkdownBlock: this.registerMarkdownBlock.bind(this),
 			inject: (slot: string, register: () => () => void) => injectSeat(slot, register),
 		};
 		this.rpc = {
@@ -1127,6 +1129,27 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 		rememberRegisteredWidget(widget);
 	}
 
+	/** Contribute a markdown block renderer. Same validation shape as
+	 *  `registerWidget`: the module is compiled by the daemon and imported by
+	 *  the GUI, so the parts the host cannot infer are required up front. */
+	registerMarkdownBlock(block: ExtensionMarkdownBlock): void {
+		if (!block || typeof block.kind !== "string" || block.kind.length === 0) {
+			throw new TypeError("registerMarkdownBlock: block.kind is required");
+		}
+		if (typeof block.label !== "string" || block.label.trim().length === 0) {
+			throw new TypeError(`registerMarkdownBlock: label required for "${block.kind}"`);
+		}
+		if (typeof block.moduleUrl !== "string" || block.moduleUrl.length === 0) {
+			throw new TypeError(`registerMarkdownBlock: moduleUrl required for "${block.kind}"`);
+		}
+		this.extension.markdownBlocks.push({
+			kind: block.kind,
+			label: block.label,
+			...(block.description ? { description: block.description } : {}),
+			moduleUrl: block.moduleUrl,
+		});
+	}
+
 	registerPrompt(section: ExtensionPromptSection): void {
 		this.extension.promptSections.push(section);
 	}
@@ -1400,6 +1423,7 @@ export function createPluginRecord(extensionPath: string, resolvedPath: string):
 		subagents: new Map(),
 		toolViews: [],
 		widgets: [],
+		markdownBlocks: [],
 		notificationChannels: [],
 		services: [],
 		memoryBackendProviders: [],

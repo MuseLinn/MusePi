@@ -156,7 +156,7 @@ import type { SlashCommandInfo } from "../slash-commands";
 import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
 import type { UrlSchemeDefinition } from "./url-schemes";
 import type { PluginWebRouteRequest, ScopedWebRoute } from "./web-route-scope";
-import type { ExtensionWidget } from "./widget-types";
+import type { ExtensionMarkdownBlock, ExtensionWidget } from "./widget-types";
 
 export type { OverlayHandle, OverlayOptions } from "@musepi/pi-tui";
 export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
@@ -581,6 +581,8 @@ export interface ExtensionContext {
 	/** Widget types contributed by loaded extensions (registerWidget). Tools
 	 *  that validate card types merge these over the built-in table. */
 	getRegisteredWidgets?(): ExtensionWidget[];
+
+	getRegisteredMarkdownBlocks?(): ExtensionMarkdownBlock[];
 	/** Gracefully shutdown and exit. */
 	shutdown(): void;
 	/** Get the current effective system prompt. */
@@ -1406,6 +1408,7 @@ export interface PluginContextNamespaces {
 	readonly slots: {
 		register: ExtensionAPI["registerComponent"];
 		registerWidget: ExtensionAPI["registerWidget"];
+		registerMarkdownBlock: ExtensionAPI["registerMarkdownBlock"];
 		/**
 		 * Ride a seat for its whole declaration lifetime.
 		 *
@@ -1977,6 +1980,10 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 * export receives `{ data, update, sendPrompt?, preview?, annotateCapture? }`.
 	 */
 	registerWidget(widget: ExtensionWidget): void;
+
+	/** Contribute a markdown block renderer. A kind the host already renders is
+	 *  replaced; a new kind is routed once a fence renderer emits it. */
+	registerMarkdownBlock(block: ExtensionMarkdownBlock): void;
 
 	/** Contribute a named, ordered prompt section. Sections compose into every session prompt the extension
 	 *  participates in, ordered by `order` against the core template, mode and
@@ -3007,6 +3014,10 @@ export interface Extension {
 	 *  daemon-side metadata validates payloads and drives the agent schema;
 	 *  `moduleUrl` is compiled for the GUI renderer registry. */
 	widgets: ExtensionWidget[];
+	/** Markdown block kinds contributed by the extension
+	 *  (registerMarkdownBlock): the GUI routes a message's blocks by kind, so a
+	 *  contribution replaces or adds one renderer without touching the parser. */
+	markdownBlocks: ExtensionMarkdownBlock[];
 	/** Notification channels registered by the extension
 	 *  (registerNotificationChannel): the runner routes every `send` call
 	 *  through its `onNotification` sink, and drops the whole list on unload. */
@@ -3251,7 +3262,7 @@ export interface ExtensionToolView {
 	label?: string;
 }
 
-export type { ExtensionWidget, ExtensionWidgetField } from "./widget-types";
+export type { ExtensionMarkdownBlock, ExtensionWidget, ExtensionWidgetField } from "./widget-types";
 
 /** Result of loading extensions. */
 export interface LoadExtensionsResult {

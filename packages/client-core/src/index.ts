@@ -81,6 +81,10 @@ export { ShinyText } from "./components/shell/ShinyText";
 export { SpotlightCard } from "./components/shell/SpotlightCard";
 /** Shared in-place cross-fade for state copy (docs/gui-design.md §3a). */
 export { ThemeToggle } from "./components/shell/ThemeToggle";
+export {
+	type ExtensionMarkdownBlockArtifact,
+	loadExtensionMarkdownBlocks,
+} from "./components/transcript/extension-markdown-blocks";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
 export { Markdown } from "./components/transcript/Markdown";

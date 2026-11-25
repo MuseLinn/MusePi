@@ -82,6 +82,18 @@ export interface ToolViewItem {
  * extensions.list `widgets`. The metadata is serialized here — defaults is
  * invoked once — because the GUI registry needs plain data plus a module.
  */
+/** One markdown block renderer contributed by an extension: the kind it claims
+ *  plus its compiled renderer module. */
+export interface MarkdownBlockViewItem {
+	kind: string;
+	extensionId: string;
+	label: string;
+	description?: string;
+	code: string;
+	css?: string;
+	error?: string;
+}
+
 export interface WidgetViewItem {
 	type: string;
 	extensionId: string;
@@ -1142,6 +1154,44 @@ export async function collectToolViews(
  * set — the type stays valid for agents and the board, and the renderer shows
  * the standard unavailable card instead of the type vanishing.
  */
+/**
+ * Compile markdown block renderers contributed by extensions
+ * (`registerMarkdownBlock`) — same contract as `collectWidgetViews`: the
+ * module is compiled once here and imported by the GUI's block registry, so a
+ * plugin can replace `table` or introduce a kind of its own.
+ */
+export async function collectMarkdownBlockViews(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<MarkdownBlockViewItem[]> {
+	const out: MarkdownBlockViewItem[] = [];
+	for (const entry of extensions) {
+		if (
+			(entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND) ||
+			entry.state !== "active"
+		)
+			continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const block of extension.markdownBlocks ?? []) {
+			const meta = {
+				kind: block.kind,
+				extensionId: extension.path,
+				label: block.label,
+				...(block.description ? { description: block.description } : {}),
+			};
+			const absPath = path.resolve(extension.resolvedPath, "..", block.moduleUrl);
+			try {
+				const compiled = await compileComponentModule(absPath);
+				out.push({ ...meta, code: compiled.code, ...(compiled.css ? { css: compiled.css } : {}) });
+			} catch (error) {
+				out.push({ ...meta, code: "", error: String(error) });
+			}
+		}
+	}
+	return out;
+}
+
 export async function collectWidgetViews(
 	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
 	cwd: string,

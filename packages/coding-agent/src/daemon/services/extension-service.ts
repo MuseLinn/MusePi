@@ -740,6 +740,7 @@ export class ExtensionService implements DaemonService {
 			collectToolViews,
 			collectStatusBarSegments,
 			collectWidgetViews,
+			collectMarkdownBlockViews,
 			collectScrollbarSkins,
 		} = await import("../extension-artifact-compiler");
 		const components = await collectSlotComponents(
@@ -762,6 +763,13 @@ export class ExtensionService implements DaemonService {
 			this.#deps.cwd(),
 		);
 		mark("widgets");
+		// Markdown block renderers (registerMarkdownBlock): compiled modules the
+		// GUI registers into its block registry by kind.
+		const markdownBlocks = await collectMarkdownBlockViews(
+			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+			this.#deps.cwd(),
+		);
+		mark("markdownBlocks");
 		// Status-bar segments (registerStatusBarSegment): the GUI status bar
 		// merges these after its built-ins, ordered by `order`.
 		const statusBarSegments = await collectStatusBarSegments(
@@ -805,6 +813,7 @@ export class ExtensionService implements DaemonService {
 					// Widgets stay inline: the board stores a card's compiled source with
 					// the card, so a URL there would outlive the artifact it points at.
 					widgets,
+					markdownBlocks,
 				}
 			: { components: inlineArtifacts(components), toolViews, widgets };
 		return {
@@ -815,6 +824,7 @@ export class ExtensionService implements DaemonService {
 			components: delivered.components,
 			toolViews: delivered.toolViews,
 			widgets: delivered.widgets,
+			markdownBlocks: delivered.markdownBlocks,
 			statusBarSegments,
 			scrollbarSkins,
 			// Desktop-shell config: enabled/mode/

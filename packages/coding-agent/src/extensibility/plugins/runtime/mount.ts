@@ -250,6 +250,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 		subagents: new Map(),
 		toolViews: [],
 		widgets: [],
+		markdownBlocks: [],
 		notificationChannels: [],
 		services: [],
 		memoryBackendProviders: [],
