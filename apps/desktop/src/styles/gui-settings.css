@@ -2410,7 +2410,7 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-size: var(--ui-font-size);
+	font-size: 14px;
 	font-weight: 600;
 }
 
@@ -3463,7 +3463,7 @@
 
 .gui-remote-disclaimer-link {
 	align-self: flex-start;
-	margin: 0 24px 12px;
+	margin: 0;
 	padding: 4px 0;
 	border: 0;
 	background: transparent;
