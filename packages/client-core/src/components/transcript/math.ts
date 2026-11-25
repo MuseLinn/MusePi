@@ -61,6 +61,17 @@ const renderDisplay = (source: string): string => {
 	// fence can — splitting there left the paragraph's own tags straddling the
 	// boundary. Its wrapper and copy control therefore stay in the string, and
 	// the delegated copy handler feeds their feedback.
+	//
+	// KNOWN COST, measured: `.katex-display` scrolls sideways, and the whole HTML
+	// blob is rewritten on every re-render, so a wide formula snapped back to
+	// `scrollLeft: 0` when text was appended below it (17 → 0). It could not be
+	// fixed from the host: the box lives inside `dangerouslySetInnerHTML`, so a
+	// layout effect's cleanup already sees the NEW node and a capture-phase
+	// `scroll` listener has nothing left to read once a stream tick lands.
+	// The fix is to make display math a BLOCK token (`$$` on its own line), which
+	// takes it out of the paragraph and hands it to a block component — same
+	// seam as `table`/`code`/`diagram`. Block-extensions are consulted at every
+	// line position (`blockTokens` in the fork), so this needs no mdast.
 	return (
 		`<span class="tr-math">${renderKatex(source, true)}` +
 		`<button type="button" class="tr-code-btn tr-math-copy tr-code-copy" data-math-copy="${hash}" data-copy-hash="${hash}" aria-label="${label}" title="${label}">` +
