@@ -465,7 +465,12 @@ function decorateTables(html: string): string {
 		return (
 			`<div class="tr-table" data-table-hash="${hash}">` +
 			tableToolbarHtml(hash) +
-			`<div class="tr-table-scroll"><table>${inner}</table></div></div>`
+			`<div class="tr-table-scroll"><table>${inner}</table></div>` +
+			// Announced on copy: the button's own label flips, but a name change on
+			// a focused control is announced unevenly across screen readers — a
+			// status region is the reliable channel.
+			`<span class="tr-table-status" role="status" aria-live="polite"></span>` +
+			`</div>`
 		);
 	});
 }
@@ -1221,12 +1226,15 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableDl.dataset.tableDownload ?? "csv";
-			const content = fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const markdown = fmt === "markdown";
 			closeTableMenus();
+			// CSV opens in Excel, which reads a UTF-8 file as the local codepage
+			// without a BOM — every CJK cell then arrives as mojibake. Markdown
+			// is read by text editors that assume UTF-8, so it stays clean.
 			downloadBlob(
-				fmt === "markdown" ? "table.md" : "table.csv",
-				content,
-				fmt === "markdown" ? "text/markdown" : "text/csv",
+				markdown ? "table.md" : "table.csv",
+				markdown ? tableToMarkdown(data) : `\uFEFF${tableToCSV(data)}`,
+				markdown ? "text/markdown" : "text/csv",
 			);
 			return;
 		}
@@ -1484,6 +1492,14 @@ export const Markdown = memo(function Markdown({
 			button
 				.querySelector<MorphIconElement>("morph-icon")
 				?.morphTo(copied ? CheckGlyphData : CopyGlyphData, "snappy");
+		}
+		for (const table of host.querySelectorAll<HTMLElement>(".tr-table[data-table-hash]")) {
+			const status = table.querySelector<HTMLElement>(".tr-table-status");
+			if (!status) continue;
+			const copied = copiedHash != null && copiedHash === table.dataset.tableHash;
+			// Assigning the same text twice announces nothing; clearing back to ""
+			// on revert lets the next copy announce again.
+			status.textContent = copied ? t("settings.copied") : "";
 		}
 	}, [copiedHash]);
 

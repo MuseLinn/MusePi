@@ -1754,6 +1754,21 @@ button.tr-display-context-source:hover {
 	scrollbar-width: thin;
 }
 
+/* Copy announcement. Visually hidden but still in the accessibility tree:
+ * `display:none` / `visibility:hidden` / zero-size without clip all remove it
+ * from the tree, which is why this uses the clip-rect recipe. */
+.tr-table-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	border: 0;
+	clip-path: inset(50%);
+}
+
 .tr-table-bar {
 	position: absolute;
 	top: 3px;

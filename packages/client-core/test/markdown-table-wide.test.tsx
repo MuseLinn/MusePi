@@ -323,4 +323,60 @@ describe("table toolbar interaction", () => {
 			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
 		}
 	});
+
+	it("announces a successful copy through a status region", async () => {
+		const original = navigator.clipboard;
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: { writeText: async () => undefined },
+		});
+		try {
+			const { container, root } = await mount(TABLE_A);
+			const status = container.querySelector<HTMLElement>(".tr-table-status");
+			expect(status?.getAttribute("role")).toBe("status");
+			expect(status?.textContent).toBe("");
+
+			await act(async () => container.querySelector<HTMLElement>("[data-table-copy]")!.click());
+			await act(async () => {
+				await Promise.resolve();
+			});
+			expect(container.querySelector<HTMLElement>(".tr-table-status")?.textContent).toBe(t("settings.copied"));
+			await unmount({ container, root });
+		} finally {
+			Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
+		}
+	});
+
+	it("marks a downloaded CSV for spreadsheet readers with a byte-order mark", async () => {
+		const downloads: { name: string; mime?: string; content: unknown }[] = [];
+		const originalCreate = URL.createObjectURL;
+		const originalRevoke = URL.revokeObjectURL;
+		const originalClick = HTMLAnchorElement.prototype.click;
+		const blobs: Blob[] = [];
+		URL.createObjectURL = ((blob: Blob) => {
+			blobs.push(blob);
+			return "blob:test";
+		}) as typeof URL.createObjectURL;
+		URL.revokeObjectURL = (() => undefined) as typeof URL.revokeObjectURL;
+		HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+			downloads.push({ name: this.download, content: blobs.at(-1) });
+		} as typeof HTMLAnchorElement.prototype.click;
+		try {
+			const { container, root } = await mount(TABLE_A);
+			const dl = container.querySelector<HTMLElement>('[data-table-download="csv"]')!;
+			await act(async () => dl.click());
+			expect(downloads).toHaveLength(1);
+			expect(downloads[0]!.name).toBe("table.csv");
+			const text = await blobs[0]!.text();
+			// Excel reads a BOM-less UTF-8 file as the local codepage, so every
+			// CJK cell arrives as mojibake without it.
+			expect(text.startsWith("\uFEFF")).toBe(true);
+			expect(text.slice(1)).toBe("a,b\n1,2");
+			await unmount({ container, root });
+		} finally {
+			URL.createObjectURL = originalCreate;
+			URL.revokeObjectURL = originalRevoke;
+			HTMLAnchorElement.prototype.click = originalClick;
+		}
+	});
 });

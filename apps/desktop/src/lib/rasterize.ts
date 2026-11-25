@@ -222,6 +222,68 @@ function loadFontEmbedCss(): Promise<string | null> {
 	return fontEmbedCss;
 }
 
+/** Wait for the faces the card is about to measure, but never for long: a
+ *  slow/blocked font must not turn an export into a hang. Measured with
+ *  fallback metrics the image keeps the *wrong* glyph widths, which is the
+ *  kind of "almost right" that is worse than a visible failure. */
+const FONTS_TIMEOUT_MS = 2000;
+
+async function fontsSettled(): Promise<void> {
+	const ready = document.fonts?.ready;
+	if (!ready) return;
+	await Promise.race([
+		ready.then(() => undefined).catch(() => undefined),
+		new Promise<void>(r => setTimeout(r, FONTS_TIMEOUT_MS)),
+	]);
+}
+
+/** Paint/layout properties only. The computed style of the root carries every
+ *  theme custom property the app defines; copying all of them onto every node
+ *  bloats the serialized SVG by megabytes and can stop Chromium from decoding
+ *  it (the "blank image" failure again, from the other side). Custom
+ *  properties are excluded because the computed values already resolved
+ *  `var()` — nothing is lost, only the unresolved tokens. */
+function captureStyleProperties(container: HTMLElement): string[] {
+	return Array.from(getComputedStyle(container)).filter(name => !name.startsWith("--"));
+}
+
+/** Do two RGBA pixels differ by more than rounding noise? Alpha counts (a
+ *  fully transparent pixel against an opaque one is a difference); two
+ *  transparent pixels never differ, whatever colour they nominally carry. */
+export function pixelsDiffer(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
+	const alphaA = a[3] ?? 0;
+	const alphaB = b[3] ?? 0;
+	if (Math.abs(alphaA - alphaB) > 2) return true;
+	if (alphaA === 0 || alphaB === 0) return false;
+	return (
+		Math.abs((a[0] ?? 0) - (b[0] ?? 0)) > 2 ||
+		Math.abs((a[1] ?? 0) - (b[1] ?? 0)) > 2 ||
+		Math.abs((a[2] ?? 0) - (b[2] ?? 0)) > 2
+	);
+}
+
+/** Reject a raster that carries nothing but the background. An SVG decode or
+ *  draw failure returns a valid, nonempty PNG — handing that to the clipboard
+ *  is exactly how "copy as image" shipped a blank picture before. Samples
+ *  bounded strips so a long image never allocates a second full buffer. */
+export function assertCanvasHasContent(canvas: HTMLCanvasElement): void {
+	const context = canvas.getContext("2d");
+	if (!context || !canvas.width || !canvas.height) throw new Error("canvas is empty");
+	let reference: ArrayLike<number> | null = null;
+	for (let y = 0; y < canvas.height; y += 32) {
+		const { data } = context.getImageData(0, y, canvas.width, Math.min(32, canvas.height - y));
+		for (let i = 0; i < data.length; i += 4) {
+			const pixel = data.subarray(i, i + 4);
+			if (!reference) {
+				reference = pixel;
+				continue;
+			}
+			if (pixelsDiffer(reference, pixel)) return;
+		}
+	}
+	throw new Error("rendered image is blank");
+}
+
 export interface RasterizeOptions {
 	pixelRatio?: number;
 	backgroundColor?: string;
@@ -256,19 +318,44 @@ export async function rasterizeToBlob(element: HTMLElement, options: RasterizeOp
 			// not rAF: rAF is paused while the window is hidden.
 			await new Promise<void>(resolve => window.setTimeout(resolve, 32));
 		}
+		await fontsSettled();
 
-		const { toBlob } = await import("html-to-image");
+		const { toCanvas } = await import("html-to-image");
 		const fontEmbedCSS = await loadFontEmbedCss();
 		const background = opaqueBackground(element, options.backgroundColor ?? "#ffffff");
-		const pixelRatio = cappedPixelRatio(options.pixelRatio ?? 2, rect.width, rect.height);
+		const preferred = options.pixelRatio ?? 2;
+		const includeStyleProperties = captureStyleProperties(clone);
 
-		const blob = await toBlob(clone, {
-			pixelRatio,
-			backgroundColor: background,
-			...(fontEmbedCSS ? { fontEmbedCSS } : {}),
-		});
-		if (!blob) throw new Error("canvas produced no blob");
-		return blob;
+		// A decode/draw failure returns a valid but blank raster; the same
+		// failure usually clears at a lower resolution, so a retry is a real
+		// recovery rather than a hope. The blank check is what makes it safe:
+		// without it the retry could hand back the same empty picture.
+		let lastError: unknown = null;
+		for (const ratio of [preferred, 1]) {
+			const pixelRatio = cappedPixelRatio(ratio, rect.width, rect.height);
+			let canvas: HTMLCanvasElement | null = null;
+			try {
+				canvas = await toCanvas(clone, {
+					pixelRatio,
+					backgroundColor: background,
+					includeStyleProperties,
+					...(fontEmbedCSS ? { fontEmbedCSS } : {}),
+				});
+				if (!canvas) throw new Error("canvas produced no raster");
+				assertCanvasHasContent(canvas);
+				const blob = await new Promise<Blob | null>(resolve => canvas?.toBlob(resolve, "image/png"));
+				if (!blob) throw new Error("canvas produced no blob");
+				return blob;
+			} catch (err) {
+				lastError = err;
+				if (canvas) {
+					canvas.width = 0;
+					canvas.height = 0;
+				}
+				if (pixelRatio <= 1) break;
+			}
+		}
+		throw lastError instanceof Error ? lastError : new Error("image export failed");
 	} finally {
 		stage.remove();
 	}
