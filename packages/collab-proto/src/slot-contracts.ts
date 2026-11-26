@@ -190,6 +190,15 @@ export const SLOT_CONTRACTS = {
 		lifetime: "core",
 		replaceRisk: "additive",
 	},
+	"settings.subnav.session-memory": {
+		scope: "root",
+		summary: "「会话与记忆」子导航的一个标签（list）：id 命中内置标签即替换其内容，其余追加。",
+		registerOptions: [MODULE, LABEL, ORDER, ID],
+		ownerProps: ["rpc", "sessionId"],
+		declaredBy: "apps/desktop/src/components/settings-sections/session-memory.tsx",
+		lifetime: "core",
+		replaceRisk: "shadows-shipped-ui",
+	},
 	"conversation.composer.bar": {
 		scope: "session",
 		summary: "整个输入卡（hero 与 session 两种模式）。",

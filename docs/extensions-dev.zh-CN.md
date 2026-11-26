@@ -187,6 +187,7 @@ export default function (pi: ExtensionAPI): void {
 - `conversation.chat.node`（list）—— transcript 节点 seat，按节点 kind 派发（见 §10）。
 - `panel.right` / `settings.extensions` — 旧保留槽（仍可用）。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载，见下）：注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染，并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片（2026-08-17；2026-08-20 起展示于**扩展中心底部**，随插件 inventory）：按扩展 id 派发一张卡片，组件经 `settingsScope` prop 读写设置键（见下）。
+- `settings.subnav.session-memory` — 「会话与记忆」子导航的一个标签（list）。`id` 命中内置标签（`session`、`memory`、`prompts`）时替换该标签的内容，并可用 `label` 覆盖标签名；其他 `id` 追加为新标签。这是“功能位于既有设置页内、而不是自成一页”时使用的席位：记忆后端设置就走这里，后端插件因此可以在不新增导航页的前提下提供自己的面板。没有条目命名该标签时渲染内置内容，贡献编译失败时同样回退内置内容。
 - `settings.item.<page>.<row>` — 页面自有行/分区席位（dsh `children` 粒度）：某个页面接管导航后，`settings.item.<page>.*` 的组件由该页承载并渲染在页面内容之后，不会变成导航项。插件**自己选择座位**：只放内置页、只放扩展中心（`settings.item.<extId>`）、或两处都注册；组件收到注入的 `slot`，可为不同座位渲染不同内容。当前座位按 list 语义挂载（dsh 的 `children` 容量声明——`single`/`keyed`——尚未实现，出现第二个消费者时再补）。`ui-theme` 用 `settings.item.appearance.rail` 把滚动条设置放回外观页（与 dsh 的 theme bundle 同构）。
 
 **设置面板宿主**（2026-10-10）：注册到 `settings.extensions` 的组件由**扩展控制中心**底部

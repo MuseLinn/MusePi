@@ -106,6 +106,10 @@ export const EXTENSION_SLOT_DECLARATION = {
 		 *  `settings.general.item`): a feature contributes one row without a page
 		 *  of its own. One spelling — no legacy alias. */
 		"settings.general.item": { kind: "list" },
+		/** One tab in the Sessions & Memory subnav. An entry appends a tab; an
+		 *  `id` matching a built-in tab (`session`, `memory`, `prompts`)
+		 *  replaces that tab's content and label. */
+		"settings.subnav.session-memory": { kind: "list" },
 		// 输入区(见上表)。list 组在前、single 组在后。
 		/** 整个输入卡本身(single):占住者渲染 hero/session 两种模式,
 		 *  宿主在无贡献或编译失败时渲染内建 Composer。 */

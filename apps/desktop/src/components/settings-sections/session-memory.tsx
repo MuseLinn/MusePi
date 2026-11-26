@@ -21,13 +21,59 @@ import { PromptsSection } from "./suggestions";
  * pane instead of stretching the page into a wall of rows.
  */
 
-type MemoryGroup = "session" | "memory" | "prompts";
-
-const GROUPS: SegmentedOption<MemoryGroup>[] = [
+const BUILTIN_GROUPS: SegmentedOption<string>[] = [
 	{ value: "session", label: t("general.sessions") },
 	{ value: "memory", label: t("settings.memorySettings") },
 	{ value: "prompts", label: t("settings.starterPrompts") },
 ];
+
+const BUILTIN_IDS = new Set(BUILTIN_GROUPS.map(group => group.value));
+
+/** Built-in tab ids, in order (test + host contract). */
+export const BUILTIN_TAB_IDS: readonly string[] = BUILTIN_GROUPS.map(group => group.value);
+
+/** One subnav tab contributed through `settings.subnav.session-memory`. An `id`
+ *  that names a built-in tab replaces that tab's content (and label when one is
+ *  given); any other id appends a tab. */
+export interface SettingsSubnavTab {
+	id?: string;
+	label?: string;
+	node: ReactNode;
+}
+
+/**
+ * Compose the subnav from the built-ins and the contributed tabs: a contributed
+ * id equal to a built-in id replaces that tab, anything else appends. Content
+ * lookup returns the contribution so the host can fall back to the built-in
+ * renderer when a tab has none.
+ */
+export function resolveSubnavTabs(tabs: readonly SettingsSubnavTab[]): {
+	options: SegmentedOption<string>[];
+	contentFor(id: string): ReactNode | undefined;
+} {
+	const overrideFor = (id: string): SettingsSubnavTab | undefined =>
+		tabs.find(tab => tab.id === id && tab.node !== undefined);
+	const appended = tabs.filter(tab => !tab.id || !BUILTIN_IDS.has(tab.id));
+	const options: SegmentedOption<string>[] = [
+		...BUILTIN_GROUPS.map(builtin => ({
+			value: builtin.value,
+			label: overrideFor(builtin.value)?.label ?? builtin.label,
+		})),
+		...appended.map((tab, index) => ({
+			value: tab.id ?? `contributed-${index}`,
+			label: tab.label ?? tab.id ?? t("settings.memorySettings"),
+		})),
+	];
+	return {
+		options,
+		contentFor(id: string): ReactNode | undefined {
+			const override = overrideFor(id);
+			if (override) return override.node;
+			const index = appended.findIndex((tab, i) => (tab.id ?? `contributed-${i}`) === id);
+			return index >= 0 ? appended[index]?.node : undefined;
+		},
+	};
+}
 
 /** Daemon setting that gates next-input prediction. Unknown reads fall back to
  *  the schema default (on) — the same fallback the daemon applies. */
@@ -94,6 +140,7 @@ export function SessionMemorySection({
 	currentSessionId,
 	sessionSlot,
 	memorySlot,
+	tabs = [],
 }: {
 	rpc: RpcClient | null;
 	currentSessionId: string | null;
@@ -101,8 +148,12 @@ export function SessionMemorySection({
 	sessionSlot?: ReactNode;
 	/** Extension takeover of the memory group (`settings.section` id `memory`). */
 	memorySlot?: ReactNode;
+	/** Tabs contributed by plugins; see {@link SettingsSubnavTab}. */
+	tabs?: readonly SettingsSubnavTab[];
 }): ReactNode {
-	const [group, setGroup] = useState<MemoryGroup>("session");
+	const [group, setGroup] = useState<string>("session");
+	const { options, contentFor } = resolveSubnavTabs(tabs);
+	const contributed = contentFor(group);
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.sessionMemory")}</h2>
@@ -110,12 +161,14 @@ export function SessionMemorySection({
 			<div className="gui-settings-subnav">
 				<Segmented
 					value={group}
-					options={GROUPS}
+					options={options}
 					onChange={next => setGroup(next)}
 					ariaLabel={t("settings.sessionMemory")}
 				/>
 			</div>
-			{group === "session" ? (
+			{contributed ? (
+				contributed
+			) : group === "session" ? (
 				<>
 					{sessionSlot ?? <SessionsSection rpc={rpc} currentSessionId={currentSessionId} />}
 					<InputSuggestionRow rpc={rpc} />

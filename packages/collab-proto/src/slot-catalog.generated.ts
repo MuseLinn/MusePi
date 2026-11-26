@@ -443,6 +443,46 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 		"occupants": []
 	},
 	{
+		"name": "settings.subnav.session-memory",
+		"kind": "list",
+		"scope": "root",
+		"summary": "「会话与记忆」子导航的一个标签（list）：id 命中内置标签即替换其内容，其余追加。",
+		"registerOptions": [
+			{
+				"name": "moduleUrl",
+				"requirement": "required",
+				"type": "string (e.g. \"./page.tsx\")",
+				"doc": "扩展内相对模块路径；构建期编译成组件产物。"
+			},
+			{
+				"name": "label",
+				"requirement": "optional",
+				"type": "string",
+				"doc": "显示名（导航行、标签、错误信息）。"
+			},
+			{
+				"name": "order",
+				"requirement": "optional",
+				"type": "number",
+				"doc": "list 座位的渲染顺序（升序，默认按注册顺序）。"
+			},
+			{
+				"name": "id",
+				"requirement": "optional",
+				"type": "string",
+				"doc": "list 座位内的条目身份；同插件可在同一座位挂多条，第三方可按 id 精确替换。"
+			}
+		],
+		"ownerProps": [
+			"rpc",
+			"sessionId"
+		],
+		"declaredBy": "apps/desktop/src/components/settings-sections/session-memory.tsx",
+		"lifetime": "core",
+		"replaceRisk": "shadows-shipped-ui",
+		"occupants": []
+	},
+	{
 		"name": "conversation.composer.bar",
 		"kind": "single",
 		"scope": "session",
