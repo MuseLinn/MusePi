@@ -82,9 +82,9 @@ describe("providers.* RPCs", () => {
 });
 
 describe("presets RPCs", () => {
-	test("modes.list seeds the built-in presets in the configured directory", async () => {
+	test("presets.list seeds the built-in presets in the configured directory", async () => {
 		const { rpc } = makeHarness();
-		const res = (await rpc("modes.list")) as { modesDir: string; modes: Array<{ id: string; builtin: boolean }> };
+		const res = (await rpc("presets.list")) as { modesDir: string; modes: Array<{ id: string; builtin: boolean }> };
 		expect(res.modesDir).toBe(modesDir);
 		const ids = res.modes.map(mode => mode.id);
 		expect(ids).toContain("work");
@@ -93,19 +93,19 @@ describe("presets RPCs", () => {
 
 	test("save → get → delete round-trips a custom preset", async () => {
 		const { rpc } = makeHarness();
-		await rpc("modes.save", { id: "roundtrip-check", label: "Roundtrip", settings: {} });
-		const read = (await rpc("modes.get", { id: "roundtrip-check" })) as { id: string; label: string };
+		await rpc("presets.save", { id: "roundtrip-check", label: "Roundtrip", settings: {} });
+		const read = (await rpc("presets.get", { id: "roundtrip-check" })) as { id: string; label: string };
 		expect(read.id).toBe("roundtrip-check");
 		expect(read.label).toBe("Roundtrip");
-		expect(await rpc("modes.validate", { id: "roundtrip-check" })).toEqual({ valid: true });
-		expect(await rpc("modes.delete", { id: "roundtrip-check" })).toEqual({ ok: true });
-		await expect(rpc("modes.get", { id: "roundtrip-check" })).rejects.toThrow(/Unknown mode/);
+		expect(await rpc("presets.validate", { id: "roundtrip-check" })).toEqual({ valid: true });
+		expect(await rpc("presets.delete", { id: "roundtrip-check" })).toEqual({ ok: true });
+		await expect(rpc("presets.get", { id: "roundtrip-check" })).rejects.toThrow(/Unknown mode/);
 	});
 
 	test("a built-in preset rejects authoring writes", async () => {
 		const { rpc } = makeHarness();
-		await expect(rpc("modes.save", { id: "work" })).rejects.toThrow(/built-in preset/);
-		await expect(rpc("modes.delete", { id: "work" })).rejects.toThrow(/built-in preset/);
+		await expect(rpc("presets.save", { id: "work" })).rejects.toThrow(/built-in preset/);
+		await expect(rpc("presets.delete", { id: "work" })).rejects.toThrow(/built-in preset/);
 	});
 
 	test("agentPresets.list reads the same sources as modes.list", async () => {

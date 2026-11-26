@@ -34,12 +34,13 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 
 - **给 MusePi 加功能/工具/命令/hook/插件（开发插件）**：读 `musepi-plugin-dev`
   skill（`skill://musepi-plugin-dev`）——默认 MusePi 插件包、Cordis 原型、`plugin_manager` 安装、六种形态 + 文档路由表。
-- **预设/模式（Work/Design/Minimal）是什么**：命名预设 = 扩展白名单 + 提示词区块
-  + settings 覆盖的组合（`~/.musepi/modes/<id>.json`）。GUI 欢迎页（输入框上方
-  项目选择旁）chip 选择，创建会话时应用；TUI/CLI 用 `--preset <id>` 启动，
-  会话内 `/preset` 查看当前预设；设置 → 智能体 → 预设 管理（卡片面板，
-  校验/删除；`modes.validate` 供 agent 自检）。极简模板 = `extensions: []` +
-  promptComplete（固定提示词）+ 关压缩。
+- **预设（Work/Design/Minimal）是什么**：预设 = 扩展白名单 + 提示词区块
+  + settings 覆盖的组合（`~/.musepi/modes/<id>.json`；目录名是历史遗留，
+  语义就是预设）。GUI 欢迎页（输入框上方项目选择旁）chip 选择，创建会话时
+  应用；TUI/CLI 用 `--preset <id>` 启动，会话内 `/preset` 查看当前预设；
+  设置 → 智能体 → 预设 管理（卡片面板，校验/删除；`presets.validate` 供
+  agent 自检）。极简模板 = `extensions: []` + promptComplete（固定提示词）+
+  关压缩。
 - **扩展中心两个分类**：OMP Extension Packages（OMP 生态扩展包，`extensions:`
   设置/`--extension`）+ MusePi Plugins（自有 Cordis 插件系统：插件包 + manifest，
   安装树 `~/.musepi/plugins/node_modules`）—— 两者独立 tab、并存。旧 Pi/omp

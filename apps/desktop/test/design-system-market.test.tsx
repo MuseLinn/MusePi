@@ -272,7 +272,7 @@ describe("M3.7d 即见：装包后 extensions.changed 驱动 rail 数据源重�
 		const root = await renderHarness(rpc);
 		await settle();
 		await act(async () => {
-			fire({ payload: { type: "modes.changed" } });
+			fire({ payload: { type: "presets.changed" } });
 			await Promise.resolve();
 		});
 		await settle();

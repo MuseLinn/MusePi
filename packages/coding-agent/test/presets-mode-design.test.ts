@@ -72,11 +72,14 @@ describe("built-in design preset", () => {
 });
 
 describe("built-in creator preset", () => {
-	it("owns the design, validate, and save workflow in its persona package", () => {
+	it("owns the design workflow in its persona package and hands saving to the settings page", () => {
 		const prompt = JSON.stringify(creatorPersonaSections);
 		expect(prompt).toContain("用户消息只包含创作需求");
-		expect(prompt).toContain("modes.validate");
-		expect(prompt).toContain("modes.save");
+		// Since 64bc1153b the creator no longer writes presets itself: it designs
+		// the definition and the settings page does the write and the check, so
+		// the persona must keep saying so instead of naming a write tool.
+		expect(prompt).toContain("Agent 预设设置页写入与校验");
+		expect(prompt).toContain("不要报告已经保存或已校验");
 		expect(prompt).not.toContain("docs/archive");
 		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toContainEqual({ name: "musepi-preset-creator" });
 	});

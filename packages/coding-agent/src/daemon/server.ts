@@ -3388,44 +3388,79 @@ export class DaemonServer {
 					extensions: { active, disabled },
 				};
 			}
-			case "modes.list": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+			case "presets.list": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").list(params ?? {});
 			}
-			case "modes.getDefault": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+			case "presets.getDefault": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").getDefault(params ?? {});
 			}
-			case "modes.setDefault": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+			case "presets.setDefault": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").setDefault(params ?? {});
 			}
-			case "modes.get": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+			case "presets.get": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").get(params ?? {});
 			}
 			case "agentPresets.list": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").agentPresets(params ?? {});
 			}
 			case "agentPresets.read": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").agentPreset(params ?? {});
 			}
 			case "agentPresets.select": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
 				return this.#services.get<PresetsService>("presets").selectAgentPreset(params ?? {});
 			}
+			case "presets.save": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
+				return this.#services.get<PresetsService>("presets").save(params ?? {});
+			}
+			case "presets.delete": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
+				return this.#services.get<PresetsService>("presets").remove(params ?? {});
+			}
+			case "presets.validate": {
+				// 实现归 PresetsService（presets.* / agentPresets.* 两面语义不变）。
+				return this.#services.get<PresetsService>("presets").validate(params ?? {});
+			}
+			case "modes.list": {
+				// Retired spelling of presets.list: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
+				return this.#services.get<PresetsService>("presets").list(params ?? {});
+			}
+			case "modes.getDefault": {
+				// Retired spelling of presets.getDefault: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
+				return this.#services.get<PresetsService>("presets").getDefault(params ?? {});
+			}
+			case "modes.setDefault": {
+				// Retired spelling of presets.setDefault: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
+				return this.#services.get<PresetsService>("presets").setDefault(params ?? {});
+			}
+			case "modes.get": {
+				// Retired spelling of presets.get: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
+				return this.#services.get<PresetsService>("presets").get(params ?? {});
+			}
 			case "modes.save": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+				// Retired spelling of presets.save: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
 				return this.#services.get<PresetsService>("presets").save(params ?? {});
 			}
 			case "modes.delete": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+				// Retired spelling of presets.delete: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
 				return this.#services.get<PresetsService>("presets").remove(params ?? {});
 			}
 			case "modes.validate": {
-				// 实现归 PresetsService（modes.* / agentPresets.* 面语义不变）。
+				// Retired spelling of presets.validate: kept so a client built before the rename
+				// keeps working; nothing in-tree calls it.
 				return this.#services.get<PresetsService>("presets").validate(params ?? {});
 			}
 			case "board.list": {

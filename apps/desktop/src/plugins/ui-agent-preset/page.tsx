@@ -85,7 +85,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 		const load = (): void => {
 			if (document.visibilityState === "hidden") return;
 			void rpc
-				.request<{ modes: ModeRow[]; modesDir?: string } | null>("modes.list", {})
+				.request<{ modes: ModeRow[]; modesDir?: string } | null>("presets.list", {})
 				.then(res => {
 					if (!alive) return;
 					setModes(res?.modes ?? []);
@@ -98,7 +98,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 					setErrors([String(error)]);
 				});
 			void rpc
-				.request<{ id: string }>("modes.getDefault", {})
+				.request<{ id: string }>("presets.getDefault", {})
 				.then(res => {
 					if (alive) setDefaultModeId(res.id);
 				})
@@ -108,7 +108,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 		const id = setInterval(load, 5000);
 		const off = rpc.addEventListener(event => {
 			const payload = event.payload as { type?: string } | undefined;
-			if (payload?.type === "modes.changed") load();
+			if (payload?.type === "presets.changed") load();
 		});
 		return () => {
 			alive = false;
@@ -128,7 +128,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 
 	const setDefault = (id: string): void => {
 		void rpc
-			?.request("modes.setDefault", { id })
+			?.request("presets.setDefault", { id })
 			.then(() => {
 				setDefaultModeId(id);
 				window.dispatchEvent(new CustomEvent("musepi-gui-default-mode-changed", { detail: id }));
@@ -144,7 +144,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 		setViewState({ status: "loading", id });
 		void (async () => {
 			try {
-				const rootDef = await rpc.request<ModeDef | null>("modes.get", { id });
+				const rootDef = await rpc.request<ModeDef | null>("presets.get", { id });
 				if (!rootDef) {
 					setViewState({ status: "error", id, error: t("settings.modesViewMissing", { id }) });
 					return;
@@ -157,7 +157,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 					chainIds.map(mid =>
 						mid === id
 							? Promise.resolve(rootDef)
-							: rpc.request<ModeDef | null>("modes.get", { id: mid }).catch(() => null),
+							: rpc.request<ModeDef | null>("presets.get", { id: mid }).catch(() => null),
 					),
 				);
 				const byId = new Map<string, ModeDefLike>();
@@ -175,7 +175,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 	const openDuplicate = (id: string): void => {
 		if (!rpc) return;
 		void rpc
-			.request<ModeDef | null>("modes.get", { id })
+			.request<ModeDef | null>("presets.get", { id })
 			.then(def => {
 				if (!def) return;
 				setDuplicateSource(def);
@@ -194,7 +194,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 		}
 		setSaving(true);
 		try {
-			await rpc.request("modes.save", { ...duplicateSource, id, label: duplicateSource.label ?? id });
+			await rpc.request("presets.save", { ...duplicateSource, id, label: duplicateSource.label ?? id });
 			setSaveMsg(t("settings.modesSaved"));
 			setDuplicateSource(null);
 		} catch (error) {
@@ -216,7 +216,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 	const remove = (id: string): void => {
 		if (!rpc) return;
 		void rpc
-			.request("modes.delete", { id })
+			.request("presets.delete", { id })
 			.then(() => {
 				setModes(prev => (prev ? prev.filter(m => m.id !== id) : prev));
 				setErrors([]);

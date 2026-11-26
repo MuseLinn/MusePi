@@ -150,7 +150,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 		expect(creatorPersonaSections).toHaveLength(1);
 		expect(creatorPersonaSections[0]!.text).toContain("cordis_define");
 		expect(creatorPersonaSections[0]!.text).toContain("发布到插件市场");
-		expect(creatorPersonaSections[0]!.text).not.toContain("modes.save");
+		expect(creatorPersonaSections[0]!.text).not.toContain("presets.save");
 	});
 
 	it("registers the sections from the package's Cordis entry", async () => {

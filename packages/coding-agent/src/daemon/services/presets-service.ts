@@ -1,11 +1,14 @@
 /**
- * PresetsService — agent presets (modes) as an L2 daemon service.
+ * PresetsService — agent presets as an L2 daemon service.
  *
  * Seam:
- * - Input: `modes.*` (settings editor) and `agentPresets.*` (declarative
- *   preset surface) routes, the modes directory, the session/header store for
+ * - Input: `presets.*` (settings editor) and `agentPresets.*` (declarative
+ *   preset surface) routes, the presets directory, the session/header store for
  *   per-session selection, and the extension registry that contributes preset
  *   sources.
+ *
+ *   `modes.*` was the old spelling of the `presets.*` routes; the daemon still
+ *   answers it so an older client keeps working, but nothing in-tree uses it.
  * - Output: summary rows, one preset's full document, validation verdicts, and
  *   save/delete/select acks. Every write broadcasts `modes-changed`.
  * - Lifecycle: stateless. Presets are files under the modes directory plus
@@ -39,13 +42,13 @@ export interface PresetsServiceDeps {
 export class PresetsService implements DaemonService {
 	readonly key = "presets";
 	readonly routes = {
-		"modes.list": "list",
-		"modes.getDefault": "getDefault",
-		"modes.setDefault": "setDefault",
-		"modes.get": "get",
-		"modes.save": "save",
-		"modes.delete": "remove",
-		"modes.validate": "validate",
+		"presets.list": "list",
+		"presets.getDefault": "getDefault",
+		"presets.setDefault": "setDefault",
+		"presets.get": "get",
+		"presets.save": "save",
+		"presets.delete": "remove",
+		"presets.validate": "validate",
 		"agentPresets.list": "agentPresets",
 		"agentPresets.read": "agentPreset",
 		"agentPresets.select": "selectAgentPreset",

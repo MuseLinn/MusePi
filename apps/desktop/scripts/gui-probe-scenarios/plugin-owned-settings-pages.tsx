@@ -39,7 +39,7 @@ function stubRpc(): never {
 			if (method === "settings.schema") return { tasks: rows, modes: rows };
 			if (method === "settings.get") return { "subagent.maxConcurrent": 4, "subagent.isolation": "none" };
 			if (method === "models.catalog" || method === "models.list") return [];
-			if (method === "modes.list") return [];
+			if (method === "presets.list") return [];
 			return {};
 		},
 		addEventListener: () => () => {},

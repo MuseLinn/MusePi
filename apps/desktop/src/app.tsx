@@ -1326,7 +1326,7 @@ function AppInner(): ReactNode {
 		let alive = true;
 		const load = (): void => {
 			void rpc
-				.request<{ modes: { id: string; label: string }[] } | null>("modes.list", {})
+				.request<{ modes: { id: string; label: string }[] } | null>("presets.list", {})
 				.then(res => {
 					if (!alive) return;
 					const modes = res?.modes;
@@ -1337,7 +1337,7 @@ function AppInner(): ReactNode {
 					if (alive) setWelcomeModes(WELCOME_MODES_FALLBACK);
 				});
 			void rpc
-				.request<{ id: string }>("modes.getDefault", {})
+				.request<{ id: string }>("presets.getDefault", {})
 				.then(res => {
 					if (alive) setWelcomeModeId(res.id);
 				})
@@ -1346,7 +1346,7 @@ function AppInner(): ReactNode {
 		load();
 		const off = rpc.addEventListener(event => {
 			const payload = event.payload as { type?: string } | undefined;
-			if (payload?.type === "modes.changed") load();
+			if (payload?.type === "presets.changed") load();
 		});
 		return () => {
 			alive = false;
