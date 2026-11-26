@@ -258,7 +258,33 @@
 	color: var(--color-text-muted);
 }
 
-.gui-conn-kind-btn[aria-selected="true"] {
+/* Two questions, one line each: where the daemon runs, and in what. A single
+ * row of four `kind` tabs asked the user to think in transport names. */
+.gui-conn-axis {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.gui-conn-axis-label {
+	flex: 0 0 64px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-conn-axis .gui-conn-kinds {
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.gui-conn-kind-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.gui-conn-kind-btn[aria-selected="true"],
+.gui-conn-kind-btn[aria-checked="true"] {
 	border-color: var(--color-accent);
 	color: var(--color-accent);
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);

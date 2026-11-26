@@ -290,3 +290,53 @@ export function bootTarget(targets: readonly ConnectionTarget[], chosenId: strin
 	const chosen = chosenId ? targets.find(row => row.id === chosenId) : undefined;
 	return chosen ?? targets[0] ?? localTarget();
 }
+
+/**
+ * The two axes a target is chosen on, kept separate from the stored `kind`.
+ *
+ * `kind` mixes transport with environment (`wsl` is both, `ssh` is a
+ * transport, `docker` is an environment), so asking a user to pick a `kind`
+ * asks them to think in our vocabulary. The form asks two questions instead —
+ * *where does the daemon run* and *in what* — and this maps the answer back.
+ *
+ * `manual` is a typed endpoint: it names no machine, so its location is
+ * `unknown` rather than a guess. Everything that reads these axes must handle
+ * that, which is why it is a value and not an omission.
+ */
+export type TargetLocation = "local" | "remote" | "unknown";
+export type TargetEnvironment = "system" | "container" | "wsl";
+
+export function targetAxes(kind: ConnectionTargetKind): {
+	location: TargetLocation;
+	environment: TargetEnvironment;
+} {
+	switch (kind) {
+		case "local":
+			return { location: "local", environment: "system" };
+		case "manual":
+			return { location: "unknown", environment: "system" };
+		case "wsl":
+			return { location: "local", environment: "wsl" };
+		case "docker":
+			return { location: "local", environment: "container" };
+		case "ssh":
+			return { location: "remote", environment: "system" };
+	}
+}
+
+/**
+ * The kind a chosen pair produces, or null when this build cannot reach it.
+ *
+ * Remote containers and remote WSL would need the container/VM on the far side
+ * probed through the same ssh tunnel; neither backend exists, so the pair is
+ * refused here rather than offered and then failing.
+ */
+export function kindForAxes(
+	location: Exclude<TargetLocation, "unknown">,
+	environment: TargetEnvironment,
+): ConnectionTargetKind | null {
+	if (location === "remote") return environment === "system" ? "ssh" : null;
+	if (environment === "system") return "manual";
+	if (environment === "wsl") return "wsl";
+	return "docker";
+}

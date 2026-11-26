@@ -55,3 +55,25 @@ describe("connection presentation", () => {
 		});
 	});
 });
+
+describe("target axes", () => {
+	test("the stored kind maps onto where and what", async () => {
+		const { targetAxes, kindForAxes } = await import("../src/lib/connection/targets");
+		expect(targetAxes("wsl")).toEqual({ location: "local", environment: "wsl" });
+		expect(targetAxes("docker")).toEqual({ location: "local", environment: "container" });
+		expect(targetAxes("ssh")).toEqual({ location: "remote", environment: "system" });
+		// A typed endpoint names no machine; guessing "local" would be wrong.
+		expect(targetAxes("manual").location).toBe("unknown");
+	});
+
+	test("only pairs this build can reach produce a kind", async () => {
+		const { kindForAxes } = await import("../src/lib/connection/targets");
+		expect(kindForAxes("local", "system")).toBe("manual");
+		expect(kindForAxes("local", "wsl")).toBe("wsl");
+		expect(kindForAxes("local", "container")).toBe("docker");
+		expect(kindForAxes("remote", "system")).toBe("ssh");
+		// No backend probes a container or a WSL distro through the far side.
+		expect(kindForAxes("remote", "container")).toBeNull();
+		expect(kindForAxes("remote", "wsl")).toBeNull();
+	});
+});

@@ -42,7 +42,9 @@ import {
 	DEFAULT_DAEMON_PORT,
 	daemonPortOf,
 	isForwardedKind,
+	kindForAxes,
 	stripToken,
+	targetAxes,
 	targetCommand,
 	targetPublishHint,
 } from "../lib/connection/targets";
@@ -50,9 +52,6 @@ import { defaultWslRunner, detectWsl, isWindowsShell, type WslDetection, type Ws
 import { normalizeRemoteHostUrl } from "../lib/remote-hosts";
 import type { IconName } from "../vendor/oc-icons";
 import { Icon } from "../vendor/oc-icons";
-
-/** Kinds the add form can create. `local` is the built-in row. */
-const ADDABLE_KINDS: readonly ConnectionTargetKind[] = ["manual", "wsl", "ssh", "docker"];
 
 interface Draft {
 	kind: ConnectionTargetKind;
@@ -280,6 +279,9 @@ export function ConnectionManager({
 	 */
 	const [docker, setDocker] = useState<DockerProbe>("idle");
 	const showFailure = showsFailureCopy(state);
+	/** The two axes the draft currently expresses; `kind` remains the stored
+	 *  discriminant, so nothing persisted changes shape. */
+	const axes = targetAxes(draft.kind);
 
 	const runDockerDetection = useCallback(async (): Promise<void> => {
 		const bridge = shellBridge();
@@ -646,20 +648,70 @@ export function ConnectionManager({
 					className="gui-conn-section gui-conn-form"
 					aria-label={editingId ? t("settings.connectionEditTarget") : t("settings.addInstance")}
 				>
-					<div className="gui-conn-kinds" role="tablist" aria-label={t("settings.connectionKind")}>
-						{ADDABLE_KINDS.map(kind => (
-							<button
-								key={kind}
-								type="button"
-								role="tab"
-								aria-selected={draft.kind === kind}
-								className="gui-conn-kind-btn"
-								onClick={() => setDraft(current => ({ ...current, kind }))}
-							>
-								<Icon name={KIND_GLYPH[kind]} className="h-3.5 w-3.5" />
-								{t(KIND_LABEL[kind])}
-							</button>
-						))}
+					{/* Two questions instead of one `kind`: where the daemon runs,
+					 * and in what. The pair is the whole model, and it is what lets a
+					 * remote container be refused honestly instead of appearing as a
+					 * transport the user might pick. */}
+					<div className="gui-conn-axis">
+						<span className="gui-conn-axis-label">{t("settings.instanceLocation")}</span>
+						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceLocation")}>
+							{(["local", "remote"] as const).map(location => (
+								<button
+									key={location}
+									type="button"
+									role="radio"
+									aria-checked={axes.location === location}
+									className="gui-conn-kind-btn"
+									onClick={() => {
+										const next = kindForAxes(location, axes.environment);
+										if (next) setDraft(current => ({ ...current, kind: next }));
+									}}
+								>
+									<Icon name={location === "local" ? "computer" : "server"} className="h-3.5 w-3.5" />
+									{location === "local"
+										? t("settings.locationThisComputer")
+										: t("settings.locationRemoteHost")}
+								</button>
+							))}
+						</div>
+					</div>
+					<div className="gui-conn-axis">
+						<span className="gui-conn-axis-label">{t("settings.instanceEnvironment")}</span>
+						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceEnvironment")}>
+							{(["system", "container", "wsl"] as const).map(environment => {
+								const reachable = kindForAxes(axes.location === "remote" ? "remote" : "local", environment);
+								return (
+									<button
+										key={environment}
+										type="button"
+										role="radio"
+										aria-checked={axes.environment === environment}
+										disabled={!reachable}
+										title={reachable ? undefined : t("settings.environmentRemoteUnsupported")}
+										className="gui-conn-kind-btn"
+										onClick={() => {
+											if (reachable) setDraft(current => ({ ...current, kind: reachable }));
+										}}
+									>
+										<Icon
+											name={
+												environment === "wsl"
+													? "terminal-box"
+													: environment === "container"
+														? "stack"
+														: "computer"
+											}
+											className="h-3.5 w-3.5"
+										/>
+										{environment === "system"
+											? t("settings.environmentSystem")
+											: environment === "container"
+												? t("settings.environmentContainer")
+												: t("settings.connectionKindWsl")}
+									</button>
+								);
+							})}
+						</div>
 					</div>
 
 					<label className="gui-field">
