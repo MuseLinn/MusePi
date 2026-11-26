@@ -22,6 +22,7 @@
 
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { connectionPresentation } from "../lib/connection/presentation";
 import {
 	type CatalogHost,
 	hasManagedLifecycle,
@@ -180,14 +181,6 @@ type DockerProbe =
 	 * read" send the user to different fixes.
 	 */
 	| { state: "list-failed"; error?: string };
-
-const STATUS_LABEL: Record<RowStatus, CopyKey> = {
-	connected: "settings.connectionStatusConnected",
-	connecting: "settings.connectionStatusConnecting",
-	failed: "settings.connectionStatusFailed",
-	"last-used": "settings.connectionStatusLastUsed",
-	unknown: "settings.connectionStatusUnknown",
-} as const;
 
 export function ConnectionManager({
 	state,
@@ -461,7 +454,40 @@ export function ConnectionManager({
 	}, [adding, draft.kind, editingId, onShapeChange]);
 
 	const renderRow = (target: ConnectionTarget): ReactNode => {
-		const status = rowStatus(target, activeTargetId, statuses, busyId, state === "connected");
+		// Row facts feed the one presentation mapping; the row renders its answer
+		// instead of deciding what "disconnected" means (see `lib/connection/presentation`).
+		const rowFacts =
+			busyId === target.id
+				? { connected: false, connecting: true }
+				: state === "connected" && target.id === activeTargetId
+					? { connected: true }
+					: (() => {
+							const stored = statuses[target.id];
+							return {
+								connected: false,
+								lastError: stored?.lastError ?? null,
+								// An attempt that succeeded before is history, not a socket.
+								lastUsed: Boolean(stored?.lastAttemptAt !== null && stored?.lastAttemptAt !== undefined),
+							};
+						})();
+		const managedForPresentation = managedRowState(managed?.[target.id]);
+		const shown = connectionPresentation({
+			...rowFacts,
+			// `idle` means "no managed process", which the model expresses as absent.
+			managed: managedForPresentation === "idle" ? null : managedForPresentation,
+		});
+		/** CSS still keys on the row's own status word; it is derived from the
+		 *  phase so there is one source and the stylesheet keeps its selectors. */
+		const status: RowStatus =
+			shown.phase === "connected"
+				? "connected"
+				: shown.phase === "connecting"
+					? "connecting"
+					: shown.phase === "failed"
+						? "failed"
+						: rowFacts.connected === false && "lastUsed" in rowFacts && rowFacts.lastUsed
+							? "last-used"
+							: "unknown";
 		// Scrubbed at the display too: a status slot written by an older build
 		// may still hold a message that quotes the token-bearing URL.
 		const error =
@@ -507,7 +533,7 @@ export function ConnectionManager({
 						<span className="gui-conn-dot" aria-hidden />
 						{/* The word is the accessible status; the dot is colour only,
 						 * so a narrow window hides the word but keeps it for readers. */}
-						<span className="gui-conn-status-word">{t(STATUS_LABEL[status])}</span>
+						<span className="gui-conn-status-word">{t(shown.labelKey)}</span>
 					</span>
 					{managedState !== "idle" && (
 						<span className="gui-conn-managed" data-managed={managedState}>

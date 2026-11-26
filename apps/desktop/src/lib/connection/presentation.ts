@@ -36,6 +36,14 @@ export interface ConnectionPresentationInput {
 	connecting?: boolean;
 	/** The last attempt's error, when there was one. */
 	lastError?: string | null;
+	/**
+	 * An earlier attempt against this target succeeded.
+	 *
+	 * Only meaningful when nothing is connected: it is history, not a live
+	 * socket. Kept as its own input so a row can say "last used" without
+	 * inventing a sixth phase — it presents as `idle` with a distinct hint.
+	 */
+	lastUsed?: boolean;
 	/** The managed process behind this row (tunnel, WSL daemon, container). */
 	managed?: "starting" | "running" | "failed" | null;
 }
@@ -47,6 +55,7 @@ export interface ConnectionPresentation {
 		| "settings.connectionStatusConnected"
 		| "settings.connectionStatusConnecting"
 		| "settings.connectionStatusUnknown"
+		| "settings.connectionStatusLastUsed"
 		| "settings.connectionStatusFailed"
 		| "settings.connectionNeedsAttention";
 	tone: ConnectionTone;
@@ -76,6 +85,11 @@ export function connectionPresentation(input: ConnectionPresentationInput): Conn
 	}
 	if (input.lastError) {
 		return { phase: "failed", labelKey: "settings.connectionStatusFailed", tone: "error" };
+	}
+	// History, not a live socket: the phase stays `idle` (nothing is wrong), and
+	// only the wording distinguishes "worked before" from "never tried".
+	if (input.lastUsed) {
+		return { phase: "idle", labelKey: "settings.connectionStatusLastUsed", tone: "neutral" };
 	}
 	return { phase: "idle", labelKey: "settings.connectionStatusUnknown", tone: "neutral" };
 }

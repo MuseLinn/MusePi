@@ -77,3 +77,20 @@ describe("target axes", () => {
 		expect(kindForAxes("remote", "wsl")).toBeNull();
 	});
 });
+
+describe("history is not a live socket", () => {
+	test("an earlier success reads as last used, still idle", async () => {
+		const { connectionPresentation } = await import("../src/lib/connection/presentation");
+		const shown = connectionPresentation({ connected: false, lastUsed: true });
+		// Same phase and tone as "never tried": nothing is wrong. Only the wording
+		// differs, so a row cannot claim 已连接 while the header says 已断开.
+		expect(shown.phase).toBe("idle");
+		expect(shown.tone).toBe("neutral");
+		expect(shown.labelKey).toBe("settings.connectionStatusLastUsed");
+	});
+
+	test("an error outranks the history behind it", async () => {
+		const { connectionPresentation } = await import("../src/lib/connection/presentation");
+		expect(connectionPresentation({ connected: false, lastUsed: true, lastError: "refused" }).phase).toBe("failed");
+	});
+});
