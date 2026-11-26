@@ -45,6 +45,12 @@ export interface MemoryBackendStatus {
 	lastMemory?: string;
 	lastRecall?: boolean;
 	database?: string;
+	/** MuseMem: lesson counts and summary size, so a host can render a compact
+	 *  localized summary instead of parsing the free-form message. */
+	projectLessons?: number;
+	globalLessons?: number;
+	summaryBytes?: number;
+	globalScope?: boolean;
 	message?: string;
 	error?: string;
 	/** Which optional maintenance hooks this backend implements, so a host can

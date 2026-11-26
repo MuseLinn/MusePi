@@ -43,7 +43,10 @@ describe("MuseMem status, stats and diagnostics", () => {
 		expect(status?.backend).toBe("musemem");
 		expect(status?.writable).toBe(true);
 		expect(status?.scope).toBe(path.basename(getMemoryRoot(agentDir, cwd)));
-		expect(status?.database).toContain("agent.db");
+		expect(status?.projectLessons).toBe(1);
+		expect(status?.globalLessons).toBe(1);
+		expect(status?.globalScope).toBe(true);
+		expect(status?.summaryBytes).toBe(0);
 		expect(status?.message).toContain("project lessons: 1");
 		expect(status?.message).toContain("global lessons: 1");
 	});

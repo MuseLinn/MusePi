@@ -126,7 +126,10 @@ export const musememBackend: MemoryBackend = {
 			writable: true,
 			searchable: false,
 			scope: path.basename(root),
-			database: getAgentDbPath(agentDir),
+			projectLessons: lessons.count,
+			globalLessons: globalLessons.count,
+			summaryBytes: summary.bytes,
+			globalScope,
 			message: `Summary: ${summary.exists ? formatBytes(summary.bytes) : "none"}; project lessons: ${lessons.count}; global lessons: ${globalScope ? globalLessons.count : "off"}.`,
 		};
 	},

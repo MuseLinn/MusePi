@@ -3469,7 +3469,7 @@ export const SETTINGS_SCHEMA = {
 		default: "off",
 		ui: {
 			tab: "memory",
-			group: "General",
+			group: "settings.memory.group.backend",
 			label: "Memory Backend",
 			description: "Off, MuseMem summaries, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
 			options: [

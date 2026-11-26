@@ -7222,63 +7222,83 @@ body.gui-resizing {
 	color: var(--color-text-muted);
 }
 
-/* ── Settings: memory maintenance card (memory.status + actions) ────── */
-.gui-memory-card {
+/* ── Settings: memory status strip (compact, capability-driven) ──────── */
+.gui-memory-maintenance {
+	margin-top: 18px;
+}
+.gui-memory-strip {
 	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-bottom: 8px;
-	padding: 12px 14px;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	padding: 10px 12px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+	background: color-mix(in oklab, var(--color-surface-raised) 45%, transparent);
 }
-.gui-memory-status-head {
+.gui-memory-identity {
 	display: flex;
-	align-items: center;
 	flex-wrap: wrap;
-	gap: 6px 14px;
+	align-items: baseline;
+	gap: 4px 12px;
+	min-width: 0;
 }
 .gui-memory-backend {
-	font-size: 14px;
-	font-weight: 600;
+	font-size: 13.5px;
+	font-weight: 650;
 	color: var(--color-text);
 }
-.gui-memory-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	margin-left: auto;
-}
-.gui-memory-chip {
+.gui-memory-state {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	padding: 2px 8px;
-	border: 1px solid var(--border);
-	border-radius: 999px;
-	font-size: 11px;
-	line-height: 1.4;
+	font-size: 11.5px;
 	color: var(--color-text-muted);
 }
-.gui-memory-chip--on {
+.gui-memory-state--on {
 	color: var(--color-text);
-	border-color: color-mix(in oklab, var(--color-accent) 35%, var(--border));
-	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 }
-.gui-memory-chip-dot {
+.gui-memory-state-dot {
 	width: 6px;
 	height: 6px;
 	border-radius: 999px;
 	background: var(--color-text-faint);
 }
-.gui-memory-chip--on .gui-memory-chip-dot {
+.gui-memory-state--on .gui-memory-state-dot {
 	background: var(--color-accent);
+}
+.gui-memory-facts {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 4px 14px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+.gui-memory-fact {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 4px;
+}
+.gui-memory-fact-label {
+	color: var(--color-text-faint);
+}
+.gui-memory-fact-value {
+	color: var(--color-text);
+	font-variant-numeric: tabular-nums;
+}
+.gui-memory-hint {
+	margin-top: 8px;
+	font-size: 11.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
 }
 .gui-memory-status-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 	gap: 6px 18px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
 }
 .gui-memory-status-item {
 	display: flex;
@@ -7309,15 +7329,70 @@ body.gui-resizing {
 .gui-memory-status-note--error {
 	color: var(--color-warning);
 }
-.gui-memory-actions {
+.gui-memory-toolbar {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px;
+	gap: 2px;
+	margin-left: auto;
+}
+.gui-memory-action {
+	padding: 3px 8px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: 11.5px;
+	line-height: 1.5;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-memory-action:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+	color: var(--color-text);
+}
+.gui-memory-action:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+.gui-memory-action--danger {
+	color: color-mix(in oklab, #e5484d 80%, var(--color-text));
+}
+.gui-memory-action--danger:hover:not(:disabled) {
+	background: color-mix(in oklab, #e5484d 12%, transparent);
+	color: #ff6b70;
+}
+.gui-memory-toolbar-sep {
+	width: 1px;
+	height: 14px;
+	margin: 0 6px;
+	background: var(--border);
+}
+.gui-memory-output {
 	margin-top: 10px;
 }
-.gui-memory-clear {
-	margin-left: auto;
+.gui-memory-output-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.gui-memory-output-close {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-faint);
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-memory-output-close:hover {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+	color: var(--color-text);
 }
 /* Scrollable markdown output (memory.view / stats / diagnose) — the
  * base .gui-ext-detail-code pre wraps but has no height cap; long
@@ -7333,10 +7408,36 @@ body.gui-resizing {
  * selector + count + search bar, refreshable file list, row click reads
  * into the shared viewer below. (The backend on/off lives in the schema
  * select — no duplicate toggle.) */
-.gui-memory-workspace-head {
+.gui-memory-workspace {
+	margin-top: 18px;
+}
+.gui-memory-workspace-toggle {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	padding: 2px 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.gui-memory-workspace-toggle:hover .gui-memory-workspace-title {
+	color: var(--color-text);
+}
+.gui-memory-caret {
+	width: 0;
+	height: 0;
+	border-left: 4px solid var(--color-text-faint);
+	border-top: 3.5px solid transparent;
+	border-bottom: 3.5px solid transparent;
+	transition: transform 120ms ease;
+}
+.gui-memory-caret--open {
+	transform: rotate(90deg);
+}
+.gui-memory-workspace-desc {
 	margin-bottom: 6px;
 }
 .gui-memory-workspace-title {
@@ -7364,7 +7465,8 @@ body.gui-resizing {
 }
 .gui-memory-workspace-count {
 	flex-shrink: 0;
-	font-size: 12px;
+	margin-left: auto;
+	font-size: 11.5px;
 	color: var(--color-text-muted);
 	font-variant-numeric: tabular-nums;
 }

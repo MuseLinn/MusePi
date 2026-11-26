@@ -20,8 +20,12 @@ interface MemoryBackendStatus {
 	episodicCount?: number;
 	tripleCount?: number;
 	lastMemory?: string;
-	lastRecall?: string;
+	lastRecall?: boolean;
 	database?: string;
+	projectLessons?: number;
+	globalLessons?: number;
+	summaryBytes?: number;
+	globalScope?: boolean;
 	message?: string;
 	error?: string;
 	/** Which optional maintenance calls the daemon's backend actually implements. */
@@ -80,13 +84,11 @@ function backendHint(id: string): string {
 	}
 }
 
-function StatusChip({ on, label }: { on: boolean; label: string }): ReactNode {
-	return (
-		<span className={`gui-memory-chip${on ? " gui-memory-chip--on" : ""}`}>
-			<span className="gui-memory-chip-dot" />
-			{label}
-		</span>
-	);
+/** Compact size label for the summary metric. */
+function formatMemoryBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Settings → Memory: backend schema first, then the local-only workspace
@@ -115,25 +117,19 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const backend = status?.status?.backend;
 	return (
 		<>
-			{/* One section, three group headings: the backend choice, then that
-			 *  backend's own settings under the schema's groups (Mnemopi,
-			 *  Hindsight, Memory Maintenance), then auto-learn. A 15px section
-			 *  heading over a single dropdown read as more structure than the
-			 *  page holds. */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-group-h">{t("settings.memoryBackends")}</div>
-				<SchemaTabSection
-					rpc={rpc}
-					tabs={["memory"]}
-					onChanged={key => {
-						if (/^(memory|mnemopi|hindsight|sharpshooter)\./.test(key)) {
-							// Let the daemon finish its backend transition before re-reading.
-							setTimeout(loadStatus, 200);
-						}
-					}}
-				/>
-			</div>
-			{backend === "musemem" || backend === "local" ? <WorkspaceMemory rpc={rpc} /> : null}
+			{/* The schema owns the backend picker and each backend's own groups;
+			 *  no page-level heading sits above them, so the first group reads as
+			 *  the page's first level instead of a nested duplicate. */}
+			<SchemaTabSection
+				rpc={rpc}
+				tabs={["memory"]}
+				onChanged={key => {
+					if (/^(memory|mnemopi|hindsight|sharpshooter)\./.test(key)) {
+						// Let the daemon finish its backend transition before re-reading.
+						setTimeout(loadStatus, 200);
+					}
+				}}
+			/>
 			{backend === "off" ? null : (
 				<MemoryMaintenance
 					rpc={rpc}
@@ -143,6 +139,7 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					onReload={loadStatus}
 				/>
 			)}
+			{backend === "musemem" || backend === "local" ? <WorkspaceMemory rpc={rpc} /> : null}
 		</>
 	);
 }
@@ -184,6 +181,7 @@ function WorkspaceMemory({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [viewing, setViewing] = useState<{ name: string; content: string } | null>(null);
 	const [viewLoading, setViewLoading] = useState(false);
+	const [open, setOpen] = useState(false);
 
 	const load = useCallback(
 		(slugArg?: string): void => {
@@ -235,101 +233,111 @@ function WorkspaceMemory({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const workspaceOptions = slug && !workspaces.includes(slug) ? [slug, ...workspaces] : workspaces;
 	const workspaceLabels = workspaceKeyLabels(workspaceOptions);
 	return (
-		<div className="gui-settings-section">
-			<div className="gui-memory-workspace-head">
-				<div className="min-w-0">
-					<div className="gui-settings-section-title">{t("settings.workspaceMemory")}</div>
-					<div className="gui-settings-row-desc">{t("settings.workspaceMemoryDescription")}</div>
-				</div>
-			</div>
-			{loadError && <div className="text-[12.5px] text-[var(--color-warning)]">{loadError}</div>}
-			<div className="gui-memory-workspace-card">
-				<div className="gui-memory-workspace-bar">
-					<select
-						className="gui-settings-select"
-						value={slug}
-						onChange={e => load(e.target.value)}
-						aria-label={t("settings.workspaceMemory")}
-						title={slug}
-					>
-						{workspaceOptions.map(w => (
-							<option key={w} value={w}>
-								{workspaceLabels.get(w) ?? w}
-							</option>
-						))}
-					</select>
-					<span className="gui-memory-workspace-count">
-						{t("settings.memoriesCount", { count: files.length })}
-					</span>
-					<input
-						className="gui-input gui-memory-workspace-search"
-						value={query}
-						onChange={e => setQuery(e.target.value)}
-						placeholder={t("settings.searchMemoryFiles")}
-						aria-label={t("settings.searchMemoryFiles")}
-						spellCheck={false}
-					/>
-					<button
-						type="button"
-						className="gui-memory-workspace-refresh"
-						onClick={() => load(slug || undefined)}
-						disabled={busy}
-						aria-label={t("settings.refresh")}
-						title={t("settings.refresh")}
-					>
-						<Icon name="refresh" className="h-3.5 w-3.5" />
-					</button>
-				</div>
-				{loading ? (
-					<div className="gui-settings-row-desc">{t("settings.loading")}</div>
-				) : (
-					<div className="gui-memory-workspace-list">
-						{filtered.map(f => (
-							<div key={f.name} className="gui-memory-workspace-row">
-								<button
-									type="button"
-									className="gui-memory-workspace-open"
-									onClick={() => openFile(f.name)}
-									title={f.name}
-								>
-									<span className="gui-memory-workspace-fileicon">
-										<Icon name="file-text" className="h-3.5 w-3.5" />
-									</span>
-									<span className="gui-memory-workspace-filemeta">
-										<span className="gui-memory-workspace-filename truncate">{f.name}</span>
-										<span className="gui-memory-workspace-filetime">{memoryAgeLabel(f.mtimeMs)}</span>
-									</span>
-								</button>
-								<button
-									type="button"
-									className="gui-memory-workspace-reveal"
-									onClick={() => reveal(f.name)}
-									aria-label={t("settings.revealFolder")}
-									title={t("settings.revealFolder")}
-								>
-									<Icon name="folder-open" className="h-3.5 w-3.5" />
-								</button>
-							</div>
-						))}
-						{filtered.length === 0 && (
-							<div className="gui-settings-row-desc">
-								{files.length === 0 ? t("settings.memoryWorkspaceEmptyHint") : t("settings.noMemoryFiles")}
+		<div className="gui-settings-section gui-memory-workspace">
+			<button
+				type="button"
+				className="gui-memory-workspace-toggle"
+				aria-expanded={open}
+				onClick={() => setOpen(value => !value)}
+			>
+				<span className="gui-memory-workspace-title">{t("settings.workspaceMemory")}</span>
+				<span className="gui-memory-workspace-count">{t("settings.memoriesCount", { count: files.length })}</span>
+				<span className={`gui-memory-caret${open ? " gui-memory-caret--open" : ""}`} aria-hidden />
+			</button>
+			{open && (
+				<>
+					<div className="gui-settings-row-desc gui-memory-workspace-desc">
+						{t("settings.workspaceMemoryDescription")}
+					</div>
+					{loadError && <div className="text-[12.5px] text-[var(--color-warning)]">{loadError}</div>}
+					<div className="gui-memory-workspace-card">
+						<div className="gui-memory-workspace-bar">
+							<select
+								className="gui-settings-select"
+								value={slug}
+								onChange={e => load(e.target.value)}
+								aria-label={t("settings.workspaceMemory")}
+								title={slug}
+							>
+								{workspaceOptions.map(w => (
+									<option key={w} value={w}>
+										{workspaceLabels.get(w) ?? w}
+									</option>
+								))}
+							</select>
+							<input
+								className="gui-input gui-memory-workspace-search"
+								value={query}
+								onChange={e => setQuery(e.target.value)}
+								placeholder={t("settings.searchMemoryFiles")}
+								aria-label={t("settings.searchMemoryFiles")}
+								spellCheck={false}
+							/>
+							<button
+								type="button"
+								className="gui-memory-workspace-refresh"
+								onClick={() => load(slug || undefined)}
+								disabled={busy}
+								aria-label={t("settings.refresh")}
+								title={t("settings.refresh")}
+							>
+								<Icon name="refresh" className="h-3.5 w-3.5" />
+							</button>
+						</div>
+						{loading ? (
+							<div className="gui-settings-row-desc">{t("settings.loading")}</div>
+						) : (
+							<div className="gui-memory-workspace-list">
+								{filtered.map(f => (
+									<div key={f.name} className="gui-memory-workspace-row">
+										<button
+											type="button"
+											className="gui-memory-workspace-open"
+											onClick={() => openFile(f.name)}
+											title={f.name}
+										>
+											<span className="gui-memory-workspace-fileicon">
+												<Icon name="file-text" className="h-3.5 w-3.5" />
+											</span>
+											<span className="gui-memory-workspace-filemeta">
+												<span className="gui-memory-workspace-filename truncate">{f.name}</span>
+												<span className="gui-memory-workspace-filetime">{memoryAgeLabel(f.mtimeMs)}</span>
+											</span>
+										</button>
+										<button
+											type="button"
+											className="gui-memory-workspace-reveal"
+											onClick={() => reveal(f.name)}
+											aria-label={t("settings.revealFolder")}
+											title={t("settings.revealFolder")}
+										>
+											<Icon name="folder-open" className="h-3.5 w-3.5" />
+										</button>
+									</div>
+								))}
+								{filtered.length === 0 && (
+									<div className="gui-settings-row-desc">
+										{files.length === 0
+											? t("settings.memoryWorkspaceEmptyHint")
+											: t("settings.noMemoryFiles")}
+									</div>
+								)}
 							</div>
 						)}
+						{viewing && (
+							<>
+								<div className="gui-ext-detail-label">
+									{viewing.name}
+									{viewLoading ? ` · ${t("settings.loading")}` : ""}
+								</div>
+								<div className="gui-ext-detail-code gui-memory-code">
+									<pre>{viewing.content}</pre>
+								</div>
+							</>
+						)}
 					</div>
-				)}
-				{viewing && (
-					<>
-						<div className="gui-ext-detail-label">
-							{viewing.name}
-							{viewLoading ? ` · ${t("settings.loading")}` : ""}
-						</div>
-						<div className="gui-ext-detail-code gui-memory-code">
-							<pre>{viewing.content}</pre>
-						</div>
-					</>
-				)}
-			</div>
+				</>
+			)}
 		</div>
 	);
 }
@@ -402,164 +410,216 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 	};
 
 	const s = status?.status;
+	const facts: Array<{ label: string; value: string }> = [];
+	if (s?.summaryBytes !== undefined) {
+		facts.push({ label: t("settings.memorySummary"), value: formatMemoryBytes(s.summaryBytes) });
+	}
+	if (s?.projectLessons !== undefined) {
+		facts.push({ label: t("settings.memoryProjectLessons"), value: String(s.projectLessons) });
+	}
+	if (s?.globalLessons !== undefined) {
+		facts.push({
+			label: t("settings.memoryGlobalLessons"),
+			value: s.globalScope === false ? t("settings.memoryOff") : String(s.globalLessons),
+		});
+	}
+	const hasGrid = Boolean(
+		s &&
+			(s.workingCount !== undefined ||
+				s.episodicCount !== undefined ||
+				s.tripleCount !== undefined ||
+				s.recallBanks?.length ||
+				s.retainBank ||
+				s.lastMemory ||
+				s.lastRecall ||
+				s.database ||
+				s.scope),
+	);
+	const hint = s ? backendHint(s.backend) : "";
 	return (
-		<div className="gui-settings-section">
-			<div className="gui-memory-workspace-head">
-				<div className="min-w-0">
-					<div className="gui-settings-section-title">{t("settings.memoryStatus")}</div>
-					<div className="gui-settings-row-desc">{t("settings.memoryStatusDescription")}</div>
-				</div>
-			</div>
+		<div className="gui-settings-section gui-memory-maintenance">
 			{loading ? (
 				<div className="gui-settings-row-desc">{t("settings.loading")}</div>
 			) : statusError ? (
 				<div className="text-[12.5px] text-[var(--color-warning)]">{statusError}</div>
 			) : s ? (
-				<div className="gui-memory-card">
-					<div className="gui-memory-status-head">
-						<span className="gui-memory-backend">{backendLabel(s.backend)}</span>
-						<div className="gui-memory-chips">
-							<StatusChip on={s.active} label={t("settings.memoryActive")} />
-							<StatusChip on={s.writable} label={t("settings.memoryWritable")} />
-							<StatusChip on={s.searchable} label={t("settings.memorySearchable")} />
+				<>
+					<div className="gui-memory-strip">
+						<div className="gui-memory-identity">
+							<span className="gui-memory-backend">{backendLabel(s.backend)}</span>
+							<span className={`gui-memory-state${s.active ? " gui-memory-state--on" : ""}`}>
+								<span className="gui-memory-state-dot" />
+								{s.active ? t("settings.memoryRunning") : t("settings.memoryInactive")}
+							</span>
+							{!s.writable && <span className="gui-memory-state">{t("settings.memoryReadOnly")}</span>}
+							{facts.length > 0 && (
+								<span className="gui-memory-facts">
+									{facts.map(fact => (
+										<span key={fact.label} className="gui-memory-fact">
+											<span className="gui-memory-fact-label">{fact.label}</span>
+											<span className="gui-memory-fact-value">{fact.value}</span>
+										</span>
+									))}
+								</span>
+							)}
+						</div>
+						<div className="gui-memory-toolbar">
+							<button
+								type="button"
+								className="gui-memory-action"
+								disabled={busy !== null}
+								onClick={() => runOk("memory.enqueue", t("settings.memoryEnqueue"))}
+							>
+								{t("settings.memoryEnqueue")}
+							</button>
+							<button
+								type="button"
+								className="gui-memory-action"
+								disabled={busy !== null}
+								onClick={() => runText("memory.view", t("settings.memoryView"))}
+							>
+								{t("settings.memoryView")}
+							</button>
+							{s.capabilities?.stats === true && (
+								<button
+									type="button"
+									className="gui-memory-action"
+									disabled={busy !== null}
+									onClick={() => runText("memory.stats", t("settings.memoryStats"))}
+								>
+									{t("settings.memoryStats")}
+								</button>
+							)}
+							{s.capabilities?.diagnose === true && (
+								<button
+									type="button"
+									className="gui-memory-action"
+									disabled={busy !== null}
+									onClick={() => runText("memory.diagnose", t("settings.memoryDiagnose"))}
+								>
+									{t("settings.memoryDiagnose")}
+								</button>
+							)}
+							<span className="gui-memory-toolbar-sep" aria-hidden />
+							{s.capabilities?.clearGlobal === true && (
+								<button
+									type="button"
+									className="gui-memory-action gui-memory-action--danger"
+									disabled={busy !== null}
+									onClick={() =>
+										runOk(
+											"memory.clear",
+											t("settings.memoryClearGlobal"),
+											t("settings.memoryClearGlobalConfirm"),
+											{ scope: "global" },
+										)
+									}
+								>
+									{t("settings.memoryClearGlobal")}
+								</button>
+							)}
+							<button
+								type="button"
+								className="gui-memory-action gui-memory-action--danger"
+								disabled={busy !== null}
+								onClick={() =>
+									runOk("memory.clear", t("settings.memoryClear"), t("settings.memoryClearConfirm"))
+								}
+							>
+								{t("settings.memoryClear")}
+							</button>
 						</div>
 					</div>
-					{backendHint(s.backend) ? <div className="gui-memory-status-note">{backendHint(s.backend)}</div> : null}
-					{s.message ? <div className="gui-memory-status-note">{s.message}</div> : null}
-					<div className="gui-memory-status-grid">
-						{s.workingCount !== undefined && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryWorkingCount")}</span>
-								<span className="gui-memory-status-value">{s.workingCount}</span>
-							</div>
-						)}
-						{s.episodicCount !== undefined && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryEpisodicCount")}</span>
-								<span className="gui-memory-status-value">{s.episodicCount}</span>
-							</div>
-						)}
-						{s.tripleCount !== undefined && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryTripleCount")}</span>
-								<span className="gui-memory-status-value">{s.tripleCount}</span>
-							</div>
-						)}
-						{s.recallBanks && s.recallBanks.length > 0 && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryRecallBanks")}</span>
-								<span className="gui-memory-status-value">{s.recallBanks.join(", ")}</span>
-							</div>
-						)}
-						{s.retainBank && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryRetainBank")}</span>
-								<span className="gui-memory-status-value">{s.retainBank}</span>
-							</div>
-						)}
-						{s.lastMemory && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryLastMemory")}</span>
-								<span className="gui-memory-status-value">{s.lastMemory}</span>
-							</div>
-						)}
-						{s.lastRecall && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryLastRecall")}</span>
-								<span className="gui-memory-status-value">{s.lastRecall}</span>
-							</div>
-						)}
-						{s.database && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryDatabase")}</span>
-								<span className="gui-memory-status-value gui-memory-status-value--mono">{s.database}</span>
-							</div>
-						)}
-						{s.scope && (
-							<div className="gui-memory-status-item">
-								<span className="gui-memory-status-label">{t("settings.memoryScope")}</span>
-								<span className="gui-memory-status-value">{s.scope}</span>
-							</div>
-						)}
-					</div>
-					{!s.workingCount &&
-						!s.episodicCount &&
-						!s.tripleCount &&
-						!s.recallBanks?.length &&
-						!s.retainBank &&
-						!s.lastMemory &&
-						!s.lastRecall &&
-						!s.database &&
-						!s.scope && <div className="gui-memory-status-note">{t("settings.memoryStatusEmpty")}</div>}
+					{hint ? <div className="gui-memory-hint">{hint}</div> : null}
+					{hasGrid && (
+						<div className="gui-memory-status-grid">
+							{s.workingCount !== undefined && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryWorkingCount")}</span>
+									<span className="gui-memory-status-value">{s.workingCount}</span>
+								</div>
+							)}
+							{s.episodicCount !== undefined && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryEpisodicCount")}</span>
+									<span className="gui-memory-status-value">{s.episodicCount}</span>
+								</div>
+							)}
+							{s.tripleCount !== undefined && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryTripleCount")}</span>
+									<span className="gui-memory-status-value">{s.tripleCount}</span>
+								</div>
+							)}
+							{s.recallBanks && s.recallBanks.length > 0 && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryRecallBanks")}</span>
+									<span className="gui-memory-status-value">{s.recallBanks.join(", ")}</span>
+								</div>
+							)}
+							{s.retainBank && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryRetainBank")}</span>
+									<span className="gui-memory-status-value">{s.retainBank}</span>
+								</div>
+							)}
+							{s.lastMemory && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryLastMemory")}</span>
+									<span className="gui-memory-status-value">{s.lastMemory}</span>
+								</div>
+							)}
+							{s.lastRecall && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryLastRecall")}</span>
+									<span className="gui-memory-status-value">{t("settings.memoryYes")}</span>
+								</div>
+							)}
+							{s.database && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryDatabase")}</span>
+									<span className="gui-memory-status-value gui-memory-status-value--mono">{s.database}</span>
+								</div>
+							)}
+							{s.scope && (
+								<div className="gui-memory-status-item">
+									<span className="gui-memory-status-label">{t("settings.memoryScope")}</span>
+									<span className="gui-memory-status-value">{s.scope}</span>
+								</div>
+							)}
+						</div>
+					)}
+					{!hint && !hasGrid && facts.length === 0 && s.message ? (
+						<div className="gui-memory-hint">{s.message}</div>
+					) : null}
 					{s.error && (
 						<div className="gui-memory-status-note gui-memory-status-note--error">
 							{t("settings.memoryError")}: {s.error}
 						</div>
 					)}
-				</div>
+				</>
 			) : null}
-			<div className="gui-memory-actions">
-				<button
-					type="button"
-					className="gui-btn gui-btn--primary"
-					disabled={busy !== null}
-					onClick={() => runOk("memory.enqueue", t("settings.memoryEnqueue"))}
-				>
-					{t("settings.memoryEnqueue")}
-				</button>
-				<button
-					type="button"
-					className="gui-btn"
-					disabled={busy !== null}
-					onClick={() => runText("memory.view", t("settings.memoryView"))}
-				>
-					{t("settings.memoryView")}
-				</button>
-				<button
-					type="button"
-					className="gui-btn"
-					disabled={busy !== null}
-					onClick={() => runText("memory.stats", t("settings.memoryStats"))}
-					hidden={s?.capabilities?.stats !== true}
-				>
-					{t("settings.memoryStats")}
-				</button>
-				<button
-					type="button"
-					className="gui-btn"
-					disabled={busy !== null}
-					onClick={() => runText("memory.diagnose", t("settings.memoryDiagnose"))}
-					hidden={s?.capabilities?.diagnose !== true}
-				>
-					{t("settings.memoryDiagnose")}
-				</button>
-				<button
-					type="button"
-					className="gui-btn gui-btn--danger gui-memory-clear"
-					disabled={busy !== null}
-					hidden={s?.capabilities?.clearGlobal !== true}
-					onClick={() =>
-						runOk("memory.clear", t("settings.memoryClearGlobal"), t("settings.memoryClearGlobalConfirm"), {
-							scope: "global",
-						})
-					}
-				>
-					{t("settings.memoryClearGlobal")}
-				</button>
-				<button
-					type="button"
-					className="gui-btn gui-btn--danger gui-memory-clear"
-					disabled={busy !== null}
-					onClick={() => runOk("memory.clear", t("settings.memoryClear"), t("settings.memoryClearConfirm"))}
-				>
-					{t("settings.memoryClear")}
-				</button>
-			</div>
 			{actionError && <div className="text-[12.5px] text-[var(--color-warning)]">{actionError}</div>}
-			{output !== null && <div className="gui-ext-detail-label">{outputLabel}</div>}
 			{output !== null && (
-				<div className="gui-ext-detail-code gui-memory-code">
-					<pre>{output}</pre>
+				<div className="gui-memory-output">
+					<div className="gui-memory-output-head">
+						<span className="gui-ext-detail-label">{outputLabel}</span>
+						<button
+							type="button"
+							className="gui-memory-output-close"
+							onClick={() => {
+								setOutput(null);
+								setOutputLabel(null);
+							}}
+							aria-label={t("settings.memoryOutputClose")}
+							title={t("settings.memoryOutputClose")}
+						>
+							×
+						</button>
+					</div>
+					<div className="gui-ext-detail-code gui-memory-code">
+						<pre>{output}</pre>
+					</div>
 				</div>
 			)}
 		</div>
