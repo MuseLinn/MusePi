@@ -31,7 +31,7 @@ memory:
 
 `learn` 接受 `scope: "global"`，用于记录不属于当前仓库的知识——工具行为、个人工作流偏好、跨仓库约束。这类经验写入 `memories/_global/learned.md`，与每个项目的 `--<cwd>--` 目录分开，每行记录来源（`_(from <项目>, <日期>)_`）。
 
-- `musemem.globalScope`（默认开启）决定这个目标是否存在。关闭时 `scope: "global"` 会被拒绝，并在结果里点名该设置；不会静默降级为项目级。
+- `musemem.globalScope`（默认开启）决定这个目标是否存在；它由 `memory-musemem` 插件提供，因此只有选中该后端时才显示这一行。关闭时 `scope: "global"` 会被拒绝，并在结果里点名该设置；不会静默降级为项目级。
 - 项目经验先注入，跨项目经验随后，并在 `memories.summaryInjectionTokenLimit` 不足时先被截断。冲突时以项目经验为准。
 - `/memory clear` 只清当前项目；`/memory clear global` 只清共享文件。
 - `memory://global/learned.md` 可读取完整的跨项目文件。

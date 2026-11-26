@@ -119,7 +119,7 @@ export const musememBackend: MemoryBackend = {
 			lessonFacts(path.join(root, LESSONS_FILE)),
 			lessonFacts(path.join(getGlobalMemoryRoot(agentDir), LESSONS_FILE)),
 		]);
-		const globalScope = session?.settings?.get("musemem.globalScope") !== false;
+		const globalScope = session?.settings?.getSettingValue("musemem.globalScope") !== false;
 		return {
 			backend: "musemem" as const,
 			active: true,
@@ -143,7 +143,7 @@ export const musememBackend: MemoryBackend = {
 			lessonFacts(path.join(globalRoot, LESSONS_FILE)),
 			skillCount(root),
 		]);
-		const globalScope = session?.settings?.get("musemem.globalScope") !== false;
+		const globalScope = session?.settings?.getSettingValue("musemem.globalScope") !== false;
 		return [
 			`- Project memory root: \`${root}\``,
 			`- Summary (${SUMMARY_FILE}): ${summarize(summary)}`,
@@ -165,7 +165,7 @@ export const musememBackend: MemoryBackend = {
 			artifactFacts(getAgentDbPath(agentDir)),
 			skillCount(root),
 		]);
-		const globalScope = session?.settings?.get("musemem.globalScope") !== false;
+		const globalScope = session?.settings?.getSettingValue("musemem.globalScope") !== false;
 		const warnings: string[] = [];
 		if (!summary.exists) warnings.push("no consolidated summary yet — run `/memory enqueue` and start a session");
 		if (!db.exists) warnings.push("state DB is missing — startup consolidation cannot claim work");

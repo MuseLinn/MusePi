@@ -1335,7 +1335,7 @@ function loadMemoryConfig(settings: Settings): MemoryRuntimeConfig {
 	const backend = settings.get("memory.backend") as string;
 	return {
 		enabled: backend === "musemem" || backend === "local",
-		globalScope: settings.get("musemem.globalScope") !== false,
+		globalScope: settings.getSettingValue("musemem.globalScope") !== false,
 		maxRolloutsPerStartup: settings.get("memories.maxRolloutsPerStartup") ?? DEFAULTS.maxRolloutsPerStartup,
 		maxRolloutAgeDays: settings.get("memories.maxRolloutAgeDays") ?? DEFAULTS.maxRolloutAgeDays,
 		minRolloutIdleHours: settings.get("memories.minRolloutIdleHours") ?? DEFAULTS.minRolloutIdleHours,

@@ -3559,21 +3559,6 @@ export const SETTINGS_SCHEMA = {
 	// Config-file-only knob (numbers without `options` are hidden from the UI).
 	"autolearn.minToolCalls": { type: "number", default: 5 },
 
-	// MuseMem backend: the project-scoped rollout-summary pipeline plus an
-	// explicit cross-project lessons file under `memories/_global`.
-	"musemem.globalScope": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			group: "MuseMem",
-			label: "MuseMem Global Scope",
-			description:
-				"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
-			condition: "musememActive",
-		},
-	},
-
 	// Mnemopi local SQLite memory backend.
 	"mnemopi.dbPath": {
 		type: "string",

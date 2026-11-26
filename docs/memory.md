@@ -33,7 +33,7 @@ If startup consolidation finishes after the first prompt build, the active sessi
 
 `learn` accepts `scope: "global"` for knowledge that holds outside the current repository — tool behaviour, personal workflow preferences, cross-repo constraints. Those lessons are stored in `memories/_global/learned.md`, separately from every project's `--<cwd>--` directory, and each row records its origin (`_(from <project>, <date>)_`).
 
-- `musemem.globalScope` (on by default) controls the destination. With it off, `scope: "global"` is refused with a message naming the setting; the lesson is not silently downgraded.
+- `musemem.globalScope` (on by default) controls the destination; it is provided by the `memory-musemem` plugin, so the row appears only while that backend is selected. With it off, `scope: "global"` is refused with a message naming the setting; the lesson is not silently downgraded.
 - Project lessons load first; cross-project lessons follow, and are truncated first when `memories.summaryInjectionTokenLimit` runs out. On conflict, the project lesson wins.
 - `/memory clear` clears the current project only; `/memory clear global` clears the shared file.
 - `memory://global/learned.md` reads the full cross-project file.

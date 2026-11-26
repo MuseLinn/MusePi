@@ -400,25 +400,21 @@ describe("compaction dependency gates", () => {
 });
 
 describe("memory backend gates", () => {
-	it("shows the MuseMem group only while MuseMem (or its former id) is selected", () => {
-		const row = item("musemem.globalScope");
-		expect(isSettingShown(row, { "memory.backend": "musemem" })).toBe(true);
-		expect(isSettingShown(row, { "memory.backend": "local" })).toBe(true);
-		expect(isSettingShown(row, { "memory.backend": "hindsight" })).toBe(false);
-		expect(isSettingShown(row, {})).toBe(false);
-	});
-
-	it("evaluates a declarative condition carried by a plugin setting", () => {
-		const row = item("musemem.globalScope", {
+	it("shows a plugin-owned MuseMem setting only while MuseMem is selected", () => {
+		const row = {
+			key: "musemem.globalScope",
+			type: "boolean",
+			default: true,
 			ui: {
 				tab: "memory",
 				group: "MuseMem",
 				label: "MuseMem Global Scope",
 				condition: { key: "memory.backend", equals: "musemem" },
 			},
-		});
+		} as SchemaItem;
 		expect(isSettingShown(row, { "memory.backend": "musemem" })).toBe(true);
 		expect(isSettingShown(row, { "memory.backend": "hindsight" })).toBe(false);
+		expect(isSettingShown(row, {})).toBe(false);
 	});
 
 	it("keeps the Hindsight block off while another backend is selected", () => {

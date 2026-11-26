@@ -15,6 +15,21 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: PluginAPI): void {
+	// The setting travels with the backend: without this plugin mounted the key
+	// still reads (raw value or the `true` default), but no surface lists it.
+	ctx.settings.register({
+		key: "musemem.globalScope",
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "memory",
+			group: "MuseMem",
+			label: "MuseMem Global Scope",
+			description:
+				"Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
+			condition: { key: "memory.backend", equals: "musemem" },
+		},
+	});
 	ctx.memory.registerBackendProvider({
 		id: "musemem",
 		label: "MuseMem",

@@ -25,7 +25,7 @@ export function isGlobalMemoryScopeAvailable(session: GlobalMemoryScopeSession):
 	switch (backend) {
 		case "musemem":
 		case "local":
-			return session.settings.get("musemem.globalScope") !== false;
+			return session.settings.getSettingValue("musemem.globalScope") !== false;
 		case "mnemopi":
 			return session.settings.get("mnemopi.scoping") !== "per-project";
 		case "hindsight":
