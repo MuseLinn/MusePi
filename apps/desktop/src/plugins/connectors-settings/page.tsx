@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DeviceCode } from "../../components/DeviceCode";
 import { DialogFrame } from "../../components/DialogFrame";
-import { McpServersSection } from "../../components/settings-sections/mcp";
+import { McpServersSection } from "../../components/settings-rows/mcp-servers";
 import { useMcpOAuth } from "../../components/settings-sections/use-mcp-oauth";
 import { copyToClipboard, openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";

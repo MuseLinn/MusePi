@@ -4,7 +4,7 @@ import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { RpcClient } from "../src/lib/rpc";
-import SubagentsSettingsPage from "../src/plugins/settings-subagents/page";
+import SubagentsSettingsPage from "../src/plugins/ui-settings-subagent/page";
 
 const mounted = new Set<Root>();
 

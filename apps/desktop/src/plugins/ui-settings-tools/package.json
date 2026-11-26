@@ -1,0 +1,15 @@
+{
+	"name": "musepi-ui-settings-tools",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned tools settings page: tool toggles plus computer-use permissions.",
+	"type": "module",
+	"musepi": {
+		"icon": "🧰",
+		"label": "MusePi Tools Settings",
+		"description": "Tool switches and computer-use permissions.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

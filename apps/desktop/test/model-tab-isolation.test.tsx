@@ -7,8 +7,8 @@ import "@lobehub/icons";
 import { describe, expect, it } from "bun:test";
 import { t } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CustomProviderPane } from "../src/plugins/settings-model/custom-provider";
-import ModelSettingsPage from "../src/plugins/settings-model/page";
+import { CustomProviderPane } from "../src/plugins/ui-settings-models/custom-provider";
+import ModelSettingsPage from "../src/plugins/ui-settings-models/page";
 
 // 设置 → 模型与供应商的 tab 隔离契约:自定义供应商区块只属于它自己的 tab。
 // 回归背景:该区块曾无条件渲染,于是"角色模型/模型行为/供应商"三个 tab 底部

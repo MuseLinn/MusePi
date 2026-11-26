@@ -7,8 +7,8 @@ import {
 	resolvePluginEntry,
 } from "../../../packages/coding-agent/src/extensibility/plugins/runtime/cordis-entry";
 import { navGroups } from "../src/components/SettingsNav";
-import * as plugin from "../src/plugins/settings-model/index";
-import { apply } from "../src/plugins/settings-model/index";
+import * as plugin from "../src/plugins/ui-settings-models/index";
+import { apply } from "../src/plugins/ui-settings-models/index";
 
 const previousLocale = getLocaleSnapshot();
 setLocale("zh-CN");

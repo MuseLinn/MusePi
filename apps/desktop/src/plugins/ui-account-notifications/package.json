@@ -1,0 +1,15 @@
+{
+	"name": "musepi-ui-account-notifications",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned notification and sound page: delivery switches, per-event toasts, templates, cues.",
+	"type": "module",
+	"musepi": {
+		"icon": "🔔",
+		"label": "MusePi Notifications",
+		"description": "Desktop toasts, per-event sounds, templates and interaction cues.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

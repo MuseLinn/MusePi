@@ -1,0 +1,15 @@
+{
+	"name": "musepi-ui-agent-preset",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Agent-preset settings page: the preset roster, its default, the read-only composition view and creation from a description.",
+	"type": "module",
+	"musepi": {
+		"icon": "🎛",
+		"label": "MusePi Agent Presets",
+		"description": "Choose the agent preset and the default for new sessions.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

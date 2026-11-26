@@ -1,0 +1,15 @@
+{
+	"name": "musepi-ui-settings-migration",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned data migration page: import from another install and move existing data.",
+	"type": "module",
+	"musepi": {
+		"icon": "📦",
+		"label": "MusePi Migration Settings",
+		"description": "Import from another install and move existing data.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

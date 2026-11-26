@@ -10,7 +10,7 @@ import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AVATAR_PRESETS } from "../src/components/avatar-presets";
-import AppearanceSettingsPage from "../src/plugins/settings-appearance/page";
+import AppearanceSettingsPage from "../src/plugins/ui-settings-appearance/page";
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;

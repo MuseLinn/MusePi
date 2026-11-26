@@ -1,0 +1,15 @@
+{
+	"name": "musepi-ui-settings-files",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned files and LSP settings page: every files-tab setting rendered from the shared schema.",
+	"type": "module",
+	"musepi": {
+		"icon": "📄",
+		"label": "MusePi Files & LSP Settings",
+		"description": "Edit, read, summarize and LSP settings on one page.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

@@ -11,8 +11,8 @@
  * label and reads as a layout bug that is not there.
  */
 import { t } from "@musepi/client-core";
-import ModesSettingsPage from "../../src/plugins/settings-modes/page";
-import SubagentsSettingsPage from "../../src/plugins/settings-subagents/page";
+import AgentPresetPage from "../../src/plugins/ui-agent-preset/page";
+import SubagentsSettingsPage from "../../src/plugins/ui-settings-subagent/page";
 import { type GuiScenario, measure, mount } from "../gui-probe-helpers";
 
 /** Daemon stand-in carrying enough schema to render these pages' bodies: both
@@ -72,9 +72,9 @@ export default {
 		},
 	},
 
-	"settings-modes": {
+	"ui-agent-preset": {
 		async render(root) {
-			await mount(<ModesSettingsPage rpc={stubRpc()} onCreateChat={() => {}} />, root);
+			await mount(<AgentPresetPage rpc={stubRpc()} onCreateChat={() => {}} />, root);
 		},
 		async measure(body) {
 			return {
