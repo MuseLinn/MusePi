@@ -383,6 +383,12 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			},
 			{
 				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/hooks-settings/index.ts",
+				"plugin": "musepi-hooks-settings",
+				"id": "hooks"
+			},
+			{
+				"slot": "settings.section",
 				"source": "apps/desktop/src/plugins/index-library/index.ts",
 				"plugin": "musepi-index-library",
 				"id": "indexes"
@@ -440,46 +446,6 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 		"declaredBy": "packages/client/ui-settings/src/client/contract/slots.ts",
 		"lifetime": "core",
 		"replaceRisk": "additive",
-		"occupants": []
-	},
-	{
-		"name": "settings.subnav.session-memory",
-		"kind": "list",
-		"scope": "root",
-		"summary": "「会话与记忆」子导航的一个标签（list）：id 命中内置标签即替换其内容，其余追加。",
-		"registerOptions": [
-			{
-				"name": "moduleUrl",
-				"requirement": "required",
-				"type": "string (e.g. \"./page.tsx\")",
-				"doc": "扩展内相对模块路径；构建期编译成组件产物。"
-			},
-			{
-				"name": "label",
-				"requirement": "optional",
-				"type": "string",
-				"doc": "显示名（导航行、标签、错误信息）。"
-			},
-			{
-				"name": "order",
-				"requirement": "optional",
-				"type": "number",
-				"doc": "list 座位的渲染顺序（升序，默认按注册顺序）。"
-			},
-			{
-				"name": "id",
-				"requirement": "optional",
-				"type": "string",
-				"doc": "list 座位内的条目身份；同插件可在同一座位挂多条，第三方可按 id 精确替换。"
-			}
-		],
-		"ownerProps": [
-			"rpc",
-			"sessionId"
-		],
-		"declaredBy": "apps/desktop/src/components/settings-sections/session-memory.tsx",
-		"lifetime": "core",
-		"replaceRisk": "shadows-shipped-ui",
 		"occupants": []
 	},
 	{
@@ -1276,6 +1242,41 @@ export const SLOT_PREFIX_CATALOG: readonly SlotPrefixCatalogEntry[] = [
 				"plugin": "musepi-ui-theme"
 			}
 		]
+	},
+	{
+		"prefix": "settings.subnav.",
+		"summary": "设置页分段子导航的一个标签；后缀是页面 id（如 `session-memory`）。",
+		"suffix": "page id (e.g. `session-memory`)",
+		"registerOptions": [
+			{
+				"name": "moduleUrl",
+				"requirement": "required",
+				"type": "string (e.g. \"./page.tsx\")",
+				"doc": "扩展内相对模块路径；构建期编译成组件产物。"
+			},
+			{
+				"name": "label",
+				"requirement": "optional",
+				"type": "string",
+				"doc": "显示名（导航行、标签、错误信息）。"
+			},
+			{
+				"name": "order",
+				"requirement": "optional",
+				"type": "number",
+				"doc": "list 座位的渲染顺序（升序，默认按注册顺序）。"
+			},
+			{
+				"name": "id",
+				"requirement": "optional",
+				"type": "string",
+				"doc": "list 座位内的条目身份；同插件可在同一座位挂多条，第三方可按 id 精确替换。"
+			}
+		],
+		"declaredBy": "apps/desktop/src/components/settings-sections/session-memory.tsx",
+		"lifetime": "component",
+		"replaceRisk": "shadows-shipped-ui",
+		"occupants": []
 	},
 	{
 		"prefix": "chat.session-info.",

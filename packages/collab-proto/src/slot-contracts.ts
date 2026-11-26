@@ -190,15 +190,6 @@ export const SLOT_CONTRACTS = {
 		lifetime: "core",
 		replaceRisk: "additive",
 	},
-	"settings.subnav.session-memory": {
-		scope: "root",
-		summary: "「会话与记忆」子导航的一个标签（list）：id 命中内置标签即替换其内容，其余追加。",
-		registerOptions: [MODULE, LABEL, ORDER, ID],
-		ownerProps: ["rpc", "sessionId"],
-		declaredBy: "apps/desktop/src/components/settings-sections/session-memory.tsx",
-		lifetime: "core",
-		replaceRisk: "shadows-shipped-ui",
-	},
 	"conversation.composer.bar": {
 		scope: "session",
 		summary: "整个输入卡（hero 与 session 两种模式）。",
@@ -435,6 +426,15 @@ export const SLOT_PREFIX_CONTRACTS = [
 		declaredBy: "apps/desktop/src/components/ExtensionsCenter.tsx / SettingsView.tsx",
 		lifetime: "component",
 		replaceRisk: "additive",
+	},
+	{
+		prefix: "settings.subnav.",
+		summary: "设置页分段子导航的一个标签；后缀是页面 id（如 `session-memory`）。",
+		suffix: "page id (e.g. `session-memory`)",
+		registerOptions: [MODULE, LABEL, ORDER, ID],
+		declaredBy: "apps/desktop/src/components/settings-sections/session-memory.tsx",
+		lifetime: "component",
+		replaceRisk: "shadows-shipped-ui",
 	},
 	{
 		prefix: "chat.session-info.",

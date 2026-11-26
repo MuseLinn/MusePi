@@ -38,7 +38,9 @@ A plugin is a Cordis fiber: `apply(ctx, config)` receives the declared config an
 Not every feature gets a nav row. Two seats cover the rest:
 
 - `settings.item.<page>.<row>` — one row on a named page, rendered after that page's own content.
-- `settings.subnav.<page>` — one tab in that page's segmented subnav. An entry whose `id` names a built-in tab replaces it; any other id appends. Sessions & Memory uses this (`settings.subnav.session-memory`), so a backend can present its pane without a new nav row.
+- `settings.subnav.<page>` — one tab in that page's segmented subnav (a prefix seat: any page id works). An entry whose `id` names a built-in tab replaces it; any other id appends. Sessions & Memory uses `settings.subnav.session-memory`, so a backend can present its pane without a new nav row.
+
+A whole page is `settings.section` with the page's existing id: the content becomes plugin-owned, the nav row and its deep links stay. The hooks page is the smallest example.
 
 Use `settings.section` only when the feature is a whole page.
 

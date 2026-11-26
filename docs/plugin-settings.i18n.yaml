@@ -1,5 +1,5 @@
 # Consistency record for plugin-settings.md / plugin-settings.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/plugin-settings
-plugin-settings.md: 49a4f65352581cffae69cfb2d18b86e1caf8ec4d
-plugin-settings.zh-CN.md: fa8fe6eda945882cf3756e6848e41659cf4c9520
+plugin-settings.md: b2f8a8ac08a8bfab042d28f49dc753713bb52f74
+plugin-settings.zh-CN.md: 75e541118b8135dfb05946aa24c1157dc1d45519

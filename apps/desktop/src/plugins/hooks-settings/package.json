@@ -1,0 +1,13 @@
+{
+	"name": "musepi-hooks-settings",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned hooks settings page: hook-capability extensions with enable toggles.",
+	"type": "module",
+	"musepi": {
+		"icon": "🪝",
+		"label": "MusePi Hooks",
+		"description": "Hook-capability extensions and their enable switches.",
+		"extensions": ["./index.ts"]
+	}
+}

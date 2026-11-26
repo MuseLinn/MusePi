@@ -38,7 +38,9 @@ scope:
 不是每个功能都需要一个导航页。另有两个席位：
 
 - `settings.item.<page>.<row>` —— 命名页面上的一行，渲染在该页自身内容之后。
-- `settings.subnav.<page>` —— 该页分段子导航中的一个标签。`id` 命中内置标签即替换，其余追加。“会话与记忆”使用它（`settings.subnav.session-memory`），后端因此无需新增导航页即可展示自己的面板。
+- `settings.subnav.<page>` —— 该页分段子导航中的一个标签（前缀席位，任意页面 id 均可）。`id` 命中内置标签即替换，其余追加。“会话与记忆”使用 `settings.subnav.session-memory`，后端因此无需新增导航页即可展示自己的面板。
+
+整页使用 `settings.section` 并沿用该页既有 id：内容归插件，导航行与深链保留。“钩子”页是最小的例子。
 
 只有当功能本身是一整页时才用 `settings.section`。
 

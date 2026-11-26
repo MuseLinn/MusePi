@@ -118,9 +118,12 @@ export function SettingsView({
 	// 记忆插件页:声明 `settings.section` 且 id 为 `memory` 的条目接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
 	const extMemoryTab = extTabFor("memory");
+	// 钩子插件页:声明 `settings.section` 且 id 为 `hooks` 的条目接管内置「钩子」分区。
+	const extHooksTab = extTabFor("hooks");
+	void extHooksTab;
 	// 会话与记忆子导航的标签席位(`settings.subnav.session-memory`):
 	// id 命中内置标签即替换其内容,其余追加为新标签。
-	const sessionMemoryTabs = useSlotComponents(rpc, "settings.subnav.session-memory");
+	const sessionMemoryTabs = useSlotComponentsByPrefix(rpc, "settings.subnav.session-memory");
 	// 行级偏好席位(dsh `settings.general.item`):挂到「常规」页末尾。
 	const generalRowItems = useSlotComponents(rpc, "settings.general.item");
 	// Nav groups are the single source of truth for "which section ids exist":
@@ -647,7 +650,7 @@ export function SettingsView({
 										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
 									)}
 									{activeSection === "secrets" && <SecretSettingsSection rpc={rpc} />}
-									{activeSection === "hooks" && <HooksSection rpc={rpc} />}
+									{!activeExtTab && activeSection === "hooks" && <HooksSection rpc={rpc} />}
 									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 									{!activeExtTab && activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 								</>
