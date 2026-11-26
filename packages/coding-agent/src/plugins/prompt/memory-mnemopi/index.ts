@@ -7,7 +7,7 @@
  */
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { mnemopiBackend } from "@musepi/pi-coding-agent/mnemopi/backend";
-import { MNEMOPI_SETTING_ROWS } from "@musepi/pi-coding-agent/mnemopi/settings";
+import { MNEMOPI_SETTING_CREDENTIALS, MNEMOPI_SETTING_ROWS } from "@musepi/pi-coding-agent/mnemopi/settings";
 
 export const name = "musepi-memory-mnemopi";
 export const inject = [] as const;
@@ -23,6 +23,7 @@ export function apply(ctx: PluginAPI): void {
 			type: row.type,
 			default: row.default,
 			ui: row.ui,
+			...(MNEMOPI_SETTING_CREDENTIALS.includes(row.key) ? { credential: true } : {}),
 		});
 	}
 	ctx.memory.registerBackendProvider({

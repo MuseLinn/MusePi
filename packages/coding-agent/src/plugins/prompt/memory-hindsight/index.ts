@@ -7,7 +7,7 @@
  */
 import type { PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { hindsightBackend } from "@musepi/pi-coding-agent/hindsight/backend";
-import { HINDSIGHT_SETTING_ROWS } from "@musepi/pi-coding-agent/hindsight/settings";
+import { HINDSIGHT_SETTING_CREDENTIALS, HINDSIGHT_SETTING_ROWS } from "@musepi/pi-coding-agent/hindsight/settings";
 
 export const name = "musepi-memory-hindsight";
 export const inject = [] as const;
@@ -20,6 +20,9 @@ export function apply(ctx: PluginAPI): void {
 			type: row.type,
 			default: row.default,
 			ui: row.ui,
+			// The plugin owns the key, so it also owns its credential marking;
+			// without it the CLI and the panel would print the token.
+			...(HINDSIGHT_SETTING_CREDENTIALS.includes(row.key) ? { credential: true } : {}),
 		});
 	}
 	ctx.memory.registerBackendProvider({

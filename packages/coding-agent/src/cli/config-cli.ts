@@ -5,7 +5,7 @@
  * Uses the settings schema as the source of truth for available settings.
  */
 
-import { APP_NAME, getAgentDir } from "@musepi/pi-utils";
+import { APP_NAME, getAgentDir, logger } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import {
 	getDefault,
@@ -19,7 +19,8 @@ import {
 	settings,
 	validateProviderMaxInFlightRequests,
 } from "../config/settings";
-import { SETTINGS_SCHEMA } from "../config/settings-schema";
+import { settingsRegistry } from "../config/settings-registry";
+import { ensureHostHalfPluginsLoaded } from "../plugins-runtime/loader";
 import { theme } from "../render/theme/theme";
 import { initXdg } from "./commands/init-xdg";
 
@@ -48,22 +49,29 @@ type CliSettingDef = {
 	tab: string;
 };
 
-const ALL_SETTING_PATHS = Object.keys(SETTINGS_SCHEMA) as SettingPath[];
+/** Every key a surface may show: core schema plus plugin-declared settings. */
+function allSettingPaths(): string[] {
+	return settingsRegistry.keys();
+}
 
 /** Printed instead of a credential value in human output only. */
 const REDACTED = "********";
 
-/** Find setting definition by path */
+/** Find setting definition by path, including plugin-declared keys. */
 function findSettingDef(path: string): CliSettingDef | undefined {
-	if (!(path in SETTINGS_SCHEMA)) return undefined;
-	const key = path as SettingPath;
-	const ui = getUi(key);
+	if (!settingsRegistry.has(path)) return undefined;
+	const ui = getUi(path);
 	return {
-		path: key,
-		type: getType(key),
+		path: path as SettingPath,
+		type: getType(path),
 		description: ui?.description ?? "",
 		tab: ui?.tab ?? "internal",
 	};
+}
+
+/** Read a setting: plugin-declared keys fall back to the package default. */
+function readSetting(path: string): unknown {
+	return settings.getSettingValue(path);
 }
 
 /** Get available values for a setting */
@@ -242,6 +250,14 @@ function parseAndSetValue(path: SettingPath, rawValue: string): void {
 
 export async function runConfigCommand(cmd: ConfigCommandArgs): Promise<void> {
 	await Settings.init();
+	// Plugin packages own their settings, so their rows only exist after the
+	// host plugins mount. Loading them here keeps `config list/get/set` able to
+	// address `hindsight.*`, `mnemopi.*` and any other plugin-declared key.
+	const settings = Settings.instance;
+	const cwd = settings.getCwd();
+	await ensureHostHalfPluginsLoaded(cwd, settings).catch(error => {
+		logger.debug("config: host plugins were not mounted", { error: String(error) });
+	});
 
 	switch (cmd.action) {
 		case "list":
@@ -278,7 +294,9 @@ async function writeStdout(text: string): Promise<void> {
 }
 
 async function handleList(flags: { json?: boolean }): Promise<void> {
-	const defs = ALL_SETTING_PATHS.map(path => findSettingDef(path)).filter((def): def is CliSettingDef => !!def);
+	const defs = allSettingPaths()
+		.map(path => findSettingDef(path))
+		.filter((def): def is CliSettingDef => !!def);
 
 	if (flags.json) {
 		// A redacted entry omits `value` and says so, rather than substituting a
@@ -292,7 +310,7 @@ async function handleList(flags: { json?: boolean }): Promise<void> {
 		// as unset; the same semantics apply here (credentials are all strings).
 		const result: Record<string, { value?: unknown; redacted?: true; type: string; description: string }> = {};
 		for (const def of defs) {
-			const value = settings.get(def.path);
+			const value = readSetting(def.path);
 			result[def.path] =
 				isCredential(def.path) && value
 					? { redacted: true, type: def.type, description: def.description }
@@ -326,7 +344,7 @@ async function handleList(flags: { json?: boolean }): Promise<void> {
 			// single-value request and is left alone. An unset or cleared ("")
 			// credential keeps its ordinary rendering: masking it would imply one
 			// is configured.
-			const value = settings.get(def.path);
+			const value = readSetting(def.path);
 			const valueStr = isCredential(def.path) && value ? REDACTED : formatValue(value);
 			const typeStr = getTypeDisplay(def);
 			console.log(`  ${chalk.white(def.path)} = ${valueStr} ${chalk.dim(typeStr)}`);
@@ -349,7 +367,7 @@ function handleGet(key: string | undefined, flags: { json?: boolean }): void {
 		process.exit(1);
 	}
 
-	const value = settings.get(def.path);
+	const value = readSetting(def.path);
 
 	if (flags.json) {
 		console.log(JSON.stringify({ key: def.path, value, type: def.type, description: def.description }, null, 2));
@@ -381,7 +399,7 @@ async function handleSet(key: string | undefined, value: string | undefined, fla
 		process.exit(1);
 	}
 
-	const newValue = settings.get(def.path);
+	const newValue = readSetting(def.path);
 
 	if (flags.json) {
 		console.log(JSON.stringify({ key: def.path, value: newValue }));
