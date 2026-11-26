@@ -141,6 +141,18 @@ export function targetCommand(target: ConnectionTarget): string | null {
 		case "docker": {
 			if (!target.container) return null;
 			const port = portOf(target.url) ?? DEFAULT_DAEMON_PORT;
+			// A remote container is reached the same way the managed start does it:
+			// one ssh hop that both forwards the published port and execs the
+			// daemon. Showing only the `docker exec` half here would hand the user a
+			// command that cannot reach anything from this machine.
+			if (target.sshHost) {
+				const parts = ["ssh", "-N"];
+				if (target.sshPort && target.sshPort !== 22) parts.push("-p", String(target.sshPort));
+				if (target.keyPath) parts.push("-i", shellWord(target.keyPath));
+				if (target.proxyJump) parts.push("-J", shellWord(target.proxyJump));
+				parts.push("-L", `${port}:127.0.0.1:${port}`, shellWord(target.sshHost));
+				return parts.join(" ");
+			}
 			return `docker exec ${shellWord(target.container)} musepi serve --port ${port}`;
 		}
 		default:
@@ -152,6 +164,10 @@ export function targetCommand(target: ConnectionTarget): string | null {
 export function targetPublishHint(target: ConnectionTarget): string | null {
 	if (target.kind !== "docker") return null;
 	const port = portOf(target.url) ?? DEFAULT_DAEMON_PORT;
+	// `-p 127.0.0.1:` binds the far loopback, which is right on either machine:
+	// locally it is this machine, and remotely it is the host the ssh forward
+	// reaches. Publishing on 0.0.0.0 would expose the daemon to a network for no
+	// reason.
 	return `docker run -d -p 127.0.0.1:${port}:${port} --name ${shellWord(target.container ?? "<name>")} musepi`;
 }
 
@@ -214,6 +230,15 @@ function shellWord(value: string): string {
  * Build a target from the manager's form draft. The URL is normalized by the
  * caller (`normalizeRemoteHostUrl`); this only attaches the kind parameters.
  */
+/**
+ * Host facts belong to any kind that runs something on another machine, and a
+ * remote container is exactly that: the form asks for an ssh host once, and the
+ * kind decides whether the daemon is that host's own or one of its containers.
+ * Keeping the fields for `docker` too is what lets `targetAxes` read the
+ * location back without a second discriminant to migrate.
+ */
+const HOST_FACTS: ReadonlySet<ConnectionTargetKind> = new Set(["ssh", "docker"]);
+
 export function createTarget(input: {
 	id: string;
 	label: string;
@@ -234,13 +259,14 @@ export function createTarget(input: {
 		url: input.url,
 		kind: input.kind,
 	};
+	const hostKind = HOST_FACTS.has(input.kind);
 	if (input.token) target.token = input.token;
 	if (input.kind === "wsl" && input.distro) target.distro = input.distro;
-	if (input.kind === "ssh" && input.sshHost) target.sshHost = input.sshHost;
-	if (input.kind === "ssh" && input.remotePort) target.remotePort = input.remotePort;
-	if (input.kind === "ssh" && input.sshPort) target.sshPort = input.sshPort;
-	if (input.kind === "ssh" && input.proxyJump) target.proxyJump = input.proxyJump;
-	if (input.kind === "ssh" && input.keyPath) target.keyPath = input.keyPath;
+	if (hostKind && input.sshHost) target.sshHost = input.sshHost;
+	if (hostKind && input.remotePort) target.remotePort = input.remotePort;
+	if (hostKind && input.sshPort) target.sshPort = input.sshPort;
+	if (hostKind && input.proxyJump) target.proxyJump = input.proxyJump;
+	if (hostKind && input.keyPath) target.keyPath = input.keyPath;
 	if (input.kind === "docker" && input.container) target.container = input.container;
 	return target;
 }
@@ -306,7 +332,20 @@ export function bootTarget(targets: readonly ConnectionTarget[], chosenId: strin
 export type TargetLocation = "local" | "remote" | "unknown";
 export type TargetEnvironment = "system" | "container" | "wsl";
 
-export function targetAxes(kind: ConnectionTargetKind): {
+/**
+ * Where a target actually runs.
+ *
+ * `docker` is the one kind that can sit on either side, so it cannot answer
+ * from its own discriminant: a container on this machine and a container on a
+ * build box are the same `kind` and different `location`. The host facts
+ * decide, which is why they are an argument rather than a second kind — a
+ * second kind would mean every existing `kind === "docker"` branch needed a
+ * twin, and a stored row would have to be migrated to the new one.
+ */
+export function targetAxes(
+	kind: ConnectionTargetKind,
+	sshHost?: string,
+): {
 	location: TargetLocation;
 	environment: TargetEnvironment;
 } {
@@ -318,24 +357,35 @@ export function targetAxes(kind: ConnectionTargetKind): {
 		case "wsl":
 			return { location: "local", environment: "wsl" };
 		case "docker":
-			return { location: "local", environment: "container" };
+			return { location: sshHost ? "remote" : "local", environment: "container" };
 		case "ssh":
 			return { location: "remote", environment: "system" };
 	}
 }
 
 /**
- * The kind a chosen pair produces, or null when this build cannot reach it.
+ * The kind a chosen pair produces.
  *
- * Remote containers and remote WSL would need the container/VM on the far side
- * probed through the same ssh tunnel; neither backend exists, so the pair is
- * refused here rather than offered and then failing.
+ * All six pairs resolve now. Remote containers used to be refused here because
+ * no backend could reach one; the backend reaches them by execing docker over
+ * the ssh hop the tunnel already uses, so refusing would be claiming a limit
+ * the implementation no longer has.
+ *
+ * A remote pair produces `docker` (or `wsl`) with host facts, not a distinct
+ * kind: the form fills `sshHost` from the same fields the `ssh` kind uses, and
+ * `targetAxes` reads it back.
  */
 export function kindForAxes(
 	location: Exclude<TargetLocation, "unknown">,
 	environment: TargetEnvironment,
 ): ConnectionTargetKind | null {
-	if (location === "remote") return environment === "system" ? "ssh" : null;
+	if (location === "remote") {
+		if (environment === "system") return "ssh";
+		if (environment === "container") return "docker";
+		// A WSL distribution is a local Windows feature, not something reachable
+		// over ssh; the chip stays disabled for that pair.
+		return null;
+	}
 	if (environment === "system") return "manual";
 	if (environment === "wsl") return "wsl";
 	return "docker";

@@ -519,9 +519,9 @@ contextBridge.exposeInMainWorld("musepiShell", {
 	startWslDaemon: input => ipcRenderer.invoke("remote-wsl-start", input),
 	stopTarget: targetId => ipcRenderer.invoke("remote-target-stop", targetId),
 	listTargets: () => ipcRenderer.invoke("remote-target-list"),
-	detectDocker: () => ipcRenderer.invoke("remote-docker-detect"),
+	detectDocker: input => ipcRenderer.invoke("remote-docker-detect", input),
 	probeRemoteCapabilities: input => ipcRenderer.invoke("remote-capabilities-probe", input),
-	dockerContainers: daemonPort => ipcRenderer.invoke("remote-docker-containers", daemonPort),
+	dockerContainers: input => ipcRenderer.invoke("remote-docker-containers", input),
 	dockerRun: input => ipcRenderer.invoke("remote-docker-run", input),
 	dockerExec: input => ipcRenderer.invoke("remote-docker-exec", input),
 	onTargetStatus: cb => {

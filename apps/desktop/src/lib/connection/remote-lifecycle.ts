@@ -55,6 +55,36 @@ type LifecycleResult =
 	| { ok: false; reason: string; error?: string; status?: ManagedTargetStatus };
 
 /**
+ * The ssh hop that reaches a docker CLI on another machine.
+ *
+ * Deliberately the same four fields the tunnel takes, because it is the same
+ * hop: a host that works for a shell must work for its containers, and a user
+ * configuring one should not have to answer the same questions twice.
+ */
+export interface DockerTransport {
+	destination: string;
+	sshPort?: number;
+	keyPath?: string;
+	proxyJump?: string;
+}
+
+/**
+ * The transport for a target, or `undefined` when docker runs here.
+ *
+ * A container target is remote exactly when it carries a host, which is the
+ * same test `targetAxes` uses — one fact, read one way.
+ */
+export function dockerTransportOf(target: ConnectionTarget): DockerTransport | undefined {
+	if (target.kind !== "docker" || !target.sshHost) return undefined;
+	return {
+		destination: target.sshHost,
+		sshPort: target.sshPort,
+		keyPath: target.keyPath,
+		proxyJump: target.proxyJump,
+	};
+}
+
+/**
  * The preload bridge. Absent outside Electron (and in a test that did not
  * inject one), which is what {@link hasManagedLifecycle} answers.
  */
@@ -86,7 +116,12 @@ export interface ShellBridge {
 	startWslDaemon?(input: { id: string; distro: string; port: number }): Promise<LifecycleResult>;
 	stopTarget?(targetId: string): Promise<{ ok: boolean; stopped: boolean; reason?: string }>;
 	listTargets?(): Promise<ManagedTargetStatus[]>;
-	detectDocker?(): Promise<{ available: boolean; version?: string; reason?: string; error?: string }>;
+	detectDocker?(input?: { transport?: DockerTransport }): Promise<{
+		available: boolean;
+		version?: string;
+		reason?: string;
+		error?: string;
+	}>;
 	/** What a *remote* host can run, asked through ssh. Local detection cannot
 	 *  answer this, which is why remote container / remote WSL used to be
 	 *  refused outright; absence of this method means the bridge predates it. */
@@ -96,16 +131,33 @@ export interface ShellBridge {
 		keyPath?: string;
 		proxyJump?: string;
 	}): Promise<
-		| { ok: true; docker: { available: boolean; version?: string; reason?: string } | null; wsl: { available: boolean; distros: string[] } | null }
+		| {
+				ok: true;
+				docker: { available: boolean; version?: string; reason?: string } | null;
+				wsl: { available: boolean; distros: string[] } | null;
+		  }
 		| { ok: false; reason: string; error?: string }
 	>;
-	dockerContainers?(daemonPort: number): Promise<{
+	/**
+	 * Where docker runs, when it is not this machine.
+	 *
+	 * Absent means local: a user with only a local daemon never produces a hop.
+	 * Present, it is the same destination/key/jump tuple the ssh tunnel uses, so
+	 * a host configured once works for its shells and its containers alike.
+	 */
+	transport?: DockerTransport;
+	dockerContainers?(input: { daemonPort: number; transport?: DockerTransport }): Promise<{
 		ok: boolean;
 		containers?: Array<{ name: string; image: string; hostPort: number; containerPort: number }>;
 		reason?: string;
 		error?: string;
 	}>;
-	dockerRun?(input: { name: string; port: number; image?: string }): Promise<LifecycleResult>;
+	dockerRun?(input: {
+		name: string;
+		port: number;
+		image?: string;
+		transport?: DockerTransport;
+	}): Promise<LifecycleResult>;
 	dockerExec?(input: {
 		id: string;
 		container: string;
@@ -113,6 +165,7 @@ export interface ShellBridge {
 		port: number;
 		/** Container side: the port the daemon must bind inside. */
 		containerPort?: number;
+		transport?: DockerTransport;
 	}): Promise<LifecycleResult>;
 	onTargetStatus?(cb: (status: ManagedTargetStatus) => void): () => void;
 }
@@ -144,7 +197,6 @@ export function managedStartBlocker(target: ConnectionTarget, platform: string |
 	if (target.kind === "wsl" && !target.distro) return "missing-distro";
 	return null;
 }
-
 /**
  * The daemon port on the far side of a forward.
  *

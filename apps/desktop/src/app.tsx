@@ -77,6 +77,7 @@ import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
 import { type BootOutcome, runBootAttempt } from "./lib/connection/boot-attempt";
 import {
 	applyTargetStatus,
+	dockerTransportOf,
 	type ManagedTargetStatus,
 	managedStartBlocker,
 	pruneTargetStatuses,
@@ -2704,11 +2705,14 @@ function AppInner(): ReactNode {
 		if (target.kind === "docker") {
 			// The daemon binds the container-side port; `localPort` is the host side
 			// the container publishes. Same distinction the ssh forward makes.
+			// A remote container additionally needs the hop, which is why the
+			// transport travels with the call instead of being assumed local.
 			void bridge.dockerExec?.({
 				id: target.id,
 				container: target.container ?? "",
 				port: localPort,
 				containerPort: remoteDaemonPort(target, DEFAULT_PORT),
+				transport: dockerTransportOf(target),
 			});
 		}
 	}, []);

@@ -46,6 +46,7 @@ import {
 	kindForAxes,
 	stripToken,
 	targetAxes,
+	type TargetLocation,
 	targetCommand,
 	targetPublishHint,
 } from "../lib/connection/targets";
@@ -56,25 +57,35 @@ import { Icon } from "../vendor/oc-icons";
 
 interface Draft {
 	kind: ConnectionTargetKind;
+	/**
+	 * The form's chosen location, kept apart from `sshHost`.
+	 *
+	 * A stored row answers "remote?" from whether it carries a host, which is
+	 * the only durable fact it has. A row *being typed* cannot: the user picks
+	 * 远端主机 before naming one, and if the chip were derived from the empty
+	 * field it would flip back to 本机 the moment it was clicked. So the form
+	 * holds the intent, and `kind` stays the stored discriminant.
+	 */
+	location: Exclude<TargetLocation, "unknown">;
 	label: string;
 	url: string;
 	token: string;
 	distro: string;
 	sshHost: string;
 	remotePort: string;
-	/** `ssh` — ssh(1)'s own port, when the catalog entry names a non-default one. */
+	/** `ssh`/`docker` — ssh(1)'s own port, when the catalog entry names a non-default one. */
 	sshPort: string;
-	/** `ssh` — `ProxyJump` chain carried from the catalog entry. */
+	/** `ssh`/`docker` — `ProxyJump` chain carried from the catalog entry. */
 	proxyJump: string;
-	/** `ssh` — identity file carried from the catalog entry. */
+	/** `ssh`/`docker` — identity file carried from the catalog entry. */
 	keyPath: string;
 	/** Name of the catalog entry the fields were filled from ("" = typed by hand). */
 	catalogName: string;
 	container: string;
 }
-
-const emptyDraft = (kind: ConnectionTargetKind = "manual"): Draft => ({
+const emptyDraft = (kind: ConnectionTargetKind = "manual", location: Exclude<TargetLocation, "unknown"> = "local"): Draft => ({
 	kind,
+	location,
 	label: "",
 	url: "",
 	token: "",
@@ -106,8 +117,13 @@ type CopyKey =
 
 /** Seed the form from an existing row so editing reuses one code path. */
 function draftFromTarget(target: ConnectionTarget): Draft {
+	const axes = targetAxes(target.kind, target.sshHost);
 	return {
 		kind: target.kind === "local" ? "manual" : target.kind,
+		// An existing row's location is a fact it carries, not an intent: a
+		// `manual` endpoint names no machine, so it opens as 本机 rather than
+		// claiming a remote it cannot describe.
+		location: axes.location === "remote" ? "remote" : "local",
 		label: target.label,
 		url: target.url,
 		token: target.token ?? "",
@@ -272,9 +288,15 @@ export function ConnectionManager({
 	 */
 	const [docker, setDocker] = useState<DockerProbe>("idle");
 	const showFailure = showsFailureCopy(state);
-	/** The two axes the draft currently expresses; `kind` remains the stored
-	 *  discriminant, so nothing persisted changes shape. */
-	const axes = targetAxes(draft.kind);
+	/** The two axes the draft currently expresses.
+	 *
+	 *  Location comes from the draft's own intent (see `Draft.location`), so a
+	 *  chosen 远端主机 does not disappear while its host field is still empty.
+	 *  Environment comes from `kind`, which stays the stored discriminant. */
+	const environment = targetAxes(draft.kind).environment;
+	const axes = { location: draft.location, environment };
+	/** True for a container reached over ssh rather than on this machine. */
+	const remoteContainer = draft.kind === "docker" && draft.location === "remote";
 
 	const runDockerDetection = useCallback(async (): Promise<void> => {
 		const bridge = shellBridge();
@@ -282,13 +304,23 @@ export function ConnectionManager({
 			setDocker({ state: "unavailable", reason: "no-bridge" });
 			return;
 		}
+		// A container on another host is probed on that host: asking this machine
+		// would answer about a docker daemon the container has nothing to do with.
+		const transport = remoteContainer
+			? {
+					destination: draft.sshHost.trim(),
+					sshPort: Number.parseInt(draft.sshPort, 10) || undefined,
+					keyPath: draft.keyPath.trim() || undefined,
+					proxyJump: draft.proxyJump.trim() || undefined,
+				}
+			: undefined;
 		setDocker("checking");
-		const detected = await bridge.detectDocker();
+		const detected = await bridge.detectDocker({ transport });
 		if (!detected.available) {
 			setDocker({ state: "unavailable", reason: detected.reason, error: detected.error });
 			return;
 		}
-		const listed = await bridge.dockerContainers?.(DEFAULT_DAEMON_PORT);
+		const listed = await bridge.dockerContainers?.({ daemonPort: DEFAULT_DAEMON_PORT, transport });
 		// A failed list keeps its own reason: rendering it as "no containers"
 		// would drop a socket-permission error the user needs to see.
 		if (!listed) {
@@ -300,12 +332,33 @@ export function ConnectionManager({
 			return;
 		}
 		setDocker({ state: "ready", containers: listed.containers ?? [] });
-	}, []);
+	}, [
+		remoteContainer,
+		draft.sshHost,
+		draft.sshPort,
+		draft.keyPath,
+		draft.proxyJump,
+	]);
 
 	useEffect(() => {
 		if (!adding || draft.kind !== "docker" || docker !== "idle") return;
+		// A remote container cannot be probed until the host is named, so the
+		// probe waits for one instead of asking this machine by mistake.
+		if (remoteContainer && !draft.sshHost.trim()) return;
 		void runDockerDetection();
-	}, [adding, draft.kind, docker, runDockerDetection]);
+	}, [adding, draft.kind, docker, remoteContainer, draft.sshHost, runDockerDetection]);
+
+	/**
+	 * Which machine the docker probe is about.
+	 *
+	 * A probe result describes one host's daemon. Moving the form to another
+	 * host — or from local to remote — has to discard it, or the container list
+	 * would offer names from a machine the user is no longer pointing at.
+	 */
+	const dockerScope = draft.kind === "docker" ? (remoteContainer ? `remote:${draft.sshHost.trim()}` : "local") : "";
+	useEffect(() => {
+		setDocker("idle");
+	}, [dockerScope]);
 
 	/**
 	 * What the *remote* host can run, asked on that host.
@@ -391,6 +444,13 @@ export function ConnectionManager({
 				setFormError(t("settings.connectionContainerRequired"));
 				return;
 			}
+			// A remote container is reached through a host, so the host is as
+			// required as the container name; without it the row would silently
+			// fall back to this machine's docker and exec a same-named container.
+			if (remoteContainer && !draft.sshHost.trim()) {
+				setFormError(t("settings.connectionHostRequired"));
+				return;
+			}
 			url = url || `ws://127.0.0.1:${DEFAULT_DAEMON_PORT}`;
 		}
 		if (!url) {
@@ -416,9 +476,13 @@ export function ConnectionManager({
 		 * facts come from one place instead of being reassembled from form
 		 * strings. `catalogEntryFor` resolves the draft's own `sshHost` too, which
 		 * is why an edited row keeps matching its entry after the catalog changes.
+		 *
+		 * A remote container asks the same question a shell does, so it reads the
+		 * catalog the same way — one host read, two kinds that consume it.
 		 */
+		const hostKind = draft.kind === "ssh" || draft.kind === "docker";
 		const entry =
-			draft.kind === "ssh"
+			hostKind && draft.sshHost.trim()
 				? catalogEntryFor({ id, label, url, kind: "ssh", sshHost: draft.sshHost }, catalog)
 				: null;
 		const fromCatalog = entry ? targetFromCatalogHost(entry, daemonPortOf(url)) : null;
@@ -430,17 +494,12 @@ export function ConnectionManager({
 				token: draft.token.trim() || undefined,
 				kind: draft.kind,
 				distro: draft.kind === "wsl" ? draft.distro : undefined,
-				sshHost: draft.kind === "ssh" ? (fromCatalog?.sshHost ?? draft.sshHost.trim()) : undefined,
+				sshHost: hostKind ? (fromCatalog?.sshHost ?? draft.sshHost.trim()) || undefined : undefined,
 				remotePort:
-					draft.kind === "ssh"
-						? Number.parseInt(draft.remotePort, 10) || fromCatalog?.remotePort || undefined
-						: undefined,
-				sshPort:
-					draft.kind === "ssh"
-						? Number.parseInt(draft.sshPort, 10) || fromCatalog?.sshPort || undefined
-						: undefined,
-				proxyJump: draft.kind === "ssh" ? draft.proxyJump.trim() || fromCatalog?.proxyJump || undefined : undefined,
-				keyPath: draft.kind === "ssh" ? draft.keyPath.trim() || fromCatalog?.keyPath || undefined : undefined,
+					hostKind ? Number.parseInt(draft.remotePort, 10) || fromCatalog?.remotePort || undefined : undefined,
+				sshPort: hostKind ? Number.parseInt(draft.sshPort, 10) || fromCatalog?.sshPort || undefined : undefined,
+				proxyJump: hostKind ? draft.proxyJump.trim() || fromCatalog?.proxyJump || undefined : undefined,
+				keyPath: hostKind ? draft.keyPath.trim() || fromCatalog?.keyPath || undefined : undefined,
 				container: draft.kind === "docker" ? draft.container.trim() : undefined,
 			}),
 		);
@@ -719,9 +778,9 @@ export function ConnectionManager({
 					aria-label={editingId ? t("settings.connectionEditTarget") : t("settings.addInstance")}
 				>
 					{/* Two questions instead of one `kind`: where the daemon runs,
-					 * and in what. The pair is the whole model, and it is what lets a
-					 * remote container be refused honestly instead of appearing as a
-					 * transport the user might pick. */}
+					 * and in what. The pair is the whole model, and it is what keeps a
+					 * remote container honest: it is a real pair now, so the chip is
+					 * offered and the transport is carried, rather than refused. */}
 					<div className="gui-conn-axis">
 						<span className="gui-conn-axis-label">{t("settings.instanceLocation")}</span>
 						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceLocation")}>
@@ -733,12 +792,17 @@ export function ConnectionManager({
 									aria-checked={axes.location === location}
 									className="gui-conn-kind-btn"
 									onClick={() => {
-										// Switching to remote with a container selected would ask for a
-										// pair this host may not run; fall back to the plain host kind
-										// and let the environment row decide from the probe.
-										const environment = location === "remote" ? "system" : axes.environment;
-										const next = kindForAxes(location, environment);
-										if (next) setDraft(current => ({ ...current, kind: next }));
+										// The environment is kept where it can be: switching to
+										// remote with a container chosen stays a container, now
+										// on another host. WSL is a local Windows feature, so that
+										// one pair has nowhere to go and falls back to the host.
+										const environment = axes.environment;
+										const next = kindForAxes(location, environment) ?? kindForAxes(location, "system");
+										setDraft(current => ({
+											...current,
+											location,
+											kind: next ?? current.kind,
+										}));
 									}}
 								>
 									<Icon name={location === "local" ? "computer" : "server"} className="h-3.5 w-3.5" />
@@ -753,18 +817,15 @@ export function ConnectionManager({
 						<span className="gui-conn-axis-label">{t("settings.instanceEnvironment")}</span>
 						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceEnvironment")}>
 							{(["system", "container", "wsl"] as const).map(environment => {
-								// Remote: the host itself answered whether it can run each
-								// environment, so the chip reflects that machine, not this one.
-								// Local keeps the local backend's answer.
+								// Reachability is a statement about the backend, not about the
+								// host: whether *this build* can run a container on another
+								// machine. It can, so the chip is offered. Whether that host
+								// actually has docker is a separate fact, answered by the
+								// probe inside the form with its own reason — collapsing the
+								// two would leave a user with no way to see the difference
+								// between "unsupported here" and "not installed there".
 								const remoteLocation = axes.location === "remote";
-								const remoteReachable =
-									remoteLocation && environment !== "system"
-										? remote.state === "ok" && (environment === "container" ? remote.docker : remote.wsl)
-										: null;
-								const reachable =
-									remoteReachable === null
-										? kindForAxes(remoteLocation ? "remote" : "local", environment) !== null
-										: remoteReachable;
+								const reachable = kindForAxes(remoteLocation ? "remote" : "local", environment) !== null;
 								return (
 									<button
 										key={environment}
@@ -772,13 +833,7 @@ export function ConnectionManager({
 										role="radio"
 										aria-checked={axes.environment === environment}
 										disabled={!reachable}
-										title={
-											reachable
-												? undefined
-												: remoteLocation && remote.state === "probing"
-													? t("settings.remoteProbeRunning")
-													: t("settings.environmentRemoteUnsupported")
-										}
+										title={reachable ? undefined : t("settings.environmentRemoteUnsupported")}
 										className="gui-conn-kind-btn"
 										onClick={() => {
 											const next = kindForAxes(remoteLocation ? "remote" : "local", environment);
@@ -859,7 +914,10 @@ export function ConnectionManager({
 						</div>
 					)}
 
-					{draft.kind === "ssh" && (
+					{/* Host facts, asked once per host rather than once per kind: a
+					 * daemon on a build box and a container on that same box differ
+					 * only in what runs there, so they answer the same questions. */}
+					{(draft.kind === "ssh" || remoteContainer) && (
 						<>
 							{catalog.length > 0 && (
 								<label className="gui-field">
@@ -907,15 +965,17 @@ export function ConnectionManager({
 									onChange={e => setDraft(current => ({ ...current, sshHost: e.target.value }))}
 								/>
 							</label>
-							<label className="gui-field">
-								<span className="gui-field-label">{t("settings.connectionRemotePort")}</span>
-								<input
-									className="gui-input font-mono"
-									value={draft.remotePort}
-									inputMode="numeric"
-									onChange={e => setDraft(current => ({ ...current, remotePort: e.target.value }))}
-								/>
-							</label>
+							{draft.kind === "ssh" && (
+								<label className="gui-field">
+									<span className="gui-field-label">{t("settings.connectionRemotePort")}</span>
+									<input
+										className="gui-input font-mono"
+										value={draft.remotePort}
+										inputMode="numeric"
+										onChange={e => setDraft(current => ({ ...current, remotePort: e.target.value }))}
+									/>
+								</label>
+							)}
 						</>
 					)}
 
@@ -933,48 +993,49 @@ export function ConnectionManager({
 									{docker.reason === "daemon-unreachable" && docker.error ? ` — ${docker.error}` : ""}
 								</p>
 							)}
-							{docker !== "checking" &&
-								docker !== "idle" &&
-								docker.state === "ready" &&
-								docker.containers.length > 0 && (
-									<>
-										<p className="gui-conn-note" role="status">
-											{t("settings.connectionDockerContainers")}
-										</p>
-										<select
-											className="gui-input font-mono"
-											value={draft.container}
-											onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
-										>
-											<option value="">{t("settings.connectionContainerPick")}</option>
-											{docker.containers.map(container => (
-												<option key={container.name} value={container.name}>
-													{container.name} — 127.0.0.1:{container.hostPort}→{container.containerPort}
-												</option>
-											))}
-										</select>
-									</>
-								)}
+							{/* One control for one value. The picker and a free-text field
+							 * were both bound to `container`, so a name from the list
+							 * appeared twice in two shapes — the same fact rendered as a
+							 * choice and as a duplication. The picker leads; the field
+							 * appears only when the list cannot supply the name. */}
+							{docker !== "checking" && docker !== "idle" && docker.state === "ready" && docker.containers.length > 0 ? (
+								<>
+									<p className="gui-conn-note" role="status">
+										{t("settings.connectionDockerContainers")}
+									</p>
+									<select
+										className="gui-input font-mono"
+										value={docker.containers.some(row => row.name === draft.container) ? draft.container : ""}
+										onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
+									>
+										<option value="">{t("settings.connectionContainerPick")}</option>
+										{docker.containers.map(container => (
+											<option key={container.name} value={container.name}>
+												{container.name} — 127.0.0.1:{container.hostPort}→{container.containerPort}
+											</option>
+										))}
+									</select>
+								</>
+							) : (
+								<input
+									className="gui-input font-mono"
+									value={draft.container}
+									spellCheck={false}
+									aria-label={t("settings.connectionContainer")}
+									onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
+								/>
+							)}
+							{docker !== "checking" && docker !== "idle" && docker.state === "ready" && docker.containers.length === 0 && (
+								<p className="gui-conn-note" role="status">
+									{t("settings.connectionDockerNone")}
+								</p>
+							)}
 							{docker !== "checking" && docker !== "idle" && docker.state === "list-failed" && (
 								<p className="gui-conn-note" role="status">
 									{t("settings.connectionDockerListFailed")}
 									{docker.error ? ` — ${docker.error}` : ""}
 								</p>
 							)}
-							{docker !== "checking" &&
-								docker !== "idle" &&
-								docker.state === "ready" &&
-								docker.containers.length === 0 && (
-									<p className="gui-conn-note" role="status">
-										{t("settings.connectionDockerNone")}
-									</p>
-								)}
-							<input
-								className="gui-input font-mono"
-								value={draft.container}
-								spellCheck={false}
-								onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
-							/>
 							{docker !== "checking" && (
 								<button
 									type="button"

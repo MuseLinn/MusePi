@@ -4196,6 +4196,27 @@ function targetInput(raw) {
 	};
 }
 
+/**
+ * The ssh hop to a docker CLI on another machine, validated like every other
+ * destination that becomes argv.
+ *
+ * Absent means "this machine": the local docker commands keep the shape they
+ * have always had, so nothing changes for a user who never adds a remote host.
+ */
+function transportInput(raw) {
+	const input = raw && typeof raw === "object" ? raw : {};
+	const destination = typeof input.destination === "string" ? input.destination.trim() : "";
+	if (!destination) return undefined;
+	if (destination.startsWith("-")) return null;
+	const sshPort = Number(input.sshPort);
+	return {
+		destination,
+		sshPort: Number.isInteger(sshPort) && sshPort > 0 && sshPort <= 65535 ? sshPort : undefined,
+		proxyJump: typeof input.proxyJump === "string" && input.proxyJump.trim() ? input.proxyJump.trim() : undefined,
+		keyPath: typeof input.keyPath === "string" && input.keyPath.trim() ? input.keyPath.trim() : undefined,
+	};
+}
+
 ipcMain.handle("remote-target-start", async (_event, raw) => {
 	const input = targetInput(raw);
 	if (!input) return { ok: false, reason: "invalid-input" };
@@ -4208,14 +4229,25 @@ ipcMain.handle("remote-target-stop", async (_event, targetId) =>
 
 ipcMain.handle("remote-target-list", () => remoteTargets.listTargets());
 
-ipcMain.handle("remote-docker-detect", async () => remoteTargets.detectDocker());
 ipcMain.handle("remote-capabilities-probe", async (_event, input) => remoteTargets.probeRemoteCapabilities(input));
 
-ipcMain.handle("remote-docker-containers", async (_event, daemonPort) => {
-	const list = await remoteTargets.listContainers();
+ipcMain.handle("remote-docker-containers", async (_event, raw) => {
+	// Two call shapes reach here: the legacy bare port, and `{ daemonPort, transport }`
+	// for a host reached over ssh. Accepting both keeps the old renderer working.
+	const input = raw && typeof raw === "object" ? raw : { daemonPort: raw };
+	const transport = transportInput(input.transport);
+	if (transport === null) return { ok: false, reason: "invalid-input" };
+	const list = await remoteTargets.listContainers({ transport });
 	if (!list.ok) return list;
-	const port = Number.isInteger(Number(daemonPort)) ? Number(daemonPort) : 8300;
+	const port = Number.isInteger(Number(input.daemonPort)) ? Number(input.daemonPort) : 8300;
 	return { ok: true, containers: remoteTargets.containersPublishing(list.containers, port), all: list.containers };
+});
+
+ipcMain.handle("remote-docker-detect", async (_event, raw) => {
+	const input = raw && typeof raw === "object" ? raw : {};
+	const transport = transportInput(input.transport);
+	if (transport === null) return { available: false, reason: "invalid-input" };
+	return remoteTargets.detectDocker({ transport });
 });
 
 ipcMain.handle("remote-docker-run", async (_event, raw) => {
@@ -4223,9 +4255,11 @@ ipcMain.handle("remote-docker-run", async (_event, raw) => {
 	const name = cliName(input.name);
 	const port = Number(input.port);
 	const image = input.image === undefined ? undefined : cliName(input.image);
+	const transport = transportInput(input.transport);
 	if (!name || (input.image !== undefined && !image)) return { ok: false, reason: "invalid-input" };
+	if (transport === null) return { ok: false, reason: "invalid-input" };
 	if (!Number.isInteger(port) || port <= 0 || port > 65535) return { ok: false, reason: "invalid-input" };
-	return remoteTargets.runContainer({ name, port, image });
+	return remoteTargets.runContainer({ name, port, image, transport });
 });
 
 ipcMain.handle("remote-docker-exec", async (_event, raw) => {
@@ -4236,11 +4270,13 @@ ipcMain.handle("remote-docker-exec", async (_event, raw) => {
 	// publishes it on the host. `port` is the host side (what the endpoint dials).
 	const port = Number(input.port);
 	const containerPort = input.containerPort === undefined ? port : Number(input.containerPort);
+	const transport = transportInput(input.transport);
 	if (!container || !targetId) return { ok: false, reason: "invalid-input" };
+	if (transport === null) return { ok: false, reason: "invalid-input" };
 	for (const value of [port, containerPort]) {
 		if (!Number.isInteger(value) || value <= 0 || value > 65535) return { ok: false, reason: "invalid-input" };
 	}
-	return remoteTargets.execContainer({ targetId, container, hostPort: port, containerPort });
+	return remoteTargets.execContainer({ targetId, container, hostPort: port, containerPort, transport });
 });
 
 ipcMain.handle("remote-wsl-start", async (_event, raw) => {

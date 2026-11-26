@@ -58,12 +58,20 @@ describe("connection presentation", () => {
 
 describe("target axes", () => {
 	test("the stored kind maps onto where and what", async () => {
-		const { targetAxes, kindForAxes } = await import("../src/lib/connection/targets");
+		const { targetAxes } = await import("../src/lib/connection/targets");
 		expect(targetAxes("wsl")).toEqual({ location: "local", environment: "wsl" });
 		expect(targetAxes("docker")).toEqual({ location: "local", environment: "container" });
 		expect(targetAxes("ssh")).toEqual({ location: "remote", environment: "system" });
 		// A typed endpoint names no machine; guessing "local" would be wrong.
 		expect(targetAxes("manual").location).toBe("unknown");
+	});
+
+	test("a container with a host is a remote container", async () => {
+		// `docker` cannot answer "where" from its own discriminant: the same kind
+		// covers a container here and one on a build box. The host decides.
+		const { targetAxes } = await import("../src/lib/connection/targets");
+		expect(targetAxes("docker", "me@build")).toEqual({ location: "remote", environment: "container" });
+		expect(targetAxes("docker", "")).toEqual({ location: "local", environment: "container" });
 	});
 
 	test("only pairs this build can reach produce a kind", async () => {
@@ -72,8 +80,10 @@ describe("target axes", () => {
 		expect(kindForAxes("local", "wsl")).toBe("wsl");
 		expect(kindForAxes("local", "container")).toBe("docker");
 		expect(kindForAxes("remote", "system")).toBe("ssh");
-		// No backend probes a container or a WSL distro through the far side.
-		expect(kindForAxes("remote", "container")).toBeNull();
+		// A container on the far side is exec'd over the ssh hop the tunnel uses,
+		// so the pair resolves to the same kind with host facts attached.
+		expect(kindForAxes("remote", "container")).toBe("docker");
+		// WSL is a local Windows feature, not something reachable through ssh.
 		expect(kindForAxes("remote", "wsl")).toBeNull();
 	});
 });

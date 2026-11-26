@@ -29,6 +29,31 @@ afterEach(async () => {
 	document.body.innerHTML = "";
 });
 
+/**
+ * Click one of the form's two-axis chips.
+ *
+ * The form asks *where* and *in what* as radio groups rather than naming its
+ * kinds directly, so reaching WSL or a container means choosing the pair that
+ * produces that kind. Label text is matched inside the chip group so a row
+ * badge with the same word cannot be clicked by mistake.
+ */
+async function chooseAxes(host: HTMLElement, location: string, environment: string): Promise<void> {
+	const groups = Array.from(host.querySelectorAll<HTMLElement>('.gui-conn-form [role="radiogroup"]'));
+	expect(groups.length).toBe(2);
+	for (const [group, label] of [
+		[groups[0], location],
+		[groups[1], environment],
+	] as const) {
+		const chip = Array.from(group.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find(
+			button => (button.textContent ?? "").trim() === label,
+		);
+		await act(async () => {
+			chip?.click();
+			await Bun.sleep(20);
+		});
+	}
+}
+
 function render(overrides: Partial<Parameters<typeof ConnectionManager>[0]> = {}): HTMLElement {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
@@ -260,9 +285,16 @@ describe("connection manager rows", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		act(() => add?.click());
-		const kinds = Array.from(host.querySelectorAll('[role="tab"]')).map(tab => tab.textContent ?? "");
-		expect(kinds.some(label => label.includes(t("settings.connectionKindManual")))).toBe(true);
-		expect(kinds.some(label => label.includes(t("settings.connectionKindWsl")))).toBe(true);
+		// The form asks two questions rather than listing kinds, and every pair a
+		// user may want is offered as a chip.
+		const chips = Array.from(host.querySelectorAll('.gui-conn-form [role="radio"]')).map(
+			chip => chip.textContent ?? "",
+		);
+		expect(chips.some(label => label.includes(t("settings.locationThisComputer")))).toBe(true);
+		expect(chips.some(label => label.includes(t("settings.locationRemoteHost")))).toBe(true);
+		expect(chips.some(label => label.includes(t("settings.environmentSystem")))).toBe(true);
+		expect(chips.some(label => label.includes(t("settings.environmentContainer")))).toBe(true);
+		expect(chips.some(label => label.includes(t("settings.connectionKindWsl")))).toBe(true);
 		expect(!!host.querySelector("details")).toBe(false);
 	});
 
@@ -352,13 +384,7 @@ describe("connection manager WSL detection", () => {
 		await act(async () => {
 			add?.click();
 		});
-		const wslTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(tab =>
-			(tab.textContent ?? "").includes(t("settings.connectionKindWsl")),
-		);
-		await act(async () => {
-			wslTab?.click();
-			await Bun.sleep(10);
-		});
+		await chooseAxes(host, t("settings.locationThisComputer"), t("settings.connectionKindWsl"));
 	}
 
 	test("two distributions become a picker with the default marked", async () => {
@@ -579,10 +605,7 @@ describe("connection manager catalog", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		await act(async () => add?.click());
-		const sshTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(tab =>
-			(tab.textContent ?? "").includes(t("settings.connectionKindSsh")),
-		);
-		await act(async () => sshTab?.click());
+		await chooseAxes(host, t("settings.locationRemoteHost"), t("settings.environmentSystem"));
 	}
 
 	test("an ssh-config-only host is offered in the instance form", async () => {
@@ -676,13 +699,7 @@ describe("connection manager docker probe", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		await act(async () => add?.click());
-		const tab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(node =>
-			(node.textContent ?? "").includes(t("settings.connectionKindDocker")),
-		);
-		await act(async () => {
-			tab?.click();
-			await Bun.sleep(20);
-		});
+		await chooseAxes(host, t("settings.locationThisComputer"), t("settings.environmentContainer"));
 		return host;
 	}
 
@@ -727,5 +744,88 @@ describe("connection manager docker probe", () => {
 		delete (globalThis as { musepiShell?: unknown }).musepiShell;
 		const options = Array.from(host.querySelectorAll("option")).map(option => option.textContent ?? "");
 		expect(options.some(option => option.includes("musepi-dev"))).toBe(true);
+	});
+});
+
+/**
+ * A container on another machine.
+ *
+ * Two things have to be true for this to be a feature rather than a field on a
+ * form: the probe must ask *that* host's docker, and the row must remember the
+ * host so a start knows where to go. Both are asserted through the same
+ * interaction a user performs.
+ */
+describe("connection manager remote container", () => {
+	test("probing a remote container asks the named host, not this machine", async () => {
+		const probed: Array<{ transport?: { destination?: string } } | undefined> = [];
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async (input?: { transport?: { destination?: string } }) => {
+				probed.push(input);
+				return { available: true };
+			},
+			dockerContainers: async (input?: { transport?: { destination?: string } }) => {
+				probed.push(input);
+				return { ok: true, containers: [] };
+			},
+		};
+		const host = render({ targets: [localTarget()] });
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		await chooseAxes(host, t("settings.locationRemoteHost"), t("settings.environmentContainer"));
+
+		// Naming the host is what releases the probe; until then there is nothing
+		// truthful to ask about.
+		const hostInput = Array.from(host.querySelectorAll<HTMLInputElement>(".gui-conn-form input.gui-input")).find(
+			input => input.placeholder === t("settings.connectionSshHostPlaceholder"),
+		);
+		expect(hostInput).toBeDefined();
+		setInput(hostInput!, "me@build");
+		await act(async () => {
+			await Bun.sleep(30);
+		});
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+
+		expect(probed.length).toBeGreaterThan(0);
+		expect(probed.every(call => call?.transport?.destination === "me@build")).toBe(true);
+	});
+
+	test("the added row keeps the host so a start knows where to go", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: true }),
+			dockerContainers: async () => ({ ok: true, containers: [] }),
+		};
+		const added: ConnectionTarget[] = [];
+		const host = render({ targets: [localTarget()], onAdd: target => added.push(target) });
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		await chooseAxes(host, t("settings.locationRemoteHost"), t("settings.environmentContainer"));
+
+		const form = host.querySelector<HTMLElement>(".gui-conn-form")!;
+		const fieldFor = (label: string): HTMLInputElement | null => {
+			const field = Array.from(form.querySelectorAll<HTMLElement>(".gui-field")).find(
+				node => node.querySelector(".gui-field-label")?.textContent === label,
+			);
+			return field?.querySelector<HTMLInputElement>("input") ?? null;
+		};
+		setInput(fieldFor(t("settings.instanceLabel"))!, "Build box");
+		setInput(fieldFor(t("settings.connectionSshHost"))!, "me@build");
+		setInput(fieldFor(t("settings.connectionContainer"))!, "musepi-dev");
+		await act(async () => {
+			await Bun.sleep(10);
+		});
+		const submit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").includes(t("settings.connectionAddTarget")),
+		);
+		await act(async () => submit?.click());
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+
+		expect(added).toHaveLength(1);
+		expect(added[0].kind).toBe("docker");
+		expect(added[0].sshHost).toBe("me@build");
+		expect(added[0].container).toBe("musepi-dev");
 	});
 });

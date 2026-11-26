@@ -371,6 +371,35 @@ async function startSshTunnel(target) {
 	return { ok: false, reason: "timeout", status: emit(record) };
 }
 
+/**
+ * Which command runs `docker`, and the argv that gets there.
+ *
+ * A docker CLI on another machine is reached the way every other remote action
+ * here is: one ssh exec, with the same destination, key and jump chain the
+ * tunnel uses. That is expressed as a *prefix*, not as a second set of
+ * `runContainer`-shaped functions — the argv after `docker` is identical either
+ * way, so there is one definition of "run a container" and one of "list them".
+ *
+ * `extraSshArgs` exists for the one thing a remote container additionally
+ * needs: its published port lives on the far host's loopback, which this shell
+ * cannot dial. The caller passes `-L` so the same ssh connection that execs the
+ * daemon also forwards that port here.
+ */
+function dockerCommandFor(options, extraSshArgs = []) {
+	const transport = options?.transport;
+	if (!transport?.destination) {
+		return { file: options?.dockerCommand ?? "docker", prefix: [] };
+	}
+	const args = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", ...extraSshArgs];
+	if (Number.isInteger(transport.sshPort) && transport.sshPort > 0 && transport.sshPort !== 22) {
+		args.push("-p", String(transport.sshPort));
+	}
+	if (transport.keyPath) args.push("-i", transport.keyPath);
+	if (transport.proxyJump) args.push("-J", transport.proxyJump);
+	args.push(transport.destination, "docker");
+	return { file: transport.sshCommand ?? "ssh", prefix: args };
+}
+
 /** `docker ps --format` fields this module asks for. */
 const DOCKER_PS_FORMAT = "{{.Names}}\t{{.Image}}\t{{.Ports}}";
 
@@ -468,8 +497,8 @@ function runOnce(file, args, timeoutMs = 15_000) {
 
 /** Is a docker CLI reachable, and does its daemon answer? */
 async function detectDocker(options = {}) {
-	const file = options.dockerCommand ?? "docker";
-	const result = await runOnce(file, ["info", "--format", "{{.ServerVersion}}"]);
+	const command = dockerCommandFor(options);
+	const result = await runOnce(command.file, [...command.prefix, "info", "--format", "{{.ServerVersion}}"]);
 	if (!result.ok) {
 		return {
 			available: false,
@@ -482,7 +511,8 @@ async function detectDocker(options = {}) {
 
 /** Running containers, or the reason the list could not be read. */
 async function listContainers(options = {}) {
-	const result = await runOnce(options.dockerCommand ?? "docker", ["ps", "--format", DOCKER_PS_FORMAT]);
+	const command = dockerCommandFor(options);
+	const result = await runOnce(command.file, [...command.prefix, "ps", "--format", DOCKER_PS_FORMAT]);
 	if (!result.ok) {
 		return {
 			ok: false,
@@ -504,8 +534,9 @@ async function runContainer(input) {
 	const image = input.image ?? "musepi";
 	if (!name) return { ok: false, reason: "missing-name" };
 	if (owned.has(`docker-run:${name}`)) return { ok: false, reason: "already-running" };
+	const command = dockerCommandFor(input);
 	const args = ["run", "-d", "--name", name, "-p", `127.0.0.1:${input.port}:${input.port}`, image];
-	const result = await runOnce(input.dockerCommand ?? "docker", args, 120_000);
+	const result = await runOnce(command.file, [...command.prefix, ...args], 120_000);
 	if (!result.ok) return { ok: false, reason: "failed", error: result.stderr.trim() || "docker run failed" };
 	const record = {
 		targetId: `docker-run:${name}`,
@@ -515,7 +546,9 @@ async function runContainer(input) {
 		stderr: [],
 		listeningPort: input.port,
 		containerName: name,
-		displayCommand: displayCommand("docker", args),
+		remote: Boolean(input.transport?.destination),
+		transport: input.transport?.destination ? input.transport : undefined,
+		displayCommand: displayCommand(command.file, [...command.prefix, ...args]),
 	};
 	owned.set(record.targetId, record);
 	return { ok: true, status: emit(record) };
@@ -534,6 +567,12 @@ async function runContainer(input) {
  * `docker exec` is a client process: stopping it ends the client, and the
  * daemon inside the container is expected to exit with its stdio closed. The
  * container itself is never removed — this shell did not create it.
+ *
+ * A remote container needs one thing more than a local one, and it is not the
+ * `docker` call: the container publishes its port on the *far* host's loopback,
+ * which this machine cannot dial. So the ssh connection that execs the daemon
+ * also carries `-L`, mapping the same port from here to there. One child, two
+ * jobs; stopping it drops both, which is exactly the lifetime a user expects.
  */
 async function execContainer(input) {
 	const key = input.targetId;
@@ -549,6 +588,10 @@ async function execContainer(input) {
 			error: `127.0.0.1:${hostPort} is already listening — this shell did not start it, so it is left alone.`,
 		};
 	}
+	const forward = input.transport?.destination
+		? ["-o", "ExitOnForwardFailure=yes", "-L", `${hostPort}:127.0.0.1:${hostPort}`]
+		: [];
+	const command = dockerCommandFor(input, forward);
 	const args = ["exec", input.container, "musepi", "serve", "--port", String(containerPort)];
 	const record = {
 		targetId: key,
@@ -558,9 +601,10 @@ async function execContainer(input) {
 		stderr: [],
 		listeningPort: hostPort,
 		containerName: input.container,
+		remote: Boolean(input.transport?.destination),
 	};
 	owned.set(key, record);
-	spawnOwned(record, input.dockerCommand ?? "docker", args);
+	spawnOwned(record, command.file, [...command.prefix, ...args]);
 	emit(record);
 	const outcome = await waitForPort(hostPort, timeouts.daemon, () => record.status !== "failed" && stillOwned(record));
 	if (record.status === "failed") return { ok: false, reason: "failed", status: statusOf(record) };
@@ -675,7 +719,12 @@ async function stopTarget(targetId, options = {}) {
 	if (!record) return { ok: true, stopped: false, reason: "not-owned" };
 	if (record.kind === "docker" && record.containerName && targetId.startsWith("docker-run:")) {
 		owned.delete(targetId);
-		const result = await runOnce(options.dockerCommand ?? "docker", ["rm", "-f", record.containerName], 60_000);
+		// The container may live on another host, so the removal goes the same
+		// way the creation did. A record keeps its own transport rather than
+		// trusting the caller to pass it again — a stop after an app restart has
+		// nothing else to go on.
+		const command = dockerCommandFor({ ...options, transport: record.transport ?? options.transport });
+		const result = await runOnce(command.file, [...command.prefix, "rm", "-f", record.containerName], 60_000);
 		record.status = result.ok ? "stopped" : "failed";
 		if (!result.ok) record.error = result.stderr.trim() || "docker rm failed";
 		return { ok: result.ok, stopped: result.ok, status: emit(record) };
