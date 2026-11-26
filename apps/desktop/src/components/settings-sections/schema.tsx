@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { CompactionThresholdRowEditor } from "../composer/compaction-threshold-editor";
 import { type SchemaItem, SchemaSettings } from "../SchemaSettings";
-import { TaskCardStylePreview } from "./general";
+import { TaskCardStylePreview } from "../settings-rows/task-card-style-preview";
 
 /** Schema-driven settings tab: fetches settings.schema + current values
  *  from the daemon and renders every item via {@link SchemaSettings}.

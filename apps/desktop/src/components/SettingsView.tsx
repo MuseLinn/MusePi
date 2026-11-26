@@ -2,7 +2,6 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type BrandIconStyle, readBrandIconStyle, writeBrandIconStyle } from "../lib/brand-icon-style";
 import { reportRequestFailure } from "../lib/report-request-failure";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
@@ -266,8 +265,6 @@ export function SettingsView({
 		prevSearchRef.current = { q, section: activeSection };
 		if (scroll && rows.length > 0) rows[0].scrollIntoView({ block: "center", behavior: "smooth" });
 	}, [settingsQuery, activeSection]);
-	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("musepi-gui-avatars") !== "0");
-	const [brandIconStyle, setBrandIconStyle] = useState<BrandIconStyle>(readBrandIconStyle);
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
 	const [custom, setCustom] = useState<CustomProvider[]>([]);
@@ -530,41 +527,6 @@ export function SettingsView({
 								/>
 							) : (
 								<>
-									{activeSection === "general" && (
-										<>
-											<GeneralSection rpc={rpc} />
-											{/* 行级偏好席位(`settings.general.item`,dsh 命名)挂到
-											 * 「常规」页末尾 —— 功能插件贡献单行偏好,无需整页或整卡。 */}
-											{generalRowItems.length > 0 && (
-												<div className="gui-settings-row">
-													{generalRowItems.map(item => (
-														<SlotComponentMount
-															key={`${item.slot}:${item.extensionId}`}
-															item={item}
-															rpc={rpc}
-														/>
-													))}
-												</div>
-											)}
-										</>
-									)}
-									{activeSection === "appearance" && (
-										<AppearanceSection
-											rpc={rpc}
-											showAvatars={showAvatars}
-											onToggleAvatars={() => {
-												const next = !showAvatars;
-												localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
-												setShowAvatars(next);
-											}}
-											brandIconStyle={brandIconStyle}
-											onToggleBrandIconStyle={() => {
-												const next: BrandIconStyle = brandIconStyle === "mono" ? "color" : "mono";
-												writeBrandIconStyle(next);
-												setBrandIconStyle(next);
-											}}
-										/>
-									)}
 									{activeSection === "model" && (
 										<ModelSection
 											providers={providers}
@@ -649,6 +611,15 @@ export function SettingsView({
 							)}
 							{/* 页面自有行席位(dsh `children` 粒度):`settings.item.<page>.*`
 							 *  的贡献挂在本页内容之后;当前页只挂载自己的座位。 */}
+							{/* 「常规」页的行级偏好席位(`settings.general.item`)：页面本身已归
+							 *  插件,行仍由宿主挂载在该页内容之后,贡献方无需随页面迁移。 */}
+							{activeSection === "general" && generalRowItems.length > 0 && (
+								<div className="gui-settings-row">
+									{generalRowItems.map(item => (
+										<SlotComponentMount key={`${item.slot}:${item.extensionId}`} item={item} rpc={rpc} />
+									))}
+								</div>
+							)}
 							{sectionItems.length > 0 && (
 								<div className="gui-settings-row">
 									{sectionItems.map(item => (
@@ -672,13 +643,11 @@ export function SettingsView({
 /** Accent preset → swatch color (display tints readable on both schemes;
  *  the tokens own the real values: brand = gold #d9a441). */
 import {
-	AppearanceSection,
 	BrowserSection,
 	CompanionSection,
 	ConnectorsSection,
 	ContextSection,
 	FilesLspSection,
-	GeneralSection,
 	GitSection,
 	IndexesSection,
 	InteractionSection,

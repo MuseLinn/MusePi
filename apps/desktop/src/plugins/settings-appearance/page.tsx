@@ -20,6 +20,30 @@ import {
 import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AppRail, type RailItem } from "../../components/AppRail";
+import {
+	AVATAR_PRESETS,
+	avatarPresetId,
+	PunkAvatar,
+	randomPunkSeed,
+	setPunkSeed,
+	userPunkSeed,
+} from "../../components/avatar-presets";
+import { ColorPickerPanel } from "../../components/ColorPicker";
+import { GuiSelect } from "../../components/GuiSelect";
+import { MockConversationPreview } from "../../components/MockConversationPreview";
+import { Reveal } from "../../components/Reveal";
+import { RightRail } from "../../components/RightRail";
+import { ChatSection } from "../../components/settings-sections/chat";
+import { SchemaTabSection } from "../../components/settings-sections/schema";
+import { NumberStepper } from "../../components/settings-sections/shared";
+import {
+	readTurnNavPref,
+	TURN_NAV_CHANGED_EVENT,
+	type TurnNavigatorSide,
+	type TurnNavigatorStyle,
+	writeTurnNavPref,
+} from "../../components/TurnNavigator";
 import {
 	applyCodeSize,
 	applyCodeThemes,
@@ -58,7 +82,8 @@ import {
 	WEEK_START_KEY,
 	type WeekStartPref,
 } from "../../lib/appearance";
-import type { BrandIconStyle } from "../../lib/brand-icon-style";
+import { useAvatarPreference, writeAvatarPreference } from "../../lib/avatar-preference";
+import { useBrandIconStyle, writeBrandIconStyle } from "../../lib/brand-icon-style";
 import { activeCompanionArt, BUILTIN_VECTOR_ART_ID } from "../../lib/companion";
 import {
 	COMPANION_ACCESSORIES,
@@ -72,36 +97,12 @@ import {
 import { PET_CHANGED_EVENT } from "../../lib/companion-events";
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
-import type { RpcClient } from "../../lib/rpc";
+import type { SlotComponentProps } from "../../lib/slot-host";
 import { THEME_PRESET_LABEL } from "../../lib/theme-preset-labels";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { dispatchUserAvatarChanged } from "../../lib/user-avatar";
 import { Icon } from "../../vendor/oc-icons";
-import { AppRail, type RailItem } from "../AppRail";
-import {
-	AVATAR_PRESETS,
-	avatarPresetId,
-	PunkAvatar,
-	randomPunkSeed,
-	setPunkSeed,
-	userPunkSeed,
-} from "../avatar-presets";
-import { ColorPickerPanel } from "../ColorPicker";
-import { GuiSelect } from "../GuiSelect";
-import { MockConversationPreview } from "../MockConversationPreview";
-import { Reveal } from "../Reveal";
-import { RightRail } from "../RightRail";
-import {
-	readTurnNavPref,
-	TURN_NAV_CHANGED_EVENT,
-	type TurnNavigatorSide,
-	type TurnNavigatorStyle,
-	writeTurnNavPref,
-} from "../TurnNavigator";
-import { ChatSection } from "./chat";
-import { SchemaTabSection } from "./schema";
-import { NumberStepper } from "./shared";
 
 const ACCENT_SWATCH: Record<string, string> = {
 	// The "follow theme" swatch paints the ACTIVE theme's own accent, so the
@@ -253,19 +254,12 @@ const HERO_RAIL: readonly RailItem[] = [
 	{ id: "board", label: "settings.board", icon: "layout-column", onSelect: noop },
 ];
 
-export function AppearanceSection({
-	showAvatars,
-	onToggleAvatars,
-	brandIconStyle,
-	onToggleBrandIconStyle,
-	rpc,
-}: {
-	showAvatars: boolean;
-	onToggleAvatars(): void;
-	brandIconStyle?: BrandIconStyle;
-	onToggleBrandIconStyle?(): void;
-	rpc: RpcClient | null;
-}): ReactNode {
+export default function AppearanceSettingsPage({ rpc }: SlotComponentProps): ReactNode {
+	// Both preferences are the page's own: it reads the live values and writes
+	// them through the shared modules, so every other surface updates without
+	// the host plumbing callbacks into this page.
+	const showAvatars = useAvatarPreference();
+	const brandIconStyle = useBrandIconStyle();
 	// Picking the already-active theme (theme.ts setThemePreference) emits
 	// musepi-theme-toggle-shake — jiggle the active segmented button instead
 	// of running another overlay. The class is removed on animationend (no
@@ -697,30 +691,28 @@ export function AppearanceSection({
 						role="switch"
 						aria-checked={showAvatars}
 						className={`gui-toggle${showAvatars ? " gui-toggle--on" : ""}`}
-						onClick={onToggleAvatars}
+						onClick={() => writeAvatarPreference(!showAvatars)}
 						aria-label={t("settings.showAvatars")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
-				{brandIconStyle && onToggleBrandIconStyle ? (
-					<div className="gui-settings-row">
-						<div className="flex-1">
-							<div className="gui-settings-row-label">{t("settings.brandIconsColor")}</div>
-							<div className="gui-settings-row-desc">{t("settings.brandIconsColorHint")}</div>
-						</div>
-						<button
-							type="button"
-							role="switch"
-							aria-checked={brandIconStyle === "color"}
-							className={`gui-toggle${brandIconStyle === "color" ? " gui-toggle--on" : ""}`}
-							onClick={onToggleBrandIconStyle}
-							aria-label={t("settings.brandIconsColor")}
-						>
-							<span className="gui-toggle-knob" />
-						</button>
+				<div className="gui-settings-row">
+					<div className="flex-1">
+						<div className="gui-settings-row-label">{t("settings.brandIconsColor")}</div>
+						<div className="gui-settings-row-desc">{t("settings.brandIconsColorHint")}</div>
 					</div>
-				) : null}
+					<button
+						type="button"
+						role="switch"
+						aria-checked={brandIconStyle === "color"}
+						className={`gui-toggle${brandIconStyle === "color" ? " gui-toggle--on" : ""}`}
+						onClick={() => writeBrandIconStyle(brandIconStyle === "color" ? "mono" : "color")}
+						aria-label={t("settings.brandIconsColor")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
 			</div>
 
 			{/* ── Agent 头像 — the conversation avatar's animation style. The
@@ -826,7 +818,7 @@ export function AppearanceSection({
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
-				<SchemaTabSection rpc={rpc} tabs={["appearance"]} groups={["images"]} />
+				<SchemaTabSection rpc={rpc ?? null} tabs={["appearance"]} groups={["images"]} />
 			</div>
 			{/* ── 本地化 — language / time format / week start (openchamber parity). ── */}
 			<div className="gui-settings-section">
@@ -1105,7 +1097,7 @@ export function AppearanceSection({
 				<div className="gui-settings-section-desc">
 					{tLoose("Affects the terminal (TUI) interface only; desktop settings live above")}
 				</div>
-				<SchemaTabSection rpc={rpc} tabs={["appearance"]} excludeGroups={["images"]} />
+				<SchemaTabSection rpc={rpc ?? null} tabs={["appearance"]} excludeGroups={["images"]} />
 			</div>
 			{/* Chat display settings (previously the 聊天设置 tab): transcript
 			 * rendering prefs are appearance — merged into one 外观 page. */}

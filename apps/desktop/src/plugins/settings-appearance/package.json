@@ -1,0 +1,13 @@
+{
+	"name": "musepi-settings-appearance",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned appearance settings page: theme, accents, avatars, brand marks, companion art and the live preview.",
+	"type": "module",
+	"musepi": {
+		"icon": "🎨",
+		"label": "MusePi Appearance Settings",
+		"description": "Theme, accent, avatars, brand marks and the conversation preview.",
+		"extensions": ["./index.ts"]
+	}
+}

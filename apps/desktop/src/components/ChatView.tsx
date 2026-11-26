@@ -51,6 +51,7 @@ import {
 import { pushActionToast } from "../lib/action-toast";
 import { AGENT_AVATAR_TRANSITION, useAgentIdentity } from "../lib/agent-identity";
 import { type AgentOutcome, agentSignalsFromSnapshot } from "../lib/agent-signals";
+import { useAvatarPreference } from "../lib/avatar-preference";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
 import { companionMoodFromSession, companionStateFromSignals } from "../lib/companion";
 import type { ComposerAttachApi } from "../lib/composer-attach";
@@ -996,10 +997,12 @@ export function ChatView({
 			}),
 		[snap, nowMs, turnOutcome],
 	);
-	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
-	// The per-row avatars are gone (one identity per conversation), so this now
-	// decides whether the agent capsule carries the orb or the text alone.
-	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
+	// Avatar display toggle lives in Settings → appearance. The per-row avatars
+	// are gone (one identity per conversation), so this now decides whether the
+	// agent capsule carries the orb or the text alone. Subscribing (not a bare
+	// read) matters because the appearance page is a plugin that can toggle it
+	// while this surface stays mounted.
+	const showAvatars = useAvatarPreference();
 	// The agent's identity (role/name/live state/orb) is the same contract the
 	// Agent tab consumes. The daemon's `session.list` row is the source, with a
 	// synchronous fallback so the capsule never waits to show an identity — the

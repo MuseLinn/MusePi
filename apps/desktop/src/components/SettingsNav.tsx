@@ -345,6 +345,8 @@ const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set([
 	"shortcuts",
 	"notifications",
 	"usage",
+	"general",
+	"appearance",
 ]);
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The

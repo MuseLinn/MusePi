@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { AppearanceSection } from "../src/components/settings-sections/appearance";
+import AppearanceSettingsPage from "../src/plugins/settings-appearance/page";
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -35,7 +35,7 @@ function mount(): HTMLDivElement {
 	document.body.appendChild(el);
 	root = createRoot(el);
 	act(() => {
-		root?.render(<AppearanceSection showAvatars onToggleAvatars={() => {}} rpc={null} />);
+		root?.render(<AppearanceSettingsPage showAvatars onToggleAvatars={() => {}} rpc={null} />);
 	});
 	host = el;
 	return el;

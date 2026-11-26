@@ -31,6 +31,7 @@ import { TriangleAlert as TriangleAlertIconData, Volume2 as Volume2IconData } fr
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../../i18n/voice";
+import { useAvatarPreference } from "../../lib/avatar-preference";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
@@ -846,13 +847,7 @@ export function VoiceSection({ rpc, sessionId }: { rpc: RpcClient | null; sessio
 	// Session chrome mirrors the chat surface (same localStorage keys
 	// ChatView reads), so the preview shows exactly what a conversation
 	// looks like under the current 外观 toggles.
-	const showAvatars = (() => {
-		try {
-			return localStorage.getItem("musepi-gui-avatars") !== "0";
-		} catch {
-			return true;
-		}
-	})();
+	const showAvatars = useAvatarPreference();
 	const refreshSpeaker = useCallback(async () => {
 		if (!rpc) return;
 		try {

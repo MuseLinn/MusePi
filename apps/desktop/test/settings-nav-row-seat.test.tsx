@@ -36,6 +36,14 @@ function uiThemeSeats(): { slot: string; label: string }[] {
 	return seats;
 }
 
+/** Minimal stand-in for the 外观 page module the settings-appearance package
+ *  compiles to; the loader only needs a non-empty module to mount. */
+const APPEARANCE_PAGE_CODE = [
+	"export default function Page() {",
+	'  return window.MusePiReact.createElement("div", { className: "appearance-page-stub" }, "APPEARANCE_PAGE");',
+	"}",
+].join("\n");
+
 const SCROLL_TRACK_CARD = [
 	"export default function Card() {",
 	'  return window.MusePiReact.createElement("div", null, "SCROLL_TRACK_CARD");',
@@ -51,10 +59,23 @@ function rpcWith(components: unknown[]): {
 			switch (method) {
 				case "extensions.list":
 					return {
+						// 外观页的内容现在由 settings-appearance 插件提供：把该包注册的
+						// 页面交给 loader,与真实装配同一条路径。
 						extensions: [],
 						tabs: [],
 						providers: [],
-						components,
+						// 外观页的内容现在由 settings-appearance 插件提供；loader 要的是
+						// 编译后的 ESM,这里给出与该包入口相同的注册形态。
+						components: [
+							{
+								slot: "settings.section",
+								id: "appearance",
+								label: t("settings.appearance"),
+								code: APPEARANCE_PAGE_CODE,
+								availability: "always",
+							},
+							...components,
+						],
 						toolViews: [],
 						widgets: [],
 						statusBarSegments: [],
@@ -108,8 +129,10 @@ describe("page-owned settings row seats", () => {
 
 		const items = navGroups(extTabs).flatMap(group => group.items);
 		expect(items.some(item => String(item.id).startsWith("ext:"))).toBe(false);
-		// The page it belongs to keeps exactly one row, and no row carries its label.
-		expect(items.filter(item => item.id === "appearance")).toHaveLength(1);
+		// A row seat never becomes a page of its own, and no row carries its label.
+		// 外观 is plugin-owned now, so its single row needs the page contribution —
+		// the row seat alone must still produce no page (and no `ext:` row).
+		expect(items.filter(item => item.id === "appearance")).toHaveLength(0);
 		expect(items.some(item => item.label === "滚动条皮肤")).toBe(false);
 	});
 

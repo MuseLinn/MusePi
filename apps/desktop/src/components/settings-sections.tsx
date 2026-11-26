@@ -6,14 +6,13 @@
  *  here unchanged. */
 
 export { TypewriterPreview, useTypewriterSample } from "./MockConversationPreview";
-export { AppearanceSection, CodePreviewCard } from "./settings-sections/appearance";
+export { TaskCardStylePreview } from "./settings-rows/task-card-style-preview";
 export { BrowserSection } from "./settings-sections/browser";
 export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
 export { CompanionCard, CompanionMarket, CompanionMarketCard, CompanionSection } from "./settings-sections/companion";
 export { ConnectorsSection } from "./settings-sections/connectors";
 export { ContextSection } from "./settings-sections/context";
 export { FilesLspSection } from "./settings-sections/files";
-export { GeneralSection, TaskCardStylePreview } from "./settings-sections/general";
 export { GitPrefsRow, GitSection } from "./settings-sections/git";
 export { IndexesSection } from "./settings-sections/indexes";
 export { InteractionSection } from "./settings-sections/interaction";
