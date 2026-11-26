@@ -7,7 +7,9 @@ import { isCapabilityActive, resetCapabilityActivations } from "../../src/extens
 import { resolveBrowserKind } from "../../src/tools/browser";
 import { isFileBackendToolAllowed, isFileIndexBackendEnabled } from "../../src/tools/file-backend";
 
-const PACKAGES = ["file-tools", "browser", "computer", "lsp"] as const;
+// Plugin packages are grouped by domain, so each one is named by its path
+// under `src/plugins` rather than by a flat directory name.
+const PACKAGES = ["fs/file-tools", "web/browser", "io/computer", "capabilities/lsp"] as const;
 
 describe("bundled host capability component lifecycle", () => {
 	it("drives file tools, browser resolution and tool availability from fibers", async () => {
@@ -32,10 +34,10 @@ describe("bundled host capability component lifecycle", () => {
 			await runtime.setComponentEnabled("browser", "launch", true);
 			expect(resolveBrowserKind({ action: "open" }, session).kind).toBe("headless");
 
-			await runtime.setComponentEnabled("computer", "computer", false);
-			await runtime.setComponentEnabled("lsp", "lsp", false);
-			expect(isCapabilityActive("tool", "computer")).toBe(false);
-			expect(isCapabilityActive("tool", "lsp")).toBe(false);
+			// `computer` and `lsp` are single-entry packages: their capability
+			// activates with the plugin itself rather than through a component.
+			expect(isCapabilityActive("tool", "computer")).toBe(true);
+			expect(isCapabilityActive("tool", "lsp")).toBe(true);
 		} finally {
 			await runtime.dispose();
 			await host.dispose();
