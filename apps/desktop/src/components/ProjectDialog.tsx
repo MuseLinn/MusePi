@@ -14,6 +14,7 @@ import {
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { DirectoryListEditor } from "./DirectoryListEditor";
+import { RemotePathPicker } from "./RemotePathPicker";
 
 export interface ProjectDialogTarget {
 	/** Present in edit mode; omitted for a project that is not registered yet. */
@@ -45,6 +46,7 @@ export function ProjectDialog({
 	rpc,
 	onClose,
 	onSaved,
+	remoteHost,
 }: {
 	open: boolean;
 	mode: "create" | "edit";
@@ -52,11 +54,22 @@ export function ProjectDialog({
 	rpc: RpcClient | null;
 	onClose(): void;
 	onSaved(result: WorkspaceMutationResult): void;
+	/**
+	 * The machine the daemon runs on, when it is not this one.
+	 *
+	 * `workspace.create` resolves `root` **on the daemon**, so the OS directory
+	 * picker is only correct when the daemon is local. With a remote host the
+	 * picker has to ask that machine (`fs.list`), otherwise the user selects a
+	 * folder they can see here and the daemon fails on a path it never had.
+	 */
+	remoteHost?: string | null;
 }): ReactNode {
 	const [name, setName] = useState("");
 	const [primary, setPrimary] = useState("");
 	const [additional, setAdditional] = useState<string[]>([]);
 	const [missing, setMissing] = useState<Set<string>>(new Set());
+	/** Which field the remote picker is filling: the primary root, or a source folder. */
+	const [remotePick, setRemotePick] = useState<"primary" | "source" | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	// A fast double click can fire twice before the disabled button re-renders;
@@ -122,6 +135,10 @@ export function ProjectDialog({
 		(mode === "create" || dirty);
 
 	const choosePrimary = async (): Promise<void> => {
+		if (remoteHost) {
+			setRemotePick("primary");
+			return;
+		}
 		const picked = (await pickDirectory())?.trim();
 		if (!picked) return;
 		setError(null);
@@ -227,7 +244,13 @@ export function ProjectDialog({
 							setAdditional(next);
 							setError(null);
 						}}
-						onPick={() => pickDirectory()}
+						onPick={() => {
+							if (remoteHost) {
+								setRemotePick("source");
+								return Promise.resolve(null);
+							}
+							return pickDirectory();
+						}}
 						onSetPrimary={
 							mode === "edit"
 								? directory => {
@@ -265,6 +288,21 @@ export function ProjectDialog({
 					</button>
 				</div>
 			</div>
+			<RemotePathPicker
+				open={remotePick !== null}
+				rpc={rpc}
+				hostLabel={remoteHost ?? undefined}
+				onClose={() => setRemotePick(null)}
+				onPick={path => {
+					if (remotePick === "primary") {
+						setPrimary(path);
+						setAdditional(current => current.filter(directory => !directoriesEqual(directory, path)));
+						if (!nameTouched.current) setName(pathBaseName(path));
+					} else {
+						setAdditional(current => [...current, path]);
+					}
+				}}
+			/>
 		</DialogFrame>
 	);
 }

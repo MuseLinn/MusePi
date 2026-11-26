@@ -757,6 +757,89 @@
 	color: var(--color-danger);
 }
 
+/* ── Remote path picker ───────────────────────────────────────────────────
+ * The dialog that browses the DAEMON's filesystem. Same geometry as the
+ * project dialog it serves, so the two read as one flow rather than a modal on
+ * top of a modal. */
+.gui-dialog.gui-path-picker {
+	width: min(560px, 92vw);
+	height: auto;
+	max-height: min(82vh, 720px);
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-path-picker-host {
+	margin: 0;
+	padding: 10px 20px 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-path-picker-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-path-picker-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--color-text-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-path-picker-error {
+	margin: 8px 20px 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-danger);
+}
+
+.gui-path-picker-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 0;
+	padding: 6px 8px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	list-style: none;
+}
+
+.gui-path-picker-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 7px 10px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+}
+
+.gui-path-picker-row:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-path-picker-row[data-selected="true"] {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-path-picker-empty {
+	padding: 16px 10px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	text-align: center;
+}
+
 .gui-project-dialog-footer {
 	display: flex;
 	justify-content: flex-end;

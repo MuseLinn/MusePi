@@ -763,6 +763,14 @@ function AppInner(): ReactNode {
 	 * the switcher and vice versa, and there is no second persisted list to
 	 * drift. The local row is the switcher's `null` entry, so it is filtered out.
 	 */
+	/** The remote machine the daemon runs on, or null when it runs here. */
+	const activeRemoteHost = useMemo(() => {
+		const row = connTargets.find(
+			target => target.id === resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current),
+		);
+		return row && row.id !== LOCAL_TARGET_ID ? row.label : null;
+	}, [connTargets, url]);
+
 	const hosts: RemoteHost[] = useMemo(
 		() =>
 			connTargets
@@ -5823,6 +5831,9 @@ function AppInner(): ReactNode {
 				mode={projectDialog?.mode ?? "create"}
 				target={projectDialog?.target ?? null}
 				rpc={rpc}
+				// `workspace.create` resolves the root on the daemon, so a remote
+				// daemon needs the daemon-side picker rather than the OS dialog.
+				remoteHost={activeRemoteHost}
 				onClose={() => setProjectDialog(null)}
 				onSaved={applyCreatedProject}
 			/>
