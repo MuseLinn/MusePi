@@ -1,0 +1,15 @@
+{
+	"name": "musepi-settings-subagents",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned subagent settings page: the default subagent model and the tasks settings rows.",
+	"type": "module",
+	"musepi": {
+		"icon": "👤",
+		"label": "MusePi Subagent Settings",
+		"description": "Default subagent model and task settings.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

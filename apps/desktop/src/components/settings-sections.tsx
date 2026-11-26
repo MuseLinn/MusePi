@@ -12,10 +12,8 @@ export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat
 export { GitPrefsRow, GitSection } from "./settings-sections/git";
 export { InteractionSection } from "./settings-sections/interaction";
 export { MediaSection } from "./settings-sections/media";
-export { ModesSection } from "./settings-sections/modes";
 export { SchemaTabSection } from "./settings-sections/schema";
 export { SessionMemorySection } from "./settings-sections/session-memory";
 export { hitText, NumberStepper } from "./settings-sections/shared";
 export { SkillsSection } from "./settings-sections/skills";
-export { SubagentsSection } from "./settings-sections/subagents";
 export { VoiceSection } from "./settings-sections/voice";

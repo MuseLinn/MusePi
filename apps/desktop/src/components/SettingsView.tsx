@@ -354,6 +354,7 @@ export function SettingsView({
 									sessionId={sessionId}
 									cwd={cwd ?? undefined}
 									onApplyPrompt={applyPrompt}
+									onCreateChat={onCreateChat}
 									settingsSection={{ id: activeExtTab.id ?? "", close: onBack }}
 								/>
 							) : (
@@ -406,8 +407,6 @@ export function SettingsView({
 												) : null;
 											})()
 										: null}
-									{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
-									{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
 									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 								</>
 							)}
@@ -449,9 +448,7 @@ import {
 	GitSection,
 	InteractionSection,
 	MediaSection,
-	ModesSection,
 	SessionMemorySection,
 	SkillsSection,
-	SubagentsSection,
 	VoiceSection,
 } from "./settings-sections";

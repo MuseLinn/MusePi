@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { SubagentsSection } from "../src/components/settings-sections/subagents";
 import type { RpcClient } from "../src/lib/rpc";
+import SubagentsSettingsPage from "../src/plugins/settings-subagents/page";
 
 const mounted = new Set<Root>();
 
@@ -56,7 +56,7 @@ async function renderSection(stored: Record<string, unknown>, writes: Array<{ ke
 	document.body.appendChild(container);
 	const root = createRoot(container);
 	mounted.add(root);
-	await act(async () => root.render(<SubagentsSection rpc={stubRpc(stored, writes)} />));
+	await act(async () => root.render(<SubagentsSettingsPage rpc={stubRpc(stored, writes)} />));
 	await flush();
 	const trigger = () => container.querySelector<HTMLButtonElement>(`[aria-label="${t("Subagent Model")}"]`);
 	return { container, trigger };

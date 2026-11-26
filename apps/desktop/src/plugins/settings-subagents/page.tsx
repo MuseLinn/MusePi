@@ -1,11 +1,12 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { GuiSelect, type SelectOption } from "../../components/GuiSelect";
+import type { SchemaItem } from "../../components/SchemaSettings";
+import { SchemaTabSection } from "../../components/settings-sections/schema";
 import type { RpcClient } from "../../lib/rpc";
 import { dispatchSettingsChanged } from "../../lib/settings-events";
-import { GuiSelect, type SelectOption } from "../GuiSelect";
-import type { SchemaItem } from "../SchemaSettings";
-import { SchemaTabSection } from "./schema";
+import type { SlotComponentProps } from "../../lib/slot-host";
 
 const SUBAGENT_MODEL_KEY = "task.subagentModel";
 const TASKS_TAB = "tasks";
@@ -123,12 +124,12 @@ function SubagentModelRow({ rpc }: { rpc: RpcClient | null }): ReactNode {
  *  roles plus the catalog, which the schema renderer cannot enumerate.
  *  The live subagent roster lives in the session right rail
  *  (AgentsPanel), not in settings (dedupe 2026-08-11). */
-export function SubagentsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function SubagentsSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.tasksSubagents")}</h2>
-			<SubagentModelRow rpc={rpc} />
-			<SchemaTabSection rpc={rpc} tabs={[TASKS_TAB]} excludeKeys={[SUBAGENT_MODEL_KEY]} />
+			<SubagentModelRow rpc={rpc ?? null} />
+			<SchemaTabSection rpc={rpc ?? null} tabs={[TASKS_TAB]} excludeKeys={[SUBAGENT_MODEL_KEY]} />
 		</>
 	);
 }

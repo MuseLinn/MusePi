@@ -1,6 +1,8 @@
 import { SpotlightCard, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { DialogFrame } from "../../components/DialogFrame";
+import { FadeScroll } from "../../components/FadeScroll";
 import { resolveModeLabel } from "../../lib/mode-label";
 import {
 	collectChainIds,
@@ -9,10 +11,8 @@ import {
 	type ModeDefLike,
 	resolveModeView,
 } from "../../lib/resolve-mode-view";
-import type { RpcClient } from "../../lib/rpc";
+import type { SlotComponentProps } from "../../lib/slot-host";
 import { Icon } from "../../vendor/oc-icons";
-import { DialogFrame } from "../DialogFrame";
-import { FadeScroll } from "../FadeScroll";
 
 /** Settings → 智能体 → 预设:命名预设(工具集 + 提示词 + settings 覆盖)卡片面板
  *  + 完整编辑器(ModesCenter)。数据源 daemon modes.list/
@@ -58,13 +58,7 @@ type ViewState =
 	| { status: "error"; id: string; error: string }
 	| { status: "ready"; id: string; view: ModeChainView };
 
-export function ModesSection({
-	rpc,
-	onCreateChat,
-}: {
-	rpc: RpcClient | null;
-	onCreateChat?: (text: string) => void;
-}): ReactNode {
+export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentProps): ReactNode {
 	const [modes, setModes] = useState<ModeRow[] | null>(null);
 	const [errors, setErrors] = useState<string[]>([]);
 

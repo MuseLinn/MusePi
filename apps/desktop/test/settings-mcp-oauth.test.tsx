@@ -3,7 +3,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { setLocale, t } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { McpServersSection } from "../src/components/settings-sections/mcp";
+import { McpServersSection } from "../src/components/settings-rows/mcp-servers";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
 
 /**

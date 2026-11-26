@@ -5,8 +5,8 @@ import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
-import type { McpItem } from "./shared";
-import { useMcpOAuth } from "./use-mcp-oauth";
+import type { McpItem } from "../settings-sections/shared";
+import { useMcpOAuth } from "../settings-sections/use-mcp-oauth";
 
 /** One row of daemon `mcp.servers.list` (headers/tokens never cross the wire). */
 interface ConfiguredMcpServer {
@@ -67,7 +67,7 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 		void loadServers();
 	}, [loadServers]);
 
-	const { flows, login, cancel: cancelLogin } = useMcpOAuth(rpc, () => void loadServers());
+	const { flows, login, cancel: cancelLogin } = useMcpOAuth(rpc ?? null, () => void loadServers());
 
 	/** One row per server name; the config enriches, the extension decides state. */
 	const rows = useMemo<ServerRow[]>(() => {

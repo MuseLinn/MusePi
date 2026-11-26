@@ -749,6 +749,10 @@ export interface SlotComponentProps {
 	 *  leave settings. Present only on settings.section page mounts whose page
 	 *  offers "apply to composer" (connectors, marketplace examples). */
 	onApplyPrompt?: (text: string) => void;
+	/** Settings-page contract: create a new session and send `text` as its
+	 *  first prompt, then leave settings. Distinct from `onApplyPrompt`, which
+	 *  only fills the composer the user is already in. */
+	onCreateChat?: (text: string) => void;
 	/** Settings-page view contract: the section id this mount renders and the
 	 *  surface's leave action. */
 	settingsSection?: { id: string; close(): void };
@@ -1164,6 +1168,7 @@ export function SlotComponentMount({
 	cwd,
 	onOpenSession,
 	onApplyPrompt,
+	onCreateChat,
 	settingsSection,
 	page,
 	chatView,
@@ -1185,6 +1190,7 @@ export function SlotComponentMount({
 	cwd?: string;
 	onOpenSession?: SlotComponentProps["onOpenSession"];
 	onApplyPrompt?: SlotComponentProps["onApplyPrompt"];
+	onCreateChat?: SlotComponentProps["onCreateChat"];
 	settingsSection?: SlotComponentProps["settingsSection"];
 	page?: SlotComponentProps["page"];
 	/** Host-owned welcome and session surface contract (main.conversation only). */
@@ -1340,6 +1346,7 @@ export function SlotComponentMount({
 		cwd,
 		onOpenSession,
 		onApplyPrompt,
+		onCreateChat,
 		settingsSection,
 		page,
 		chatView,
