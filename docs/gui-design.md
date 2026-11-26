@@ -92,12 +92,7 @@ A sent prompt lands as itself: the bubble that appears in the transcript perform
 
 ### Verifying a change visually
 
-`bun apps/desktop/scripts/gui-probe.ts <scenario.tsx>` renders a real component against the real
-stylesheets and returns a screenshot plus structured measurements; the scenario declares the
-measurement it expects, so a run answers "is this still right" rather than "here is a picture".
-Use it for any change to a component or a `gui-*.css` sheet — a box and a computed property explain
-a layout that a picture only shows. Procedure, scenario shape and the traps already handled live in
-`.agents/skills/musepi-gui-visual-probe/SKILL.md`.
+`bun apps/desktop/scripts/gui-probe.ts <scenario.tsx>` renders a real component against the real stylesheets and returns a screenshot plus structured measurements; the scenario declares the measurement it expects, so a run answers "is this still right" rather than "here is a picture". Use it for any change to a component or a `gui-*.css` sheet — a box and a computed property explain a layout that a picture only shows. Procedure, scenario shape and the traps already handled live in `.agents/skills/musepi-gui-visual-probe/SKILL.md`.
 
 ### Full-surface view transitions and the off switch
 
