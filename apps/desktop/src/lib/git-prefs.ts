@@ -20,7 +20,7 @@ export type ChangesView = "flat" | "tree";
  *  the pre-rename alias, still dispatched for out-of-tree listeners. */
 export const GIT_PREFS_EVENT = "musepi-git-prefs-changed";
 /** @deprecated Pre-rename alias. Dispatched for compatibility only. */
-export const LEGACY_GIT_PREFS_EVENT = "omp-git-prefs-changed";
+const LEGACY_GIT_PREFS_EVENT = "omp-git-prefs-changed";
 
 /**
  * Whether gitignored paths are listed. Defaults to ON: a tree that silently

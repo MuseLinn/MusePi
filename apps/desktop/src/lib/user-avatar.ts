@@ -15,7 +15,7 @@ export const USER_AVATAR_MODE_KEY = "musepi-gui-user-avatar-mode";
  *  pre-rename alias, kept dispatched so an out-of-tree listener still hears it. */
 export const USER_AVATAR_EVENT = "musepi-user-avatar-changed";
 /** @deprecated Pre-rename alias. Dispatched for compatibility only. */
-export const LEGACY_USER_AVATAR_EVENT = "omp-avatar-changed";
+const LEGACY_USER_AVATAR_EVENT = "omp-avatar-changed";
 
 /** `auto` = GitHub photo → identity-derived pixel face → initial letter;
  *  `punk` = the user-chosen pixel face; `initial` = the letter chip only. */

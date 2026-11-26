@@ -8,11 +8,11 @@
 
 export const PET_CHANGED_EVENT = "musepi-pet-changed";
 /** @deprecated Pre-rename alias. Dispatched for compatibility only. */
-export const LEGACY_PET_CHANGED_EVENT = "omp-pet-changed";
+const LEGACY_PET_CHANGED_EVENT = "omp-pet-changed";
 
 export const PET_ACTIVITY_EVENT = "musepi-pet-activity";
 /** @deprecated Pre-rename alias. Dispatched for compatibility only. */
-export const LEGACY_PET_ACTIVITY_EVENT = "omp-pet-activity";
+const LEGACY_PET_ACTIVITY_EVENT = "omp-pet-activity";
 
 export interface PetActivityDetail {
 	kind: string;
