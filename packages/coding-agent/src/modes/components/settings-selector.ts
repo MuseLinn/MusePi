@@ -1027,7 +1027,7 @@ export class SettingsSelectorComponent implements Component {
 	 * Get the current value for a setting.
 	 */
 	#getCurrentValue(def: SettingDef): unknown {
-		return settings.get(def.path);
+		return settings.getSettingValue(def.path);
 	}
 
 	#isChanged(def: SettingDef, currentValue: unknown): boolean {
@@ -1183,14 +1183,14 @@ export class SettingsSelectorComponent implements Component {
 		return new TextInputSubmenu(
 			def.label,
 			def.description,
-			this.#formatTextInputEditValue(def.path, settings.get(def.path)),
+			this.#formatTextInputEditValue(def.path, settings.getSettingValue(def.path)),
 			def.secret,
 			value => {
 				// Empty string clears the setting; undefined-typed string settings
 				// store "" which the browser.ts expandPath ignores (no-op fallback).
 				this.#setSettingValue(def.path, value);
-				this.callbacks.onChange(def.path, settings.get(def.path));
-				wrappedDone(this.#formatTextInputValue(def, settings.get(def.path)));
+				this.callbacks.onChange(def.path, settings.getSettingValue(def.path));
+				wrappedDone(this.#formatTextInputValue(def, settings.getSettingValue(def.path)));
 			},
 			() => wrappedDone(),
 		);
@@ -1224,7 +1224,7 @@ export class SettingsSelectorComponent implements Component {
 			}
 		}
 
-		const current: unknown = settings.get(def.path);
+		const current: unknown = settings.getSettingValue(def.path);
 		const initial = Array.isArray(current)
 			? current.filter((entry): entry is string => typeof entry === "string")
 			: [];
@@ -1238,7 +1238,7 @@ export class SettingsSelectorComponent implements Component {
 				settings.set(def.path, value as never);
 				this.callbacks.onChange(def.path, value);
 			},
-			() => done(this.#formatMultiSelectValue(def, settings.get(def.path))),
+			() => done(this.#formatMultiSelectValue(def, settings.getSettingValue(def.path))),
 		);
 	}
 
@@ -1264,7 +1264,7 @@ export class SettingsSelectorComponent implements Component {
 	 * Set a setting value, handling type conversion.
 	 */
 	#setSettingValue(path: SettingPath, value: string): void {
-		const currentValue = settings.get(path);
+		const currentValue = settings.getSettingValue(path);
 		const schemaType = getType(path);
 		if (path === "compaction.thresholdPercent" && value === "default") {
 			settings.set(path, -1 as never);

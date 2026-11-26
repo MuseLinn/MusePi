@@ -32,12 +32,19 @@ import { JsonListEditor, TextListEditor } from "./settings-controls/ValueLists";
  * settings.schema RPC (the same single source of truth the TUI settings
  * panel renders — the GUI must not drift from it).
  */
+export interface DeclarativeCondition {
+	key: string;
+	equals?: unknown;
+	notEquals?: unknown;
+	in?: readonly unknown[];
+}
+
 export interface SchemaUi {
 	tab?: string;
 	group?: string;
 	label?: string;
 	description?: string;
-	condition?: string;
+	condition?: string | DeclarativeCondition;
 	/** Dead/placeholder key (UiBase.hidden in settings-schema.ts): the
 	 *  feature behind it does not exist yet, so no settings surface lists
 	 *  it. The key stays readable/writable via config.yml. */
@@ -116,6 +123,13 @@ export function isSettingShown(
 ): boolean {
 	const cond = item.ui?.condition;
 	if (!cond) return true;
+	if (typeof cond === "object") {
+		const value = values[cond.key];
+		if ("equals" in cond && !Object.is(value, cond.equals)) return false;
+		if ("notEquals" in cond && Object.is(value, cond.notEquals)) return false;
+		if (cond.in && !cond.in.some(entry => Object.is(entry, value))) return false;
+		return true;
+	}
 	const evaluate = conditions?.[cond] ?? CONDITIONS[cond];
 	// Unknown names stay visible (parity-safe), but a page that knows the
 	// answer — e.g. the voice tab's plugin state — must win over that default.

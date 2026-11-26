@@ -11,7 +11,7 @@
 
 import { TERMINAL } from "@musepi/pi-tui";
 import { Settings } from "../../config/settings";
-import { settingsRegistry } from "../../config/settings-registry";
+import { evaluateSettingCondition, type SettingCondition, settingsRegistry } from "../../config/settings-registry";
 import {
 	type AnyUiMetadata,
 	getDefault,
@@ -266,6 +266,18 @@ function resolveOptions(ui: AnyUiMetadata): OptionList | "runtime" | undefined {
 	return ui.options;
 }
 
+function resolveCondition(condition: SettingCondition | undefined): (() => boolean) | undefined {
+	if (!condition) return undefined;
+	if (typeof condition === "string") return CONDITIONS[condition];
+	return () => {
+		try {
+			return evaluateSettingCondition(condition, key => Settings.instance.getSettingValue(key));
+		} catch {
+			return true;
+		}
+	};
+}
+
 function pathToSettingDef(path: SettingPath): SettingDef | null {
 	const ui = getUi(path);
 	if (!ui) return null;
@@ -274,7 +286,7 @@ function pathToSettingDef(path: SettingPath): SettingDef | null {
 	if (ui.hidden) return null;
 
 	const schemaType = getType(path);
-	const condition = ui.condition ? CONDITIONS[ui.condition] : undefined;
+	const condition = resolveCondition(ui.condition);
 	const base = { path, label: t(ui.label), description: t(ui.description), tab: ui.tab, group: ui.group, condition };
 
 	if (schemaType === "boolean") {

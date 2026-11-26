@@ -18,6 +18,7 @@ import { logger } from "@musepi/pi-utils";
 import type { ConfigFieldDesc } from "@musepi/pi-wire";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import { isServiceTierFamily, isServiceTierForFamily } from "../../config/service-tier";
+import { settingsRegistry } from "../../config/settings-registry";
 import { rememberRegisteredWidget } from "../../daemon/registered-widgets";
 import { getExtensionNameFromPath } from "../../discovery/helpers";
 import type { ExecOptions } from "../../exec/exec";
@@ -411,7 +412,11 @@ function bindFiberEffect(context: Context, cleanup: () => void | Promise<void>, 
 	};
 }
 
+let settingOwnerSequence = 0;
+
 class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
+	/** Unique owner token: two sessions may mount the same extension path. */
+	readonly #settingOwner = `extension-instance:${settingOwnerSequence++}`;
 	readonly logger = logger;
 	readonly typebox = TypeBox;
 	readonly arktype = type;
@@ -900,6 +905,29 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 
 	registerSetting(setting: ExtensionSetting): void {
 		this.extension.settings.set(setting.key, setting);
+		try {
+			const dispose = settingsRegistry.register(
+				{
+					key: setting.key,
+					type: setting.type,
+					default: setting.default,
+					ui: setting.ui,
+					...(setting.validate ? { validate: setting.validate } : {}),
+				},
+				`extension:${this.extension.path}`,
+				this.#settingOwner,
+			);
+			if (!this.extension.settingDisposers) this.extension.settingDisposers = [];
+			this.extension.settingDisposers.push(dispose);
+		} catch (error) {
+			// Another owner already claimed the key: keep the extension's own map
+			// (its config surface may still read it) but do not shadow the winner.
+			logger.warn("Extension setting was not registered", {
+				extensionPath: this.extension.path,
+				key: setting.key,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 	}
 
 	registerMemoryBackendProvider(provider: Parameters<typeof registerMemoryProvider>[0]): () => void {

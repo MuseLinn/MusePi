@@ -110,7 +110,7 @@ describe("daemon settings.schema reads the registry", () => {
 		const service = new SettingsService({
 			cwd: () => process.cwd(),
 			settings: () => Settings.isolated(),
-			ensureRegistry: async () => {},
+			ensureRegistry: async () => null,
 			extensionSettings: () => new Map(),
 		});
 		const out = (await service.schema({ tabs: ["memory"] })) as Record<
@@ -127,5 +127,45 @@ describe("daemon settings.schema reads the registry", () => {
 			expect(item.type).toEqual(def.type);
 			expect(item.default).toEqual(def.default);
 		}
+	});
+});
+
+describe("declarative conditions", () => {
+	it("compares one setting value without a host-specific condition name", async () => {
+		const { evaluateSettingCondition } = await import("@musepi/pi-coding-agent/config/settings-registry");
+		const values: Record<string, unknown> = { "memory.backend": "musemem" };
+		const read = (key: string) => values[key];
+		expect(evaluateSettingCondition({ key: "memory.backend", equals: "musemem" }, read)).toBe(true);
+		expect(evaluateSettingCondition({ key: "memory.backend", equals: "hindsight" }, read)).toBe(false);
+		expect(evaluateSettingCondition({ key: "memory.backend", notEquals: "off" }, read)).toBe(true);
+		expect(evaluateSettingCondition({ key: "memory.backend", in: ["musemem", "local"] }, read)).toBe(true);
+		expect(evaluateSettingCondition(undefined, read)).toBe(true);
+	});
+});
+
+describe("provider settings share the Settings store", () => {
+	const key = "test.providerValue";
+	afterEach(() => settingsRegistry.clearSource("test-provider"));
+
+	it("reads the descriptor default until a value is written, then reads the stored value", async () => {
+		const { Settings } = await import("@musepi/pi-coding-agent/config/settings");
+		settingsRegistry.register(
+			{ key, type: "boolean", default: true, ui: { tab: "memory", group: "MuseMem", label: key } },
+			"test-provider",
+		);
+		const settings = Settings.isolated();
+		expect(settings.getSettingValue(key)).toBe(true);
+		settings.setSettingValue(key, false);
+		expect(settings.getSettingValue(key)).toBe(false);
+	});
+
+	it("keeps the key while another owner still holds it", () => {
+		const descriptor = { key, type: "boolean" as const, default: false };
+		const first = settingsRegistry.register(descriptor, "test-provider", "owner-a");
+		const second = settingsRegistry.register(descriptor, "test-provider", "owner-b");
+		first();
+		expect(settingsRegistry.has(key)).toBe(true);
+		second();
+		expect(settingsRegistry.has(key)).toBe(false);
 	});
 });

@@ -64,7 +64,7 @@ import {
 	SERVICE_TIER_OPENAI_OPTIONS,
 	SERVICE_TIER_OPENAI_VALUES,
 } from "./service-tier";
-import { type SettingDescriptor, settingsRegistry } from "./settings-registry";
+import { type SettingCondition, type SettingDescriptor, settingsRegistry } from "./settings-registry";
 
 /** Unified settings schema - single source of truth for all settings.
  *
@@ -291,7 +291,7 @@ interface UiBase {
 	label: string;
 	description: string;
 	/** Condition function name - setting only shown when true */
-	condition?: string;
+	condition?: SettingCondition;
 	/**
 	 * Hide the setting from every settings UI (TUI panel + desktop GUI).
 	 * For dead/placeholder keys whose feature does not exist yet: the key

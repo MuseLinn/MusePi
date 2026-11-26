@@ -73,6 +73,7 @@ import type { logger as PiLogger } from "@musepi/pi-utils";
 import type { AsyncJobManager } from "../../async/job-manager";
 import type { KeybindingsManager } from "../../config/keybindings";
 import type { ModelRegistry } from "../../config/model-registry";
+import type { SettingCondition } from "../../config/settings-registry";
 import type { EditToolDetails } from "../../edit";
 import type { PythonResult } from "../../eval/py/executor";
 import type { BashResult } from "../../exec/bash-executor";
@@ -2976,6 +2977,8 @@ export interface Extension {
 	 *  the settings.schema surface so the GUI/TUI settings panel shows them
 	 *  only while the extension is enabled (swarm style extension). */
 	settings: Map<string, ExtensionSetting>;
+	/** Disposers for the settings registered into the host registry. */
+	settingDisposers?: Array<() => void>;
 	/** Renderer-side components contributed by the extension
 	 *  (registerComponent), in registration order. */
 	components: ExtensionComponent[];
@@ -3081,6 +3084,12 @@ export interface ExtensionSetting {
 		label: string;
 		description?: string;
 		options?: { value: string; label: string; description?: string }[];
+		/** Declarative gate: show only while another setting has the stated value. */
+		condition?: SettingCondition;
+		/** Config-only setting: readable/writable but never listed. */
+		hidden?: boolean;
+		/** Only affects the terminal surface; the GUI lists it muted. */
+		tuiOnly?: boolean;
 	};
 	/** Write-time guard :
 	 *  invoked by the daemon `settings.set` RPC before persisting a value for

@@ -20,6 +20,30 @@ export interface SettingOptionDescriptor {
 	description?: string;
 }
 
+/** A condition that can travel over the wire: evaluate against one key's value. */
+export interface DeclarativeSettingCondition {
+	key: string;
+	equals?: unknown;
+	notEquals?: unknown;
+	in?: readonly unknown[];
+}
+
+export type SettingCondition = string | DeclarativeSettingCondition;
+
+/** Evaluate a descriptor's visibility gate against a value reader. */
+export function evaluateSettingCondition(
+	condition: SettingCondition | undefined,
+	read: (key: string) => unknown,
+): boolean {
+	if (condition === undefined) return true;
+	if (typeof condition === "string") return true;
+	const value = read(condition.key);
+	if ("equals" in condition && !Object.is(value, condition.equals)) return false;
+	if ("notEquals" in condition && Object.is(value, condition.notEquals)) return false;
+	if (condition.in && !condition.in.some(entry => Object.is(entry, value))) return false;
+	return true;
+}
+
 export interface SettingUiDescriptor {
 	tab: string;
 	group?: string;
@@ -27,7 +51,7 @@ export interface SettingUiDescriptor {
 	description?: string;
 	options?: readonly SettingOptionDescriptor[] | "runtime";
 	/** Declarative visibility gate; the host evaluates it against current values. */
-	condition?: string;
+	condition?: SettingCondition;
 	hidden?: boolean;
 	tuiOnly?: boolean;
 	ordered?: boolean;
@@ -53,6 +77,8 @@ export type SettingDescriptorSource = "core" | "provider" | "extension" | (strin
 export interface RegisteredSettingDescriptor {
 	descriptor: SettingDescriptor;
 	source: SettingDescriptorSource;
+	/** Live owners of this key (several sessions may mount one extension). */
+	owners: Set<string>;
 }
 
 /**
@@ -64,11 +90,17 @@ export class SettingsRegistry {
 	readonly #listeners = new Set<() => void>();
 
 	/**
-	 * Register one descriptor. Re-registering the same key from the same source
-	 * replaces it; a different source is refused, because two owners for one key
-	 * would make the rendered metadata depend on load order.
+	 * Register one descriptor. The same source may claim the key again (a reload
+	 * or a second session mounting the same extension): the latest descriptor
+	 * wins and each caller gets its own disposer. A different source is refused,
+	 * because two owners for one key would make the rendered metadata depend on
+	 * load order.
 	 */
-	register(descriptor: SettingDescriptor, source: SettingDescriptorSource = "provider"): () => void {
+	register(
+		descriptor: SettingDescriptor,
+		source: SettingDescriptorSource = "provider",
+		owner: string = source,
+	): () => void {
 		const existing = this.#entries.get(descriptor.key);
 		if (existing && existing.source !== source) {
 			throw new Error(
@@ -76,13 +108,19 @@ export class SettingsRegistry {
 					`${source} cannot claim the same key.`,
 			);
 		}
-		this.#entries.set(descriptor.key, { descriptor, source });
+		if (existing) {
+			existing.descriptor = descriptor;
+			existing.owners.add(owner);
+		} else {
+			this.#entries.set(descriptor.key, { descriptor, source, owners: new Set([owner]) });
+		}
 		this.#emit();
 		return () => {
-			if (this.#entries.get(descriptor.key)?.descriptor === descriptor) {
-				this.#entries.delete(descriptor.key);
-				this.#emit();
-			}
+			const entry = this.#entries.get(descriptor.key);
+			if (!entry) return;
+			if (!entry.owners.delete(owner)) return;
+			if (entry.owners.size === 0) this.#entries.delete(descriptor.key);
+			this.#emit();
 		};
 	}
 

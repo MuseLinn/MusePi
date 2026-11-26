@@ -512,7 +512,13 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 		await extensionRunner.releaseMcpServers();
 		extensionRunner.releaseUrlSchemes();
 		extensionRunner.releaseSearchProviders();
+		extensionRunner.releaseSettings();
 	}
+}
+
+/** Run and clear the setting disposers an extension accumulated. */
+function releaseExtensionSettings(extension: Extension): void {
+	for (const dispose of extension.settingDisposers?.splice(0) ?? []) dispose();
 }
 
 const noOpUIContext: ExtensionUIContext = {
@@ -1280,6 +1286,7 @@ export class ExtensionRunner {
 		if (index === -1) return [];
 		const extension = this.extensions[index]!;
 		const toolNames = [...extension.tools.keys()];
+		releaseExtensionSettings(extension);
 		this.extensions.splice(index, 1);
 		if (!isSharedSessionExtension(extension)) releaseSearchProvidersForOwner(extension.path, extension);
 		this.#extensionEntryMtimes.delete(resolvedTarget);
@@ -1407,6 +1414,7 @@ export class ExtensionRunner {
 			replacement.toolRegistrationListeners = oldExt.toolRegistrationListeners;
 		}
 		this.extensions[index] = replacement;
+		if (!isSharedSessionExtension(oldExt)) releaseExtensionSettings(oldExt);
 		// The replacement registered under the same owner with a new generation.
 		// Releasing the old record drops only ids it did not re-register; a shared
 		// generation is left for other sessions until it is disposed.
@@ -1907,6 +1915,18 @@ export class ExtensionRunner {
 			released.push(...releaseSearchProvidersForOwner(extension.path, extension));
 		}
 		return released;
+	}
+
+	/**
+	 * Drop every setting this runner's session extensions registered into the
+	 * host settings registry. Shared (host) plugin generations outlive one
+	 * session, so their settings stay until the generation is disposed.
+	 */
+	releaseSettings(): void {
+		for (const extension of this.extensions) {
+			if (isSharedSessionExtension(extension)) continue;
+			releaseExtensionSettings(extension);
+		}
 	}
 
 	/** Direct registrations from an initialized extension context. */

@@ -45,6 +45,7 @@ import { AUTO_IMAGE_PROVIDER_ORDER, isImageProviderId } from "../tools/image-pro
 import { type EditMode, normalizeEditMode } from "../utils/edit-mode";
 import { INSPECT_IMAGE_MODES } from "../utils/inspect-image-mode";
 import { isSearchProviderId, SEARCH_PROVIDER_ORDER } from "../web/search/types";
+import { settingsRegistry } from "./settings-registry";
 import {
 	type BashInterceptorRule,
 	type GroupPrefix,
@@ -571,6 +572,23 @@ export class Settings {
 	 */
 	getRaw(path: string): unknown {
 		return getByPath(this.#merged, path.split("."));
+	}
+
+	/**
+	 * Read a setting for a UI row: in-schema keys resolve through `get` (typed
+	 * defaults), provider/extension keys read their stored value and fall back to
+	 * the descriptor default registered in `settingsRegistry`. TUI and daemon
+	 * schema readers use this so a plugin-owned setting behaves like a core one.
+	 */
+	getSettingValue(path: string): unknown {
+		if (path in SETTING_PATH_SEGMENTS) return this.get(path as SettingPath);
+		const raw = this.getRaw(path);
+		return raw !== undefined ? raw : settingsRegistry.get(path)?.default;
+	}
+
+	/** Write a setting by UI path; `set` already routes keys outside the schema. */
+	setSettingValue(path: string, value: unknown): void {
+		this.set(path as SettingPath, value as never);
 	}
 
 	/**

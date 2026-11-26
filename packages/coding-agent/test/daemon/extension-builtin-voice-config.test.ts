@@ -93,8 +93,14 @@ describe("first-party voice packages", () => {
 
 	test("writes declared configuration and reads it back", async () => {
 		const before = fixture.changedCount();
+		// The answer mirrors what the field itself declares (a live-applicable
+		// value reports `none`, one the engine reads at session start reports
+		// `session`), so the test follows the declaration instead of pinning it.
+		const declared = (await fixture.service.list()).extensions
+			.find(entry => entry.id === "tts")
+			?.config?.find(field => field.key === "tts.rate");
 		const result = await fixture.service.setConfig({ id: "tts", key: "tts.rate", value: 1.5 });
-		expect(result.restart).toBe("none");
+		expect(result.restart).toBe(declared?.restart ?? "none");
 		expect(fixture.settings.getRaw("tts.rate")).toBe(1.5);
 		expect(fixture.changedCount()).toBe(before + 1);
 		const tts = (await fixture.service.list()).extensions.find(entry => entry.id === "tts");
@@ -220,14 +226,14 @@ describe("entry components", () => {
 			"sensevoice",
 			"parakeet",
 		]);
-		const before = listed.extensions.find(entry => entry.id === "computer");
-		await service.setComponentEnabled({ id: "computer", component: "computer", enabled: false });
+		const before = listed.extensions.find(entry => entry.id === "browser");
+		await service.setComponentEnabled({ id: "browser", component: "gui", enabled: false });
 		expect(settings.get("tools.disabled")).toEqual([]);
-		expect(settings.get("disabledExtensionComponents")).toEqual(["computer/computer"]);
-		const after = (await service.list()).extensions.find(entry => entry.id === "computer");
-		expect(after?.components?.[0]?.enabled).toBe(false);
+		expect(settings.get("disabledExtensionComponents")).toEqual(["browser/gui"]);
+		const after = (await service.list()).extensions.find(entry => entry.id === "browser");
+		expect(after?.components?.find(component => component.id === "gui")?.enabled).toBe(false);
 		expect(after?.state).toBe(before?.state);
-		await service.setComponentEnabled({ id: "computer", component: "computer", enabled: true });
+		await service.setComponentEnabled({ id: "browser", component: "gui", enabled: true });
 	}, 30_000);
 
 	test("rejects retired IDs and undeclared components", async () => {
