@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@musepi/pi-agent-core";
-import { promptSuggestionText, turnAllowsPromptSuggestion } from "../src/session/prompt-suggestion";
+import {
+	PROMPT_SUGGESTION_MAX_CHARS,
+	promptSuggestionText,
+	turnAllowsPromptSuggestion,
+} from "../src/session/prompt-suggestion";
 
 /** Policy only: the model call, timing and delivery belong to the bundled plugin. */
 
@@ -31,6 +35,34 @@ describe("promptSuggestionText", () => {
 
 	test("structured-looking output is preserved rather than repaired", () => {
 		expect(promptSuggestionText('{"suggestion":"Run the tests"}')).toBe('{"suggestion":"Run the tests"}');
+	});
+});
+
+describe("promptSuggestionText — structured answer", () => {
+	test("a yes answer yields its message", () => {
+		expect(promptSuggestionText('{"show":"yes","message":"跑一下测试"}')).toBe("跑一下测试");
+	});
+
+	test("a fenced yes answer is unwrapped", () => {
+		expect(promptSuggestionText('```json\n{"show":"yes","message":"commit this"}\n```')).toBe("commit this");
+	});
+
+	test("a no answer declines, matching the bare null", () => {
+		expect(promptSuggestionText('{"show":"no","message":""}')).toBeNull();
+		expect(promptSuggestionText('{"show":"no","message":"ignore me"}')).toBeNull();
+	});
+
+	test("an object without a show field falls back to plain text", () => {
+		expect(promptSuggestionText('{"suggestion":"Run the tests"}')).toBe('{"suggestion":"Run the tests"}');
+	});
+
+	test("malformed JSON falls back to plain text instead of throwing", () => {
+		expect(promptSuggestionText('{"show":"yes"')).toBe('{"show":"yes"');
+	});
+
+	test("a yes answer is capped at the instruction's own limit", () => {
+		const long = "x".repeat(400);
+		expect(promptSuggestionText(`{"show":"yes","message":"${long}"}`)).toHaveLength(PROMPT_SUGGESTION_MAX_CHARS);
 	});
 });
 
