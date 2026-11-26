@@ -1,5 +1,5 @@
 # Consistency record for mnemosyne-memory-backend.md / mnemosyne-memory-backend.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/mnemosyne-memory-backend
-mnemosyne-memory-backend.md: ab43f3b3b48f8cac2c3996364c712ca02821f664
-mnemosyne-memory-backend.zh-CN.md: 02cf74017d575ecaaa8258c360b30b7e39e8549e
+mnemosyne-memory-backend.md: 03ee90e53b34ee4f327834927e891a3e8387d88e
+mnemosyne-memory-backend.zh-CN.md: a9fde7fe5f6c5278ab7d277d66584eecb29a03c6

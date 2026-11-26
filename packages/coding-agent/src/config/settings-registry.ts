@@ -81,12 +81,18 @@ export interface RegisteredSettingDescriptor {
 	owners: Set<string>;
 }
 
+interface UiOverride {
+	ui: SettingUiDescriptor;
+	source: SettingDescriptorSource;
+}
+
 /**
  * Ordered descriptor registry. Insertion order is preserved, so a tab renders in
  * the same order the descriptors were declared (core first, then providers).
  */
 export class SettingsRegistry {
 	readonly #entries = new Map<string, RegisteredSettingDescriptor>();
+	readonly #uiOverrides = new Map<string, Map<string, UiOverride>>();
 	readonly #listeners = new Set<() => void>();
 
 	/**
@@ -131,12 +137,64 @@ export class SettingsRegistry {
 		};
 	}
 
+	/**
+	 * Let a plugin own one existing setting's presentation without moving its
+	 * value, type or default. The core descriptor stays the fallback: removing
+	 * every overlay returns the row to whatever the core schema declared (or to
+	 * no UI at all when the core entry has none).
+	 */
+	registerUi(
+		key: string,
+		ui: SettingUiDescriptor,
+		source: SettingDescriptorSource = "provider",
+		owner: string = source,
+	): () => void {
+		const entry = this.#entries.get(key);
+		if (!entry) {
+			throw new Error(`Setting "${key}" has no descriptor; register it before its UI.`);
+		}
+		let owners = this.#uiOverrides.get(key);
+		if (!owners) {
+			owners = new Map();
+			this.#uiOverrides.set(key, owners);
+		}
+		owners.set(owner, { ui, source });
+		this.#emit();
+		return () => {
+			const current = this.#uiOverrides.get(key);
+			if (!current) return;
+			if (current.get(owner)?.ui !== ui) return;
+			current.delete(owner);
+			if (current.size === 0) this.#uiOverrides.delete(key);
+			this.#emit();
+		};
+	}
+
+	/** Effective UI metadata: the latest plugin overlay, else the descriptor's own. */
+	ui(key: string): SettingUiDescriptor | undefined {
+		const overrides = this.#uiOverrides.get(key);
+		if (overrides && overrides.size > 0) {
+			let last: UiOverride | undefined;
+			for (const override of overrides.values()) last = override;
+			if (last) return last.ui;
+		}
+		return this.#entries.get(key)?.descriptor.ui;
+	}
+
 	get(key: string): SettingDescriptor | undefined {
-		return this.#entries.get(key)?.descriptor;
+		const entry = this.#entries.get(key);
+		if (!entry) return undefined;
+		const ui = this.ui(key);
+		return ui ? { ...entry.descriptor, ui } : entry.descriptor;
 	}
 
 	has(key: string): boolean {
 		return this.#entries.has(key);
+	}
+
+	/** Which source owns a descriptor's value/default (not its UI overlay). */
+	source(key: string): SettingDescriptorSource | undefined {
+		return this.#entries.get(key)?.source;
 	}
 
 	keys(): string[] {
@@ -144,21 +202,29 @@ export class SettingsRegistry {
 	}
 
 	entries(): Array<[string, SettingDescriptor]> {
-		return [...this.#entries.entries()].map(([key, entry]) => [key, entry.descriptor]);
+		return this.keys().map(key => [key, this.get(key)!]);
 	}
 
 	/** Descriptors whose `ui.tab` matches, in registration order. */
 	pathsForTab(tab: string): string[] {
-		return this.keys().filter(key => this.get(key)?.ui?.tab === tab);
+		return this.keys().filter(key => this.ui(key)?.tab === tab);
 	}
 
-	/** Drop every descriptor contributed by one source (plugin unload). */
+	/** Drop every descriptor and UI overlay contributed by one source (plugin unload). */
 	clearSource(source: SettingDescriptorSource): void {
 		let changed = false;
 		for (const [key, entry] of this.#entries) {
 			if (entry.source !== source) continue;
 			this.#entries.delete(key);
 			changed = true;
+		}
+		for (const [key, owners] of this.#uiOverrides) {
+			for (const [owner, override] of owners) {
+				if (override.source !== source) continue;
+				owners.delete(owner);
+				changed = true;
+			}
+			if (owners.size === 0) this.#uiOverrides.delete(key);
 		}
 		if (changed) this.#emit();
 	}

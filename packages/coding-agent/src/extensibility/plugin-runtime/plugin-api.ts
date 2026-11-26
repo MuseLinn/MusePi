@@ -906,17 +906,36 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 	registerSetting(setting: ExtensionSetting): void {
 		this.extension.settings.set(setting.key, setting);
 		try {
-			const dispose = settingsRegistry.register(
-				{
-					key: setting.key,
-					type: setting.type,
-					default: setting.default,
-					ui: setting.ui,
-					...(setting.validate ? { validate: setting.validate } : {}),
-				},
-				`extension:${this.extension.path}`,
-				this.#settingOwner,
-			);
+			const source = `extension:${this.extension.path}`;
+			const existing = settingsRegistry.get(setting.key);
+			let dispose: () => void;
+			if (existing) {
+				// A core descriptor owns the value/default; the plugin may own the
+				// presentation (the migration path for built-in backend settings).
+				// Two plugins cannot both claim one row.
+				if (settingsRegistry.source(setting.key) !== "core") {
+					throw new Error(`Setting "${setting.key}" is already owned by another plugin.`);
+				}
+				if (existing.type !== setting.type) {
+					throw new Error(
+						`Setting "${setting.key}" is declared as ${existing.type}; the plugin cannot present it as ${setting.type}.`,
+					);
+				}
+				dispose = settingsRegistry.registerUi(setting.key, setting.ui, source, this.#settingOwner);
+			} else {
+				dispose = settingsRegistry.register(
+					{
+						key: setting.key,
+						type: setting.type,
+						default: setting.default,
+						ui: setting.ui,
+						...(setting.credential ? { credential: setting.credential } : {}),
+						...(setting.validate ? { validate: setting.validate } : {}),
+					},
+					source,
+					this.#settingOwner,
+				);
+			}
 			if (!this.extension.settingDisposers) this.extension.settingDisposers = [];
 			this.extension.settingDisposers.push(dispose);
 		} catch (error) {

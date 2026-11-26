@@ -3085,7 +3085,7 @@ export interface ExtensionSetting {
 		group: string;
 		label: string;
 		description?: string;
-		options?: { value: string; label: string; description?: string }[];
+		options?: readonly { value: string; label: string; description?: string }[];
 		/** Declarative gate: show only while another setting has the stated value. */
 		condition?: SettingCondition;
 		/** Config-only setting: readable/writable but never listed. */
@@ -3100,6 +3100,8 @@ export interface ExtensionSetting {
 	 *  the schema cannot express (endpoint reachability, cross-key
 	 *  consistency, …) can refuse the write instead of failing at use time. */
 	validate?: (value: unknown) => string | void;
+	/** Never echo this value back to a UI or export it without an explicit request. */
+	credential?: boolean;
 }
 
 /**

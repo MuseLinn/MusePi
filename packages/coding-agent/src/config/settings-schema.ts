@@ -3559,242 +3559,41 @@ export const SETTINGS_SCHEMA = {
 	// Config-file-only knob (numbers without `options` are hidden from the UI).
 	"autolearn.minToolCalls": { type: "number", default: 5 },
 
+	// Value/default owned by core; the memory-musemem plugin owns the UI row.
+	"musemem.globalScope": { type: "boolean", default: true },
+
 	// Mnemopi local SQLite memory backend.
-	"mnemopi.dbPath": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi DB Path",
-			description: "Optional SQLite DB path. Defaults to the agent memories directory.",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.bank": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Bank",
-			description: "Optional shared bank base name. Per-project modes derive project-local banks from it.",
-			condition: "mnemopiActive",
-		},
-	},
+	// Mnemopi values and defaults stay in core; the memory-mnemopi plugin owns
+	// their settings rows (see mnemopi/settings.ts).
+	"mnemopi.dbPath": { type: "string", default: undefined },
+	"mnemopi.bank": { type: "string", default: undefined },
 	"mnemopi.scoping": {
 		type: "enum",
 		values: ["global", "per-project", "per-project-tagged"] as const,
 		default: "per-project",
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Scoping",
-			description:
-				"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
-			options: [
-				{
-					value: "global",
-					label: "Global",
-					description: "One shared Mnemopi bank for every project",
-				},
-				{
-					value: "per-project",
-					label: "Per project",
-					description: "Project-local Mnemopi bank per cwd basename",
-				},
-				{
-					value: "per-project-tagged",
-					label: "Per project (tagged)",
-					description: "Write to a project-local bank but merge project + shared recall results",
-				},
-			],
-			condition: "mnemopiActive",
-		},
 	},
 	"mnemopi.embeddingVariant": {
 		type: "enum",
 		values: ["en", "multilingual"] as const,
 		default: "en",
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Embedding variant",
-			description:
-				"Local embedding model family. en = stronger English model; multilingual = cross-language model. Changing this rebuilds existing memory embeddings on next start.",
-			options: [
-				{
-					value: "en",
-					label: "English (bge-base-en-v1.5)",
-					description: "BAAI/bge-base-en-v1.5 (768d), English-only",
-				},
-				{
-					value: "multilingual",
-					label: "Multilingual (multilingual-e5-large)",
-					description: "intfloat/multilingual-e5-large (1024d), cross-language recall",
-				},
-			],
-			condition: "mnemopiActive",
-		},
 	},
-	"mnemopi.autoRecall": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Auto Recall",
-			description: "Recall local memories into the first turn of each session",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.autoRetain": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Auto Retain",
-			description: "Retain completed conversation turns into local Mnemopi memory",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.polyphonicRecall": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Polyphonic Recall",
-			description: "Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.enhancedRecall": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Enhanced Recall",
-			description: "Enable the tiered query result cache for repeated and similar recall queries",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.proactiveLinking": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Proactive Linking",
-			description:
-				"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.noEmbeddings": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Disable Embeddings",
-			description: "Force deterministic FTS-only recall instead of vector embeddings",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.embeddingModel": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Embedding Model",
-			description:
-				"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.embeddingApiUrl": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Embedding API URL",
-			description: "Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.embeddingApiKey": {
-		type: "string",
-		credential: true,
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi Embedding API Key",
-			description: "Optional embedding API key passed to Mnemopi",
-			condition: "mnemopiActive",
-		},
-	},
+	"mnemopi.autoRecall": { type: "boolean", default: true },
+	"mnemopi.autoRetain": { type: "boolean", default: true },
+	"mnemopi.polyphonicRecall": { type: "boolean", default: false },
+	"mnemopi.enhancedRecall": { type: "boolean", default: false },
+	"mnemopi.proactiveLinking": { type: "boolean", default: false },
+	"mnemopi.noEmbeddings": { type: "boolean", default: false },
+	"mnemopi.embeddingModel": { type: "string", default: undefined },
+	"mnemopi.embeddingApiUrl": { type: "string", default: undefined },
+	"mnemopi.embeddingApiKey": { type: "string", credential: true, default: undefined },
 	"mnemopi.llmMode": {
 		type: "enum",
 		values: ["none", "smol", "remote"] as const,
 		default: "smol",
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi LLM Mode",
-			description:
-				"Use no LLM, the online tiny model (the TINY role from /models, else @smol), or a remote OpenAI-compatible endpoint",
-			condition: "mnemopiActive",
-			options: [
-				{ value: "none", label: "None", description: "Disable Mnemopi LLM-backed extraction" },
-				{
-					value: "smol",
-					label: "Online (tiny)",
-					description: "Use the online tiny model (the TINY role from /models, else @smol)",
-				},
-				{ value: "remote", label: "Remote", description: "Use the Mnemopi remote LLM settings below" },
-			],
-		},
 	},
-	"mnemopi.llmBaseUrl": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi LLM Base URL",
-			description: "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.llmApiKey": {
-		type: "string",
-		credential: true,
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi LLM API Key",
-			description: "Optional LLM API key for Mnemopi remote mode",
-			condition: "mnemopiActive",
-		},
-	},
-	"mnemopi.llmModel": {
-		type: "string",
-		default: undefined,
-		ui: {
-			tab: "memory",
-			group: "Mnemopi",
-			label: "Mnemopi LLM Model",
-			description: "Optional LLM model name for Mnemopi remote mode",
-			condition: "mnemopiActive",
-		},
-	},
+	"mnemopi.llmBaseUrl": { type: "string", default: undefined },
+	"mnemopi.llmApiKey": { type: "string", credential: true, default: undefined },
+	"mnemopi.llmModel": { type: "string", default: undefined },
 	"mnemopi.retainEveryNTurns": { type: "number", default: 4 },
 	"mnemopi.recallLimit": { type: "number", default: 8 },
 	"mnemopi.recallContextTurns": { type: "number", default: 3 },
@@ -3802,7 +3601,6 @@ export const SETTINGS_SCHEMA = {
 	"mnemopi.injectionTokenLimit": { type: "number", default: 5000 },
 	"mnemopi.debug": { type: "boolean", default: false },
 
-	// Sharpshooter project-decision memory.
 	"sharpshooter.model": { type: "string", default: undefined },
 	"sharpshooter.minPromptLength": { type: "number", default: 16 },
 	"sharpshooter.intervalMinutes": { type: "number", default: 5 },

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { settingsRegistry } from "@musepi/pi-coding-agent/config/settings-registry";
+import { getUi } from "@musepi/pi-coding-agent/config/settings-schema";
 import type { ExtensionSetting, PluginAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { getSettingsForTab } from "@musepi/pi-coding-agent/modes/components/settings-defs";
 import { apply } from "../src/plugins/prompt/memory-musemem/index.ts";
@@ -19,16 +20,18 @@ function mountPlugin(): { registered: ExtensionSetting[]; dispose: () => void } 
 			register(setting: ExtensionSetting): void {
 				registered.push(setting);
 				disposers.push(
-					settingsRegistry.register(
-						{
-							key: setting.key,
-							type: setting.type,
-							default: setting.default,
-							ui: setting.ui,
-						},
-						SOURCE,
-						"test-owner",
-					),
+					settingsRegistry.has(setting.key)
+						? settingsRegistry.registerUi(setting.key, setting.ui, SOURCE, "test-owner")
+						: settingsRegistry.register(
+								{
+									key: setting.key,
+									type: setting.type,
+									default: setting.default,
+									ui: setting.ui,
+								},
+								SOURCE,
+								"test-owner",
+							),
 				);
 			},
 		},
@@ -73,12 +76,12 @@ describe("MuseMem plugin-owned settings", () => {
 		expect(getSettingsForTab("memory").some(def => (def.path as string) === "musemem.globalScope")).toBe(false);
 	});
 
-	it("keeps the default readable when the plugin is absent", () => {
-		// No descriptor registered: the raw value is unset, and every reader uses
-		// `!== false`, so the backend keeps its on-by-default behaviour.
+	it("keeps the value and default while the plugin is absent", () => {
+		// The core descriptor keeps the default; only the UI row belongs to the
+		// plugin, so an unmounted plugin hides the row without changing behaviour.
 		const settings = Settings.isolated({ memory: { backend: "musemem" } } as never);
-		expect(settings.getSettingValue("musemem.globalScope")).toBeUndefined();
-		expect(settings.getSettingValue("musemem.globalScope") !== false).toBe(true);
+		expect(settings.getSettingValue("musemem.globalScope")).toBe(true);
+		expect(getUi("musemem.globalScope")).toBeUndefined();
 	});
 
 	it("mounts through the bundled plugin runtime", async () => {

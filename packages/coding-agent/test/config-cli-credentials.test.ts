@@ -4,7 +4,9 @@ import { runConfigCommand } from "@musepi/pi-coding-agent/cli/config-cli";
 import { resetSettingsForTest } from "@musepi/pi-coding-agent/config/settings";
 import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { getConfigRootDir, setAgentDir, TempDir } from "@musepi/pi-utils";
+import { settingsRegistry } from "../src/config/settings-registry";
 import { isCredential, SETTINGS_SCHEMA, type SettingPath } from "../src/config/settings-schema";
+import { MNEMOPI_SETTING_ROWS } from "../src/mnemopi/settings";
 import { getSettingDef } from "../src/modes/components/settings-defs";
 
 const paths = Object.keys(SETTINGS_SCHEMA) as SettingPath[];
@@ -53,10 +55,18 @@ describe("credential masking reaches every surface", () => {
 		// The panel derives masking from the same classification the CLI uses, so
 		// a credential cannot render as plain text on one surface and dots on the
 		// other.
-		for (const path of ["hindsight.apiToken", "mnemopi.embeddingApiKey", "mnemopi.llmApiKey"] as const) {
-			const def = getSettingDef(path);
-			expect(def?.type).toBe("text");
-			expect(def && "secret" in def ? def.secret : undefined).toBe(true);
+		// Mnemopi rows are contributed by its plugin; mount that presentation here.
+		const disposers = MNEMOPI_SETTING_ROWS.map(row =>
+			settingsRegistry.registerUi(row.key, row.ui, "test-credentials", "test-owner"),
+		);
+		try {
+			for (const path of ["hindsight.apiToken", "mnemopi.embeddingApiKey", "mnemopi.llmApiKey"] as const) {
+				const def = getSettingDef(path);
+				expect(def?.type).toBe("text");
+				expect(def && "secret" in def ? def.secret : undefined).toBe(true);
+			}
+		} finally {
+			for (const dispose of disposers) dispose();
 		}
 	});
 

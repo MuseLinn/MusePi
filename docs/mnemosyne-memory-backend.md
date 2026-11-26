@@ -74,6 +74,8 @@ The first-turn recall is part of the transcript's history and is stored in the s
 
 When the embedding model changes, a bank rebuilds its stored embeddings on open. The bank embeds the whole corpus with the new model first and replaces the stored embeddings only after every batch succeeds, so a missing key, an unreachable endpoint, or a rejected request cannot erase the old ones; the next open tries again. Embedding API requests carry at most `MNEMOPI_EMBEDDING_BATCH_SIZE` texts (default `64`); set it to the provider's limit when that limit is lower, for example `10` for DashScope.
 
+The rows above are contributed by the `memory-mnemopi` plugin. The values still live under the same `mnemopi.*` keys and stay readable when the plugin is not mounted; an absent plugin only removes the settings UI.
+
 ## Scoping
 
 The coding-agent wrapper applies scoping on top of the underlying `Mnemopi` package:
