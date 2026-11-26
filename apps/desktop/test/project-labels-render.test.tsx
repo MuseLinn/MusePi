@@ -145,6 +145,11 @@ describe("memory workspace selector", () => {
 			},
 		};
 		const container = await mount(<MemorySection rpc={rpc as never} />);
+		// The workspace card is collapsed until its header is opened.
+		await act(async () => {
+			(container.querySelector(".gui-memory-workspace-toggle") as HTMLButtonElement).click();
+		});
+		await flush();
 
 		const options = [...container.querySelectorAll<HTMLOptionElement>("select option")];
 		// The selected-but-unlisted current workspace is prepended, and all three
