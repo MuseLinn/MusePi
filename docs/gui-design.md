@@ -74,12 +74,12 @@ English | [中文](gui-design.zh-CN.md)
 
 | Scenario | Component | Mechanism |
 |---|---|---|
-| Conditional block (visibility follows another option) | `<Reveal open>` (`components/Reveal.tsx`) | Collapse height over 240ms `cubic-bezier(0.22,1,0.36,1)` plus a 160ms fade-in; closed state is `aria-hidden` + `inert`; the node stays mounted |
+| Conditional block (visibility follows another option) | `<Reveal open>` (`components/Reveal.tsx`) | Collapse height over 240ms `cubic-bezier(0.22,1,0.36,1)` plus a 160ms fade-in; closed state is `aria-hidden` + `inert`; the node stays mounted (destroy-on-close uses `HeightMorph`) |
 | Mounted block changes height (tab switch, list growth) | `<HeightMorph morphKey>` (`components/HeightMorph.tsx`) | Capture the old height, commit the new content, transition the height, then settle `auto`; the same 160ms fade restarts per key; clip with `overflow: hidden` during the morph or the new content fills instantly and only box edges appear to move; skip pinning when the height is unchanged so the scrollbar does not vanish |
 
 - **HeightMorph rules**: children render directly into the ref-carrying outer element, never an intermediate wrapper — callers pass their own layout classes, and a wrapper becomes the grid's only child. The morph is driven by the shared JS spring (`client-core/lib/spring-motion`), not a CSS transition: a bezier is a function of time and cannot express both overshoot and settle time. The overshoot shrinks with the height delta and is capped in pixels (2–12px). Release the pin when the spring converges, not at its hard cap.
 - **Forbidden**: collapsing via `grid-template-rows: 0fr↔1fr` (Chromium's one-way animation behavior, documented in `useCollapse`). Settings-section switching is a fixed-height scroll container; HeightMorph contributes only the fade.
-- **Timing**: height/morph 240ms `cubic-bezier(0.22,1,0.36,1)`; fades 160ms ease; KITT sweep 1.7s with the same easing, alternate. Application sites: settings conditional items, model tabs, provider-grid "show all", settings section switching, session group blocks and custom groups.
+- **Timing**: height/morph 240ms `cubic-bezier(0.22,1,0.36,1)`; fades 160ms ease; KITT sweep 1.7s with the same easing, alternate; control states 120–140ms `ease`. Application sites: settings conditional items, model tabs, provider-grid items, settings section switching.
 
 ### Sent bubble arrival
 

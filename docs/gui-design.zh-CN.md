@@ -75,12 +75,11 @@ lang: zh-CN
 
 | 场景 | 组件 | 机制 |
 |---|---|---|
-| 条件块（显隐跟随另一个选项） | `<Reveal open>`（`components/Reveal.tsx`） | 240ms `cubic-bezier(0.22,1,0.36,1)` 折叠高度 + 160ms 淡入；关闭态 `aria-hidden` + `inert`，节点保持挂载 |
+| 条件块（显隐跟随另一个选项） | `<Reveal open>`（`components/Reveal.tsx`） | 240ms `cubic-bezier(0.22,1,0.36,1)` 折叠高度 + 160ms 淡入；关闭态 `aria-hidden` + `inert`，节点常驻（销毁用 `HeightMorph`） |
 | 已挂载但高度变化（切 tab、列表增长） | `<HeightMorph morphKey>`（`components/HeightMorph.tsx`） | 记录旧高 → 提交新内容 → 过渡高度 → 落到 `auto`；同样的 160ms 淡入按 key 重来；morph 期间用 `overflow: hidden` 裁剪，否则新内容立即填满、只看到盒子边缘移动；高度不变时跳过 pin，避免滚动条消失 |
 
-- **HeightMorph 铁律**：子节点直接渲染进带 ref 的外层，不能包中间 div——调用方传自己的布局 class，包一层会让 grid 只剩一个子节点。morph 由共享 JS 弹簧（`client-core/lib/spring-motion`）驱动，不用 CSS transition：贝塞尔只是时间的函数，无法同时表达过冲与落定时间。过冲随高度差缩小，并以像素封顶（2–12px）。弹簧收敛即释放 pin，不等硬上限。
-- **禁止**用 `grid-template-rows: 0fr↔1fr` 折叠（Chromium 单向动画问题，见 `useCollapse`）。设置分区切换是固定高度滚动容器，HeightMorph 只贡献淡入。
-- **时长**：高度/morph 240ms `cubic-bezier(0.22,1,0.36,1)`；淡入 160ms ease；KITT 扫光 1.7s 同曲线 alternate。应用点：设置条件项、模型 tab、供应商网格「显示全部」、设置分区切换、会话分组块、自定义分组。
+- **HeightMorph 铁律**：子节点直接渲染进带 ref 的外层，不包中间 div——调用方传自己的布局 class，包一层会让 grid 只剩一个子节点。morph 由共享 JS 弹簧（`client-core/lib/spring-motion`）驱动，不用 CSS transition：贝塞尔只是时间的函数，无法同时表达过冲与落定。过冲随高度差缩小，以像素封顶（2–12px）。弹簧收敛即释放 pin，不等硬上限。
+- **禁止**用 `grid-template-rows: 0fr↔1fr` 折叠（单向动画，见 `useCollapse`）；分区切换是定高容器。**凭据表单这类关闭须销毁的内容改用 `HeightMorph`（key 收敛 `null`）。**- **时长**：高度/morph 240ms `cubic-bezier(0.22,1,0.36,1)`；淡入 160ms ease；KITT 1.7s 同曲线；控件状态 120–140ms `ease`。应用点：条件项、模型 tab、网格、分区切换。
 
 ### 气泡入场（已发消息，2026-11-24）
 
