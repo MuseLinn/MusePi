@@ -17,11 +17,19 @@ import { type DaemonConnection, DaemonServer, type DaemonSessionHost } from "../
 const modesDir = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-modes-"));
 const previousModesDir = process.env.MUSEPI_MODES_DIR;
 process.env.MUSEPI_MODES_DIR = modesDir;
+// A preset is a profile declaration now, so the harness needs its own home:
+// otherwise a save lands in the real profile patch.
+const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-presets-home-"));
+const previousHome = process.env.MUSEPI_HOME;
+process.env.MUSEPI_HOME = fakeHome;
 
 afterAll(() => {
 	if (previousModesDir === undefined) delete process.env.MUSEPI_MODES_DIR;
 	else process.env.MUSEPI_MODES_DIR = previousModesDir;
+	if (previousHome === undefined) delete process.env.MUSEPI_HOME;
+	else process.env.MUSEPI_HOME = previousHome;
 	fs.rmSync(modesDir, { recursive: true, force: true });
+	fs.rmSync(fakeHome, { recursive: true, force: true });
 });
 
 function makeHarness() {
@@ -98,7 +106,18 @@ describe("presets RPCs", () => {
 		expect(read.id).toBe("roundtrip-check");
 		expect(read.label).toBe("Roundtrip");
 		expect(await rpc("presets.validate", { id: "roundtrip-check" })).toEqual({ valid: true });
+		// A preset is a profile declaration, not a file of its own: the save has to
+		// land in the profile patch, and the directory-backed store stays untouched.
+		const patchFiles = fs
+			.readdirSync(fakeHome, { recursive: true, encoding: "utf8" })
+			.filter(name => name.endsWith("cordis.patch.yml"));
+		const written = patchFiles.map(name => fs.readFileSync(path.join(fakeHome, name), "utf8")).join("\n");
+		expect(written).toContain("preset-roundtrip-check");
+		expect(written).toContain("@musepi/agent-preset");
+		expect(fs.readdirSync(modesDir).filter(name => name.startsWith("roundtrip-check"))).toEqual([]);
 		expect(await rpc("presets.delete", { id: "roundtrip-check" })).toEqual({ ok: true });
+		const afterDelete = patchFiles.map(name => fs.readFileSync(path.join(fakeHome, name), "utf8")).join("\n");
+		expect(afterDelete).not.toContain("preset-roundtrip-check");
 		await expect(rpc("presets.get", { id: "roundtrip-check" })).rejects.toThrow(/Unknown mode/);
 	});
 

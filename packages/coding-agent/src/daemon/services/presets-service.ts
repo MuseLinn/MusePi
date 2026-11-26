@@ -21,6 +21,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import YAML from "yaml";
+import type { ModeDefinition } from "../../presets/resolve";
 import type { DaemonSessionHost } from "../session-host";
 import type { DaemonService } from "./types";
 
@@ -34,8 +35,11 @@ export interface KnownExtension {
 }
 
 export interface PresetsServiceDeps {
-	/** The one preset directory (read and write). */
+	/** The one preset directory file-backed presets live in. */
 	modesDir(): string;
+	/** Home whose profile holds preset declarations. Overridable so a harness
+	 *  writes into its own tree instead of the user's profile. */
+	homeDir?(): string;
 	knownExtensions(): Promise<readonly KnownExtension[]>;
 	broadcastModesChanged(): void;
 }
@@ -135,7 +139,7 @@ export class PresetsService implements DaemonService {
 		});
 		const fileIds = new Set(ids);
 		const { collectProfilePresetDefinitions } = await import("../../extensibility/plugins/profile/profile-presets");
-		for (const def of await collectProfilePresetDefinitions(this.host.cwd(), os.homedir())) {
+		for (const def of await collectProfilePresetDefinitions(this.host.cwd(), this.#home())) {
 			if (fileIds.has(def.id)) continue;
 			fileIds.add(def.id);
 			modes.push({
@@ -176,14 +180,27 @@ export class PresetsService implements DaemonService {
 		return { ok: true, id };
 	}
 
+	/** The home profile declarations belong to (a harness may redirect it). */
+	#home(): string {
+		return this.host.homeDir?.() ?? os.homedir();
+	}
+
+	/** One preset declared as a profile row, when the profile has it. */
+	async #fromProfile(id: string): Promise<ModeDefinition | undefined> {
+		const { collectProfilePresetDefinitions } = await import("../../extensibility/plugins/profile/profile-presets");
+		return (await collectProfilePresetDefinitions(this.host.cwd(), this.#home())).find(def => def.id === id);
+	}
+
 	async get(params: unknown): Promise<unknown> {
-		// 单预设完整定义(设置页编辑器用):modes.list 是摘要,编辑页
+		// 单预设完整定义(设置页编辑器用):presets.list 是摘要,编辑页
 		// 按需拉完整(含 prompt 区块数组/settings 覆盖)。
 		const { loadModeFile, ensureModeTemplates } = await import("../../presets/resolve");
 		const p = (params ?? {}) as { id: string };
 		const dir = this.host.modesDir();
 		ensureModeTemplates(dir);
-		const def = loadModeFile(dir, p.id);
+		// File presets and profile declarations are both presets; a file wins,
+		// matching the lookup order `createModeResolver` documents.
+		const def = loadModeFile(dir, p.id) ?? (await this.#fromProfile(p.id));
 		if (!def) throw new Error(`Unknown mode: ${p.id}`);
 		return def;
 	}
@@ -239,8 +256,11 @@ export class PresetsService implements DaemonService {
 		resolveMode(p.id, mid => (mid === p.id ? (def as never) : loadModeFile(dir, mid)), {
 			knownExtensions,
 		});
-		const file = modeFilePath(dir, p.id);
-		fs.writeFileSync(file, `${JSON.stringify(def, null, 2)}\n`, "utf8");
+		// A preset is one declaration row in the profile patch — the same place any
+		// Cordis plugin declaration lives. The row id is derived from the preset id,
+		// so a save always rewrites that declaration instead of appending another.
+		const { writeProfilePreset } = await import("../../extensibility/plugins/profile/profile-presets");
+		await writeProfilePreset(this.host.cwd(), this.#home(), def as never, 0);
 		this.host.broadcastModesChanged();
 		return { ok: true };
 	}
@@ -260,11 +280,8 @@ export class PresetsService implements DaemonService {
 		if (referencing.length > 0) {
 			throw new Error(`mode "${p.id}" is referenced by: ${referencing.join(", ")}`);
 		}
-		try {
-			fs.rmSync(modeFilePath(dir, p.id));
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-		}
+		const { removeProfilePreset } = await import("../../extensibility/plugins/profile/profile-presets");
+		await removeProfilePreset(this.host.cwd(), this.#home(), p.id);
 		this.host.broadcastModesChanged();
 		return { ok: true };
 	}
@@ -277,11 +294,15 @@ export class PresetsService implements DaemonService {
 		const knownExtensions = (await this.host.knownExtensions()).map(e => e.id);
 		const errors: string[] = [];
 		try {
-			const def = loadModeFile(dir, p.id);
+			const def = loadModeFile(dir, p.id) ?? (await this.#fromProfile(p.id));
 			if (!def) errors.push(`mode "${p.id}" not found`);
 			else {
 				errors.push(...validateMode(def as never, { knownExtensions }));
-				resolveMode(p.id, mid => loadModeFile(dir, mid), { knownExtensions });
+				// The preset under test may be a profile declaration, so it resolves to
+				// the in-memory definition rather than a file read.
+				resolveMode(p.id, mid => (mid === p.id ? (def as never) : loadModeFile(dir, mid)), {
+					knownExtensions,
+				});
 				// P0-② 挂载校验:白名单扩展
 				// 实际加载 + 槽位组件编译。不建会话(standingKeyFor 即
 				// "真实挂载但不建 agent")。

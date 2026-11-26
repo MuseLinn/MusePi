@@ -1044,6 +1044,7 @@ export class DaemonServer {
 				get: sessionId => this.#host.get(sessionId),
 				persistHeaderPatch: (sessionId, patch) => this.#host.persistHeaderPatch(sessionId, patch),
 				modesDir: () => this.#modesDir(),
+				homeDir: () => process.env.MUSEPI_HOME ?? os.homedir(),
 				knownExtensions: () => this.#services.get<ExtensionService>("extensions").getExtensions(),
 				broadcastModesChanged: () => this.#services.get<EventService>("events").broadcastModesChanged(),
 			}),

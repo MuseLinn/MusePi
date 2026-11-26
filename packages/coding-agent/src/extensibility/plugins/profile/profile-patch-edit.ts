@@ -31,7 +31,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { type Document, isMap, isSeq, parseDocument } from "yaml";
+import { type Document, isMap, isSeq, parseDocument, stringify as YAMLstringify } from "yaml";
 
 /** What a write did, for the caller to report honestly. */
 export type PatchWriteResult =
@@ -194,6 +194,71 @@ export async function writeRowConfigValue(
 			insert: [{ id, name, config: { [key]: value } }],
 		});
 	}
+	await fs.writeFile(patchPath, String(document), "utf8");
+	return { kind: "updated", changed: true };
+}
+
+/** Replace a row's whole `config` block while preserving the rest of the patch.
+ *
+ *  `writeRowConfigValue` sets one key and is enough for a knob. A preset is a
+ *  whole definition — id, name, plugin rows, and this host's own fields — so it
+ *  is written as one block: setting the keys one by one would leave a stale key
+ *  behind whenever the definition dropped it. */
+export async function writeRowConfig(
+	patchPath: string,
+	id: string,
+	name: string,
+	config: Record<string, unknown>,
+): Promise<PatchWriteResult> {
+	const document = await readPatch(patchPath);
+	if (!document) {
+		await fs.mkdir(path.dirname(patchPath), { recursive: true });
+		await fs.writeFile(patchPath, YAMLstringify([{ insert: [{ id, name, config }] }]), "utf8");
+		return { kind: "created" };
+	}
+	// The last declaration for an id wins, so that is the one to edit.
+	const target = [...declarationNodes(document)].reverse().find(node => {
+		if (node.get("id") !== id) return false;
+		const declared = node.get("name");
+		return declared === undefined || declared === null || declared === name;
+	});
+	if (target) target.set("config", config);
+	else (document.contents as unknown as { add(value: unknown): void }).add({ insert: [{ id, name, config }] });
+	await fs.writeFile(patchPath, String(document), "utf8");
+	return { kind: "updated", changed: true };
+}
+
+/** Delete every declaration of an id, leaving the rest of the patch intact. */
+export async function removeRow(patchPath: string, id: string): Promise<PatchWriteResult> {
+	const document = await readPatch(patchPath);
+	if (!document) return { kind: "updated", changed: false };
+	const contents = document.contents as unknown as { items?: unknown[] };
+	let changed = false;
+	for (const item of contents.items ?? []) {
+		if (!isMap(item)) continue;
+		const node = item as unknown as EntryNode;
+		const insert = node.get("insert") as unknown;
+		const entries = Array.isArray(insert) ? insert : ((insert as { items?: unknown[] })?.items ?? []);
+		if (!isSeq(insert) && !Array.isArray(insert)) continue;
+		const sequence = Array.isArray(insert) ? null : (insert as { items: { get(key: string): unknown }[] });
+		// Walk backwards so an earlier removal cannot shift a later index.
+		for (let index = entries.length - 1; index >= 0; index--) {
+			const entry = entries[index] as { get(key: string): unknown } | undefined;
+			if (entry?.get("id") !== id) continue;
+			changed = true;
+			if (Array.isArray(insert)) insert.splice(index, 1);
+			else sequence?.items.splice(index, 1);
+		}
+		if (changed && (entries.length === 0 || !isSeq(insert))) {
+			// An entry group left with no rows carries nothing; drop it.
+			const remaining = Array.isArray(insert) ? insert : (sequence?.items ?? []);
+			if (remaining.length === 0) {
+				const parent = contents.items ?? [];
+				parent.splice(parent.indexOf(item), 1);
+			}
+		}
+	}
+	if (!changed) return { kind: "updated", changed: false };
 	await fs.writeFile(patchPath, String(document), "utf8");
 	return { kind: "updated", changed: true };
 }
