@@ -167,6 +167,8 @@ hindsight:
 
 `HINDSIGHT_*` 环境变量覆盖 `hindsight.*` 设置，后者覆盖内置默认值。完整覆盖表、取值、解析规则、优先级和默认值见 [Hindsight 环境变量表](./environment-variables.html#hindsight-memory-backend)。
 
+本节的 `hindsight.*` 设置行由 `memory-hindsight` 插件提供。值仍存放在原来的键下，插件未挂载时依然可读；插件缺席只会移除设置界面，不影响后端行为。
+
 默认使用 `per-project-tagged` 作用域：写入带项目标签的共享 bank，recall 同时包含项目标签记忆和未打标签的全局记忆。开启 `hindsight.globalScope: true`（默认关闭）后，`retain` 和 `learn` 接受 `scope: "global"`，写入不带项目标签的记忆，使适用于所有项目的偏好或经验在每个项目中都能被 recall。每个项目都能 recall 到全局事实本身。按项目刷新的 mental model 使用严格项目标签匹配，因此不会包含全局记忆；未打标签的 `user-preferences` 模型会包含。合并也可能把全局事实并入已有的项目标签 observation，因此其他项目的 observation 结果可能缺少该合并形式。若 bank 配置会给抽取事实打标签（`entity_labels` 组中 `tag: true`），全局事实带上该标签后不再出现在其他项目。`per-project` 把每个工作目录项目隔离到自己的 bank，且不提供 `scope: "global"`；`global` 使用一个共享 bank。显式 `hindsight.bankId` 选择 bank 基名。bank ID、前缀或作用域变化会重建主会话状态，后续操作使用新作用域。
 
 两种项目作用域用同样方式命名项目：取 repo 的主 checkout 根（同一 repo 的所有 linked worktree 解析到同一目录），再小写其 basename。`~/code/General` 因此打上 `project:general`。标签按字面匹配，这一折叠保证同一 repo 无论路径大小写都落在同一记忆作用域。

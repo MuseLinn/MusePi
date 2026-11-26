@@ -6,6 +6,7 @@ import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { getConfigRootDir, setAgentDir, TempDir } from "@musepi/pi-utils";
 import { settingsRegistry } from "../src/config/settings-registry";
 import { isCredential, SETTINGS_SCHEMA, type SettingPath } from "../src/config/settings-schema";
+import { HINDSIGHT_SETTING_ROWS } from "../src/hindsight/settings";
 import { MNEMOPI_SETTING_ROWS } from "../src/mnemopi/settings";
 import { getSettingDef } from "../src/modes/components/settings-defs";
 
@@ -56,7 +57,7 @@ describe("credential masking reaches every surface", () => {
 		// a credential cannot render as plain text on one surface and dots on the
 		// other.
 		// Mnemopi rows are contributed by its plugin; mount that presentation here.
-		const disposers = MNEMOPI_SETTING_ROWS.map(row =>
+		const disposers = [...MNEMOPI_SETTING_ROWS, ...HINDSIGHT_SETTING_ROWS].map(row =>
 			settingsRegistry.registerUi(row.key, row.ui, "test-credentials", "test-owner"),
 		);
 		try {

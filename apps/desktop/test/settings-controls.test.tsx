@@ -417,8 +417,18 @@ describe("memory backend gates", () => {
 		expect(isSettingShown(row, {})).toBe(false);
 	});
 
-	it("keeps the Hindsight block off while another backend is selected", () => {
-		const row = item("hindsight.globalScope");
+	it("shows a plugin-owned Hindsight setting only while Hindsight is selected", () => {
+		const row = {
+			key: "hindsight.globalScope",
+			type: "boolean",
+			default: false,
+			ui: {
+				tab: "memory",
+				group: "Hindsight",
+				label: "Hindsight Global Scope",
+				condition: { key: "memory.backend", equals: "hindsight" },
+			},
+		} as SchemaItem;
 		expect(isSettingShown(row, { "memory.backend": "hindsight" })).toBe(true);
 		expect(isSettingShown(row, { "memory.backend": "musemem" })).toBe(false);
 	});
