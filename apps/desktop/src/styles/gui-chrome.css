@@ -3136,12 +3136,17 @@
 
 /* Dialog-level actions sit below both axes, apart from the sections' own
  * single primary actions. */
+/* A dialog-level action row, separated from the list it is not part of. The
+ * disconnect control is the destructive one, so it must not read as a fourth
+ * row of the list above it — a hairline is what says "this belongs to the
+ * dialog, not to the instances". */
 .gui-loc-foot {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
-	padding: 0 20px 14px;
+	padding: 12px 20px 14px;
+	border-top: 1px solid var(--border);
 }
 
 .gui-loc-foot .gui-remote-disclaimer-link {
