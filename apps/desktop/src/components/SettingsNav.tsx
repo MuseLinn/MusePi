@@ -338,7 +338,14 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 /** Nav ids whose page body ships as a plugin contribution only. The host keeps
  *  no fallback renderer, so the row is gated on a loaded contribution: an
  *  absent or failed plugin removes the page instead of opening it blank. */
-const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set(["secrets", "hooks"]);
+const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set([
+	"secrets",
+	"hooks",
+	"commands",
+	"shortcuts",
+	"notifications",
+	"usage",
+]);
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The
  * openchamber-parity tabs (chat / notifications / sessions / shortcuts /

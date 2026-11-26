@@ -1,7 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import type { RpcClient } from "../../lib/rpc";
+import type { SlotComponentProps } from "../../lib/slot-host";
 
 interface SlashCommandItem {
 	name: string;
@@ -13,7 +13,7 @@ interface SlashCommandItem {
 
 /** Settings → 智能体 → 命令: read-only slash-command catalog (commands.list
  * — same source of truth as the composer's / completion and the TUI). */
-export function CommandsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function CommandsSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	const [items, setItems] = useState<SlashCommandItem[] | null>(null);
 	useEffect(() => {
 		if (!rpc) return;

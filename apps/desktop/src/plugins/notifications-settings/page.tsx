@@ -2,6 +2,8 @@ import { type TranslationKey, t } from "@musepi/client-core";
 import type { SoundName } from "cuelume";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { GuiSelect } from "../../components/GuiSelect";
+import { Reveal } from "../../components/Reveal";
 import {
 	defaultTemplate,
 	eventEnabled,
@@ -20,7 +22,6 @@ import {
 	setInAppToastEnabled,
 	setNotifySoundEnabled,
 } from "../../lib/notify";
-import type { RpcClient } from "../../lib/rpc";
 import {
 	inQuietHours,
 	previewSound,
@@ -36,9 +37,8 @@ import {
 	soundFor,
 	volumePref,
 } from "../../lib/sfx";
+import type { SlotComponentProps } from "../../lib/slot-host";
 import { Icon } from "../../vendor/oc-icons";
-import { GuiSelect } from "../GuiSelect";
-import { Reveal } from "../Reveal";
 
 /** Sfx/notification event labels are keyed per event id; the ids come from
  *  SFX_EVENTS / NOTIFY_EVENTS, so both lookups are closed over that set. */
@@ -210,7 +210,7 @@ const TEMPLATE_VARIABLES = [
 /** Desktop notifications + sound. Delivery switches, one row per event
  *  (toast toggle + palette sound), optional templates, then interaction cues
  *  and their shared volume/quiet-hours controls. */
-export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function NotificationsSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	const [notify, setNotify] = useState<boolean>(() => notifyEnabled());
 	const [focused, setFocused] = useState<boolean>(() => notifyWhileFocused());
 	const [notifySound, setNotifySound] = useState<boolean>(() => notifySoundEnabled());

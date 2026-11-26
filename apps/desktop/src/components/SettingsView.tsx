@@ -589,7 +589,6 @@ export function SettingsView({
 									{activeSection === "media" && (
 										<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
 									)}
-									{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
 									{activeSection === "pet" && <CompanionSection />}
 									{activeSection === "session-memory" && (
 										<SessionMemorySection
@@ -618,7 +617,6 @@ export function SettingsView({
 										/>
 									)}
 									{activeSection === "git" && <GitSection rpc={rpc} />}
-									{activeSection === "shortcuts" && <ShortcutsSection />}
 									{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
 									{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
 									{activeSection === "context" && <ContextSection rpc={rpc} />}
@@ -642,7 +640,6 @@ export function SettingsView({
 									{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
 									{activeSection === "migration" && <MigrationSection rpc={rpc} />}
 									{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
-									{activeSection === "commands" && <CommandsSection rpc={rpc} />}
 									{!activeExtTab && activeSection === "connectors" && (
 										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
 									)}
@@ -650,7 +647,6 @@ export function SettingsView({
 									{!activeExtTab && activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 								</>
 							)}
-							{activeSection === "usage" && <UsageSection rpc={rpc} />}
 							{/* 页面自有行席位(dsh `children` 粒度):`settings.item.<page>.*`
 							 *  的贡献挂在本页内容之后;当前页只挂载自己的座位。 */}
 							{sectionItems.length > 0 && (
@@ -678,7 +674,6 @@ export function SettingsView({
 import {
 	AppearanceSection,
 	BrowserSection,
-	CommandsSection,
 	CompanionSection,
 	ConnectorsSection,
 	ContextSection,
@@ -690,13 +685,10 @@ import {
 	MediaSection,
 	ModelSection,
 	ModesSection,
-	NotificationsSection,
 	SessionMemorySection,
 	ShellSection,
-	ShortcutsSection,
 	SkillsSection,
 	SubagentsSection,
 	ToolsSection,
-	UsageSection,
 	VoiceSection,
 } from "./settings-sections";

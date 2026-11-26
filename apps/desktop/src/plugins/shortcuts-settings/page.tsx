@@ -20,7 +20,7 @@ import {
  * immediately — the old static table could only describe the hardcoded
  * chain in app.tsx.
  */
-export function ShortcutsSection(): ReactNode {
+export default function ShortcutsSettingsPage(): ReactNode {
 	const [query, setQuery] = useState("");
 	const [capturing, setCapturing] = useState<string | null>(null);
 	const [conflict, setConflict] = useState<{ id: string; label: string } | null>(null);

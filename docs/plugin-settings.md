@@ -42,7 +42,7 @@ Not every feature gets a nav row. Two seats cover the rest:
 
 A whole page is `settings.section` with the page's existing id: the content becomes plugin-owned, the nav row and its deep links stay. The hooks page is the smallest example.
 
-A page whose body ships only as a contribution keeps no host fallback: the nav row follows the contribution, so an absent or failed plugin removes the page rather than opening it blank. Declare such ids in the settings nav's plugin-owned set next to the page component.
+A page whose body ships only as a contribution keeps no host fallback: the nav row follows the contribution, so an absent or failed plugin removes the page rather than opening it blank. Declare such ids in the settings nav's plugin-owned set next to the page component. 保险库, 钩子, 命令, 快捷键, 通知与音效 and 使用统计 are owned this way today.
 
 Use `settings.section` only when the feature is a whole page.
 

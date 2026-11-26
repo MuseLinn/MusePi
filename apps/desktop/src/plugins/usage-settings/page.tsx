@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import { workspaceKeyLabels } from "../../lib/project-label";
-import type { RpcClient } from "../../lib/rpc";
+import type { SlotComponentProps } from "../../lib/slot-host";
 import { Icon } from "../../vendor/oc-icons";
 
 /* ============ 数据与统计: 使用统计 / 索引库 / 钩子 ============ */
@@ -150,7 +150,7 @@ const dashboardCache: DashboardCache = loadPersistedDashboard();
  * aggregation over every session file) + stats.sync (incremental rescan).
  * The CLI `omp stats` dashboard is the parity reference; here the same
  * numbers render natively in the settings surface. */
-export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function UsageSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	const [stats, setStats] = useState<UsageDashboard | null>(null);
 	const [heatSeries, setHeatSeries] = useState<UsageDashboard["timeSeries"]>([]);
 	const [range, setRange] = useState<"7d" | "30d">(loadPersistedRange);
