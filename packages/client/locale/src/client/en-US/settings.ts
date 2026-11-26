@@ -7608,6 +7608,7 @@ export const settings = {
 	"settings.connectionKindManual": "WebSocket",
 	"settings.connectionStatusConnected": "Connected",
 	"settings.connectionStatusConnecting": "Connecting",
+	"settings.connectionNeedsAttention": "Needs attention",
 	"settings.connectionStatusFailed": "Unreachable",
 	"settings.connectionStatusLastUsed": "Last used",
 	"settings.connectionStatusUnknown": "Not tried yet",

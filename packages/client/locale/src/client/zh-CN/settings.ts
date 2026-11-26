@@ -7277,6 +7277,7 @@ export const settings = {
 	"settings.connectionKindManual": "WebSocket",
 	"settings.connectionStatusConnected": "已连接",
 	"settings.connectionStatusConnecting": "连接中",
+	"settings.connectionNeedsAttention": "需要处理",
 	"settings.connectionStatusFailed": "无法连接",
 	"settings.connectionStatusLastUsed": "上次用过",
 	"settings.connectionStatusUnknown": "尚未尝试",

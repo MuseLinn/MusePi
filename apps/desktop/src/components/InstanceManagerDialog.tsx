@@ -31,6 +31,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { connectionPresentation } from "../lib/connection/presentation";
 import type { CatalogHost } from "../lib/connection/remote-lifecycle";
 import { type ConnectionTarget, stripToken } from "../lib/connection/targets";
 import { useHostCatalog } from "../lib/connection/use-host-catalog";
@@ -144,11 +145,10 @@ export function InstanceManagerDialog({
 	const renderHost = (host: RemoteHost | null): ReactNode => {
 		const active = host ? host.id === activeHostId : activeHostId === null;
 		const label = host?.label ?? t("general.local");
-		const status = active
-			? connected
-				? t("settings.connectionStatusConnected")
-				: t("settings.disconnected")
-			: t("settings.connectionStatusUnknown");
+		// One mapping for every surface (see `lib/connection/presentation`): the
+		// row does not decide what "disconnected" means, it renders the phase.
+		const presentation = connectionPresentation({ connected: active && connected });
+		const status = t(presentation.labelKey);
 		return (
 			<ConnectionLocationRow
 				key={host?.id ?? "local"}
@@ -157,7 +157,13 @@ export function InstanceManagerDialog({
 				where={whereItRuns(host, catalog, daemonUrl)}
 				whereTitle={host ? stripToken(host.url) : daemonUrl}
 				status={status}
-				statusKind={active ? (connected ? "connected" : "disconnected") : "idle"}
+				statusKind={
+					presentation.phase === "connected"
+						? "connected"
+						: presentation.phase === "idle"
+							? "idle"
+							: "disconnected"
+				}
 				current={active}
 				disabled={active}
 				onActivate={() => {
