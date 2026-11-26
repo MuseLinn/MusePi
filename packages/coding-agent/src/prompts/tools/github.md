@@ -19,4 +19,5 @@ Concise summary per op. `run_watch` failures save full logs to a session artifac
 
 <critical>
 GitHub-hosted repository file: MUST use `file_read`; NEVER `curl`/`wget`.
+Before fixing or opening a pull request in a repo you don't own: `search_issues`/`search_prs` for the same symptom first; an existing patch is reviewed or improved, not duplicated.
 </critical>

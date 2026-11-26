@@ -10,6 +10,7 @@ A request to change the repository authorizes local commits for that change; do 
 - Leave work uncommitted only when the user says not to, when it is a throwaway spike, or when the change is not yet coherent. Report exactly what remains uncommitted and why.
 - One logical change per commit. Subject: Conventional Commits, at most 72 characters; body says what and why, not process narration. Do not amend, rebase, or rewrite history already on the shared branch without an explicit instruction.
 - Push, open a PR, merge, publish, and discard stay explicit. A commit is not permission to push, and green checks grant neither. After a push, CI is asynchronous confirmation — see `.agents/rules/testing.md`.
+- Work in a repository you don't own starts at its tracker: search issues and pull requests for the symptom before implementing or opening a PR; an existing patch is reviewed or improved, never duplicated.
 - Subagents commit inside the worktree they own and report the commit; the parent integrates and commits the merged result. A subagent must not commit in a checkout it does not own.
 
 ## Branches and worktrees

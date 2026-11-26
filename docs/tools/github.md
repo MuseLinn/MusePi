@@ -89,6 +89,8 @@ Single-issue and single-PR reads live in the `issue://<N>` / `pr://<N>` URL sche
 
 ### `pr_create`
 
+Opening a PR in a repository you don't own starts at the tracker: search issues and PRs for the same symptom first (`search_issues` / `search_prs`); an existing patch is reviewed or improved, not duplicated.
+
 | Aspect | Value |
 | --- | --- |
 | Required fields | `op` plus either `fill=true` or `title` |
