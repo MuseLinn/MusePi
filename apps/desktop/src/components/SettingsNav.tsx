@@ -335,6 +335,11 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 	usage: ["统计", "usage", "用量", "成本", "cost", "token", "模型", "model", "月度", "monthly"],
 };
 
+/** Nav ids whose page body ships as a plugin contribution only. The host keeps
+ *  no fallback renderer, so the row is gated on a loaded contribution: an
+ *  absent or failed plugin removes the page instead of opening it blank. */
+const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set(["secrets", "hooks"]);
+
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The
  * openchamber-parity tabs (chat / notifications / sessions / shortcuts /
  * agents) are backed by live settings; hooks (extensions RPC), 索引库
@@ -348,6 +353,9 @@ export function navGroups(
 		icon?: string;
 		order?: number;
 		keywords?: readonly string[];
+		code?: string;
+		url?: string;
+		error?: string;
 	}>,
 ): { title: string; items: SectionDef[] }[] {
 	const groups: { title: string; items: SectionDef[] }[] = [
@@ -397,6 +405,14 @@ export function navGroups(
 	// 扩展声明一个设置页即出现在导航，条目自带 id/label/icon/order/keywords。
 	// 配置项级贡献走 registerSetting 的 ui.tab(插入现有 tab)或
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
+	// Pages whose content is entirely plugin-owned: the host keeps no renderer
+	// for them, so a missing contribution would open a blank page. Their row
+	// exists only while a contribution claims it (a compile failure retracts
+	// it, like a missing plugin).
+	const claimed = new Set(extTabs.filter(c => c.id && !c.error).map(c => c.id as string));
+	for (const group of groups) {
+		group.items = group.items.filter(item => !PLUGIN_OWNED_SECTIONS.has(item.id) || claimed.has(item.id));
+	}
 	// A page whose id names an existing page TAKES IT OVER: the built-in row
 	// (and its id, keywords and deep links) stays, and the extension does not
 	// add a second row. Only genuinely new pages get an `ext:` row.

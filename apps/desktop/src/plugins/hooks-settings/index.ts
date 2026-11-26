@@ -4,7 +4,7 @@
  * - 输入：宿主传入的 rpc；页面读取 `extensions.list` 与 `extensions.setEnabled`。
  * - 输出：设置页「钩子」整页 —— hook 能力扩展与各自的启用开关。
  * - 生命周期：页面随设置页导航挂载/卸载；数据来自共享注册表单例。
- * - 启停：停用后槽位消失，SettingsView 回退内置 `HooksSection`。
+ * - 启停：停用后槽位消失，「钩子」导航项随之消失（本页无宿主内建回退）。
  * - 冲突：独占 `settings.section` 的 `hooks` 页；不接管 hook 执行引擎。
  * - 检视入口：本目录与 `apps/desktop/test/hooks-settings-plugin.test.tsx`。
  */

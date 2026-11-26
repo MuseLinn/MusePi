@@ -118,9 +118,6 @@ export function SettingsView({
 	// 记忆插件页:声明 `settings.section` 且 id 为 `memory` 的条目接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
 	const extMemoryTab = extTabFor("memory");
-	// 钩子插件页:声明 `settings.section` 且 id 为 `hooks` 的条目接管内置「钩子」分区。
-	const extHooksTab = extTabFor("hooks");
-	void extHooksTab;
 	// 会话与记忆子导航的标签席位(`settings.subnav.session-memory`):
 	// id 命中内置标签即替换其内容,其余追加为新标签。
 	const sessionMemoryTabs = useSlotComponentsByPrefix(rpc, "settings.subnav.session-memory");
@@ -649,8 +646,6 @@ export function SettingsView({
 									{!activeExtTab && activeSection === "connectors" && (
 										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
 									)}
-									{activeSection === "secrets" && <SecretSettingsSection rpc={rpc} />}
-									{!activeExtTab && activeSection === "hooks" && <HooksSection rpc={rpc} />}
 									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 									{!activeExtTab && activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 								</>
@@ -690,14 +685,12 @@ import {
 	FilesLspSection,
 	GeneralSection,
 	GitSection,
-	HooksSection,
 	IndexesSection,
 	InteractionSection,
 	MediaSection,
 	ModelSection,
 	ModesSection,
 	NotificationsSection,
-	SecretSettingsSection,
 	SessionMemorySection,
 	ShellSection,
 	ShortcutsSection,

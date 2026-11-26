@@ -4,10 +4,10 @@ import { setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { navGroups } from "../src/components/SettingsNav";
-import { SecretSettingsSection } from "../src/components/settings-sections/secret-settings";
 import { PromptProvider } from "../src/lib/prompt-dialog";
 import type { RpcClient } from "../src/lib/rpc";
 import { resolveActiveSection } from "../src/lib/settings-nav";
+import SecretsSettingsPage from "../src/plugins/secrets-settings/page";
 
 setLocale("zh-CN");
 afterAll(() => {
@@ -75,7 +75,7 @@ async function mountRpc(rpc: RpcClient | null): Promise<HTMLDivElement> {
 	document.body.appendChild(element);
 	root = createRoot(element);
 	await act(async () => {
-		root?.render(createElement(PromptProvider, null, createElement(SecretSettingsSection, { rpc })));
+		root?.render(createElement(PromptProvider, null, createElement(SecretsSettingsPage, { rpc })));
 	});
 	await flush();
 	host = element;
@@ -117,8 +117,13 @@ async function openDeleteConfirm(scope: HTMLElement, name: string): Promise<void
 }
 
 describe("设置页密钥", () => {
-	test("导航注册了密钥页，并可按 section id 解析", () => {
-		const items = navGroups([]).flatMap(group => group.items);
+	test("导航在插件认领后出现保险库页，并可按 section id 解析", () => {
+		// The page body ships with the secrets plugin only, so the row follows
+		// the contribution: claimed → present, absent → no row (never a blank page).
+		const unclaimed = navGroups([]).flatMap(group => group.items);
+		expect(unclaimed.some(item => item.id === "secrets")).toBe(false);
+
+		const items = navGroups([{ id: "secrets", label: "保险库" }]).flatMap(group => group.items);
 		const row = items.find(item => item.id === "secrets");
 		expect(row?.label).toBe("保险库");
 		expect(resolveActiveSection("secrets", new Set(items.map(item => item.id)))).toBe("secrets");

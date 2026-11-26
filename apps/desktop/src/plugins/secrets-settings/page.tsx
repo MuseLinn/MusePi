@@ -24,7 +24,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import { useConfirm } from "../../lib/prompt-dialog";
-import type { RpcClient } from "../../lib/rpc";
+import type { SlotComponentProps } from "../../lib/slot-host";
 
 /** Wire contract for the daemon's `secret.*` methods. Timestamps are epoch ms. */
 type SecretScope = "all" | string[];
@@ -260,7 +260,7 @@ function SecretForm({
 	);
 }
 
-export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	const { confirm } = useConfirm();
 	const [entries, setEntries] = useState<SecretEntryView[]>([]);
 	const [status, setStatus] = useState<SecretStatusResult | null>(null);

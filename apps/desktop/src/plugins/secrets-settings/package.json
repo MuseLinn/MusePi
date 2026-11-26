@@ -1,0 +1,13 @@
+{
+	"name": "musepi-secrets-settings",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned secret vault settings page: write-only secret entries, master-key protection, .env import.",
+	"type": "module",
+	"musepi": {
+		"icon": "🔐",
+		"label": "MusePi Secrets",
+		"description": "The agent secret vault: entries, scopes and master-key protection.",
+		"extensions": ["./index.ts"]
+	}
+}

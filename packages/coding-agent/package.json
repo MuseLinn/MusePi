@@ -515,14 +515,7 @@
 			"types": "./src/modes/setup-wizard/*.ts",
 			"import": "./src/modes/setup-wizard/*.ts"
 		},
-		"./modes/theme/*": {
-			"types": "./src/modes/theme/*.ts",
-			"import": "./src/modes/theme/*.ts"
-		},
-		"./modes/theme/defaults": {
-			"types": "./src/modes/theme/defaults/index.ts",
-			"import": "./src/modes/theme/defaults/index.ts"
-		},
+		
 		"./modes/ultrathink": {
 			"types": "./src/modes/ultrathink.ts",
 			"import": "./src/modes/ultrathink.ts"
