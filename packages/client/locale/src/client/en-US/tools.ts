@@ -2052,6 +2052,7 @@ export const tools = {
 	"tools.videoGeneratingWithState": "Generating video… {state}",
 	"tools.videoResultWithCount": "Video result {count}",
 	"tools.videoUnavailable": "This video cannot play here",
+	"tools.imageUnavailable": "Image no longer available",
 	"tools.toolGenerateImage": "Generate image",
 	"tools.toolGithub": "GitHub",
 	"tools.toolGlob": "Match files",

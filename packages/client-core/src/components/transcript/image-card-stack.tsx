@@ -1,4 +1,5 @@
-import { type ReactNode, useRef, useState } from "react";
+import { ImageOff } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { type BlobImageItem, useResolvedImageItems } from "../../lib/blob-image";
 import type { ToolRenderHost } from "../../tool-render/types";
@@ -12,6 +13,12 @@ import "./image-card-stack.css";
  * next image; a tap (no drag) opens the full-size preview lightbox at the
  * current index. Behind cards recede via scale / vertical offset /
  * rotation (pure CSS transitions).
+ *
+ * A card whose bytes are gone (an expired `blob:sha256:` ref, a rejected
+ * data URL) keeps its place but paints the unavailable face instead of the
+ * browser's broken-image glyph, and stops being a target: it never opens
+ * the lightbox, and the stack rests on the next image that can still be
+ * shown so a dead card cannot trap the swipe.
  */
 export function ImageCardStack<T extends BlobImageItem>({
 	items,
@@ -30,14 +37,44 @@ export function ImageCardStack<T extends BlobImageItem>({
 	// A restored session stores images as blob refs; resolve before painting so
 	// the card and the lightbox share one displayable list.
 	const resolved = useResolvedImageItems(items, host);
-	// The lightbox takes the plain gallery shape; mimeType stays card-side.
-	const gallery = resolved.map(item => ({ src: item.src, alt: item.alt }));
+	const count = items.length;
+	// srcs that failed to decode. Keyed by src, not by slot, so resolving a ref
+	// later (a new src) starts clean and a stale entry can never match.
+	const [missing, setMissing] = useState<ReadonlySet<string>>(() => new Set());
 	const [index, setIndex] = useState(0);
 	const [dx, setDx] = useState(0);
 	const [dragging, setDragging] = useState(false);
 	const dragRef = useRef<{ sx: number; sy: number; moved: boolean } | null>(null);
-	const count = items.length;
-	const next = (): void => setIndex(i => (i + 1) % count);
+
+	const isMissing = (item: BlobImageItem): boolean => missing.has(item.src);
+	// Slots that can still be shown — the only ones the gallery offers. Built on
+	// every render (the lists are per-message and tiny) so `missing` cannot be
+	// read through a stale memo.
+	const shown = resolved.map((item, i) => ({ item, i })).filter(({ item }) => !missing.has(item.src));
+	const shownIndices = shown.map(entry => entry.i);
+	// The gallery the lightbox receives: resolved, and never a dead ref.
+	const gallery = shown.map(({ item }) => ({ src: item.src, alt: item.alt }));
+	const top = count === 0 ? 0 : index % count;
+	// Position of the top card in the showable list; -1 while the effect below
+	// is still moving it off a dead slot.
+	const topAt = shownIndices.indexOf(top);
+
+	// Rest on a showable card: a failure discovered after mount (or a stale
+	// index from a replaced message) must not leave the dead card on top, where
+	// it would swallow the tap and hide the images that still work.
+	useEffect(() => {
+		if (shownIndices.length === 0) return;
+		if (!shownIndices.includes(top)) {
+			const firstAfter = shownIndices.find(i => i > top);
+			setIndex(firstAfter ?? shownIndices[0]);
+		}
+	}, [shownIndices, top]);
+
+	const step = (delta: 1 | -1): void => {
+		if (shownIndices.length === 0) return;
+		const from = topAt === -1 ? 0 : topAt;
+		setIndex(shownIndices[(from + delta + shownIndices.length) % shownIndices.length]);
+	};
 
 	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
 		dragRef.current = { sx: e.clientX, sy: e.clientY, moved: false };
@@ -59,20 +96,28 @@ export function ImageCardStack<T extends BlobImageItem>({
 		if (d.moved && Math.abs(dx) > 56) {
 			// Flick past the threshold → next card (wrap), then settle.
 			setDx(0);
-			setTimeout(next, 0);
+			setTimeout(() => step(1), 0);
 			return;
 		}
 		setDx(0);
-		if (!d.moved) onOpen(index, gallery, e.currentTarget.querySelector<HTMLElement>("img"));
+		// Open on the current card's slot in the gallery, which skips the dead
+		// ones, so the lightbox starts on the picture the tap showed.
+		if (!d.moved) {
+			if (topAt !== -1) onOpen(topAt, gallery, e.currentTarget.querySelector<HTMLElement>("img"));
+		}
 	};
 
 	return (
 		<div className="tr-img-stack" role="group" aria-label={t("settings.previewImage")}>
 			{resolved.map((item, i) => {
-				const pos = (((i - index + count) % count) + count) % count;
+				const pos = (((i - top + count) % count) + count) % count;
 				const depth = count > 1 ? pos / (count - 1) : 0;
 				const ease = depth * depth;
 				const lift = (count - 1) * 12 * 0.45;
+				const dead = isMissing(item);
+				// A dead card is inert at every depth: it has nothing to drag or
+				// open, so it never claims the cursor or the keyboard.
+				const interactive = pos === 0 && !dead;
 				const style = {
 					zIndex: count - pos,
 					transform: `translate(-50%, -50%) translateY(${pos * 12 - lift}px) scale(${1 - 0.16 * ease}) rotate(${Math.sin(i * 2.399) * 4}deg)`,
@@ -82,38 +127,56 @@ export function ImageCardStack<T extends BlobImageItem>({
 				return (
 					<div
 						key={i}
-						className={`tr-img-stack-card${pos === 0 ? " tr-img-stack-card--top" : ""}${dragging && pos === 0 ? " tr-img-stack-card--drag" : ""}`}
+						className={`tr-img-stack-card${pos === 0 ? " tr-img-stack-card--top" : ""}${
+							dragging && pos === 0 ? " tr-img-stack-card--drag" : ""
+						}${dead ? " tr-img-stack-card--missing" : ""}`}
 						style={style}
-						role={pos === 0 ? "button" : undefined}
-						tabIndex={pos === 0 ? 0 : -1}
-						title={pos === 0 ? t("settings.previewImage") : undefined}
+						role={interactive ? "button" : undefined}
+						tabIndex={interactive ? 0 : -1}
+						title={interactive ? t("settings.previewImage") : undefined}
 						aria-hidden={pos !== 0}
-						onPointerDown={pos === 0 ? onPointerDown : undefined}
-						onPointerMove={pos === 0 ? onPointerMove : undefined}
-						onPointerUp={pos === 0 ? onPointerUp : undefined}
-						onPointerCancel={pos === 0 ? onPointerUp : undefined}
+						onPointerDown={interactive ? onPointerDown : undefined}
+						onPointerMove={interactive ? onPointerMove : undefined}
+						onPointerUp={interactive ? onPointerUp : undefined}
+						onPointerCancel={interactive ? onPointerUp : undefined}
 						onKeyDown={
-							pos === 0
+							interactive
 								? (e: React.KeyboardEvent<HTMLDivElement>) => {
 										if (e.key === "Enter" || e.key === " ") {
 											e.preventDefault();
-											onOpen(index, gallery);
+											if (topAt !== -1) onOpen(topAt, gallery);
 										} else if (e.key === "ArrowRight") {
-											next();
+											step(1);
 										} else if (e.key === "ArrowLeft") {
-											setIndex(i => (i - 1 + count) % count);
+											step(-1);
 										}
 									}
 								: undefined
 						}
 					>
-						<img src={item.src} alt={item.alt} draggable={false} loading="lazy" decoding="async" />
+						{dead ? (
+							<span className="tr-img-stack-missing">
+								<ImageOff size={18} aria-hidden="true" />
+								<span>{t("tools.imageUnavailable")}</span>
+							</span>
+						) : (
+							<img
+								src={item.src}
+								alt={item.alt}
+								draggable={false}
+								loading="lazy"
+								decoding="async"
+								onError={() => setMissing(prev => new Set(prev).add(item.src))}
+							/>
+						)}
 					</div>
 				);
 			})}
-			<div className="tr-img-stack-count" aria-hidden="true">
-				{index + 1} / {count}
-			</div>
+			{topAt !== -1 && (
+				<div className="tr-img-stack-count" aria-hidden="true">
+					{topAt + 1} / {shown.length}
+				</div>
+			)}
 		</div>
 	);
 }

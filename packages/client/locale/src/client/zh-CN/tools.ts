@@ -1994,6 +1994,7 @@ export const tools = {
 	"tools.videoGeneratingWithState": "视频生成中… {state}",
 	"tools.videoResultWithCount": "视频结果 {count}",
 	"tools.videoUnavailable": "当前环境无法播放该视频",
+	"tools.imageUnavailable": "图片已不可用",
 	"tools.toolGenerateImage": "生成图片",
 	"tools.toolGithub": "GitHub",
 	"tools.toolGlob": "匹配文件",
