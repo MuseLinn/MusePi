@@ -4209,6 +4209,7 @@ ipcMain.handle("remote-target-stop", async (_event, targetId) =>
 ipcMain.handle("remote-target-list", () => remoteTargets.listTargets());
 
 ipcMain.handle("remote-docker-detect", async () => remoteTargets.detectDocker());
+ipcMain.handle("remote-capabilities-probe", async (_event, input) => remoteTargets.probeRemoteCapabilities(input));
 
 ipcMain.handle("remote-docker-containers", async (_event, daemonPort) => {
 	const list = await remoteTargets.listContainers();

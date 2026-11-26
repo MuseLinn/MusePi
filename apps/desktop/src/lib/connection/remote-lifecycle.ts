@@ -87,6 +87,18 @@ export interface ShellBridge {
 	stopTarget?(targetId: string): Promise<{ ok: boolean; stopped: boolean; reason?: string }>;
 	listTargets?(): Promise<ManagedTargetStatus[]>;
 	detectDocker?(): Promise<{ available: boolean; version?: string; reason?: string; error?: string }>;
+	/** What a *remote* host can run, asked through ssh. Local detection cannot
+	 *  answer this, which is why remote container / remote WSL used to be
+	 *  refused outright; absence of this method means the bridge predates it. */
+	probeRemoteCapabilities?(input: {
+		destination: string;
+		sshPort?: number;
+		keyPath?: string;
+		proxyJump?: string;
+	}): Promise<
+		| { ok: true; docker: { available: boolean; version?: string; reason?: string } | null; wsl: { available: boolean; distros: string[] } | null }
+		| { ok: false; reason: string; error?: string }
+	>;
 	dockerContainers?(daemonPort: number): Promise<{
 		ok: boolean;
 		containers?: Array<{ name: string; image: string; hostPort: number; containerPort: number }>;

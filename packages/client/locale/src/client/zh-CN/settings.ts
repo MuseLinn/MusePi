@@ -7278,6 +7278,8 @@ export const settings = {
 	"settings.instanceEnvironment": "运行环境",
 	"settings.environmentSystem": "主机系统",
 	"settings.environmentContainer": "容器",
+	"settings.remoteProbeRunning": "正在探测该主机…",
+	"settings.remoteProbeNoBridge": "当前版本无法探测远端主机",
 	"settings.environmentRemoteUnsupported": "远端容器与远端 WSL 暂不可用",
 	"settings.connectionKindLocal": "本机",
 	"settings.connectionKindWsl": "WSL",

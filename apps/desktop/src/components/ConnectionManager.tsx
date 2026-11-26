@@ -314,6 +314,50 @@ export function ConnectionManager({
 		void runDockerDetection();
 	}, [adding, draft.kind, docker, runDockerDetection]);
 
+	/**
+	 * What the *remote* host can run, asked on that host.
+	 *
+	 * The environment chips above are enabled or disabled by this answer, so a
+	 * remote machine without docker no longer offers a container the user cannot
+	 * reach. Absent a bridge the probe reports `unknown`, and the chips stay
+	 * disabled rather than guessing.
+	 */
+	const [remote, setRemote] = useState<
+		| { state: "idle" }
+		| { state: "probing" }
+		| { state: "ok"; docker: boolean; wsl: boolean }
+		| { state: "failed"; error: string }
+	>({ state: "idle" });
+	useEffect(() => {
+		if (!adding || draft.kind !== "ssh" || remote.state === "probing") return;
+		const host = draft.sshHost.trim();
+		if (!host) return;
+		const bridge = shellBridge();
+		if (!bridge?.probeRemoteCapabilities) {
+			setRemote({ state: "failed", error: t("settings.remoteProbeNoBridge") });
+			return;
+		}
+		setRemote({ state: "probing" });
+		void bridge
+			.probeRemoteCapabilities({
+				destination: host,
+				sshPort: Number.parseInt(draft.sshPort, 10) || undefined,
+				keyPath: draft.keyPath.trim() || undefined,
+				proxyJump: draft.proxyJump.trim() || undefined,
+			})
+			.then(result => {
+				if (!result.ok) {
+					setRemote({ state: "failed", error: result.error ?? result.reason });
+					return;
+				}
+				setRemote({
+					state: "ok",
+					docker: result.docker?.available === true,
+					wsl: result.wsl?.available === true,
+				});
+			});
+	}, [adding, draft.kind, draft.sshHost, draft.sshPort, draft.keyPath, draft.proxyJump, remote.state]);
+
 	const runDetection = useCallback(async (): Promise<void> => {
 		setWsl("checking");
 		setWsl(await detectWsl(detect));
@@ -663,7 +707,11 @@ export function ConnectionManager({
 									aria-checked={axes.location === location}
 									className="gui-conn-kind-btn"
 									onClick={() => {
-										const next = kindForAxes(location, axes.environment);
+										// Switching to remote with a container selected would ask for a
+										// pair this host may not run; fall back to the plain host kind
+										// and let the environment row decide from the probe.
+										const environment = location === "remote" ? "system" : axes.environment;
+										const next = kindForAxes(location, environment);
 										if (next) setDraft(current => ({ ...current, kind: next }));
 									}}
 								>
@@ -679,7 +727,18 @@ export function ConnectionManager({
 						<span className="gui-conn-axis-label">{t("settings.instanceEnvironment")}</span>
 						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceEnvironment")}>
 							{(["system", "container", "wsl"] as const).map(environment => {
-								const reachable = kindForAxes(axes.location === "remote" ? "remote" : "local", environment);
+								// Remote: the host itself answered whether it can run each
+								// environment, so the chip reflects that machine, not this one.
+								// Local keeps the local backend's answer.
+								const remoteLocation = axes.location === "remote";
+								const remoteReachable =
+									remoteLocation && environment !== "system"
+										? remote.state === "ok" && (environment === "container" ? remote.docker : remote.wsl)
+										: null;
+								const reachable =
+									remoteReachable === null
+										? kindForAxes(remoteLocation ? "remote" : "local", environment) !== null
+										: remoteReachable;
 								return (
 									<button
 										key={environment}
@@ -687,10 +746,17 @@ export function ConnectionManager({
 										role="radio"
 										aria-checked={axes.environment === environment}
 										disabled={!reachable}
-										title={reachable ? undefined : t("settings.environmentRemoteUnsupported")}
+										title={
+											reachable
+												? undefined
+												: remoteLocation && remote.state === "probing"
+													? t("settings.remoteProbeRunning")
+													: t("settings.environmentRemoteUnsupported")
+										}
 										className="gui-conn-kind-btn"
 										onClick={() => {
-											if (reachable) setDraft(current => ({ ...current, kind: reachable }));
+											const next = kindForAxes(remoteLocation ? "remote" : "local", environment);
+											if (reachable && next) setDraft(current => ({ ...current, kind: next }));
 										}}
 									>
 										<Icon

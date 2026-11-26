@@ -7609,6 +7609,8 @@ export const settings = {
 	"settings.instanceEnvironment": "Runs in",
 	"settings.environmentSystem": "Host system",
 	"settings.environmentContainer": "Container",
+	"settings.remoteProbeRunning": "Checking that host…",
+	"settings.remoteProbeNoBridge": "This build cannot probe a remote host",
 	"settings.environmentRemoteUnsupported": "Remote containers and remote WSL are not available yet",
 	"settings.connectionKindLocal": "Local",
 	"settings.connectionKindWsl": "WSL",

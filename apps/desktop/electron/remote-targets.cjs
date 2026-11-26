@@ -177,6 +177,67 @@ function buildSshTunnelArgs(input) {
 	return args;
 }
 
+/**
+ * Ask a remote host what it can run — on that host, through ssh.
+ *
+ * The local probes (`detectDocker`, `listWslDistros`) run against this machine,
+ * so "remote + container" could only be refused. Refusing was correct while the
+ * question could not be asked; asking it is one ssh exec, using the same
+ * destination, key and jump chain the tunnel already uses.
+ *
+ * `BatchMode=yes` for the same reason the tunnel uses it: there is no terminal,
+ * so a password or host-key prompt must fail fast instead of hanging the form.
+ *
+ * The wire between the two ends is one line per fact, so nothing here depends
+ * on quoting a nested command substitution:
+ *
+ *   docker=1:<version>   a docker CLI answered with its server version
+ *   docker=0:<reason>    missing, or its daemon is not running
+ *   wsl=1                `wsl.exe -l -q` answered; its names follow, one line each
+ *   wsl=0                not Windows, or no WSL
+ *
+ * A fact the host does not print stays absent rather than defaulting, so an
+ * unreachable host and a host without docker remain distinguishable.
+ */
+async function probeRemoteCapabilities(input = {}) {
+	const destination = input.destination;
+	if (!destination) return { ok: false, reason: "missing-destination" };
+	const script = [
+		"if command -v docker >/dev/null 2>&1; then",
+		'v=$(docker info --format "{{.ServerVersion}}" 2>/dev/null)',
+		'if [ -n "$v" ]; then echo "docker=1:$v"; else echo "docker=0:daemon-unreachable"; fi',
+		"else echo docker=0:docker-not-found; fi",
+		"if command -v wsl.exe >/dev/null 2>&1; then echo wsl=1; wsl.exe -l -q 2>/dev/null",
+		"else echo wsl=0; fi",
+	].join("; ");
+	const args = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8"];
+	if (Number.isInteger(input.sshPort) && input.sshPort > 0 && input.sshPort !== 22) {
+		args.push("-p", String(input.sshPort));
+	}
+	if (input.keyPath) args.push("-i", input.keyPath);
+	if (input.proxyJump) args.push("-J", input.proxyJump);
+	args.push(destination, script);
+	const result = await runOnce(input.sshCommand ?? "ssh", args, 20_000);
+	if (!result.ok) {
+		return { ok: false, reason: "unreachable", error: (result.stderr || result.stdout).trim() };
+	}
+	const lines = result.stdout
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean);
+	const parsed = { ok: true, docker: null, wsl: null };
+	for (const line of lines) {
+		if (line.startsWith("docker=1:")) parsed.docker = { available: true, version: line.slice(9) };
+		else if (line.startsWith("docker=0:")) parsed.docker = { available: false, reason: line.slice(9) };
+		else if (line === "wsl=1") parsed.wsl = { available: true, distros: [] };
+		else if (line === "wsl=0") parsed.wsl = { available: false };
+		// After `wsl=1` every remaining line is a distribution name exactly as
+		// `wsl.exe -l -q` printed it.
+		else if (parsed.wsl?.available) parsed.wsl.distros.push(line);
+	}
+	return parsed;
+}
+
 function spawnOwned(record, file, args) {
 	const child = spawnImpl(file, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
 	record.child = child;
@@ -654,6 +715,7 @@ module.exports = {
 	parseDockerPs,
 	parsePublishedPorts,
 	portOpen,
+	probeRemoteCapabilities,
 	resetForTests,
 	runContainer,
 	startSshTunnel,
