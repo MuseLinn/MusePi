@@ -19,7 +19,7 @@ import { GuiSessionStore } from "../src/lib/session-store";
  * the user reported as "the list has a highlight on the container's top edge
  * when it is at the top". The top feather therefore appears only once rows are
  * really sliding under the head; the bottom edge, the jump-to-bottom button
- * and TurnRail keep their plain edge semantics.
+ * and TurnNavigator keep their plain edge semantics.
  *
  * happy-dom has no layout engine, so the geometry is driven through the same
  * data attributes the scroller writes: scrollHeight/clientHeight are defined

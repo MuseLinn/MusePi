@@ -96,7 +96,7 @@ console.log("open:", openRes.result?.result?.value ?? JSON.stringify(openRes.res
 const jumpRes = (await send(
 	"Runtime.evaluate",
 	{
-		expression: `(async()=>{ const track=document.querySelector(".gui-turn-track"); if(!track) return "no-rail"; const r=track.getBoundingClientRect(); track.dispatchEvent(new PointerEvent("pointermove",{bubbles:true,cancelable:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2})); await new Promise(res=>setTimeout(res,300)); track.dispatchEvent(new KeyboardEvent("keydown",{key:"Home",bubbles:true,cancelable:true})); await new Promise(res=>setTimeout(res,200)); track.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true,cancelable:true})); return "dispatched"; })()`,
+		expression: `(async()=>{ const frame=document.querySelector(".gui-turn-frame"); if(!frame) return "no-rail"; frame.focus(); frame.dispatchEvent(new KeyboardEvent("keydown",{key:"Home",bubbles:true,cancelable:true})); await new Promise(res=>setTimeout(res,200)); frame.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true,cancelable:true})); return "dispatched"; })()`,
 		returnByValue: true,
 		awaitPromise: true,
 	},

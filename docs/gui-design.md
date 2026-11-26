@@ -519,7 +519,7 @@ turn
 3. **泽** `--glass-sheen` 线性渐变（对角 45°，仅浮层/活动卡）
 4. **影** `--glass-shadow` 双层（近环 + 远落地）
 
-**层级表（新增组件必须按级取值，禁止跳级发明）**：L0 pane（滚动面板底/输入条：全无）/ L1 card（折叠段、消息卡、工具卡：底+缘）/ L2 float（ApprovalCard、TurnRail hover、回到底部钮、lightbox：强底+缘+rim+泽+近环）/ L3 overlay（对话框、GlobalPause、导览：双层全量）。
+**层级表（新增组件必须按级取值，禁止跳级发明）**：L0 pane（滚动面板底/输入条：全无）/ L1 card（折叠段、消息卡、工具卡：底+缘）/ L2 float（ApprovalCard、TurnNavigator preview、回到底部钮、lightbox：强底+缘+rim+泽+近环）/ L3 overlay（对话框、GlobalPause、导览：双层全量）。
 
 **活态**（玻璃随会话状态呼吸）：streaming/进行中 → rim 高光换 accent、底升 strong；审批等待 → 进度线（guest）/pulse beam（desktop）+ 底升 strong；冻结态回落 L1。
 
@@ -787,7 +787,8 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
 ### Find bar (⌘F, in-conversation)
 
 - **Placement**: absolutely positioned over the transcript's **top** edge, right-aligned
-  (`.gui-find`, `gui-chat.css`) so it clears the TurnRail tick gutter on either side.
+  (`.gui-find`, `gui-chat.css`) so it clears the TurnNavigator mark gutter and the native
+  scrollbar on either side.
 - **Hard rule — never reflows the transcript.** The bar is `position: absolute` inside
   `.gui-transcript-wrap`; a bar in normal flow would re-measure every virtual row on open.
 - **Material**: §5s glass recipe, `--color-surface-raised` at 82% + `backdrop-filter`

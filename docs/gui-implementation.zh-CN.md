@@ -1053,18 +1053,18 @@ seq 单一权威 = daemon journal：journal 打开时从文件尾部恢复 `#seq
 
 `ChatView.requestJump(timestamp)`（`ChatView.tsx`，约 2055 行）已经是「把这行放到屏幕上」
 的唯一属主。它会翻历史分页直到目标条目出现、在目标早于压缩点时展开折叠，然后
-`virtualizer.scrollToIndex(…, {align:"center"})` 并闪烁该行。TurnRail、消息树画布、
+`virtualizer.scrollToIndex(…, {align:"center"})` 并闪烁该行。TurnNavigator、消息树画布、
 轨迹图全部走它。
 
 **因此查找栏完全不持有任何滚动几何** —— `ChatFind.tsx` 是纯展示组件，把 timestamp 交回
 调用方。若你后续加「复制消息链接」（§46 待办），也走这里；第二条路径必然在分页与压缩
 两个 case 上漂移。
 
-**TurnRail 悬浮/跳转交互**：悬浮面板为了几何只挂在刻度条内部，面板自己的 pointer 事件
-必须就地截止（刻度条也忽略落在面板里的移动），否则行高亮会反过来驱动刻度 scrub 和边缘
-翻页；指针重新进入 rail 要取消已排定的隐藏计时（另用透明 pseudo-element 桥接 6px 空隙）；
-点击刻度或面板行跳转后立即收起列表，指针离开 rail 之前不再自动弹开；非主键 pointerdown
-不跳转。
+**TurnNavigator 悬浮/跳转交互**：每一轮是固定 pitch 的一个按钮标记，装在可滚动的 frame 里；
+hover/focus 标记在非交互 tooltip 里预览该轮提示词（没有可交互列表面板，也没有边缘 carousel），
+所以指针在轨内时轨道不会自己滑动。active 标记只在指针离开后居中，规则跟随阅读
+（near-bottom → 最新轮，否则 `min(96px, 视口 20%)` 阅读线之上最后一轮）。轨道距边缘
+`calc(4px + --mp-scrollbar-width)`，永不覆盖原生滚动条。
 
 它声明在查找块**之后**，所以查找块通过 `requestJumpRef.current`（一个在 effect 里赋值的
 ref）触达。保留这个间接层 —— 反过来做就得把 `requestJump` 移到 `loadOlder` 之上。

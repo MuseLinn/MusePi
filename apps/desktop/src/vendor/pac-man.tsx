@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
  * be interpolated by CSS without a registered `d`).
  *
  * Mouth frame selection:
- * - `mouth` 0..1 drives the static body cutout (TurnRail hover states).
+ * - `mouth` 0..1 drives the static body cutout (TurnNavigator hover states).
  * - `animating` renders the three chomp frames instead of the rest body;
  *   the `.pac-chomp` class cycles them (open → mid → closed → …).
  */

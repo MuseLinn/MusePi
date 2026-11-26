@@ -5,6 +5,10 @@
 	overflow-y: auto;
 	overflow-y: overlay;
 	overflow-x: hidden;
+	/* Reserve the bar's layout width so a session that starts or stops
+	 * overflowing does not shift every row sideways by it; the desktop
+	 * transcript reads the same gutter for its turn navigator offset. */
+	scrollbar-gutter: stable;
 	/* Chromium scroll anchoring fights the JS prepend anchor
 	 * (TranscriptAnchorCtl.restore / the bottom-follow pin): on a 500-row
 	 * prepend the browser picks its own anchor node and re-adjusts
@@ -24,6 +28,7 @@
 .gui-transcript {
 	overflow-anchor: none;
 	overflow-x: clip;
+	scrollbar-gutter: stable;
 }
 
 .tr-empty {

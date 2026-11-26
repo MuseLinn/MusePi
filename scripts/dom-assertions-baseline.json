@@ -108,7 +108,6 @@
 		"apps/desktop/test/transcript-top-fade.test.tsx": 2,
 		"apps/desktop/test/turn-map-browser.test.ts": 3,
 		"apps/desktop/test/turn-map-canvas.test.tsx": 8,
-		"apps/desktop/test/turn-rail-loadmore.test.tsx": 11,
 		"apps/desktop/test/user-account-menu.test.tsx": 5,
 		"apps/desktop/test/voice-input-mode-i18n.test.tsx": 1,
 		"apps/desktop/test/voice-settings.test.tsx": 15,

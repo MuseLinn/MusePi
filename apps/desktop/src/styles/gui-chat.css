@@ -6398,7 +6398,7 @@ body.gui-resizing .gui-pane-right {
  * top edge. Offset parent is .gui-chat-body (see above).
  *
  * --gui-find-inset-end is MEASURED, not hardcoded: ChatView observes the
- * TurnRail — a 24px absolutely-positioned overlay hugging whichever edge
+ * TurnNavigator — a 24px absolutely-positioned overlay hugging whichever edge
  * the user picked in 设置 → 外观 — and publishes the clearance needed to sit
  * inside it. The literal fallback only applies before that first measurement. */
 .gui-find {
@@ -6491,7 +6491,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* Scroll ownership: the OUTER .gui-transcript is the scroller here
- * (jump-to-bottom, scroll-shadow and TurnRail all read its scroll
+ * (jump-to-bottom, scroll-shadow and TurnNavigator all read its scroll
  * state). The shared .tr-root ships height:100% + overflow-y:auto —
  * nested inside a fixed-height scroller that made the INNER div the
  * real scroller and silently deadened every outer listener. Expand the

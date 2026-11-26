@@ -627,49 +627,102 @@
 	color: var(--color-text-faint);
 }
 
-/* ── Transcript turn rail (openchamber PromptNavigatorRail parity) ──
- * Burger-layer ticks stacked at a fixed 12px pitch. The track hugs its
- * tick window (height = visible ticks × pitch, set inline) and the rail
- * centers on the session column, so few turns sit dead-center instead of
- * clustering at the top of a fixed 360px track. Hovering opens a gliding
- * multi-row panel (all turns at once, openchamber); the tick for the turn
- * currently in view (scroll-spy) carries the accent. Side (right/left)
- * and glyph style (burger/pacman) come from settings via data-side. */
-.gui-turn-rail {
+/* ── Transcript turn navigator ─────────────────────────────────────────
+ * One fixed-pitch mark per turn inside a scrollable frame. The rail clears
+ * the native scrollbar (a skin may widen it, so the offset reads
+ * --mp-scrollbar-width) and keeps its own scrollbar hidden. The active mark
+ * carries the accent; hover/focus previews the prompt in a non-interactive
+ * tooltip. Overflow scrolls inside the frame with fade bands — no carousel. */
+.gui-turn-nav {
 	position: absolute;
 	top: 50%;
 	transform: translateY(-50%);
 	width: 24px;
 	z-index: 20;
 }
-.gui-turn-rail[data-side="right"] {
-	right: 4px;
+.gui-turn-nav[data-side="right"] {
+	right: calc(4px + var(--mp-scrollbar-width, 5px));
 }
-.gui-turn-rail[data-side="left"] {
+.gui-turn-nav[data-side="left"] {
 	left: 4px;
 }
+/* RTL puts the native bar on the left edge. */
+[dir="rtl"] .gui-turn-nav[data-side="left"] {
+	left: calc(4px + var(--mp-scrollbar-width, 5px));
+}
+[dir="rtl"] .gui-turn-nav[data-side="right"] {
+	right: 4px;
+}
 
-.gui-turn-track {
+.gui-turn-frame {
 	position: relative;
 	width: 24px;
+	max-height: min(420px, 60vh);
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	scrollbar-width: none;
 }
-/* Load-more control (openchamber PromptNavigatorRail parity). Absolutely
- * positioned above the tick track rather than in flow, so adding it cannot
- * shift the tape the carousel measures. `bottom: 100%` + the same 2px inset
- * the ticks use (`.gui-turn-tick { inset-inline: 2px }` in a 24px rail) puts
- * the 20px circle on the tick column's centre line for BOTH rail sides —
- * a 20px box inset 2px in a 24px rail is the same box either way, so no
- * [data-side] override is needed.
- *
- * It must be clickable while the ticks stay pointer-events:none — the whole
- * gutter is otherwise one hover/click target that maps y to the nearest turn. */
+.gui-turn-frame::-webkit-scrollbar {
+	display: none;
+}
+.gui-turn-frame:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 4px;
+	border-radius: 999px;
+}
+
+.gui-turn-marks {
+	position: relative;
+	width: 100%;
+}
+
+.gui-turn-mark {
+	position: absolute;
+	inset-inline: 2px;
+	display: flex;
+	align-items: center;
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+}
+.gui-turn-nav[data-side="right"] .gui-turn-mark {
+	justify-content: flex-end;
+}
+.gui-turn-nav[data-side="left"] .gui-turn-mark {
+	justify-content: flex-start;
+}
+
+.gui-turn-mark-bar {
+	display: block;
+	height: 2px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 30%, transparent);
+	transition: width 120ms ease-out, background 120ms ease-out;
+}
+.gui-turn-mark--preview .gui-turn-mark-bar {
+	background: color-mix(in oklab, var(--color-text) 80%, transparent);
+}
+.gui-turn-mark--active .gui-turn-mark-bar {
+	background: var(--color-accent);
+}
+.gui-turn-nav[data-style="pacman"] .gui-turn-mark-bar {
+	display: grid;
+	place-items: center;
+	height: auto;
+	border-radius: 50%;
+	background: transparent;
+}
+
+/* Load-more control: absolutely above the frame so adding it cannot shift the
+ * marks the frame centres. */
 .gui-turn-loadmore {
 	position: absolute;
-	bottom: 100%;
+	bottom: calc(100% + 6px);
 	inset-inline-end: 2px;
 	width: 20px;
 	height: 20px;
-	margin-bottom: 6px;
 	z-index: 1;
 	display: flex;
 	align-items: center;
@@ -681,219 +734,70 @@
 	color: color-mix(in oklab, var(--color-text) 55%, transparent);
 	cursor: pointer;
 	transition: background 120ms ease-out, color 120ms ease-out, opacity 120ms ease-out;
-	}
+}
 .gui-turn-loadmore:hover:not(:disabled) {
 	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 	color: var(--color-text);
-	}
+}
 .gui-turn-loadmore:disabled {
 	cursor: wait;
 	opacity: 0.7;
-	}
+}
 .gui-turn-loadmore-icon {
 	width: 14px;
 	height: 14px;
-	}
-/* The spinner is the only motion here, and it only runs while a page is in
- * flight; prefers-reduced-motion users get a static glyph instead of a
- * frozen half-spin. */
+}
 @media (prefers-reduced-motion: reduce) {
 	.gui-turn-loadmore-icon {
 		animation: none !important;
 	}
-	}
+}
 
-.gui-turn-tape-wrap {
+/* Prompt preview: a narrow tooltip on the content side of the rail. It never
+ * takes pointer events, so it cannot steal hover from the marks. */
+.gui-turn-preview {
 	position: absolute;
-	inset: 0;
-	overflow: hidden;
-}
-
-.gui-turn-tape {
-	position: absolute;
-	inset-inline: 0;
-	top: 0;
-	transition: transform 300ms ease-out;
-}
-
-/* Ticks are pointer-events-none: the whole gutter is one hover/click
- * target mapping the cursor's y to the nearest tick (openchamber), so
- * tick density never demands pointer precision. */
-.gui-turn-tick {
-	position: absolute;
-	inset-inline: 2px;
-	height: 12px; /* pitch slot */
-	display: flex;
-	align-items: center;
-	pointer-events: none;
-	border: none;
-	padding: 0;
-	background: none;
-}
-.gui-turn-rail[data-side="right"] .gui-turn-tick {
-	justify-content: flex-end;
-}
-.gui-turn-rail[data-side="left"] .gui-turn-tick {
-	justify-content: flex-start;
-}
-
-/* The burger layer: a short rounded bar, stretched by the proximity
- * wave around the hovered turn (width is set inline). Shades of the
- * foreground like openchamber; the active (currently displayed) turn
- * carries the accent. */
-.gui-turn-tick-bar {
-	display: block;
-	height: 2px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 30%, transparent);
-	transition: width 120ms ease-out, background 120ms ease-out;
-}
-.gui-turn-tick--hover .gui-turn-tick-bar {
-	background: color-mix(in oklab, var(--color-text) 80%, transparent);
-}
-.gui-turn-tick--active .gui-turn-tick-bar {
-	background: var(--color-accent);
-}
-
-/* Pacman variant: a disc with a wedge mouth, gaping on hover. The mouth
- * faces the transcript (inward): left side on a right-side rail, right
- * side on a left-side rail. The active turn is a solid disc. Height is
- * auto so the square glyph is never squeezed into the 2px burger rail —
- * the 12px pitch slot clips only the edge ticks' overshoot via the tape
- * mask (hover width is clamped in TurnRail.tsx). The glyph itself is the
- * <PacMan> SVG from vendor/pac-man.tsx (direction via the `side` prop),
- * so no CSS variants are needed. */
-.gui-turn-rail--pacman .gui-turn-tick-bar {
-	display: grid;
-	place-items: center;
-	height: auto;
-	border-radius: 50%;
-	background: transparent;
-}
-
-/* Hover panel: a gliding mini-list of all turns (openchamber parity),
- * centered on the rail — the list glides internally so the highlighted
- * row stays in view and the panel itself never moves. Anchored with
- * translateY(-50%) and faded with an OPACITY-ONLY keyframe: gui-menu-in
- * scales the transform property, which would drop the centering
- * translate mid-fade and make the card appear shifted, then snap. */
-.gui-turn-panel {
-	position: absolute;
-	top: 50%;
+	z-index: 1;
+	width: min(18rem, 40vw);
 	transform: translateY(-50%);
-	width: min(20rem, calc(100vw - 6rem));
-	overflow: hidden;
-	border-radius: var(--radius-xl);
-	pointer-events: auto;
-	z-index: 30;
-	/* Frosted glass (same recipe as the floating menus). */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	pointer-events: none;
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 8px 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+	background: color-mix(in oklab, var(--bg-overlay) 90%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 12px 32px rgba(0, 0, 0, 0.45);
-	animation: gui-turn-panel-in 120ms ease-out;
-}
-.gui-turn-rail[data-side="right"] .gui-turn-panel {
-	right: 30px;
-}
-.gui-turn-rail[data-side="left"] .gui-turn-panel {
-	left: 30px;
-}
-
-/* Transparent bridge across the 6px gap to the tick column: without it the
- * pointer leaves the rail while travelling into the panel, and the hide timer
- * can close the list under the cursor. Pointer events only — no paint. */
-.gui-turn-panel::before {
-	content: "";
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	width: 8px;
-}
-.gui-turn-rail[data-side="right"] .gui-turn-panel::before {
-	right: 100%;
-}
-.gui-turn-rail[data-side="left"] .gui-turn-panel::before {
-	left: 100%;
-}
-
-@keyframes gui-turn-panel-in {
-	from {
-		opacity: 0;
-	}
-	to {
-		opacity: 1;
-	}
-}
-
-.gui-turn-panel-list {
-	position: relative;
-	overflow: hidden;
-}
-
-.gui-turn-panel-glide {
-	position: absolute;
-	inset-inline: 0;
-	top: 0;
-	transition: transform 200ms ease-out;
-}
-
-/* Each row is a bordered card inset within its pitch slot so
- * neighbouring prompts read as separate items instead of one run. */
-.gui-turn-panel-row {
-	position: absolute;
-	inset-inline: 0;
-	padding: 0 6px;
-	cursor: pointer;
-}
-.gui-turn-panel-card {
-	display: flex;
-	align-items: center;
-	height: 100%;
-	border-radius: var(--radius-lg);
-	border: 1px solid color-mix(in oklab, var(--border) 45%, transparent);
-	padding: 0 8px;
-	transition: background 100ms ease-out, border-color 100ms ease-out;
-}
-.gui-turn-panel-row--hover .gui-turn-panel-card {
-	background: color-mix(in oklab, var(--color-text) 8%, transparent);
-	border-color: color-mix(in oklab, var(--border-strong) 60%, transparent);
-}
-.gui-turn-panel-row--active .gui-turn-panel-card {
-	background: var(--color-accent-soft);
-	border-color: transparent;
-}
-
-.gui-turn-panel-text {
-	min-width: 0;
-	flex: 1;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.4;
 	color: var(--color-text-muted);
+}
+.gui-turn-nav[data-side="right"] .gui-turn-preview {
+	right: calc(100% + 10px);
+}
+.gui-turn-nav[data-side="left"] .gui-turn-preview {
+	left: calc(100% + 10px);
+}
+.gui-turn-preview-text {
+	min-width: 0;
 	display: -webkit-box;
-	-webkit-line-clamp: 2;
+	-webkit-line-clamp: 3;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 	overflow-wrap: anywhere;
 }
-/* Advisor-started turns (shared isTurnStart semantics): a compact tag
- * distinguishes an advisory note from a user prompt in the hover panel. */
-.gui-turn-panel-kind {
+.gui-turn-preview-kind {
 	flex: none;
 	font-size: var(--ui-font-size-2xs, 10px);
 	line-height: 1;
 	padding: 2px 5px;
-	margin-right: 6px;
 	border-radius: var(--radius-xl);
 	color: var(--color-accent, var(--color-text));
 	background: color-mix(in oklab, var(--color-accent, var(--color-text)) 14%, transparent);
 	white-space: nowrap;
-}
-.gui-turn-panel-row--active .gui-turn-panel-text {
-	color: var(--color-text);
 }
 
 /* ── Round 6: compact group/project tab strip + project remove ─────── */

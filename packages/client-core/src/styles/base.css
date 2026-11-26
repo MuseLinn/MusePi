@@ -141,8 +141,8 @@ body {
 	--mp-scrollbar-hover-l2: var(--mp-scrollbar-skin-hover-l2, color-mix(in oklab, var(--fg-faint) 62%, transparent));
 	/* The bar's layout width. A surface that must align beside it reads this
 	 * instead of hardcoding the number. */
-	--mp-scrollbar-width: var(--mp-scrollbar-skin-width, 8px);
-	--mp-scrollbar-thumb-border: var(--mp-scrollbar-skin-border, 2px);
+	--mp-scrollbar-width: var(--mp-scrollbar-skin-width, 5px);
+	--mp-scrollbar-thumb-border: var(--mp-scrollbar-skin-border, 0px);
 	--mp-scrollbar-track-margin: 0px;
 }
 
@@ -182,7 +182,7 @@ body * {
 	border-radius: 999px;
 	corner-shape: round;
 	background-color: var(--mp-scrollbar-tint);
-	background-clip: padding-box;
+	background-clip: content-box;
 }
 
 @media (hover: hover) {

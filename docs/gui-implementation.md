@@ -1014,7 +1014,7 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 
 - **mem-bench 判定依据**（`docs/review/0.5.0-m1-transcript-design/mem-bench.md`）：3,000 轮合成会话 wire 载荷 194.5MB、恢复 parse ~470ms、全量派生 ~200ms/次、常驻字符串 371MB；尾部 300 条窗口派生恒定 ~0.1ms、数据 2.6MB（派生收益 ~2000×、数据 ~140×）。测量方法学：JSC `heapUsed`/`rss` 不可用（rope 共享 + GC 页归还 ±400MB 噪声）——用「字符串字节总量」作内存代理；合成数据逐字符生成防 rope 共享。
 - **渲染窗口**（Transcript）：尾部 800 条初始 / 顶部哨兵上滚扩 600 / 会话切换复位；folds/turn-units 在窗口切片上派生再平移回绝对索引（下游零改动）；跳转目标出窗时按需扩窗 + pending-jump 二次生效；扩窗按 scrollHeight 真实差值补偿 scrollTop。
-- **`turn-index.ts`**：每轮 ~120B 元数据（startIdx/entryId/timestamp/90 字摘要，4 例单测）；TurnRail 数据驱动——不再 DOM 测量（窗口外轮次无行可测正是导航条缺轮次根因）；scroll-spy 按 title=timestamp 反查；点击出窗轮次走 jumpRequest 扩窗后闪光落位；顶部 carousel 触顶自动 `session.history` 回填。
+- **`turn-index.ts`**：每轮 ~120B 元数据（startIdx/entryId/timestamp/90 字摘要，4 例单测）；TurnNavigator 数据驱动——不再 DOM 测量（窗口外轮次无行可测正是导航条缺轮次根因）；高亮按阅读规则（near-bottom 取最新轮，否则 `min(96px, 视口 20%)` 阅读线反查 `title=timestamp`，顶部默认第 0 轮）；点击出窗轮次走 jumpRequest 扩窗后闪光落位；daemon 仍有更早历史时由顶部加载按钮分页（不再有边缘 carousel）。
 - **数据链路既有**：daemon TAIL_ENTRIES=200 初始快照 + `session.history` beforeId 分页 + store.prependEntries——客户端补的是无界挂载/派生纪律。
 - **已知边界**：数据窗口（卸载前缀 entries 省内存）未做——窗口只回收派生/DOM 成本，entries 本体常驻内存；guest web shell（app.tsx）未接 onLoadOlder（web 本就全量加载，窗口化对派生/DOM 依然生效）。
 
@@ -1111,19 +1111,19 @@ must return `[]`, never degrade to an unscoped search (asserted in
 `ChatView.requestJump(timestamp)` (`ChatView.tsx`, ~line 2055) is already the single owner
 of "put this row on screen". It pages older chunks until the entry materializes, opens the
 compaction fold when the target predates it, then `virtualizer.scrollToIndex(…, {align:"center"})`
-and flashes the row. The TurnRail, the message-tree canvas and the trajectory map all route
+and flashes the row. The TurnNavigator, the message-tree canvas and the trajectory map all route
 through it.
 
 **The find bar therefore owns no scroll geometry at all** — `ChatFind.tsx` is presentational
 and hands a timestamp back. If you add copy-message-link (§46 backlog), route it here too;
 a second path will drift on the paging and compaction cases.
 
-**TurnRail hover/jump interaction**: the hover panel is a child of the tick strip for geometry
-only, so its pointer events stop there and the strip ignores panel-targeted moves — otherwise
-row highlighting would steer tick scrubbing and the edge carousel. Re-entering the rail cancels
-a pending hide (a transparent pseudo-element also bridges the 6px gap to the panel). A jump from
-a tick or a row dismisses the list until the pointer leaves the rail, and non-primary
-pointerdown never jumps.
+**TurnNavigator hover/jump interaction**: each turn is one button at a fixed pitch in a
+scrollable frame; hover or focus previews its prompt in a non-interactive tooltip (no
+interactive list, no edge carousel), so the rail cannot self-steer. The active mark centres
+only while the pointer is out, following reading (`near-bottom → latest`, otherwise the last
+turn above `min(96px, 20%)`). It sits `calc(4px + --mp-scrollbar-width)` from the edge, clear
+of the native bar.
 
 Declared **after** the find block, so the block reaches it through
 `requestJumpRef.current` (a ref assigned in an effect). Keep that indirection — the reverse

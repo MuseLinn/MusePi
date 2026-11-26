@@ -64,7 +64,7 @@ const BUILTIN_CLASSIC: ScrollbarSkin = {
 		track: "transparent",
 		eaten: "transparent",
 	},
-	size: 8,
+	size: 5,
 	pacGlyph: null,
 };
 

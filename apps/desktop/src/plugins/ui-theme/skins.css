@@ -11,8 +11,8 @@
  * a var() nested inside a custom property is substituted where the property is
  * declared, so an inherited image string could not follow a per-surface tint.
  *
- * `classic` is the base (no rule): an 8px capsule with a 2px transparent border
- * paints the 4px neutral thumb. */
+ * `classic` is the base (no rule): a 5px capsule with no inset border paints the
+ * full 5px neutral thumb. */
 
 /* ── Snake: a rounded head, one eye, and vertebra seams down the body ─────
  * 12px box with a 3px transparent border: the body paints 6px, the head is a

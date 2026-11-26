@@ -729,42 +729,6 @@
 	left:12px;
 	right:12px;
 }
-.gui-turn-rail--pacman[data-side=left] .gui-turn-tick--active .gui-turn-tick-bar
-{
-	background:var(--color-accent);
-}
-.gui-turn-rail--pacman[data-side=left] .gui-turn-tick--hover .gui-turn-tick-bar
-{
-	background:conic-gradient(from 0deg,transparent 0 100deg,var(--color-accent)100deg 360deg);
-}
-.gui-turn-rail--pacman[data-side=left] .gui-turn-tick-bar
-{
-	background:conic-gradient(from 0deg,transparent 0 45deg,color-mix(in oklab,var(--color-text)42%,transparent)45deg 360deg);
-}
-.gui-turn-rail[data-side=left]
-{
-	left:4px;
-}
-.gui-turn-rail[data-side=left] .gui-turn-panel
-{
-	left:30px;
-}
-.gui-turn-rail[data-side=left] .gui-turn-tick
-{
-	justify-content:flex-start;
-}
-.gui-turn-rail[data-side=right]
-{
-	right:4px;
-}
-.gui-turn-rail[data-side=right] .gui-turn-panel
-{
-	right:30px;
-}
-.gui-turn-rail[data-side=right] .gui-turn-tick
-{
-	justify-content:flex-end;
-}
 .gui-welcome[data-focused] form>.gui-border-beam
 {
 	display:flex;

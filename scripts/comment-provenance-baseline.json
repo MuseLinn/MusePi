@@ -46,7 +46,6 @@
 		"apps/desktop/src/components/TimelineOverview.tsx": 6,
 		"apps/desktop/src/components/Toolbar.tsx": 3,
 		"apps/desktop/src/components/TrajectoryView.tsx": 2,
-		"apps/desktop/src/components/TurnRail.tsx": 3,
 		"apps/desktop/src/components/UnifiedPluginsView.tsx": 9,
 		"apps/desktop/src/components/composer/approval-mode-button.tsx": 1,
 		"apps/desktop/src/components/composer/use-attachments.ts": 1,

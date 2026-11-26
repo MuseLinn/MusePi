@@ -94,9 +94,9 @@ import {
 	TURN_RAIL_CHANGED_EVENT,
 	TURN_RAIL_SIDE_KEY,
 	TURN_RAIL_STYLE_KEY,
-	type TurnRailSide,
-	type TurnRailStyle,
-} from "../TurnRail";
+	type TurnNavigatorSide,
+	type TurnNavigatorStyle,
+} from "../TurnNavigator";
 import { ChatSection } from "./chat";
 import { SchemaTabSection } from "./schema";
 import { NumberStepper } from "./shared";
@@ -331,11 +331,11 @@ export function AppearanceSection({
 	const [transcriptFont, setTranscriptFont] = useState<string>(
 		() => localStorage.getItem(TRANSCRIPT_FONT_KEY) ?? DEFAULT_TRANSCRIPT_FONT.id,
 	);
-	const [turnRailSide, setTurnRailSide] = useState<TurnRailSide>(
-		() => (localStorage.getItem(TURN_RAIL_SIDE_KEY) as TurnRailSide) ?? "right",
+	const [turnRailSide, setTurnRailSide] = useState<TurnNavigatorSide>(
+		() => (localStorage.getItem(TURN_RAIL_SIDE_KEY) as TurnNavigatorSide) ?? "right",
 	);
-	const [turnRailStyle, setTurnRailStyle] = useState<TurnRailStyle>(
-		() => (localStorage.getItem(TURN_RAIL_STYLE_KEY) as TurnRailStyle) ?? "burger",
+	const [turnRailStyle, setTurnRailStyle] = useState<TurnNavigatorStyle>(
+		() => (localStorage.getItem(TURN_RAIL_STYLE_KEY) as TurnNavigatorStyle) ?? "burger",
 	);
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",

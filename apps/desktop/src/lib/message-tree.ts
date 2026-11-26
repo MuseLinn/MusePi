@@ -3,7 +3,7 @@
  * 建父子分支树。历史/持久化快照自带 parentId(立即可用);live 会话的
  * parentId 依赖 wire 发射端打标(live 消息树 seam,见 docs/gui-implementation.md)。
  *
- * 与右侧轨迹面板(TurnRail/事件时间线)的关系:轨迹按 **时间/turn** 投影,
+ * 与右侧轨迹面板(TurnNavigator/事件时间线)的关系:轨迹按 **时间/turn** 投影,
  * 消息树按 **分支结构(parentId)** 投影——同一棵 entry 树的两个轴,对应
  * TUI 的 /tree(结构)与 /trace(轨迹)之分。GUI 轨迹面板未来加"时间线/分支树"
  * 切换时复用此构建器。

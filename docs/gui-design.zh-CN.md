@@ -518,7 +518,7 @@ turn
 3. **泽** `--glass-sheen` 线性渐变（对角 45°，仅浮层/活动卡）
 4. **影** `--glass-shadow` 双层（近环 + 远落地）
 
-**层级表（新增组件必须按级取值，禁止跳级发明）**：L0 pane（滚动面板底/输入条：全无）/ L1 card（折叠段、消息卡、工具卡：底+缘）/ L2 float（ApprovalCard、TurnRail hover、回到底部钮、lightbox：强底+缘+rim+泽+近环）/ L3 overlay（对话框、GlobalPause、导览：双层全量）。
+**层级表（新增组件必须按级取值，禁止跳级发明）**：L0 pane（滚动面板底/输入条：全无）/ L1 card（折叠段、消息卡、工具卡：底+缘）/ L2 float（ApprovalCard、TurnNavigator 预览、回到底部钮、lightbox：强底+缘+rim+泽+近环）/ L3 overlay（对话框、GlobalPause、导览：双层全量）。
 
 **活态**（玻璃随会话状态呼吸）：streaming/进行中 → rim 高光换 accent、底升 strong；审批等待 → 进度线（guest）/pulse beam（desktop）+ 底升 strong；冻结态回落 L1。
 
@@ -786,7 +786,7 @@ composer 周边的四个回归，同一个根因模式：布局没有为异步�
 ### 查找栏（⌘F，会话内）
 
 - **位置**：绝对定位于 transcript **顶边**之上、右对齐（`.gui-find`，`gui-chat.css`），
-  两侧都让开 TurnRail 的刻度槽。
+  两侧都让开 TurnNavigator 的标记槽与原生滚动条。
 - **硬规则——绝不让 transcript 重排**。查找栏是 `.gui-transcript-wrap` 内的
   `position: absolute`；若放进常规流，打开瞬间会重测每一个虚拟行。
 - **材质**：§5s 玻璃配方，`--color-surface-raised` 82% + `backdrop-filter`

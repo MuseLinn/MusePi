@@ -147,7 +147,7 @@ import { SESSION_INFO_PANEL_ROW_PX, SessionInfoCard, sessionInfoSeat } from "./s
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
-import { TurnRail } from "./TurnRail";
+import { TurnNavigator } from "./TurnNavigator";
 
 /** Stable empty map for the desktop preview before a session store lands. */
 const EMPTY_ACTIVE_TOOLS: ReadonlyMap<string, never> = new Map<string, never>();
@@ -1218,7 +1218,7 @@ export function ChatView({
 	// raw querySelector missed unmounted rows and fell back to scrollTop 0).
 	const [jumpRequest, setJumpRequest] = useState<{ entryId: string; nonce: number } | null>(null);
 	const jumpNonceRef = useRef(0);
-	// requestJump is defined further down (after loadOlder — the TurnRail may
+	// requestJump is defined further down (after loadOlder — the TurnNavigator may
 	// target a turn above the loaded window, so a jump pages older chunks in
 	// first; see the callback below the paging helper).
 	// Session-switch reveal: when the active session changes, the transcript
@@ -2511,7 +2511,7 @@ export function ChatView({
 	);
 	// Jump via requestJumpRef — the single owner of "put this row on screen"
 	// (pages older chunks, opens the compaction fold, scrolls the virtualizer,
-	// flashes the row). Same path the TurnRail and the canvas use. The
+	// flashes the row). Same path the TurnNavigator and the canvas use. The
 	// indirection exists because requestJump is declared further down (it
 	// depends on loadOlder) while this block needs to reach it.
 	// The daemon's message table has no wire entry id (P1-17), so a hit
@@ -2546,7 +2546,7 @@ export function ChatView({
 		[overviewEntries, leafWalk, activePathIds, currentLeafKey, pinnedPathIds],
 	);
 	const pathEntriesOrNull = leafWalk.complete || pinnedPathIds ? pathEntries : null;
-	// M1.11: data-driven TurnRail source — one lightweight record per turn
+	// M1.11: data-driven TurnNavigator source — one lightweight record per turn
 	// (~120B). The rail no longer measures turn positions from the DOM: rows
 	// outside the transcript's render window don't exist to measure, which is
 	// what made the rail drop turns on long sessions.
@@ -2604,7 +2604,7 @@ export function ChatView({
 		() => (pathTurnIds ? railTurns.filter(t => pathTurnIds.has(t.entryId)) : railTurns),
 		[railTurns, pathTurnIds],
 	);
-	// TurnRail jump dispatcher (defined here — after loadOlder, which a jump
+	// TurnNavigator jump dispatcher (defined here — after loadOlder, which a jump
 	// into the folded window pages through). The rail indexes the FULL session,
 	// so the target may sit above the loaded window: page older chunks until
 	// the entry materializes, then dispatch. (Dispatching immediately would
@@ -2705,7 +2705,7 @@ export function ChatView({
 	// Find-bar docking. `.gui-find` is absolutely positioned against
 	// .gui-chat-body (the chat column's own box — it is the offset parent),
 	// so the one thing it cannot know is how
-	// much of that edge the TurnRail covers: the rail is a 24px absolutely-
+	// much of that edge the TurnNavigator covers: the rail is a 24px absolutely-
 	// positioned overlay hugging whichever side the user picked (设置 → 外观),
 	// and its extent changes with the rail style and the turn count. Measure
 	// it and publish the clearance rather than hardcoding a margin — a fixed
@@ -2713,14 +2713,14 @@ export function ChatView({
 	const FIND_EDGE_GAP_PX = 14;
 	const FIND_RAIL_GAP_PX = 10;
 	const chatBodyRef = useRef<HTMLDivElement | null>(null);
-	// TurnRail returns null for an empty turn list, so its presence tracks the
+	// TurnNavigator returns null for an empty turn list, so its presence tracks the
 	// same source it is fed; re-measure when that flips.
 	const findRailMounted = ((viewMode === "canvas" ? canvasRail.turns : turnsData?.turns)?.length ?? 0) > 0;
 	useEffect(() => {
 		const host = chatBodyRef.current;
 		if (!host) return;
 		const sync = () => {
-			const rail = host.querySelector(".gui-turn-rail");
+			const rail = host.querySelector(".gui-turn-nav");
 			let inset = FIND_EDGE_GAP_PX;
 			if (rail instanceof HTMLElement) {
 				const hostRect = host.getBoundingClientRect();
@@ -2737,7 +2737,7 @@ export function ChatView({
 		ro.observe(host);
 		// The rail's extent tracks its own style and the turn count, so observe
 		// it too for as long as it is mounted.
-		const rail = host.querySelector(".gui-turn-rail");
+		const rail = host.querySelector(".gui-turn-nav");
 		if (rail instanceof HTMLElement) ro.observe(rail);
 		return () => {
 			ro.disconnect();
@@ -4102,9 +4102,8 @@ export function ChatView({
 											 * the transcript scroller does not exist, so the rail
 											 * switches to the active-path source below and clicks
 											 * hand the node over to the map. */}
-											<TurnRail
+											<TurnNavigator
 												rootRef={transcriptRef}
-												entryCount={snap?.entries.length ?? 0}
 												nodeTurns={viewMode === "canvas" ? canvasRail.turns : undefined}
 												activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
 												onSelectNode={id => setCanvasFocus(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))}

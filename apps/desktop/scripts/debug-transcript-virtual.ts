@@ -11,7 +11,7 @@
  *   3. History paging — scrolling to the top fires session.history
  *      backfill; the mounted-row count stays bounded while the top spacer
  *      grows.
- *   4. TurnRail jump — clicking a rail item scrolls straight to the turn
+ *   4. TurnNavigator jump — clicking a rail item scrolls straight to the turn
  *      (scrollToIndex) instead of expanding a window; the target row is
  *      mounted and flash-highlighted.
  *
@@ -83,7 +83,7 @@ const SNAP = `(() => {
 	const rows = document.querySelectorAll(".tr-vrow");
 	const top = document.querySelector(".tr-virtual-spacer--top");
 	const bottom = document.querySelector(".tr-virtual-spacer--bottom");
-	const rail = document.querySelectorAll(".gui-turn-rail [data-turn], .gui-turn-rail button, .gui-turn-rail .turn-rail-item");
+	const rail = document.querySelectorAll(".gui-turn-nav .gui-turn-mark");
 	return {
 		scrollerH: scroller ? scroller.clientHeight : 0,
 		scrollTop: scroller ? scroller.scrollTop : 0,
@@ -158,11 +158,11 @@ report.checks.pagingFired = (topState as { topSpacer: number }).topSpacer >= 0; 
 report.atTop = topState;
 await shot("virt-top");
 
-// ── 4: TurnRail jump — click a rail item near the middle ──────────────
+// ── 4: TurnNavigator jump — click a mark near the middle ───────────────
 const jumpResult = await evaluate<() => Promise<Record<string, number | boolean>>>(`(() => {
-	const rail = document.querySelector(".gui-turn-rail");
+	const rail = document.querySelector(".gui-turn-nav");
 	if (!rail) return null;
-	const items = rail.querySelectorAll("[data-turn], button, [class*='item'], [class*='turn']");
+	const items = rail.querySelectorAll(".gui-turn-mark");
 	if (items.length < 3) return null;
 	const pick = items[Math.floor(items.length / 2)];
 	const r = pick.getBoundingClientRect();

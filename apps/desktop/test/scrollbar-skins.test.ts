@@ -86,6 +86,12 @@ describe("native scrollbar stylesheet contract", () => {
 		expect(BASE).toContain("background-color: var(--mp-scrollbar-tint)");
 		expect(BASE).toContain("background-color: var(--mp-scrollbar-tint-hover)");
 	});
+
+	test("the default bar is a 5px capsule with no inset border", () => {
+		expect(BASE).toContain("--mp-scrollbar-skin-width, 5px");
+		expect(BASE).toContain("--mp-scrollbar-skin-border, 0px");
+		expect(BASE).toContain("background-clip: content-box");
+	});
 });
 
 describe("skin recipes", () => {

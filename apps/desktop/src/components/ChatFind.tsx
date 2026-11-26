@@ -17,7 +17,7 @@ export interface FindHit {
  *
  * Deliberately presentational: ChatView owns the query, the debounced
  * `session.search` and the selected index, and hands jumps back through
- * `onJumpTo` — the same resolver the TurnRail and the message-tree canvas
+ * `onJumpTo` — the same resolver the TurnNavigator and the message-tree canvas
  * use, which pages older chunks until the target row materializes before
  * calling `virtualizer.scrollToIndex`. Keeping transcript geometry in one
  * owner is why this bar never touches the virtualizer itself.
