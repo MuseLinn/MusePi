@@ -6,30 +6,37 @@ import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { getConfigRootDir, setAgentDir, TempDir } from "@musepi/pi-utils";
 import { settingsRegistry } from "../src/config/settings-registry";
 import { isCredential, SETTINGS_SCHEMA, type SettingPath } from "../src/config/settings-schema";
-import { HINDSIGHT_SETTING_ROWS } from "../src/hindsight/settings";
-import { MNEMOPI_SETTING_ROWS } from "../src/mnemopi/settings";
+import { HINDSIGHT_SETTING_CREDENTIALS, HINDSIGHT_SETTING_ROWS } from "../src/hindsight/settings";
+import { MNEMOPI_SETTING_CREDENTIALS, MNEMOPI_SETTING_ROWS } from "../src/mnemopi/settings";
 import { getSettingDef } from "../src/modes/components/settings-defs";
 
 const paths = Object.keys(SETTINGS_SCHEMA) as SettingPath[];
 
 describe("credential settings", () => {
 	it("marks every known credential, including those with no settings panel entry", () => {
-		for (const path of [
-			"auth.broker.token",
-			"searxng.token",
-			"searxng.basicPassword",
-			"dev.autoqaPush.token",
-			"hindsight.apiToken",
-		] as const) {
+		for (const path of ["auth.broker.token", "searxng.token", "searxng.basicPassword", "dev.autoqaPush.token"]) {
 			expect(isCredential(path)).toBe(true);
 		}
+		// Plugin-owned credentials are registered by their plugin, not the core schema.
+		expect(HINDSIGHT_SETTING_CREDENTIALS).toContain("hindsight.apiToken");
 	});
 
-	it("classifies UI-visible credentials through the same marker", () => {
+	it("classifies UI-visible credentials through the same marker", async () => {
 		// One field, not two: there is no separate UI-only masking flag that could
-		// drift away from this classification.
-		for (const path of ["mnemopi.embeddingApiKey", "mnemopi.llmApiKey"] as const) {
-			expect(isCredential(path)).toBe(true);
+		// drift away from this classification. Mnemopi's keys belong to its plugin,
+		// so mount that package's credential declarations before asking.
+		const { MNEMOPI_SETTING_CREDENTIALS } = await import("../src/mnemopi/settings");
+		const disposers = MNEMOPI_SETTING_CREDENTIALS.map(key =>
+			settingsRegistry.register(
+				{ key, type: "string", default: undefined, credential: true },
+				"test-credentials",
+				"test-owner",
+			),
+		);
+		try {
+			for (const path of MNEMOPI_SETTING_CREDENTIALS) expect(isCredential(path)).toBe(true);
+		} finally {
+			for (const dispose of disposers) dispose();
 		}
 	});
 
@@ -56,18 +63,31 @@ describe("credential masking reaches every surface", () => {
 		// The panel derives masking from the same classification the CLI uses, so
 		// a credential cannot render as plain text on one surface and dots on the
 		// other.
-		// Mnemopi rows are contributed by its plugin; mount that presentation here.
-		const disposers = [...MNEMOPI_SETTING_ROWS, ...HINDSIGHT_SETTING_ROWS].map(row =>
-			settingsRegistry.registerUi(row.key, row.ui, "test-credentials", "test-owner"),
+		// Plugin-owned rows first, then the presentation overlay each plugin adds.
+		const credentials = new Set([...HINDSIGHT_SETTING_CREDENTIALS, ...MNEMOPI_SETTING_CREDENTIALS]);
+		const registered = [...HINDSIGHT_SETTING_ROWS, ...MNEMOPI_SETTING_ROWS].map(row => ({
+			key: row.key,
+			type: row.type,
+			default: row.default,
+			ui: row.ui,
+		}));
+		const own = registered.map(row =>
+			settingsRegistry.has(row.key)
+				? settingsRegistry.registerUi(row.key, row.ui, "test-credentials", "test-owner")
+				: settingsRegistry.register(
+						{ ...row, ...(credentials.has(row.key) ? { credential: true } : {}) },
+						"test-credentials",
+						"test-owner",
+					),
 		);
 		try {
-			for (const path of ["hindsight.apiToken", "mnemopi.embeddingApiKey", "mnemopi.llmApiKey"] as const) {
+			for (const path of ["hindsight.apiToken", "mnemopi.embeddingApiKey", "mnemopi.llmApiKey"]) {
 				const def = getSettingDef(path);
 				expect(def?.type).toBe("text");
 				expect(def && "secret" in def ? def.secret : undefined).toBe(true);
 			}
 		} finally {
-			for (const dispose of disposers) dispose();
+			for (const dispose of own) dispose();
 		}
 	});
 

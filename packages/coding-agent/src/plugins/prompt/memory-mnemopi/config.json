@@ -1,0 +1,148 @@
+{
+	"fields": [
+		{
+			"key": "mnemopi.dbPath",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.bank",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.scoping",
+			"type": "select",
+			"options": [
+				"global",
+				"per-project",
+				"per-project-tagged"
+			],
+			"default": "per-project",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.embeddingVariant",
+			"type": "select",
+			"options": [
+				"en",
+				"multilingual"
+			],
+			"default": "en",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.autoRecall",
+			"type": "boolean",
+			"default": true,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.autoRetain",
+			"type": "boolean",
+			"default": true,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.polyphonicRecall",
+			"type": "boolean",
+			"default": false,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.enhancedRecall",
+			"type": "boolean",
+			"default": false,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.proactiveLinking",
+			"type": "boolean",
+			"default": false,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.noEmbeddings",
+			"type": "boolean",
+			"default": false,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.embeddingModel",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.embeddingApiUrl",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.embeddingApiKey",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.llmMode",
+			"type": "select",
+			"options": [
+				"none",
+				"smol",
+				"remote"
+			],
+			"default": "smol",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.llmBaseUrl",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.llmApiKey",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.llmModel",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.retainEveryNTurns",
+			"type": "number",
+			"default": 4,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.recallLimit",
+			"type": "number",
+			"default": 8,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.recallContextTurns",
+			"type": "number",
+			"default": 3,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.recallMaxQueryChars",
+			"type": "number",
+			"default": 4000,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.injectionTokenLimit",
+			"type": "number",
+			"default": 5000,
+			"restart": "session"
+		},
+		{
+			"key": "mnemopi.debug",
+			"type": "boolean",
+			"default": false,
+			"restart": "session"
+		}
+	]
+}

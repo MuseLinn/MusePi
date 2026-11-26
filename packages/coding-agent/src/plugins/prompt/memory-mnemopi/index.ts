@@ -14,6 +14,9 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: PluginAPI): void {
+	// The manifest (`config.json`) declares each key, type and default; the
+	// backend reads them through `readMnemopiSetting`, so values survive this
+	// plugin being unmounted. This registration adds the row's presentation.
 	for (const row of MNEMOPI_SETTING_ROWS) {
 		ctx.settings.register({
 			key: row.key,

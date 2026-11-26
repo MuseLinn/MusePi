@@ -274,3 +274,56 @@ export const MNEMOPI_SETTING_ROWS: readonly MnemopiSettingRow[] = [
 		},
 	},
 ];
+
+/**
+ * Defaults owned by this package: the key, its type and its default live here,
+ * not in the core schema. Readers go through {@link readMnemopiSetting} so the
+ * backend works when the plugin is not mounted.
+ */
+export const MNEMOPI_SETTING_DEFAULTS: Record<string, unknown> = {
+	"mnemopi.dbPath": undefined,
+	"mnemopi.bank": undefined,
+	"mnemopi.scoping": "per-project",
+	"mnemopi.embeddingVariant": "en",
+	"mnemopi.autoRecall": true,
+	"mnemopi.autoRetain": true,
+	"mnemopi.polyphonicRecall": false,
+	"mnemopi.enhancedRecall": false,
+	"mnemopi.proactiveLinking": false,
+	"mnemopi.noEmbeddings": false,
+	"mnemopi.embeddingModel": undefined,
+	"mnemopi.embeddingApiUrl": undefined,
+	"mnemopi.embeddingApiKey": undefined,
+	"mnemopi.llmMode": "smol",
+	"mnemopi.llmBaseUrl": undefined,
+	"mnemopi.llmApiKey": undefined,
+	"mnemopi.llmModel": undefined,
+	"mnemopi.retainEveryNTurns": 4,
+	"mnemopi.recallLimit": 8,
+	"mnemopi.recallContextTurns": 3,
+	"mnemopi.recallMaxQueryChars": 4000,
+	"mnemopi.injectionTokenLimit": 5000,
+	"mnemopi.debug": false,
+};
+
+/** Keys this package stores as credentials; the plugin registers them masked. */
+export const MNEMOPI_SETTING_CREDENTIALS: readonly string[] = ["mnemopi.embeddingApiKey", "mnemopi.llmApiKey"];
+
+/** Read one `mnemopi.*` value: stored value, else the package default. */
+export function readMnemopiSetting(settings: { getExtension(path: string): unknown }, key: string): unknown {
+	const stored = settings.getExtension(key);
+	return stored === undefined ? MNEMOPI_SETTING_DEFAULTS[key] : stored;
+}
+
+/** Typed reads for the config loader. */
+export function readMnemopiString(settings: { getExtension(path: string): unknown }, key: string): string | undefined {
+	const value = readMnemopiSetting(settings, key);
+	return typeof value === "string" ? value : undefined;
+}
+export function readMnemopiBool(settings: { getExtension(path: string): unknown }, key: string): boolean {
+	return readMnemopiSetting(settings, key) === true;
+}
+export function readMnemopiNumber(settings: { getExtension(path: string): unknown }, key: string): number {
+	const value = readMnemopiSetting(settings, key);
+	return typeof value === "number" ? value : 0;
+}

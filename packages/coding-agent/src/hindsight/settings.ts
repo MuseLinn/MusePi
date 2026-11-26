@@ -15,6 +15,56 @@ interface HindsightSettingCondition {
 
 const whenHindsight: HindsightSettingCondition = { key: "memory.backend", equals: "hindsight" };
 
+/**
+ * Defaults owned by this package: the key, its type and its default live here,
+ * not in the core schema. `loadHindsightConfig` reads the stored value and falls
+ * back to this table, so the backend works when the plugin is not mounted.
+ */
+export const HINDSIGHT_SETTING_DEFAULTS = {
+	"hindsight.apiUrl": "http://localhost:8888",
+	"hindsight.apiToken": undefined,
+	"hindsight.bankId": undefined,
+	"hindsight.bankIdPrefix": undefined,
+	"hindsight.scoping": "per-project-tagged",
+	"hindsight.globalScope": false,
+	"hindsight.bankMission": undefined,
+	"hindsight.retainMission": undefined,
+	"hindsight.autoRecall": true,
+	"hindsight.autoRetain": true,
+	"hindsight.retainMode": "full-session",
+	"hindsight.retainEveryNTurns": 3,
+	"hindsight.retainOverlapTurns": 2,
+	"hindsight.retainContext": "musepi",
+	"hindsight.recallBudget": "mid",
+	"hindsight.recallMaxTokens": 1024,
+	"hindsight.recallContextTurns": 1,
+	"hindsight.recallMaxQueryChars": 800,
+	"hindsight.recallTypes": ["world", "experience"],
+	"hindsight.debug": false,
+	"hindsight.requestTimeoutMs": 30_000,
+	"hindsight.reflectTimeoutMs": 120_000,
+	"hindsight.recallTimeoutMs": 30_000,
+	"hindsight.retainTimeoutMs": 60_000,
+	"hindsight.mentalModelsEnabled": true,
+	"hindsight.mentalModelAutoSeed": true,
+	"hindsight.mentalModelRefreshIntervalMs": 5 * 60 * 1000,
+	"hindsight.mentalModelMaxRenderChars": 16_000,
+} as const satisfies Record<string, unknown>;
+
+export type HindsightSettingKey = keyof typeof HINDSIGHT_SETTING_DEFAULTS;
+
+/** Keys this package stores as credentials; the plugin registers them masked. */
+export const HINDSIGHT_SETTING_CREDENTIALS: readonly string[] = ["hindsight.apiToken"];
+
+/** Read one `hindsight.*` value: stored value, else the package default. */
+export function readHindsightSetting<K extends HindsightSettingKey>(
+	settings: { getExtension(path: string): unknown },
+	key: K,
+): (typeof HINDSIGHT_SETTING_DEFAULTS)[K] {
+	const stored = settings.getExtension(key);
+	return (stored === undefined ? HINDSIGHT_SETTING_DEFAULTS[key] : stored) as (typeof HINDSIGHT_SETTING_DEFAULTS)[K];
+}
+
 export interface HindsightSettingRow {
 	key: string;
 	type: "boolean" | "enum" | "string" | "number";

@@ -496,7 +496,7 @@ export class Settings {
 	 * A supplied storage handle remains shared for runtime data while setting overrides stay non-persistent.
 	 */
 	static isolated(
-		overrides: Partial<Record<SettingPath, unknown>> = {},
+		overrides: Partial<Record<SettingPath | (string & {}), unknown>> = {},
 		options: { storage?: AgentStorage | null } = {},
 	): Settings {
 		const instance = new Settings({ inMemory: true, overrides });
@@ -529,13 +529,22 @@ export class Settings {
 			return this.#resolvedCache.get(path) as SettingValue<P>;
 		}
 
-		let value = getByPath(this.#merged, SETTING_PATH_SEGMENTS[path]);
+		// A plugin-declared key (manifest `config` with `host.configStorage:
+		// "settings"`) has no static path entry; split it like `set` does so the
+		// plugin owns the key while values keep living in this store.
+		const segments = SETTING_PATH_SEGMENTS[path] ?? path.split(".");
+		let value = getByPath(this.#merged, segments);
 		if (value === undefined) {
 			const legacy = LEGACY_READ_ALOUD_KEYS[path];
 			if (legacy) value = this.getRaw(legacy);
 		}
+		if (value === undefined && !(path in SETTING_PATH_SEGMENTS)) {
+			value = settingsRegistry.get(path)?.default;
+		}
 		const resolved =
-			value !== undefined ? (resolvePathScopedStringArray(path, value, this.#cwd) ?? value) : getDefault(path);
+			value !== undefined
+				? (resolvePathScopedStringArray(path, value, this.#cwd) ?? value)
+				: getDefault(path as SettingPath);
 		this.#resolvedCache.set(path, resolved);
 		return resolved as SettingValue<P>;
 	}
@@ -584,6 +593,21 @@ export class Settings {
 		if (path in SETTING_PATH_SEGMENTS) return this.get(path as SettingPath);
 		const raw = this.getRaw(path);
 		return raw !== undefined ? raw : settingsRegistry.get(path)?.default;
+	}
+
+	/**
+	 * Read a plugin-owned key: the stored value, else the descriptor default the
+	 * plugin declared through `registerSetting`. `undefined` when neither exists,
+	 * so the caller's own fallback stays authoritative.
+	 */
+	getExtension(path: string): unknown {
+		const raw = this.getRaw(path);
+		return raw !== undefined ? raw : settingsRegistry.get(path)?.default;
+	}
+
+	/** Write a plugin-declared key (not in the static schema). */
+	setExtension(path: string, value: unknown): void {
+		this.set(path as SettingPath, value as never);
 	}
 
 	/** Write a setting by UI path; `set` already routes keys outside the schema. */
@@ -2600,7 +2624,7 @@ class SettingSignal<A extends unknown[] = []> {
 	}
 }
 
-const SETTING_HOOKS: Partial<Record<SettingPath, SettingHook<any>>> = {
+const SETTING_HOOKS: Partial<Record<SettingPath | (string & {}), SettingHook<any>>> = {
 	"theme.dark": value => {
 		if (typeof value === "string") {
 			setAutoThemeMapping("dark", value);
@@ -2637,6 +2661,7 @@ const SETTING_HOOKS: Partial<Record<SettingPath, SettingHook<any>>> = {
 	"secrets.enabled": value => {
 		configureCredentialRedaction(value === true);
 	},
+
 	"hindsight.bankId": () => hindsightScopeSignal.fire(),
 	"hindsight.bankIdPrefix": () => hindsightScopeSignal.fire(),
 	"hindsight.scoping": () => hindsightScopeSignal.fire(),

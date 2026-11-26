@@ -14,13 +14,15 @@ export const name = "musepi-memory-musemem";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(ctx: PluginAPI): void {
-	// The setting travels with the backend: without this plugin mounted the key
-	// still reads (raw value or the `true` default), but no surface lists it.
+export function apply(ctx: PluginAPI, config: { globalScope?: boolean } = {}): void {
+	// The setting travels with the backend: the manifest declares the key, the
+	// value is stored in the settings store, and the plugin owns how it is read.
+	// Without this plugin mounted the key still resolves through the manifest
+	// default registered at mount time.
 	ctx.settings.register({
 		key: "musemem.globalScope",
 		type: "boolean",
-		default: true,
+		default: config.globalScope !== false,
 		ui: {
 			tab: "memory",
 			group: "MuseMem",

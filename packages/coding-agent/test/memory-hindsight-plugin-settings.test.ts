@@ -66,10 +66,12 @@ describe("Hindsight plugin-owned settings", () => {
 		expect(getSettingsForTab("memory").some(def => (def.path as string) === "hindsight.scoping")).toBe(false);
 	});
 
-	it("keeps values and defaults while the plugin is absent", () => {
+	it("keeps the package defaults while the plugin is absent", async () => {
 		const settings = Settings.isolated();
-		expect(settings.get("hindsight.scoping")).toBe("per-project-tagged");
-		expect(settings.get("hindsight.autoRecall")).toBe(true);
+		const { HINDSIGHT_SETTING_DEFAULTS, readHindsightSetting } = await import("../src/hindsight/settings");
+		expect(readHindsightSetting(settings, "hindsight.scoping")).toBe("per-project-tagged");
+		expect(readHindsightSetting(settings, "hindsight.autoRecall")).toBe(true);
+		expect(HINDSIGHT_SETTING_DEFAULTS["hindsight.recallTypes"]).toEqual(["world", "experience"]);
 		expect(getUi("hindsight.scoping")).toBeUndefined();
 	});
 

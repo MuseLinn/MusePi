@@ -2,7 +2,7 @@
 layout: default
 title: 插件自带设置
 status: living
-summary: 设置值归谁、插件如何拥有自己的设置行，以及新增或迁移设置项的检查清单。
+summary: 插件如何拥有设置的键、类型、默认值与设置行，以及新增或迁移设置项的检查清单。
 scope:
   - docs
   - packages/coding-agent
@@ -13,39 +13,49 @@ scope:
 
 [English](plugin-settings.md) | 中文
 
-一个设置有两个归属：核心 schema 拥有它的值、类型和默认值；提供该功能的插件拥有它的设置行。两者分开，后端或功能才能自带设置界面，而不必搬动配置，也不会在插件未挂载的宿主上失效。
+设置归插件所有。插件包声明键、类型和默认值；宿主从设置存储读取这些值，并用同一份声明渲染设置行。核心代码只保留不属于单个插件的内容：标识当前启用哪个后端的选择器，以及跨后端的维护开关。
 
-## 归属
+## 设置的存放位置
 
-- **核心 schema**（`packages/coding-agent/src/config/settings-schema.ts`）：`type`、`default`、`values`、`credential`。它们既是读取路径（`Settings.get`），也是插件缺席时的回退。
-- **插件 UI**（`SettingsRegistry.registerUi`）：`ui` 元数据与显示条件。插件通过 `ctx.settings.register` 贡献设置行，注册表把它叠加到核心描述符上。
-- **插件独有的设置**：核心没有该键时注册完整描述符（`register`），读取方使用 `Settings.getSettingValue`，由描述符默认值兜底。
-- **条件**：写成 `{ key: "memory.backend", equals: "<id>" }`。GUI 与 TUI 求值同一个对象，不要新增宿主专属的条件名。
-- **卸载**：移除插件只移除 UI 叠加层；已存值、默认值和后端行为不变。不要为了隐藏一行而删除核心描述符。
+| 内容 | 归属 | 位置 |
+| --- | --- | --- |
+| 键、类型、默认值、凭据标记 | 提供该功能的插件 | 包旁的 `config.json`，或 `musepi.config` 块 |
+| 已存值 | 设置存储 | `Settings`（全局配置、项目覆盖，部分键还有环境变量） |
+| 设置行：tab、分组、标签、说明、显示条件 | 同一个插件 | `ctx.settings.register` |
+| 插件未挂载时的回退 | 插件自己的读取函数 | 包内的默认值表 |
 
-## 给后端插件新增一行
+插件是一个 Cordis fiber：`apply(ctx, config)` 收到声明的配置，每次注册都是该 fiber 上的 effect。卸载会移除设置行与 provider；已存值保留，包内读取函数继续返回默认值。
 
-1. 核心 schema 保留 `type`/`default`/`values`/`credential`，删除该键的 `ui` 块。
-2. 在领域模块（`src/<domain>/settings.ts`）声明设置行，带上声明式条件。
-3. 在插件的 `apply` 中注册：`ctx.settings.register({ key, type, default, ui })`。
-4. 补测试：挂载时该行出现在 `getSettingsForTab`，卸载后消失；插件缺席时 `Settings.get`/`getSettingValue` 仍返回默认值；凭据行仍被遮罩。
-5. 在所属后端文档中说明该行由插件提供。
+## 新增一个设置项
 
-## 新增 DSH 式页面
+1. 在包的 `config.json` 声明字段（键、类型、默认值、可选 `restart`），并在清单里加 `"host": { "configStorage": "settings" }`，让宿主把值存进 `Settings`。
+2. 在包的 settings 模块导出默认值，并统一通过它读取（`settings.getExtension(key)`），使读取在挂载前后都成立。
+3. 在 `apply` 里注册设置行：`ctx.settings.register({ key, type, default, ui })`，条件写成声明式对象，如 `{ key: "memory.backend", equals: "mnemopi" }`。
+4. 测三种状态：已挂载（行可见、值可写）、未挂载（行消失、读取返回默认值）、密钥键的遮罩。
 
-DSH 让每个插件拥有自己的 Config schema 和 Plugins 页。MusePi 目前保留一个统一设置页：当前后端的行显示在后端页头下，其他后端的行由条件隐藏。
+## 位于既有页面内的设置行
 
-要让某个后端拥有独立页面：
+不是每个功能都需要一个导航页。另有两个席位：
 
-- 增加桌面端 `settings.section` 条目（或带导航行的 `SectionId`），渲染 `SchemaTabSection` 并传入 `groups={[backendGroup]}`；
-- 跨后端设置（`memory.backend`、维护、自动学习）留在共享页；
-- 页面只负责展示描述符；值仍在 `Settings` 中，设置行仍归插件。
+- `settings.item.<page>.<row>` —— 命名页面上的一行，渲染在该页自身内容之后。
+- `settings.subnav.<page>` —— 该页分段子导航中的一个标签。`id` 命中内置标签即替换，其余追加。“会话与记忆”使用它（`settings.subnav.session-memory`），后端因此无需新增导航页即可展示自己的面板。
+
+只有当功能本身是一整页时才用 `settings.section`。
+
+新增席位需在 `packages/collab-proto/src/extension-slots.ts` 与 `slot-contracts.ts` 登记，重新生成目录，并在 `docs/extensions-dev.md` 说明。
+
+## 插件的嵌套组合
+
+一个插件本身可以是子插件的集合：清单里的 `components` 逐项声明入口，每个组件有自己的 fiber。组件各自注册自己的设置、工具与设置行；停用某个组件只移除它的贡献。功能族因此可以只发一个包，而不必把二十行设置堆在同一页：父包声明组件，子项各自拥有设置与设置行。
+
+父插件启用时宿主才显示它的设置；被停用的组件不贡献任何内容。两个包不能拥有同一个键——注册表会拒绝第二个所有者。
 
 ## 检查清单
 
-- [ ] 设置键没有改变；现有配置文件继续生效。
-- [ ] 插件缺席时，值与默认值仍可读，行为不变。
-- [ ] 密钥行的 `credential` 仍留在核心描述符上。
-- [ ] 条件是声明式的，GUI 与 TUI 都能求值。
-- [ ] 测试覆盖挂载、卸载、缺席默认值和凭据遮罩。
-- [ ] 所属后端文档注明这些行由插件提供。
+- [ ] 键由所属插件包声明，而不是核心 schema。
+- [ ] 读取统一走 `settings.getExtension` 与包内默认值表。
+- [ ] 插件未挂载时行为不变，设置行不出现。
+- [ ] 密钥键在注册设置行时声明为凭据。
+- [ ] 条件是声明式的，终端与桌面两种界面都能求值。
+- [ ] 设置行位于其他页面时，席位已登记并写入文档。
+- [ ] 测试覆盖已挂载、未挂载与遮罩三种状态。

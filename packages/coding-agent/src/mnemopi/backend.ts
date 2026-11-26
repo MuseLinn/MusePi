@@ -108,7 +108,7 @@ export const mnemopiBackend: MemoryBackend = {
 		if (primary?.lastRecallSnippet) parts.push(primary.lastRecallSnippet);
 		const rendered = parts.join("\n\n").trim();
 		if (!rendered) return undefined;
-		return truncateApproxTokens(rendered, settings.get("mnemopi.injectionTokenLimit"));
+		return truncateApproxTokens(rendered, settings.getExtension("mnemopi.injectionTokenLimit") as number);
 	},
 
 	async beforeAgentStartPrompt(session, promptText, signal): Promise<MemoryPromptPreparation | undefined> {

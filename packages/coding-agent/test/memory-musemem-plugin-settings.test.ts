@@ -76,11 +76,13 @@ describe("MuseMem plugin-owned settings", () => {
 		expect(getSettingsForTab("memory").some(def => (def.path as string) === "musemem.globalScope")).toBe(false);
 	});
 
-	it("keeps the value and default while the plugin is absent", () => {
-		// The core descriptor keeps the default; only the UI row belongs to the
-		// plugin, so an unmounted plugin hides the row without changing behaviour.
+	it("owns the key: absent without the plugin, behaviour still on", () => {
+		// The plugin owns the key now. Without it the key is unregistered, and
+		// every reader uses `!== false`, so the backend keeps its on-by-default
+		// behaviour instead of flipping off.
 		const settings = Settings.isolated({ memory: { backend: "musemem" } } as never);
-		expect(settings.getSettingValue("musemem.globalScope")).toBe(true);
+		expect(settings.getSettingValue("musemem.globalScope")).toBeUndefined();
+		expect(settings.getSettingValue("musemem.globalScope") !== false).toBe(true);
 		expect(getUi("musemem.globalScope")).toBeUndefined();
 	});
 

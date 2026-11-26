@@ -1015,7 +1015,7 @@ describe("Settings", () => {
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
-			expect(settings.get("hindsight.scoping")).toBe("per-project");
+			expect(settings.getExtension("hindsight.scoping")).toBe("per-project");
 		});
 
 		it("does not override an explicit hindsight.scoping when migrating", async () => {
@@ -1025,7 +1025,7 @@ describe("Settings", () => {
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
-			expect(settings.get("hindsight.scoping")).toBe("global");
+			expect(settings.getExtension("hindsight.scoping")).toBe("global");
 		});
 
 		it("promotes legacy hindsight.agentName onto hindsight.bankId when bankId is unset", async () => {
@@ -1035,7 +1035,7 @@ describe("Settings", () => {
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
-			expect(settings.get("hindsight.bankId")).toBe("ada-cli");
+			expect(settings.getExtension("hindsight.bankId")).toBe("ada-cli");
 		});
 
 		it("migrates the legacy mnemosyne memory backend to mnemopi", async () => {
@@ -1047,8 +1047,8 @@ describe("Settings", () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			expect(settings.get("memory.backend")).toBe("mnemopi");
-			expect(settings.get("mnemopi.dbPath")).toBe("/tmp/old.db");
-			expect(settings.get("mnemopi.scoping")).toBe("global");
+			expect(settings.getExtension("mnemopi.dbPath")).toBe("/tmp/old.db");
+			expect(settings.getExtension("mnemopi.scoping")).toBe("global");
 		});
 
 		it("does not clobber an explicit mnemopi block when the legacy mnemosyne block is also present", async () => {
@@ -1059,7 +1059,7 @@ describe("Settings", () => {
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
-			expect(settings.get("mnemopi.dbPath")).toBe("/tmp/new.db");
+			expect(settings.getExtension("mnemopi.dbPath")).toBe("/tmp/new.db");
 		});
 
 		it("migrates boolean task.eager/todo.eager true to always", async () => {

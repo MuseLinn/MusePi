@@ -12,6 +12,7 @@
 
 import { logger } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
+import { readHindsightSetting } from "./settings";
 
 export type HindsightScoping = "global" | "per-project" | "per-project-tagged";
 
@@ -132,57 +133,57 @@ export function loadHindsightConfig(settings: Settings, env: NodeJS.ProcessEnv =
 	const retainTimeoutMsEnv = envInt(env.HINDSIGHT_RETAIN_TIMEOUT_MS);
 
 	// Read from settings (each falls back to its schema default).
-	const settingsRetainMode = pickRetainMode(settings.get("hindsight.retainMode"));
-	if (settings.get("hindsight.retainMode") && !settingsRetainMode) {
+	const settingsRetainMode = pickRetainMode(readHindsightSetting(settings, "hindsight.retainMode"));
+	if (readHindsightSetting(settings, "hindsight.retainMode") && !settingsRetainMode) {
 		logger.warn("Hindsight: invalid retainMode setting, falling back to full-session", {
-			value: settings.get("hindsight.retainMode"),
+			value: readHindsightSetting(settings, "hindsight.retainMode"),
 		});
 	}
-	const settingsRecallBudget = pickBudget(settings.get("hindsight.recallBudget"));
-	const settingsScoping = pickScoping(settings.get("hindsight.scoping"));
-	if (settings.get("hindsight.scoping") && !settingsScoping) {
+	const settingsRecallBudget = pickBudget(readHindsightSetting(settings, "hindsight.recallBudget"));
+	const settingsScoping = pickScoping(readHindsightSetting(settings, "hindsight.scoping"));
+	if (readHindsightSetting(settings, "hindsight.scoping") && !settingsScoping) {
 		logger.warn("Hindsight: invalid scoping setting, falling back to per-project-tagged", {
-			value: settings.get("hindsight.scoping"),
+			value: readHindsightSetting(settings, "hindsight.scoping"),
 		});
 	}
 
 	const config: HindsightConfig = {
-		hindsightApiUrl: apiUrlEnv ?? settings.get("hindsight.apiUrl") ?? null,
-		hindsightApiToken: apiTokenEnv ?? settings.get("hindsight.apiToken") ?? null,
+		hindsightApiUrl: apiUrlEnv ?? readHindsightSetting(settings, "hindsight.apiUrl") ?? null,
+		hindsightApiToken: apiTokenEnv ?? readHindsightSetting(settings, "hindsight.apiToken") ?? null,
 
-		bankId: bankIdEnv ?? settings.get("hindsight.bankId") ?? null,
-		bankIdPrefix: settings.get("hindsight.bankIdPrefix") ?? "",
+		bankId: bankIdEnv ?? readHindsightSetting(settings, "hindsight.bankId") ?? null,
+		bankIdPrefix: readHindsightSetting(settings, "hindsight.bankIdPrefix") ?? "",
 		scoping: scopingEnv ?? settingsScoping ?? "per-project-tagged",
-		globalScope: settings.get("hindsight.globalScope"),
-		bankMission: bankMissionEnv ?? settings.get("hindsight.bankMission") ?? "",
-		retainMission: settings.get("hindsight.retainMission") ?? null,
+		globalScope: readHindsightSetting(settings, "hindsight.globalScope"),
+		bankMission: bankMissionEnv ?? readHindsightSetting(settings, "hindsight.bankMission") ?? "",
+		retainMission: readHindsightSetting(settings, "hindsight.retainMission") ?? null,
 
-		autoRecall: autoRecallEnv ?? settings.get("hindsight.autoRecall"),
-		autoRetain: autoRetainEnv ?? settings.get("hindsight.autoRetain"),
+		autoRecall: autoRecallEnv ?? readHindsightSetting(settings, "hindsight.autoRecall"),
+		autoRetain: autoRetainEnv ?? readHindsightSetting(settings, "hindsight.autoRetain"),
 
 		retainMode: retainModeEnv ?? settingsRetainMode ?? "full-session",
-		retainEveryNTurns: retainEveryNTurnsEnv ?? settings.get("hindsight.retainEveryNTurns"),
-		retainOverlapTurns: settings.get("hindsight.retainOverlapTurns"),
-		retainContext: settings.get("hindsight.retainContext") ?? "musepi",
+		retainEveryNTurns: retainEveryNTurnsEnv ?? readHindsightSetting(settings, "hindsight.retainEveryNTurns"),
+		retainOverlapTurns: readHindsightSetting(settings, "hindsight.retainOverlapTurns"),
+		retainContext: readHindsightSetting(settings, "hindsight.retainContext") ?? "musepi",
 
 		recallBudget: recallBudgetEnv ?? settingsRecallBudget ?? "mid",
-		recallMaxTokens: recallMaxTokensEnv ?? settings.get("hindsight.recallMaxTokens"),
-		recallTypes: settings.get("hindsight.recallTypes") as string[],
-		recallContextTurns: recallContextTurnsEnv ?? settings.get("hindsight.recallContextTurns"),
-		recallMaxQueryChars: recallMaxQueryCharsEnv ?? settings.get("hindsight.recallMaxQueryChars"),
+		recallMaxTokens: recallMaxTokensEnv ?? readHindsightSetting(settings, "hindsight.recallMaxTokens"),
+		recallTypes: [...readHindsightSetting(settings, "hindsight.recallTypes")],
+		recallContextTurns: recallContextTurnsEnv ?? readHindsightSetting(settings, "hindsight.recallContextTurns"),
+		recallMaxQueryChars: recallMaxQueryCharsEnv ?? readHindsightSetting(settings, "hindsight.recallMaxQueryChars"),
 		recallPromptPreamble: DEFAULT_PREAMBLE,
 
-		debug: debugEnv ?? settings.get("hindsight.debug"),
+		debug: debugEnv ?? readHindsightSetting(settings, "hindsight.debug"),
 
-		requestTimeoutMs: requestTimeoutMsEnv ?? settings.get("hindsight.requestTimeoutMs"),
-		reflectTimeoutMs: reflectTimeoutMsEnv ?? settings.get("hindsight.reflectTimeoutMs"),
-		recallTimeoutMs: recallTimeoutMsEnv ?? settings.get("hindsight.recallTimeoutMs"),
-		retainTimeoutMs: retainTimeoutMsEnv ?? settings.get("hindsight.retainTimeoutMs"),
+		requestTimeoutMs: requestTimeoutMsEnv ?? readHindsightSetting(settings, "hindsight.requestTimeoutMs"),
+		reflectTimeoutMs: reflectTimeoutMsEnv ?? readHindsightSetting(settings, "hindsight.reflectTimeoutMs"),
+		recallTimeoutMs: recallTimeoutMsEnv ?? readHindsightSetting(settings, "hindsight.recallTimeoutMs"),
+		retainTimeoutMs: retainTimeoutMsEnv ?? readHindsightSetting(settings, "hindsight.retainTimeoutMs"),
 
-		mentalModelsEnabled: settings.get("hindsight.mentalModelsEnabled"),
-		mentalModelAutoSeed: settings.get("hindsight.mentalModelAutoSeed"),
-		mentalModelRefreshIntervalMs: settings.get("hindsight.mentalModelRefreshIntervalMs"),
-		mentalModelMaxRenderChars: settings.get("hindsight.mentalModelMaxRenderChars"),
+		mentalModelsEnabled: readHindsightSetting(settings, "hindsight.mentalModelsEnabled"),
+		mentalModelAutoSeed: readHindsightSetting(settings, "hindsight.mentalModelAutoSeed"),
+		mentalModelRefreshIntervalMs: readHindsightSetting(settings, "hindsight.mentalModelRefreshIntervalMs"),
+		mentalModelMaxRenderChars: readHindsightSetting(settings, "hindsight.mentalModelMaxRenderChars"),
 	};
 
 	return config;

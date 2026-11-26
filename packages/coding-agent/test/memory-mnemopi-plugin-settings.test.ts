@@ -67,10 +67,12 @@ describe("Mnemopi plugin-owned settings", () => {
 		expect(getSettingsForTab("memory").some(def => (def.path as string) === "mnemopi.scoping")).toBe(false);
 	});
 
-	it("keeps values and defaults while the plugin is absent", () => {
+	it("keeps the package defaults while the plugin is absent", async () => {
 		const settings = Settings.isolated();
-		expect(settings.get("mnemopi.scoping")).toBe("per-project");
-		expect(settings.get("mnemopi.retainEveryNTurns")).toBe(4);
+		const { MNEMOPI_SETTING_DEFAULTS, readMnemopiSetting } = await import("../src/mnemopi/settings");
+		expect(readMnemopiSetting(settings, "mnemopi.scoping")).toBe("per-project");
+		expect(readMnemopiSetting(settings, "mnemopi.retainEveryNTurns")).toBe(4);
+		expect(MNEMOPI_SETTING_DEFAULTS["mnemopi.llmMode"]).toBe("smol");
 		expect(getUi("mnemopi.scoping")).toBeUndefined();
 	});
 

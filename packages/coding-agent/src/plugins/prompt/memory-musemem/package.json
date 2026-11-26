@@ -37,6 +37,9 @@
 		"scope": "host",
 		"extensions": [
 			"./index.ts"
-		]
+		],
+		"host": {
+			"configStorage": "settings"
+		}
 	}
 }

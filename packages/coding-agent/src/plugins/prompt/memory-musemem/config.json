@@ -1,0 +1,12 @@
+{
+	"fields": [
+		{
+			"key": "musemem.globalScope",
+			"type": "boolean",
+			"label": "MuseMem Global Scope",
+			"description": "Let learn take scope: global so every project recalls that lesson. Off keeps every lesson project-local.",
+			"restart": "none",
+			"default": true
+		}
+	]
+}

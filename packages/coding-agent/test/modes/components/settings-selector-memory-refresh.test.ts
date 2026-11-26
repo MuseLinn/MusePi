@@ -1,7 +1,9 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
+import { settingsRegistry } from "@musepi/pi-coding-agent/config/settings-registry";
 import { SETTING_TABS } from "@musepi/pi-coding-agent/config/settings-schema";
 import { loadHindsightConfig } from "@musepi/pi-coding-agent/hindsight/config";
+import { HINDSIGHT_SETTING_ROWS } from "@musepi/pi-coding-agent/hindsight/settings";
 import { SettingsSelectorComponent } from "@musepi/pi-coding-agent/modes/components/settings-selector";
 import { initTheme } from "@musepi/pi-coding-agent/render/theme/theme";
 
@@ -11,13 +13,32 @@ beforeAll(async () => {
 
 let geometryStub: { restore(): void } | undefined;
 
+let hindsightRows: Array<() => void> = [];
+
 beforeEach(async () => {
 	resetSettingsForTest();
 	await Settings.init({ inMemory: true });
+	// The host mounts the Hindsight plugin before any session; this fixture does
+	// the same so its rows exist for the condition-gated assertions.
+	hindsightRows = HINDSIGHT_SETTING_ROWS.map(row =>
+		settingsRegistry.register(
+			{
+				key: row.key,
+				type: row.type,
+				default: row.default,
+				ui: row.ui,
+				...(row.key === "hindsight.apiToken" ? { credential: true } : {}),
+			},
+			"test-hindsight",
+			"test-owner",
+		),
+	);
 	geometryStub = stubStdoutGeometry(120);
 });
 
 afterEach(() => {
+	for (const dispose of hindsightRows) dispose();
+	hindsightRows = [];
 	resetSettingsForTest();
 	geometryStub?.restore();
 	geometryStub = undefined;
@@ -93,7 +114,7 @@ describe("SettingsSelectorComponent memory tab", () => {
 
 	it("saves a pasted Hindsight API token from its settings row", () => {
 		settings.set("memory.backend", "hindsight");
-		settings.set("hindsight.apiToken", "saved-secret-token");
+		settings.setExtension("hindsight.apiToken", "saved-secret-token");
 		const comp = createSelector();
 
 		for (const ch of "hindsight api token") comp.handleInput(ch);
@@ -105,7 +126,7 @@ describe("SettingsSelectorComponent memory tab", () => {
 		comp.handleInput("\n");
 		expect(comp.render(120).join("\n")).not.toContain("saved-secret-token");
 		comp.handleInput("\n");
-		expect(settings.get("hindsight.apiToken")).toBe("saved-secret-token");
+		expect(settings.getExtension("hindsight.apiToken")).toBe("saved-secret-token");
 		expect(comp.render(120).join("\n")).not.toContain("saved-secret-token");
 
 		comp.handleInput("\n");
@@ -114,7 +135,7 @@ describe("SettingsSelectorComponent memory tab", () => {
 		expect(comp.render(120).join("\n")).not.toContain("test-token-123");
 		comp.handleInput("\n");
 
-		expect(settings.get("hindsight.apiToken")).toBe("test-token-123");
+		expect(settings.getExtension("hindsight.apiToken")).toBe("test-token-123");
 		expect(loadHindsightConfig(settings, {}).hindsightApiToken).toBe("test-token-123");
 		expect(comp.render(120).join("\n")).not.toContain("test-token-123");
 	});

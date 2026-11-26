@@ -227,7 +227,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Rules (TTSR)",
 		"settings.context.group.experimental",
 	],
-	memory: ["General", "Auto-Learn", "Mnemopi", "Hindsight"],
+	memory: ["settings.memory.group.backend", "Auto-Learn", "Mnemopi", "Hindsight", "settings.memory.group.maintenance"],
 	files: ["Editing", "Reading", "Read Summaries", "LSP"],
 	shell: ["Bash", "Bash Advanced", "Eval & Runtimes"],
 	tools: [
@@ -3559,95 +3559,10 @@ export const SETTINGS_SCHEMA = {
 	// Config-file-only knob (numbers without `options` are hidden from the UI).
 	"autolearn.minToolCalls": { type: "number", default: 5 },
 
-	// Value/default owned by core; the memory-musemem plugin owns the UI row.
-	"musemem.globalScope": { type: "boolean", default: true },
-
-	// Mnemopi local SQLite memory backend.
-	// Mnemopi values and defaults stay in core; the memory-mnemopi plugin owns
-	// their settings rows (see mnemopi/settings.ts).
-	"mnemopi.dbPath": { type: "string", default: undefined },
-	"mnemopi.bank": { type: "string", default: undefined },
-	"mnemopi.scoping": {
-		type: "enum",
-		values: ["global", "per-project", "per-project-tagged"] as const,
-		default: "per-project",
-	},
-	"mnemopi.embeddingVariant": {
-		type: "enum",
-		values: ["en", "multilingual"] as const,
-		default: "en",
-	},
-	"mnemopi.autoRecall": { type: "boolean", default: true },
-	"mnemopi.autoRetain": { type: "boolean", default: true },
-	"mnemopi.polyphonicRecall": { type: "boolean", default: false },
-	"mnemopi.enhancedRecall": { type: "boolean", default: false },
-	"mnemopi.proactiveLinking": { type: "boolean", default: false },
-	"mnemopi.noEmbeddings": { type: "boolean", default: false },
-	"mnemopi.embeddingModel": { type: "string", default: undefined },
-	"mnemopi.embeddingApiUrl": { type: "string", default: undefined },
-	"mnemopi.embeddingApiKey": { type: "string", credential: true, default: undefined },
-	"mnemopi.llmMode": {
-		type: "enum",
-		values: ["none", "smol", "remote"] as const,
-		default: "smol",
-	},
-	"mnemopi.llmBaseUrl": { type: "string", default: undefined },
-	"mnemopi.llmApiKey": { type: "string", credential: true, default: undefined },
-	"mnemopi.llmModel": { type: "string", default: undefined },
-	"mnemopi.retainEveryNTurns": { type: "number", default: 4 },
-	"mnemopi.recallLimit": { type: "number", default: 8 },
-	"mnemopi.recallContextTurns": { type: "number", default: 3 },
-	"mnemopi.recallMaxQueryChars": { type: "number", default: 4000 },
-	"mnemopi.injectionTokenLimit": { type: "number", default: 5000 },
-	"mnemopi.debug": { type: "boolean", default: false },
-
 	"sharpshooter.model": { type: "string", default: undefined },
 	"sharpshooter.minPromptLength": { type: "number", default: 16 },
 	"sharpshooter.intervalMinutes": { type: "number", default: 5 },
 	"sharpshooter.injectionTokenLimit": { type: "number", default: 15000 },
-
-	// Hindsight (https://hindsight.vectorize.io)
-	// Values/defaults stay in core; the memory-hindsight plugin owns their UI.
-	"hindsight.apiUrl": { type: "string", default: "http://localhost:8888" },
-	"hindsight.apiToken": { type: "string", credential: true, default: undefined },
-	"hindsight.bankId": { type: "string", default: undefined },
-	"hindsight.bankIdPrefix": { type: "string", default: undefined },
-	"hindsight.scoping": {
-		type: "enum",
-		values: ["global", "per-project", "per-project-tagged"] as const,
-		default: "per-project-tagged",
-	},
-	"hindsight.globalScope": { type: "boolean", default: false },
-	"hindsight.bankMission": { type: "string", default: undefined },
-	"hindsight.retainMission": { type: "string", default: undefined },
-	"hindsight.autoRecall": { type: "boolean", default: true },
-	"hindsight.autoRetain": { type: "boolean", default: true },
-	"hindsight.retainMode": {
-		type: "enum",
-		values: ["full-session", "last-turn"] as const,
-		default: "full-session",
-	},
-	"hindsight.retainEveryNTurns": { type: "number", default: 3 },
-	"hindsight.retainOverlapTurns": { type: "number", default: 2 },
-	"hindsight.retainContext": { type: "string", default: "musepi" },
-	"hindsight.recallBudget": {
-		type: "enum",
-		values: ["low", "mid", "high"] as const,
-		default: "mid",
-	},
-	"hindsight.recallMaxTokens": { type: "number", default: 1024 },
-	"hindsight.recallContextTurns": { type: "number", default: 1 },
-	"hindsight.recallMaxQueryChars": { type: "number", default: 800 },
-	"hindsight.recallTypes": { type: "array", default: HINDSIGHT_RECALL_TYPES_DEFAULT },
-	"hindsight.debug": { type: "boolean", default: false },
-	"hindsight.requestTimeoutMs": { type: "number", default: 30_000 },
-	"hindsight.reflectTimeoutMs": { type: "number", default: 120_000 },
-	"hindsight.recallTimeoutMs": { type: "number", default: 30_000 },
-	"hindsight.retainTimeoutMs": { type: "number", default: 60_000 },
-	"hindsight.mentalModelsEnabled": { type: "boolean", default: true },
-	"hindsight.mentalModelAutoSeed": { type: "boolean", default: true },
-	"hindsight.mentalModelRefreshIntervalMs": { type: "number", default: 5 * 60 * 1000 },
-	"hindsight.mentalModelMaxRenderChars": { type: "number", default: 16_000 },
 
 	// TTSR
 	"ttsr.enabled": {
@@ -6799,9 +6714,10 @@ export type SettingValue<P extends SettingPath> = Schema[P] extends { type: "boo
 								: never;
 
 /** Get the default value for a setting path */
-export function getDefault<P extends SettingPath>(path: P): SettingValue<P> {
+export function getDefault<P extends SettingPath>(path: P | string): SettingValue<P> {
 	const descriptor = settingsRegistry.get(path);
-	return (descriptor?.default ?? SETTINGS_SCHEMA[path]?.default) as SettingValue<P>;
+	const core = (SETTINGS_SCHEMA as Record<string, { default?: unknown } | undefined>)[path]?.default;
+	return (descriptor?.default ?? core) as SettingValue<P>;
 }
 
 /** Check if a path has UI metadata (should appear in settings panel) */

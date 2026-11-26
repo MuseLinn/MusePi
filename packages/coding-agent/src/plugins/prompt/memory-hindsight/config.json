@@ -1,0 +1,218 @@
+{
+	"fields": [
+		{
+			"key": "hindsight.apiUrl",
+			"type": "string",
+			"label": "Hindsight API URL",
+			"description": "Hindsight server URL (Cloud or self-hosted)",
+			"default": "http://localhost:8888",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.apiToken",
+			"type": "string",
+			"label": "Hindsight API Token",
+			"description": "Bearer token for authenticated Hindsight servers",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.bankId",
+			"type": "string",
+			"label": "Hindsight Bank ID",
+			"description": "Memory bank identifier (default: project name)",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.bankIdPrefix",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.scoping",
+			"type": "select",
+			"label": "Hindsight Scoping",
+			"description": "global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = shared bank with project tags so global + project memories merge on recall",
+			"default": "per-project-tagged",
+			"restart": "session",
+			"options": [
+				"global",
+				"per-project",
+				"per-project-tagged"
+			],
+			"optionLabels": {
+				"global": "Global",
+				"per-project": "Per project",
+				"per-project-tagged": "Per project (tagged)"
+			}
+		},
+		{
+			"key": "hindsight.globalScope",
+			"type": "boolean",
+			"label": "Hindsight Global Scope",
+			"description": "Let retain and learn take scope: global, which stores a memory without the project tag so every project recalls it. Needs global or per-project-tagged scoping",
+			"default": false,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.bankMission",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.retainMission",
+			"type": "string",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.autoRecall",
+			"type": "boolean",
+			"label": "Hindsight Auto Recall",
+			"description": "Recall memories on the first turn of each session",
+			"default": true,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.autoRetain",
+			"type": "boolean",
+			"label": "Hindsight Auto Retain",
+			"description": "Retain transcript every N turns and at session boundaries",
+			"default": true,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.retainMode",
+			"type": "select",
+			"label": "Hindsight Retain Mode",
+			"description": "full-session = upsert one document per session, last-turn = chunked",
+			"default": "full-session",
+			"restart": "session",
+			"options": [
+				"full-session",
+				"last-turn"
+			],
+			"optionLabels": {
+				"full-session": "Full session",
+				"last-turn": "Last turn"
+			}
+		},
+		{
+			"key": "hindsight.retainEveryNTurns",
+			"type": "number",
+			"default": 3,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.retainOverlapTurns",
+			"type": "number",
+			"default": 2,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.retainContext",
+			"type": "string",
+			"default": "musepi",
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.recallBudget",
+			"type": "select",
+			"default": "mid",
+			"restart": "session",
+			"options": [
+				"low",
+				"mid",
+				"high"
+			],
+			"optionLabels": {
+				"low": "Low",
+				"mid": "Mid",
+				"high": "High"
+			}
+		},
+		{
+			"key": "hindsight.recallMaxTokens",
+			"type": "number",
+			"default": 1024,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.recallContextTurns",
+			"type": "number",
+			"default": 1,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.recallMaxQueryChars",
+			"type": "number",
+			"default": 800,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.recallTypes",
+			"type": "list",
+			"default": [
+				"world",
+				"experience"
+			],
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.debug",
+			"type": "boolean",
+			"default": false,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.requestTimeoutMs",
+			"type": "number",
+			"default": 30000,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.reflectTimeoutMs",
+			"type": "number",
+			"default": 120000,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.recallTimeoutMs",
+			"type": "number",
+			"default": 30000,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.retainTimeoutMs",
+			"type": "number",
+			"default": 60000,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.mentalModelsEnabled",
+			"type": "boolean",
+			"label": "Hindsight Mental Models",
+			"description": "Read curated reflect summaries (mental models) into developer instructions at boot. Loads existing models on the bank — does not write.",
+			"default": true,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.mentalModelAutoSeed",
+			"type": "boolean",
+			"label": "Hindsight Mental Model Auto-Seed",
+			"description": "At session start, create any built-in mental models that do not yet exist on the bank.",
+			"default": true,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.mentalModelRefreshIntervalMs",
+			"type": "number",
+			"default": 300000,
+			"restart": "session"
+		},
+		{
+			"key": "hindsight.mentalModelMaxRenderChars",
+			"type": "number",
+			"default": 16000,
+			"restart": "session"
+		}
+	]
+}
