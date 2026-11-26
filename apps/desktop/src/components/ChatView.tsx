@@ -51,7 +51,6 @@ import {
 import { pushActionToast } from "../lib/action-toast";
 import { AGENT_AVATAR_TRANSITION, useAgentIdentity } from "../lib/agent-identity";
 import { type AgentOutcome, agentSignalsFromSnapshot } from "../lib/agent-signals";
-import { useAvatarPreference } from "../lib/avatar-preference";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
 import { companionMoodFromSession, companionStateFromSignals } from "../lib/companion";
 import type { ComposerAttachApi } from "../lib/composer-attach";
@@ -997,12 +996,10 @@ export function ChatView({
 			}),
 		[snap, nowMs, turnOutcome],
 	);
-	// Avatar display toggle lives in Settings → appearance. The per-row avatars
-	// are gone (one identity per conversation), so this now decides whether the
-	// agent capsule carries the orb or the text alone. Subscribing (not a bare
-	// read) matters because the appearance page is a plugin that can toggle it
-	// while this surface stays mounted.
-	const showAvatars = useAvatarPreference();
+	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
+	// The per-row avatars are gone (one identity per conversation), so this now
+	// decides whether the agent capsule carries the orb or the text alone.
+	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
 	// The agent's identity (role/name/live state/orb) is the same contract the
 	// Agent tab consumes. The daemon's `session.list` row is the source, with a
 	// synchronous fallback so the capsule never waits to show an identity — the
@@ -1327,6 +1324,10 @@ export function ChatView({
 	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.sessionId ?? store?.cwd ?? project ?? ""}`);
 	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
 	const activeView = activePanelTab?.surface ?? null;
+	// The compaction card renders as pressed while ITS summary is the focused
+	// tab, and a second click closes it — so the transcript needs the entry id,
+	// not just "some compaction tab is open".
+	const openCompactionEntryId = activePanelTab?.surface === COMPACTION_PANEL_SURFACE ? activePanelTab.target : null;
 	// Surfaces with open tabs — feeds the rail's has-content fallback so a
 	// has-content surface stays visible while it has open tabs.
 	const openSurfaces = useMemo(() => new Set(panelTabs.tabs.map(tab => tab.surface)), [panelTabs.tabs]);
@@ -1501,10 +1502,21 @@ export function ChatView({
 				pushActionToast({ kind: "error", message: t("transcript.compactionSummaryUnavailable") });
 				return;
 			}
-			panelTabs.open(compactionTabDescriptor(entry.id, tabLabelFor(COMPACTION_PANEL_SURFACE)));
+			const descriptor = compactionTabDescriptor(entry.id, tabLabelFor(COMPACTION_PANEL_SURFACE));
+			// Second click on an open, focused card closes its summary: the card
+			// reports its own state through aria-expanded, so the toggle has to
+			// live here where the panel's active tab is known.
+			const existing = panelTabs.tabs.find(
+				tab => tab.surface === descriptor.surface && tab.dedupeKey === descriptor.dedupeKey,
+			);
+			if (existing && panelTabs.activeId === existing.id && rightPanelOpen && !focusMode) {
+				panelTabs.close(existing.id);
+				return;
+			}
+			panelTabs.open(descriptor);
 			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 		},
-		[panelTabs.open, tabLabelFor, rightPanelOpen, focusMode, onExpandRightPanel],
+		[panelTabs, tabLabelFor, rightPanelOpen, focusMode, onExpandRightPanel],
 	);
 	const toolPanelRequests = useRef<{
 		store: GuiSessionStore | null;
@@ -3796,6 +3808,7 @@ export function ChatView({
 																	host={host}
 																	renderTranscriptNode={renderTranscriptNode}
 																	onOpenCompaction={openCompaction}
+																	openCompactionEntryId={openCompactionEntryId}
 																	/* Codex 编辑预览 parity: the lightbox edit button
 																	 * opens the composer's sketch board with the image
 																	 * as its base layer (event channel — the board

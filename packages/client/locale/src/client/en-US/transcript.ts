@@ -169,6 +169,10 @@ export const transcript = {
 	"transcript.deleteGroup": "Delete group",
 	"transcript.contextCompactedTokensWithCount": "Context compacted · {count} tokens",
 	"transcript.contextCompactedTokensBeforeAfter": "Context compacted ({before} → {after} tokens)",
+	"transcript.compactedAuto": "Context auto-compacted",
+	"transcript.compactedPlain": "Context compacted",
+	"transcript.compactionSummary": "Compaction summary",
+	"transcript.compactionSaved": "-{saved}",
 	"transcript.viewCompactionSummary": "View summary",
 	"transcript.compactionSummaryUnavailable":
 		"The compaction summary panel is unavailable. Check whether the plugin is enabled.",

@@ -1050,31 +1050,97 @@ button.tr-display-context-source:hover {
 	color: var(--accent);
 }
 
-.tr-compaction-open {
-	width: 100%;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	font: inherit;
+/* Compaction checkpoint card: a chip card in the flow rather than a rule with
+ * a caption. It carries its own before/after token counts and the freed
+ * amount, so the reader sees what the compaction bought without opening the
+ * summary; the chevron opens the summary tab, and a second click closes it. */
+.tr-compact-card {
+	display: flex;
+	justify-content: center;
+	margin: 10px 0;
+}
+
+.tr-compact-open,
+.tr-compact-static {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	max-width: 100%;
+	min-width: 0;
+	padding: 4px 8px 4px 5px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg);
+	font-family: var(--font-ui), var(--font-mono), sans-serif;
+	font-size: 12px;
+	line-height: 1.25;
+	color: var(--fg-muted);
+	white-space: nowrap;
+	text-align: left;
+}
+
+.tr-compact-open {
 	cursor: pointer;
 }
 
-.tr-compaction-open > span {
+.tr-compact-open:hover {
+	background: var(--hover);
+	border-color: var(--border-strong, var(--border));
+}
+
+.tr-compact-open:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.tr-compact-open[aria-expanded="true"] {
+	border-color: var(--border-strong, var(--border));
+}
+
+.tr-compact-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-}
-
-.tr-compaction-open:hover,
-.tr-compaction-open:focus-visible {
+	justify-content: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	border-radius: 5px;
+	background: color-mix(in srgb, var(--accent) 13%, transparent);
 	color: var(--accent);
 }
 
-.tr-compaction-view {
-	color: var(--accent);
-	font-size: 12px;
-	letter-spacing: normal;
-	text-transform: none;
+.tr-compact-title {
+	flex: none;
+	color: var(--fg);
+	font-weight: 500;
+}
+
+.tr-compact-tokens {
+	flex: none;
+	color: var(--fg-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-compact-saved {
+	flex: none;
+	padding: 1px 5px;
+	border-radius: var(--radius-xs, 4px);
+	background: color-mix(in srgb, var(--ok) 14%, transparent);
+	color: var(--ok);
+	font-size: 11px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-compact-chevron {
+	display: inline-flex;
+	flex: none;
+	color: var(--fg-faint);
+}
+
+.tr-compact-open[aria-expanded="true"] .tr-compact-chevron {
+	color: var(--fg);
 }
 
 .tr-marker {

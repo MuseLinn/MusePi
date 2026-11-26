@@ -30,7 +30,7 @@ import {
 } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
-import { fmtDuration, fmtTokens } from "../../lib/format";
+import { fmtDuration } from "../../lib/format";
 import { ircPresentation } from "../../lib/irc";
 import { morphSurfaceBack, morphSurfaceFrom, sharedSurfaceTransitionAllowed } from "../../lib/view-transition";
 import type { ToolRenderHost } from "../../tool-render";
@@ -38,6 +38,7 @@ import type { PresentedFile } from "../../tool-render/presented.js";
 import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
 import { BranchSummaryDivider } from "./branch-summary-divider";
+import { CompactionCard } from "./compaction-card";
 import { TurnErrorBody } from "./error-notice";
 import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
@@ -342,6 +343,11 @@ export interface TranscriptProps {
 	onFork?(messageId: string, text: string | undefined, includeTarget?: boolean): void;
 	/** Open the full summary for a compaction entry in the host UI. */
 	onOpenCompaction?(entry: Extract<SessionEntry, { type: "compaction" }>): void;
+	/** The compaction entry whose summary panel is currently open and focused.
+	 *  The card renders as pressed and clicking again closes the panel. */
+	openCompactionEntryId?: string | null;
+	/** Close the compaction summary panel (the card's second click). */
+	onCloseCompaction?(): void;
 	/** Lazy history backfill: fires when the tail window
 	 *  is fully expanded AND the user keeps scrolling up — the caller pages
 	 *  the next older chunk from session.history and prepends it. */
@@ -834,6 +840,10 @@ interface EntryRowProps {
 	onPreviewImage?(images: { src: string; alt: string }[], index: number, element?: HTMLElement | null): void;
 	/** Open the full summary for a compaction entry in the host UI. */
 	onOpenCompaction?(entry: Extract<SessionEntry, { type: "compaction" }>): void;
+	/** True when THIS compaction entry's summary panel is the open, focused tab. */
+	compactionOpen?: boolean;
+	/** Close that panel — the card's second click. */
+	onCloseCompaction?(): void;
 	/** Advisor-card expansion for THIS entry (transcript-level state keyed by
 	 *  entry id — survives the row's virtualized unmount/remount). */
 	advisorOpen?: boolean;
@@ -973,6 +983,8 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	if (prev.speaking !== next.speaking || prev.onStopSpeak !== next.onStopSpeak) return false;
 	if (prev.onPreviewImage !== next.onPreviewImage) return false;
 	if (prev.onOpenCompaction !== next.onOpenCompaction) return false;
+	if (prev.compactionOpen !== next.compactionOpen) return false;
+	if (prev.onCloseCompaction !== next.onCloseCompaction) return false;
 	if (prev.advisorOpen !== next.advisorOpen || prev.onToggleAdvisor !== next.onToggleAdvisor) return false;
 	if (prev.renderTranscriptNode !== next.renderTranscriptNode) return false;
 	const e = next.entry;
@@ -1271,6 +1283,8 @@ const EntryRow = memo(function EntryRow({
 	onSaveImage,
 	onPreviewImage,
 	onOpenCompaction,
+	compactionOpen = false,
+	onCloseCompaction,
 	advisorOpen = false,
 	onToggleAdvisor,
 	speaking,
@@ -1411,29 +1425,15 @@ const EntryRow = memo(function EntryRow({
 					onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
 					ircContinued,
 				});
-			case "compaction": {
-				const label =
-					entry.tokensAfter === undefined
-						? t("transcript.contextCompactedTokensWithCount", { count: fmtTokens(entry.tokensBefore) })
-						: t("transcript.contextCompactedTokensBeforeAfter", {
-								before: fmtTokens(entry.tokensBefore),
-								after: fmtTokens(entry.tokensAfter),
-							});
+			case "compaction":
 				return (
-					<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
-						{onOpenCompaction ? (
-							<button type="button" className="tr-compaction-open" onClick={() => onOpenCompaction(entry)}>
-								<span>
-									{label}
-									<span className="tr-compaction-view">{t("transcript.viewCompactionSummary")}</span>
-								</span>
-							</button>
-						) : (
-							<span>{label}</span>
-						)}
-					</div>
+					<CompactionCard
+						entry={entry}
+						open={compactionOpen}
+						onOpen={onOpenCompaction}
+						onClose={onCloseCompaction}
+					/>
 				);
-			}
 			case "branch_summary":
 				return <BranchSummaryDivider summary={entry.summary} />;
 			case "model_change":
@@ -1510,6 +1510,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		onRevert,
 		onFork,
 		onOpenCompaction,
+		openCompactionEntryId = null,
+		onCloseCompaction,
 		onLoadOlder,
 		loadingOlder = false,
 		historyBlocked = false,
@@ -2922,6 +2924,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							onSaveImage={onSaveImage}
 							onPreviewImage={openPreview}
 							onOpenCompaction={onOpenCompaction}
+							onCloseCompaction={onCloseCompaction}
+							compactionOpen={openCompactionEntryId != null && entry.id === openCompactionEntryId}
 							speaking={speakingId != null && speakingId === entry.id}
 							onStopSpeak={onStopSpeak}
 							retryTarget={retryTargets.get(entry.id) ?? null}
