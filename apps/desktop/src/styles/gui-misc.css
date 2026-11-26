@@ -692,6 +692,49 @@
 	gap: 6px;
 }
 
+/* Where-a-project-runs axis pairs. Same chip primitive as the instance form
+   (`.gui-conn-kind-btn`), so one control language covers both surfaces; only
+   the label column and host row are new here. */
+.gui-proj-axis {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 28px;
+}
+
+.gui-proj-axis-label {
+	flex: none;
+	width: 72px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+.gui-proj-hosts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-proj-host {
+	padding: 3px 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	background: var(--color-surface-raised);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-proj-host:hover {
+	border-color: var(--color-accent-bd);
+	color: var(--color-text);
+}
+
+.gui-proj-host[aria-pressed="true"] {
+	border-color: var(--color-accent);
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
 .gui-new-project-label {
 	font-size: var(--ui-font-size-sm);
 	font-weight: 600;

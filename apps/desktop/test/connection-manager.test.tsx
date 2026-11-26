@@ -30,28 +30,45 @@ afterEach(async () => {
 });
 
 /**
- * Click one of the form's two-axis chips.
+ * Reach one transport in the form.
  *
- * The form asks *where* and *in what* as radio groups rather than naming its
- * kinds directly, so reaching WSL or a container means choosing the pair that
- * produces that kind. Label text is matched inside the chip group so a row
- * badge with the same word cannot be clicked by mistake.
+ * The form leads with transport cards; only a container additionally asks
+ * *where* it runs, because that is the one transport that can be on either
+ * machine. Callers name the transport they want, so a rename on the form does
+ * not silently re-point a test at a different one.
  */
-async function chooseAxes(host: HTMLElement, location: string, environment: string): Promise<void> {
-	const groups = Array.from(host.querySelectorAll<HTMLElement>('.gui-conn-form [role="radiogroup"]'));
-	expect(groups.length).toBe(2);
-	for (const [group, label] of [
-		[groups[0], location],
-		[groups[1], environment],
-	] as const) {
-		const chip = Array.from(group.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find(
-			button => (button.textContent ?? "").trim() === label,
-		);
-		await act(async () => {
-			chip?.click();
-			await Bun.sleep(20);
-		});
-	}
+async function chooseTransport(
+	host: HTMLElement,
+	transport: "ssh" | "docker" | "wsl",
+	location?: "local" | "remote",
+): Promise<void> {
+	const labels: Record<typeof transport, string> = {
+		ssh: t("settings.connectionKindSsh"),
+		docker: t("settings.connectionKindDocker"),
+		wsl: t("settings.connectionKindWsl"),
+	};
+	const card = Array.from(host.querySelectorAll<HTMLElement>(".gui-conn-transport-card")).find(
+		node => (node.querySelector(".gui-conn-transport-label")?.textContent ?? "") === labels[transport],
+	);
+	expect(card).toBeDefined();
+	await act(async () => {
+		card?.click();
+		await Bun.sleep(20);
+	});
+	if (transport !== "docker" || !location) return;
+	const group = Array.from(host.querySelectorAll<HTMLElement>('.gui-conn-form [role="radiogroup"]')).find(
+		node => node.getAttribute("aria-label") === t("settings.instanceLocation"),
+	);
+	expect(group).toBeDefined();
+	const wanted = location === "local" ? t("settings.locationThisComputer") : t("settings.locationRemoteHost");
+	const chip = Array.from(group!.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find(
+		button => (button.textContent ?? "").trim() === wanted,
+	);
+	expect(chip).toBeDefined();
+	await act(async () => {
+		chip?.click();
+		await Bun.sleep(20);
+	});
 }
 
 function render(overrides: Partial<Parameters<typeof ConnectionManager>[0]> = {}): HTMLElement {
@@ -285,16 +302,16 @@ describe("connection manager rows", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		act(() => add?.click());
-		// The form asks two questions rather than listing kinds, and every pair a
-		// user may want is offered as a chip.
-		const chips = Array.from(host.querySelectorAll('.gui-conn-form [role="radio"]')).map(
-			chip => chip.textContent ?? "",
+		// The form opens on transport cards: the three ways to reach a daemon,
+		// each stating what it is for. It is not an advanced disclosure.
+		const cards = Array.from(host.querySelectorAll<HTMLElement>(".gui-conn-transport-card")).map(
+			card => card.querySelector(".gui-conn-transport-label")?.textContent ?? "",
 		);
-		expect(chips.some(label => label.includes(t("settings.locationThisComputer")))).toBe(true);
-		expect(chips.some(label => label.includes(t("settings.locationRemoteHost")))).toBe(true);
-		expect(chips.some(label => label.includes(t("settings.environmentSystem")))).toBe(true);
-		expect(chips.some(label => label.includes(t("settings.environmentContainer")))).toBe(true);
-		expect(chips.some(label => label.includes(t("settings.connectionKindWsl")))).toBe(true);
+		expect(cards).toEqual([
+			t("settings.connectionKindSsh"),
+			t("settings.connectionKindDocker"),
+			t("settings.connectionKindWsl"),
+		]);
 		expect(!!host.querySelector("details")).toBe(false);
 	});
 
@@ -376,6 +393,82 @@ describe("connection manager rows", () => {
 	});
 });
 
+/**
+ * The transport cards.
+ *
+ * The form used to open on two chip rows and nothing else, so a user picked a
+ * vocabulary before knowing which transport they wanted. The cards lead with
+ * the transport — the thing actually being configured — and carry each
+ * transport's own readiness, so a container or a WSL that cannot work says so
+ * where it is offered rather than after a failed submit.
+ */
+describe("connection manager transports", () => {
+	async function openForm(): Promise<HTMLElement> {
+		const host = render();
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		return host;
+	}
+
+	test("the form offers ssh, docker and WSL as cards", async () => {
+		const host = await openForm();
+		const cards = Array.from(host.querySelectorAll<HTMLElement>(".gui-conn-transport-card"));
+		expect(cards).toHaveLength(3);
+		const labels = cards.map(card => card.querySelector(".gui-conn-transport-label")?.textContent ?? "");
+		expect(labels).toEqual([
+			t("settings.connectionKindSsh"),
+			t("settings.connectionKindDocker"),
+			t("settings.connectionKindWsl"),
+		]);
+		// Each card states what it is for, so the three are distinguishable
+		// without selecting one first.
+		for (const card of cards) {
+			expect((card.querySelector(".gui-conn-transport-hint")?.textContent ?? "").length).toBeGreaterThan(0);
+		}
+	});
+
+	test("choosing the ssh card switches the form to a remote host", async () => {
+		const host = await openForm();
+		const sshCard = Array.from(host.querySelectorAll<HTMLElement>(".gui-conn-transport-card")).find(card =>
+			(card.textContent ?? "").includes(t("settings.connectionKindSsh")),
+		);
+		await act(async () => {
+			sshCard?.click();
+			await Bun.sleep(20);
+		});
+		// The ssh card IS the remote case: choosing it has to put the form in a
+		// remote state so the host field appears, without a second chip asking the
+		// same question the card already answered.
+		const hostInput = Array.from(host.querySelectorAll<HTMLInputElement>(".gui-conn-form input.gui-input")).find(
+			input => input.placeholder === t("settings.connectionSshHostPlaceholder"),
+		);
+		expect(hostInput).toBeDefined();
+	});
+
+	test("a container card says when the docker probe cannot answer", async () => {
+		(globalThis as { musepiShell?: unknown }).musepiShell = {
+			detectDocker: async () => ({ available: false, reason: "daemon-unreachable" }),
+		};
+		const host = render();
+		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		await act(async () => add?.click());
+		await chooseTransport(host, "docker", "local");
+		await act(async () => {
+			await Bun.sleep(40);
+		});
+		delete (globalThis as { musepiShell?: unknown }).musepiShell;
+		const card = Array.from(host.querySelectorAll<HTMLElement>(".gui-conn-transport-card")).find(node =>
+			(node.textContent ?? "").includes(t("settings.connectionKindDocker")),
+		);
+		// Blocked at the point of choosing, not after a submit that could not work.
+		expect(card?.querySelector('[data-tone="blocked"]')).not.toBeNull();
+	});
+});
+
 describe("connection manager WSL detection", () => {
 	async function openWsl(host: HTMLElement): Promise<void> {
 		const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
@@ -384,7 +477,7 @@ describe("connection manager WSL detection", () => {
 		await act(async () => {
 			add?.click();
 		});
-		await chooseAxes(host, t("settings.locationThisComputer"), t("settings.connectionKindWsl"));
+		await chooseTransport(host, "wsl");
 	}
 
 	test("two distributions become a picker with the default marked", async () => {
@@ -605,7 +698,7 @@ describe("connection manager catalog", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		await act(async () => add?.click());
-		await chooseAxes(host, t("settings.locationRemoteHost"), t("settings.environmentSystem"));
+		await chooseTransport(host, "ssh");
 	}
 
 	test("an ssh-config-only host is offered in the instance form", async () => {
@@ -699,7 +792,7 @@ describe("connection manager docker probe", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		await act(async () => add?.click());
-		await chooseAxes(host, t("settings.locationThisComputer"), t("settings.environmentContainer"));
+		await chooseTransport(host, "docker", "local");
 		return host;
 	}
 
@@ -773,7 +866,7 @@ describe("connection manager remote container", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		await act(async () => add?.click());
-		await chooseAxes(host, t("settings.locationRemoteHost"), t("settings.environmentContainer"));
+		await chooseTransport(host, "docker", "remote");
 
 		// Naming the host is what releases the probe; until then there is nothing
 		// truthful to ask about.
@@ -787,8 +880,10 @@ describe("connection manager remote container", () => {
 		});
 		delete (globalThis as { musepiShell?: unknown }).musepiShell;
 
+		// The first probe ran for this machine the moment the container card was
+		// chosen; the one after naming a host must be about that host.
 		expect(probed.length).toBeGreaterThan(0);
-		expect(probed.every(call => call?.transport?.destination === "me@build")).toBe(true);
+		expect(probed.at(-1)?.transport?.destination).toBe("me@build");
 	});
 
 	test("the added row keeps the host so a start knows where to go", async () => {
@@ -802,7 +897,7 @@ describe("connection manager remote container", () => {
 			(button.textContent ?? "").includes(t("settings.addInstance")),
 		);
 		await act(async () => add?.click());
-		await chooseAxes(host, t("settings.locationRemoteHost"), t("settings.environmentContainer"));
+		await chooseTransport(host, "docker", "remote");
 
 		const form = host.querySelector<HTMLElement>(".gui-conn-form")!;
 		const fieldFor = (label: string): HTMLInputElement | null => {

@@ -43,10 +43,9 @@ import {
 	DEFAULT_DAEMON_PORT,
 	daemonPortOf,
 	isForwardedKind,
-	kindForAxes,
 	stripToken,
-	targetAxes,
 	type TargetLocation,
+	targetAxes,
 	targetCommand,
 	targetPublishHint,
 } from "../lib/connection/targets";
@@ -83,7 +82,10 @@ interface Draft {
 	catalogName: string;
 	container: string;
 }
-const emptyDraft = (kind: ConnectionTargetKind = "manual", location: Exclude<TargetLocation, "unknown"> = "local"): Draft => ({
+const emptyDraft = (
+	kind: ConnectionTargetKind = "manual",
+	location: Exclude<TargetLocation, "unknown"> = "local",
+): Draft => ({
 	kind,
 	location,
 	label: "",
@@ -216,6 +218,7 @@ export function ConnectionManager({
 	onRemove,
 	onCopy,
 	onShapeChange,
+	onFormClosed,
 	children,
 	/** Rendered inside another surface (the locations dialog's instance axis):
 	 *  the host already states which axis this is, so the brand header would
@@ -266,6 +269,15 @@ export function ConnectionManager({
 	 *  changes, so a hosting dialog can spring its own height instead of
 	 *  snapping when the form opens or switches kind. */
 	onShapeChange?(shape: string): void;
+	/**
+	 * The form was dismissed without adding anything.
+	 *
+	 * A hosting dialog used the form in place of its own 添加实例 button, so
+	 * cancelling left it showing neither: the form gone, its trigger gone. The
+	 * dialog owns that decision, so it is told rather than guessing from
+	 * `onShapeChange`.
+	 */
+	onFormClosed?(): void;
 	/** Extra actions the entrance owns (导出诊断 on the failure surface). */
 	children?: ReactNode;
 	embedded?: boolean;
@@ -332,13 +344,7 @@ export function ConnectionManager({
 			return;
 		}
 		setDocker({ state: "ready", containers: listed.containers ?? [] });
-	}, [
-		remoteContainer,
-		draft.sshHost,
-		draft.sshPort,
-		draft.keyPath,
-		draft.proxyJump,
-	]);
+	}, [remoteContainer, draft.sshHost, draft.sshPort, draft.keyPath, draft.proxyJump]);
 
 	useEffect(() => {
 		if (!adding || draft.kind !== "docker" || docker !== "idle") return;
@@ -359,6 +365,60 @@ export function ConnectionManager({
 	useEffect(() => {
 		setDocker("idle");
 	}, [dockerScope]);
+
+	/**
+	 * The three ways to reach a daemon, as cards.
+	 *
+	 * The axis chips ask *where* and *in what*; these cards are the concrete
+	 * transports that pair resolves to. They lead with the transport because
+	 * that is what a user is actually configuring — an ssh host, a container
+	 * name, a distribution — and the pair becomes a consequence of the card
+	 * rather than a second question asked before one.
+	 *
+	 * A card also says whether it is ready: the container card carries the
+	 * probe's answer and the WSL card the distribution list's, so a transport
+	 * that cannot work is visibly blocked at the point of choosing it instead
+	 * of failing after submit.
+	 */
+	const transportCards: Array<{
+		kind: "ssh" | "docker" | "wsl";
+		label: string;
+		hint: string;
+		icon: "server" | "stack" | "terminal-box";
+		state: "ready" | "checking" | "blocked";
+	}> = [
+		{
+			kind: "ssh",
+			label: t("settings.connectionKindSsh"),
+			hint: t("settings.connectionSshCardHint"),
+			icon: "server",
+			state: "ready",
+		},
+		{
+			kind: "docker",
+			label: t("settings.connectionKindDocker"),
+			hint: t("settings.connectionDockerCardHint"),
+			icon: "stack",
+			// A probe only runs once this transport is chosen, so an unopened
+			// card reports nothing rather than claiming to be checking: `idle`
+			// means nobody asked, not that an answer is on its way.
+			state:
+				docker === "idle"
+					? "ready"
+					: docker === "checking"
+						? "checking"
+						: docker.state === "ready"
+							? "ready"
+							: "blocked",
+		},
+		{
+			kind: "wsl",
+			label: t("settings.connectionKindWsl"),
+			hint: t("settings.connectionWslCardHint"),
+			icon: "terminal-box",
+			state: wsl === "idle" ? "ready" : wsl === "checking" ? "checking" : wsl.status === "ok" ? "ready" : "blocked",
+		},
+	];
 
 	/**
 	 * What the *remote* host can run, asked on that host.
@@ -495,8 +555,9 @@ export function ConnectionManager({
 				kind: draft.kind,
 				distro: draft.kind === "wsl" ? draft.distro : undefined,
 				sshHost: hostKind ? (fromCatalog?.sshHost ?? draft.sshHost.trim()) || undefined : undefined,
-				remotePort:
-					hostKind ? Number.parseInt(draft.remotePort, 10) || fromCatalog?.remotePort || undefined : undefined,
+				remotePort: hostKind
+					? Number.parseInt(draft.remotePort, 10) || fromCatalog?.remotePort || undefined
+					: undefined,
 				sshPort: hostKind ? Number.parseInt(draft.sshPort, 10) || fromCatalog?.sshPort || undefined : undefined,
 				proxyJump: hostKind ? draft.proxyJump.trim() || fromCatalog?.proxyJump || undefined : undefined,
 				keyPath: hostKind ? draft.keyPath.trim() || fromCatalog?.keyPath || undefined : undefined,
@@ -777,89 +838,88 @@ export function ConnectionManager({
 					className="gui-conn-section gui-conn-form"
 					aria-label={editingId ? t("settings.connectionEditTarget") : t("settings.addInstance")}
 				>
+					{/* Choose the transport first, as cards. The chips below then
+					 * refine the pair (this machine or a host; the host's system, a
+					 * container or WSL) instead of asking a user to pick a vocabulary
+					 * before they know which one they want. */}
+					<div className="gui-conn-cards" role="radiogroup" aria-label={t("settings.connectionKind")}>
+						{transportCards.map(card => {
+							const selected = draft.kind === card.kind;
+							return (
+								<button
+									key={card.kind}
+									type="button"
+									role="radio"
+									aria-checked={selected}
+									data-state={card.state}
+									className="gui-conn-card gui-conn-transport-card"
+									onClick={() => {
+										setDraft(current => ({
+											...current,
+											kind: card.kind,
+											// A transport implies a location. WSL and a local
+											// container run here; ssh is the remote case, which is
+											// what the location chip then shows.
+											location: card.kind === "ssh" ? "remote" : current.location,
+										}));
+									}}
+								>
+									<span className="gui-conn-transport-icon" aria-hidden>
+										<Icon name={card.icon} className="h-4 w-4" />
+									</span>
+									<span className="gui-conn-transport-copy">
+										<span className="gui-conn-transport-label">{card.label}</span>
+										<span className="gui-conn-transport-hint">{card.hint}</span>
+									</span>
+									{card.state === "checking" && (
+										<span className="gui-conn-transport-state">
+											{card.kind === "docker"
+												? t("settings.connectionDetectingDocker")
+												: t("settings.connectionDetecting")}
+										</span>
+									)}
+									{card.state === "blocked" && (
+										<span className="gui-conn-transport-state" data-tone="blocked">
+											{t("settings.connectionTransportBlocked")}
+										</span>
+									)}
+								</button>
+							);
+						})}
+					</div>
+
 					{/* Two questions instead of one `kind`: where the daemon runs,
 					 * and in what. The pair is the whole model, and it is what keeps a
 					 * remote container honest: it is a real pair now, so the chip is
 					 * offered and the transport is carried, rather than refused. */}
-					<div className="gui-conn-axis">
-						<span className="gui-conn-axis-label">{t("settings.instanceLocation")}</span>
-						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceLocation")}>
-							{(["local", "remote"] as const).map(location => (
-								<button
-									key={location}
-									type="button"
-									role="radio"
-									aria-checked={axes.location === location}
-									className="gui-conn-kind-btn"
-									onClick={() => {
-										// The environment is kept where it can be: switching to
-										// remote with a container chosen stays a container, now
-										// on another host. WSL is a local Windows feature, so that
-										// one pair has nowhere to go and falls back to the host.
-										const environment = axes.environment;
-										const next = kindForAxes(location, environment) ?? kindForAxes(location, "system");
-										setDraft(current => ({
-											...current,
-											location,
-											kind: next ?? current.kind,
-										}));
-									}}
-								>
-									<Icon name={location === "local" ? "computer" : "server"} className="h-3.5 w-3.5" />
-									{location === "local"
-										? t("settings.locationThisComputer")
-										: t("settings.locationRemoteHost")}
-								</button>
-							))}
-						</div>
-					</div>
-					<div className="gui-conn-axis">
-						<span className="gui-conn-axis-label">{t("settings.instanceEnvironment")}</span>
-						<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceEnvironment")}>
-							{(["system", "container", "wsl"] as const).map(environment => {
-								// Reachability is a statement about the backend, not about the
-								// host: whether *this build* can run a container on another
-								// machine. It can, so the chip is offered. Whether that host
-								// actually has docker is a separate fact, answered by the
-								// probe inside the form with its own reason — collapsing the
-								// two would leave a user with no way to see the difference
-								// between "unsupported here" and "not installed there".
-								const remoteLocation = axes.location === "remote";
-								const reachable = kindForAxes(remoteLocation ? "remote" : "local", environment) !== null;
-								return (
+					{/* Location is a real question for exactly one transport.
+					 * A container can be on this machine or on a host; a WSL
+					 * distribution is local by definition, and an ssh host IS the
+					 * remote location. Asking it for all three restated what the
+					 * card had already said, which is what made the form read as
+					 * two competing pickers instead of one. */}
+					{draft.kind === "docker" && (
+						<div className="gui-conn-axis">
+							<span className="gui-conn-axis-label">{t("settings.instanceLocation")}</span>
+							<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceLocation")}>
+								{(["local", "remote"] as const).map(location => (
 									<button
-										key={environment}
+										key={location}
 										type="button"
 										role="radio"
-										aria-checked={axes.environment === environment}
-										disabled={!reachable}
-										title={reachable ? undefined : t("settings.environmentRemoteUnsupported")}
+										aria-checked={axes.location === location}
 										className="gui-conn-kind-btn"
-										onClick={() => {
-											const next = kindForAxes(remoteLocation ? "remote" : "local", environment);
-											if (reachable && next) setDraft(current => ({ ...current, kind: next }));
-										}}
+										onClick={() => setDraft(current => ({ ...current, location }))}
 									>
-										<Icon
-											name={
-												environment === "wsl"
-													? "terminal-box"
-													: environment === "container"
-														? "stack"
-														: "computer"
-											}
-											className="h-3.5 w-3.5"
-										/>
-										{environment === "system"
-											? t("settings.environmentSystem")
-											: environment === "container"
-												? t("settings.environmentContainer")
-												: t("settings.connectionKindWsl")}
+										<Icon name={location === "local" ? "computer" : "server"} className="h-3.5 w-3.5" />
+										{location === "local"
+											? t("settings.locationThisComputer")
+											: t("settings.locationRemoteHost")}
 									</button>
-								);
-							})}
+								))}
+							</div>
 						</div>
-					</div>
+					)}
 
 					<label className="gui-field">
 						<span className="gui-field-label">{t("settings.instanceLabel")}</span>
@@ -998,7 +1058,10 @@ export function ConnectionManager({
 							 * appeared twice in two shapes — the same fact rendered as a
 							 * choice and as a duplication. The picker leads; the field
 							 * appears only when the list cannot supply the name. */}
-							{docker !== "checking" && docker !== "idle" && docker.state === "ready" && docker.containers.length > 0 ? (
+							{docker !== "checking" &&
+							docker !== "idle" &&
+							docker.state === "ready" &&
+							docker.containers.length > 0 ? (
 								<>
 									<p className="gui-conn-note" role="status">
 										{t("settings.connectionDockerContainers")}
@@ -1025,11 +1088,14 @@ export function ConnectionManager({
 									onChange={e => setDraft(current => ({ ...current, container: e.target.value }))}
 								/>
 							)}
-							{docker !== "checking" && docker !== "idle" && docker.state === "ready" && docker.containers.length === 0 && (
-								<p className="gui-conn-note" role="status">
-									{t("settings.connectionDockerNone")}
-								</p>
-							)}
+							{docker !== "checking" &&
+								docker !== "idle" &&
+								docker.state === "ready" &&
+								docker.containers.length === 0 && (
+									<p className="gui-conn-note" role="status">
+										{t("settings.connectionDockerNone")}
+									</p>
+								)}
 							{docker !== "checking" && docker !== "idle" && docker.state === "list-failed" && (
 								<p className="gui-conn-note" role="status">
 									{t("settings.connectionDockerListFailed")}
@@ -1087,16 +1153,23 @@ export function ConnectionManager({
 								setEditingId(null);
 								setDraft(emptyDraft());
 								setFormError(null);
+								// Embedded in the locations dialog, dismissing has to
+								// re-offer the action that opened this form. Left alone, the
+								// dialog kept a closed form and no way back to it: the list
+								// said 添加实例 but the button that says it is what the form
+								// replaced. The handler is the one path that knows a form was
+								// dismissed rather than a target added.
+								onFormClosed?.();
 							}}
 						>
-							{t("settings.dismiss")}
+							{t("settings.cancel")}
 						</button>
 						<button type="button" className="gui-btn gui-btn-primary" onClick={submit}>
 							{t("settings.connectionAddTarget")}
 						</button>
 					</div>
 				</section>
-			) : formOnly ? null : (
+			) : (
 				<button
 					type="button"
 					className="gui-btn gui-conn-add"

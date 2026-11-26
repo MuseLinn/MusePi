@@ -244,6 +244,7 @@ export function InstanceManagerDialog({
 								onAddTarget(target);
 								setFormOpen(false);
 							}}
+							onFormClosed={() => setFormOpen(false)}
 							onRemove={() => {}}
 							onCopy={() => {}}
 						/>

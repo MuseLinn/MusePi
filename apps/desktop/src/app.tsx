@@ -38,7 +38,12 @@ import { InstanceButton } from "./components/InstanceButton";
 import type { McpAuthRequest } from "./components/McpAuthCard";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
-import { ProjectDialog, type ProjectDialogTarget } from "./components/ProjectDialog";
+import {
+	DEFAULT_PROJECT_LOCATION,
+	ProjectDialog,
+	type ProjectDialogTarget,
+	type ProjectLocationChoice,
+} from "./components/ProjectDialog";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { RemoteAccessDialog } from "./components/RemoteAccessDialog";
 import { RemoteAccessDisclaimerDialog } from "./components/RemoteAccessDisclaimerDialog";
@@ -1175,7 +1180,18 @@ function AppInner(): ReactNode {
 	const [projectDialog, setProjectDialog] = useState<{
 		mode: "create";
 		target: ProjectDialogTarget;
+		/** Where the project runs, chosen in the dialog and kept across a close. */
+		location?: ProjectLocationChoice;
 	} | null>(null);
+	/**
+	 * Where a new project runs.
+	 *
+	 * Held by the shell rather than the dialog because it outlives one open:
+	 * a user who adds three projects on the same build box should not re-answer
+	 * the same two questions each time. It also decides which machine resolves
+	 * the folder, which is a shell-level fact (the active daemon).
+	 */
+	const [projectLocation, setProjectLocation] = useState<ProjectLocationChoice>(DEFAULT_PROJECT_LOCATION);
 	const applyCreatedProject = useCallback((result: WorkspaceMutationResult): void => {
 		const root = result.workspace.root;
 		setProject(root);
@@ -3457,8 +3473,9 @@ function AppInner(): ReactNode {
 		setProjectDialog({
 			mode: "create",
 			target: { root: "", name: "", additionalDirs: [] },
+			location: projectLocation,
 		});
-	}, []);
+	}, [projectLocation]);
 
 	const sendPrompt = useCallback(
 		async (
@@ -5838,6 +5855,14 @@ function AppInner(): ReactNode {
 				// `workspace.create` resolves the root on the daemon, so a remote
 				// daemon needs the daemon-side picker rather than the OS dialog.
 				remoteHost={activeRemoteHost}
+				location={projectDialog?.location ?? projectLocation}
+				onLocationChange={next => {
+					setProjectLocation(next);
+					setProjectDialog(current => (current ? { ...current, location: next } : current));
+				}}
+				hosts={connTargets.flatMap(row =>
+					row.kind === "ssh" && row.sshHost ? [{ id: row.id, label: row.label, host: row.sshHost }] : [],
+				)}
 				onClose={() => setProjectDialog(null)}
 				onSaved={applyCreatedProject}
 			/>

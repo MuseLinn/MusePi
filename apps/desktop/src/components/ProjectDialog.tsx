@@ -24,6 +24,32 @@ export interface ProjectDialogTarget {
 	additionalDirs: readonly string[];
 }
 
+/**
+ * Where the project runs, as the create form asks it.
+ *
+ * A project's directory is resolved *on the daemon*, so "where does this
+ * project run" is a real question at creation time and not only at connect
+ * time: a folder chosen here must exist on that machine. The answer mirrors the
+ * instance model's two axes — this computer / a remote host, and the host system
+ * / a container / WSL — because the two surfaces describe the same machinery.
+ *
+ * `location` is the user's intent and is kept apart from the host string for
+ * the same reason the instance form keeps theirs apart: picking 远程主机 before
+ * typing a host must not flip the chip back.
+ */
+export interface ProjectLocationChoice {
+	location: "local" | "remote";
+	environment: "system" | "container" | "wsl";
+	/** `user@host`, filled once 远程主机 is chosen. */
+	host: string;
+}
+
+export const DEFAULT_PROJECT_LOCATION: ProjectLocationChoice = {
+	location: "local",
+	environment: "system",
+	host: "",
+};
+
 const MAX_NAME = 100;
 const MAX_DIRECTORIES = 64;
 
@@ -47,6 +73,9 @@ export function ProjectDialog({
 	onClose,
 	onSaved,
 	remoteHost,
+	location: locationProp,
+	onLocationChange,
+	hosts = [],
 }: {
 	open: boolean;
 	mode: "create" | "edit";
@@ -63,6 +92,18 @@ export function ProjectDialog({
 	 * folder they can see here and the daemon fails on a path it never had.
 	 */
 	remoteHost?: string | null;
+	/**
+	 * Where this project runs, when the caller owns that choice.
+	 *
+	 * The shell owns it because switching the machine means switching the
+	 * daemon, which is not this dialog's decision to make on its own; the dialog
+	 * asks and reports. Absent, the form reads the machine from `remoteHost` and
+	 * shows the axes as a statement rather than a control.
+	 */
+	location?: ProjectLocationChoice;
+	onLocationChange?(next: ProjectLocationChoice): void;
+	/** Instances the location chips can point at, newest first. */
+	hosts?: readonly { id: string; label: string; host: string }[];
 }): ReactNode {
 	const [name, setName] = useState("");
 	const [primary, setPrimary] = useState("");
@@ -118,6 +159,14 @@ export function ProjectDialog({
 
 	const trimmedName = name.trim();
 	const nameInvalid = trimmedName.length === 0 || trimmedName.length > MAX_NAME;
+	/** The machine the entry will be created on: the caller's choice, else the
+	 *  daemon the shell is already talking to. */
+	const effectiveHost = locationProp
+		? locationProp.location === "remote"
+			? locationProp.host.trim() || null
+			: null
+		: (remoteHost ?? null);
+	const locationIncomplete = locationProp?.location === "remote" && !effectiveHost;
 	const blockedByMissing = [...missing].some(directory =>
 		additional.some(existing => directoriesEqual(existing, directory)),
 	);
@@ -130,12 +179,13 @@ export function ProjectDialog({
 		!busy &&
 		!nameInvalid &&
 		primary.length > 0 &&
+		!locationIncomplete &&
 		!blockedByMissing &&
 		additional.length <= MAX_DIRECTORIES &&
 		(mode === "create" || dirty);
 
 	const choosePrimary = async (): Promise<void> => {
-		if (remoteHost) {
+		if (effectiveHost) {
 			setRemotePick("primary");
 			return;
 		}
@@ -210,6 +260,119 @@ export function ProjectDialog({
 					/>
 				</div>
 
+				{mode === "create" && locationProp && onLocationChange && (
+					<>
+						{/* Where the project runs. The chip pair is the same model the
+						 * instance form asks, because a project's directory is resolved on
+						 * that machine: choosing 容器 here means the daemon inside that
+						 * container resolves the path, and the folder picker below has to
+						 * ask the same machine. */}
+						<div className="gui-new-project-field">
+							<div className="gui-proj-axis">
+								<span className="gui-proj-axis-label">{t("settings.instanceLocation")}</span>
+								<div className="gui-conn-kinds" role="radiogroup" aria-label={t("settings.instanceLocation")}>
+									{(["local", "remote"] as const).map(location => (
+										<button
+											key={location}
+											type="button"
+											role="radio"
+											aria-checked={locationProp.location === location}
+											disabled={busy}
+											className="gui-conn-kind-btn"
+											onClick={() =>
+												onLocationChange({
+													...locationProp,
+													location,
+													// WSL is a local Windows feature, so moving to a remote
+													// host has nowhere to put it and falls back to the host.
+													environment:
+														location === "remote" && locationProp.environment === "wsl"
+															? "system"
+															: locationProp.environment,
+												})
+											}
+										>
+											<Icon name={location === "local" ? "computer" : "server"} className="h-3.5 w-3.5" />
+											{location === "local"
+												? t("settings.locationThisComputer")
+												: t("settings.locationRemoteHost")}
+										</button>
+									))}
+								</div>
+							</div>
+							<div className="gui-proj-axis">
+								<span className="gui-proj-axis-label">{t("settings.instanceEnvironment")}</span>
+								<div
+									className="gui-conn-kinds"
+									role="radiogroup"
+									aria-label={t("settings.instanceEnvironment")}
+								>
+									{(["system", "container", "wsl"] as const).map(environment => {
+										const reachable = !(locationProp.location === "remote" && environment === "wsl");
+										return (
+											<button
+												key={environment}
+												type="button"
+												role="radio"
+												aria-checked={locationProp.environment === environment}
+												disabled={busy || !reachable}
+												title={reachable ? undefined : t("settings.environmentRemoteUnsupported")}
+												className="gui-conn-kind-btn"
+												onClick={() => reachable && onLocationChange({ ...locationProp, environment })}
+											>
+												<Icon
+													name={
+														environment === "wsl"
+															? "terminal-box"
+															: environment === "container"
+																? "stack"
+																: "computer"
+													}
+													className="h-3.5 w-3.5"
+												/>
+												{environment === "system"
+													? t("settings.environmentSystem")
+													: environment === "container"
+														? t("settings.environmentContainer")
+														: t("settings.connectionKindWsl")}
+											</button>
+										);
+									})}
+								</div>
+							</div>
+							{locationProp.location === "remote" && (
+								<>
+									{hosts.length > 0 && (
+										<div className="gui-proj-hosts" role="list">
+											{hosts.map(host => (
+												<button
+													key={host.id}
+													type="button"
+													role="listitem"
+													aria-pressed={locationProp.host === host.host}
+													className="gui-proj-host"
+													onClick={() => onLocationChange({ ...locationProp, host: host.host })}
+												>
+													{host.label}
+												</button>
+											))}
+										</div>
+									)}
+									<input
+										className="gui-input w-full font-mono"
+										value={locationProp.host}
+										placeholder={t("settings.connectionSshHostPlaceholder")}
+										spellCheck={false}
+										disabled={busy}
+										aria-label={t("settings.connectionSshHost")}
+										onChange={event => onLocationChange({ ...locationProp, host: event.target.value })}
+									/>
+								</>
+							)}
+						</div>
+					</>
+				)}
+
 				{mode === "create" && (
 					<div className="gui-new-project-field">
 						<div className="gui-new-project-label">
@@ -245,7 +408,7 @@ export function ProjectDialog({
 							setError(null);
 						}}
 						onPick={() => {
-							if (remoteHost) {
+							if (effectiveHost) {
 								setRemotePick("source");
 								return Promise.resolve(null);
 							}
@@ -267,6 +430,7 @@ export function ProjectDialog({
 					<p className="gui-project-dialog-hint">{t("projectDialog.inheritHint")}</p>
 				</div>
 
+				{locationIncomplete && <p className="gui-project-dialog-hint">{t("settings.connectionHostRequired")}</p>}
 				{blockedByMissing && <p className="gui-project-dialog-error">{t("projectDialog.missingBlocksSave")}</p>}
 				{error && (
 					<p className="gui-project-dialog-error" role="alert">
@@ -291,7 +455,7 @@ export function ProjectDialog({
 			<RemotePathPicker
 				open={remotePick !== null}
 				rpc={rpc}
-				hostLabel={remoteHost ?? undefined}
+				hostLabel={effectiveHost ?? undefined}
 				onClose={() => setRemotePick(null)}
 				onPick={path => {
 					if (remotePick === "primary") {

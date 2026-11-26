@@ -225,3 +225,97 @@ describe("ProjectDialog", () => {
 		expect(document.querySelector(".gui-directory-notice")?.textContent).toContain("/work/shared");
 	});
 });
+
+/**
+ * Where a project runs.
+ *
+ * A project's root is resolved on the daemon, so the machine is part of the
+ * creation request and not a display detail: choosing a remote host here is
+ * what makes the folder picker ask that machine. The chips ask the same two
+ * questions the instance form asks, because both describe the same machinery.
+ */
+describe("ProjectDialog location", () => {
+	it("asks where the project runs, and blocks create without a hosts answer", async () => {
+		const picked: Array<{ location: string; environment: string; host: string }> = [];
+		const rpc = {
+			async request<T>(): Promise<T> {
+				return {} as T;
+			},
+		};
+		await mount(
+			<ProjectDialog
+				open
+				mode="create"
+				target={{ root: "", name: "", additionalDirs: [] }}
+				rpc={rpc as never}
+				onClose={() => {}}
+				onSaved={() => {}}
+				location={{ location: "local", environment: "system", host: "" }}
+				onLocationChange={next => picked.push(next)}
+			/>,
+		);
+
+		const groups = Array.from(document.body.querySelectorAll<HTMLElement>('[role="radiogroup"]'));
+		expect(groups).toHaveLength(2);
+		// The two axes, in the same words the instance form uses.
+		expect(groups[0]?.querySelectorAll('button[role="radio"]')).toHaveLength(2);
+		expect(groups[1]?.querySelectorAll('button[role="radio"]')).toHaveLength(3);
+
+		const remote = Array.from(groups[0]!.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find(
+			button => button.getAttribute("aria-checked") === "false",
+		);
+		await act(async () => remote?.click());
+		await flush();
+		expect(picked.at(-1)?.location).toBe("remote");
+	});
+
+	it("a remote project cannot be created until a host is named", async () => {
+		const rpc = {
+			async request<T>(): Promise<T> {
+				return {} as T;
+			},
+		};
+		await mount(
+			<ProjectDialog
+				open
+				mode="create"
+				target={{ root: "", name: "", additionalDirs: [] }}
+				rpc={rpc as never}
+				onClose={() => {}}
+				onSaved={() => {}}
+				location={{ location: "remote", environment: "system", host: "" }}
+				onLocationChange={() => {}}
+			/>,
+		);
+		const footer = document.body.querySelectorAll<HTMLButtonElement>(".gui-project-dialog-footer button");
+		// The primary action is the last one in the footer, whatever the locale
+		// calls it; what matters is that it is refused, not its wording.
+		expect(footer.length).toBeGreaterThan(0);
+		expect(footer[footer.length - 1]?.disabled).toBe(true);
+	});
+
+	it("WSL is refused on a remote host and kept on this machine", async () => {
+		const rpc = {
+			async request<T>(): Promise<T> {
+				return {} as T;
+			},
+		};
+		await mount(
+			<ProjectDialog
+				open
+				mode="create"
+				target={{ root: "", name: "", additionalDirs: [] }}
+				rpc={rpc as never}
+				onClose={() => {}}
+				onSaved={() => {}}
+				location={{ location: "remote", environment: "system", host: "me@build" }}
+				onLocationChange={() => {}}
+			/>,
+		);
+		const groups = Array.from(document.body.querySelectorAll<HTMLElement>('[role="radiogroup"]'));
+		const wsl = Array.from(groups[1]?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? []).at(-1);
+		// A WSL distribution is a local Windows feature; there is nothing on the
+		// far side of an ssh hop to run it in.
+		expect(wsl?.disabled).toBe(true);
+	});
+});

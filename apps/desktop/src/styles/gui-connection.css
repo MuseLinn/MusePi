@@ -301,6 +301,76 @@
 	align-self: flex-start;
 }
 
+/* Transport cards: the first question, and the only one a user has to answer
+   before the rest of the form makes sense. A grid of equal cards rather than a
+   stacked list, so the three transports read as alternatives at a glance. */
+.gui-conn-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.gui-conn-transport-card {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 9px;
+	padding: 10px 11px;
+	text-align: left;
+	border-radius: var(--radius-md);
+	/* `.gui-conn-card` is `flex: 1` for the method picker's side-by-side row.
+	   A grid item keeps that as `flex-grow`, and the form is a flex column, so
+	   the cards stretched to the tallest track (272px) instead of their own
+	   content. Reset it: a card is as tall as what it says. */
+	flex: none;
+}
+
+.gui-conn-transport-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-conn-transport-card[aria-checked="true"] .gui-conn-transport-icon {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
+.gui-conn-transport-copy {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.gui-conn-transport-label {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-conn-transport-hint {
+	font-size: 12px;
+	line-height: 1.35;
+	color: var(--color-text-muted);
+}
+
+.gui-conn-transport-state {
+	flex: none;
+	align-self: center;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-conn-transport-state[data-tone="blocked"] {
+	color: var(--color-warn);
+}
+
 .gui-conn-form-actions {
 	display: flex;
 	justify-content: flex-end;

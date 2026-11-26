@@ -134,6 +134,28 @@ describe("the add form is the instance form", () => {
 		// A directory belongs to 添加项目, not to an instance.
 		expect(labels).not.toContain(t("settings.workspaceDirectory"));
 	});
+
+	test("cancelling the form gives the section its add action back", async () => {
+		// The form replaces the section's own 添加实例 button, so dismissing it
+		// used to leave a section with neither: the form gone and the trigger
+		// gone with it, and the only way to add a second instance was to close
+		// and reopen the dialog.
+		const host = await render();
+		const daemon = await openAddForm(host);
+		expect(daemon.querySelector(".gui-conn-form")).not.toBeNull();
+		const cancel = Array.from(daemon.querySelectorAll<HTMLButtonElement>(".gui-conn-form-actions button")).find(
+			button => (button.textContent ?? "").trim() === t("settings.cancel"),
+		);
+		await act(async () => {
+			cancel?.click();
+			await Bun.sleep(20);
+		});
+		expect(daemon.querySelector(".gui-conn-form")).toBeNull();
+		const add = Array.from(daemon.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			(button.textContent ?? "").includes(t("settings.addInstance")),
+		);
+		expect(add).toBeDefined();
+	});
 });
 
 describe("empty, loading and error states", () => {
