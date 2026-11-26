@@ -390,7 +390,7 @@ export function getSettingsForTab(tab: SettingTab): SettingDef[] {
 }
 
 /** Get a setting definition by path */
-export function getSettingDef(path: SettingPath): SettingDef | undefined {
+export function getSettingDef(path: SettingPath | (string & {})): SettingDef | undefined {
 	return getAllSettingDefs().find(def => def.path === path);
 }
 

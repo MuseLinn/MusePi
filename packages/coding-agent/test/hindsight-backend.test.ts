@@ -598,7 +598,7 @@ describe("hindsightBackend live bank routing", () => {
 		// follow-up `set` writes to `#global` while `get` keeps returning the
 		// `#overrides` value — exactly the precedence the live settings UI
 		// does NOT have, since real config writes land in `#global`.
-		settings.set("hindsight.bankId", "omp");
+		settings.setExtension("hindsight.bankId", "omp");
 		const session = makeFakeSession({ sessionId: "s-rebuild", settings });
 
 		await hindsightBackend.start({
@@ -612,7 +612,7 @@ describe("hindsightBackend live bank routing", () => {
 		const initial = session.getHindsightSessionState();
 		expect(initial?.bankId).toBe("omp");
 
-		settings.set("hindsight.bankId", "Minigames");
+		settings.setExtension("hindsight.bankId", "Minigames");
 		// Hook is sync but the rebuild is async; yield once so the handler runs.
 		await Bun.sleep(10);
 
@@ -630,7 +630,7 @@ describe("hindsightBackend live bank routing", () => {
 			"memory.backend": "hindsight",
 			"hindsight.apiUrl": "http://localhost:8888",
 		});
-		settings.set("hindsight.scoping", "global");
+		settings.setExtension("hindsight.scoping", "global");
 		const session = makeFakeSession({ sessionId: "s-scoping", cwd: "/work/proj", settings });
 
 		await hindsightBackend.start({
@@ -645,7 +645,7 @@ describe("hindsightBackend live bank routing", () => {
 		expect(initial?.bankId).toBe("omp");
 		expect(initial?.retainTags).toBeUndefined();
 
-		settings.set("hindsight.scoping", "per-project");
+		settings.setExtension("hindsight.scoping", "per-project");
 		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
@@ -662,7 +662,7 @@ describe("hindsightBackend live bank routing", () => {
 			"memory.backend": "hindsight",
 			"hindsight.apiUrl": "http://localhost:8888",
 		});
-		settings.set("hindsight.bankId", "omp");
+		settings.setExtension("hindsight.bankId", "omp");
 		const session = makeFakeSession({ sessionId: "s-noop", settings });
 
 		await hindsightBackend.start({
@@ -674,7 +674,7 @@ describe("hindsightBackend live bank routing", () => {
 		});
 
 		const initial = session.getHindsightSessionState();
-		settings.set("hindsight.bankId", "omp"); // unchanged
+		settings.setExtension("hindsight.bankId", "omp"); // unchanged
 		await Bun.sleep(10);
 
 		expect(session.getHindsightSessionState()).toBe(initial);
@@ -693,8 +693,8 @@ describe("hindsightBackend live bank routing", () => {
 			"memory.backend": "hindsight",
 			"hindsight.apiUrl": "http://localhost:8888",
 		});
-		settings.set("hindsight.scoping", "per-project");
-		settings.set("hindsight.bankId", "Minigames");
+		settings.setExtension("hindsight.scoping", "per-project");
+		settings.setExtension("hindsight.bankId", "Minigames");
 		const session = makeFakeSession({ sessionId: "s-reset", cwd: "/work/_NEW_XenGameKit", settings });
 
 		await hindsightBackend.start({
@@ -709,7 +709,7 @@ describe("hindsightBackend live bank routing", () => {
 
 		// Operator clears the bankId via the TUI — `settings.set(path, "")` is
 		// the same call shape `#setSettingValue` uses for an empty text input.
-		settings.set("hindsight.bankId", "");
+		settings.setExtension("hindsight.bankId", "");
 		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
@@ -735,8 +735,8 @@ describe("hindsightBackend live bank routing", () => {
 			"memory.backend": "hindsight",
 			"hindsight.apiUrl": "http://localhost:8888",
 		});
-		settings.set("hindsight.scoping", "global");
-		settings.set("hindsight.bankId", "Minigames-_NEW_XenGameKit");
+		settings.setExtension("hindsight.scoping", "global");
+		settings.setExtension("hindsight.bankId", "Minigames-_NEW_XenGameKit");
 		const session = makeFakeSession({ sessionId: "s-reset-global", settings });
 
 		await hindsightBackend.start({
@@ -748,7 +748,7 @@ describe("hindsightBackend live bank routing", () => {
 		});
 		expect(session.getHindsightSessionState()?.bankId).toBe("Minigames-_NEW_XenGameKit");
 
-		settings.set("hindsight.bankId", "");
+		settings.setExtension("hindsight.bankId", "");
 		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
@@ -769,8 +769,8 @@ describe("hindsightBackend live bank routing", () => {
 			"hindsight.apiUrl": "http://localhost:8888",
 			"hindsight.retainEveryNTurns": 1,
 		});
-		settings.set("hindsight.bankId", "omp");
-		settings.set("hindsight.scoping", "global");
+		settings.setExtension("hindsight.bankId", "omp");
+		settings.setExtension("hindsight.scoping", "global");
 		const entries = [
 			{ role: "user" as const, text: "remember this routing coalesce fact" },
 			{ role: "assistant" as const, text: "acknowledged routing coalesce fact" },
@@ -789,9 +789,9 @@ describe("hindsightBackend live bank routing", () => {
 		// Mirrors `Settings.#fireAllHooks()` during cwd reload: all three
 		// Hindsight routing hooks can fire synchronously before the first async
 		// queue flush continuation resumes. They must collapse into one rebuild.
-		settings.set("hindsight.bankIdPrefix", "live");
-		settings.set("hindsight.bankId", "Minigames");
-		settings.set("hindsight.scoping", "per-project");
+		settings.setExtension("hindsight.bankIdPrefix", "live");
+		settings.setExtension("hindsight.bankId", "Minigames");
+		settings.setExtension("hindsight.scoping", "per-project");
 		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
