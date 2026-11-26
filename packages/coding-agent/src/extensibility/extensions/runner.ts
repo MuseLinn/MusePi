@@ -136,6 +136,7 @@ function isHostOwnedExtension(ext: Extension): boolean {
 	const normalized = ext.resolvedPath.replaceAll("\\", "/");
 	return (
 		normalized.includes("/plugins/") ||
+		normalized.includes("/bundled-plugins/") ||
 		normalized.includes("/desktop-plugins/") ||
 		normalized.includes("/apps/desktop/src/plugins/")
 	);
