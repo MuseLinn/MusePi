@@ -8,6 +8,18 @@ export function isContextCommand(text: string): boolean {
 	return trimmed === "/context" || trimmed.startsWith("/context ");
 }
 
+/** The message half split by source: what the reader typed, what the harness
+ *  injected, and what the model or its tools produced. */
+interface MessageSourceView {
+	userMessages: number;
+	systemReminders: number;
+	compactionSummaries: number;
+	modelReplies: number;
+	thinking: number;
+	toolCalls: number;
+	toolResults: number;
+}
+
 /** Category breakdown served by session.contextUsage (daemon adds the
  *  full ContextUsageBreakdown the TUI /context panel renders). */
 export interface ContextBreakdownView {
@@ -18,6 +30,9 @@ export interface ContextBreakdownView {
 	systemContextTokens: number;
 	skillsTokens: number;
 	messagesTokens: number;
+	/** Present when the daemon splits the message half; the panel then lists
+	 *  these rows instead of one aggregate "messages" row. */
+	messagesBySource?: MessageSourceView;
 	/** Autocompact reserve (daemon computes from the compaction strategy). */
 	autoCompactBufferTokens?: number;
 	/** Window left after used + autocompact buffer. */

@@ -1,4 +1,4 @@
-import type { Tokenizer } from "@musepi/pi-agent-core";
+import type { AgentMessage, Tokenizer } from "@musepi/pi-agent-core";
 import type { CompactionSettings } from "@musepi/pi-agent-core/compaction";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
 import type { Tool as AiTool, Model } from "@musepi/pi-ai";
@@ -254,6 +254,155 @@ export function computeNonMessageBreakdown(
 	const breakdown = { skillsTokens, toolsTokens, systemContextTokens, systemPromptTokens };
 	entry.breakdown = breakdown;
 	return breakdown;
+}
+
+/**
+ * Split the message half of the context into the sources a reader can act on:
+ * their own typed text, injected reminders, compaction summaries, model
+ * replies (text only), thinking, tool calls, and tool results. The totals sum
+ * to the same estimate `countMessages` reports, so the categories stay
+ * reconcilable with `messagesTokens` rather than drifting from it.
+ *
+ * Only the COMPOSITION is split here. Injected reminders ride inside user
+ * messages, so a caller that cannot attribute a fragment must count it as a
+ * user message — over-reporting what the reader wrote is worse than missing a
+ * subcategory.
+ */
+export interface MessageSourceTokens {
+	userMessages: number;
+	systemReminders: number;
+	compactionSummaries: number;
+	modelReplies: number;
+	thinking: number;
+	toolCalls: number;
+	toolResults: number;
+}
+
+/** `<system-reminder>` is the one marker every injection path emits. */
+const SYSTEM_REMINDER_BLOCK = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+
+/** A zeroed accumulator, so callers never hand-roll the field list. */
+export function emptyMessageSourceTokens(): MessageSourceTokens {
+	return {
+		userMessages: 0,
+		systemReminders: 0,
+		compactionSummaries: 0,
+		modelReplies: 0,
+		thinking: 0,
+		toolCalls: 0,
+		toolResults: 0,
+	};
+}
+
+/**
+ * Rescale a composition onto a total measured elsewhere (the anchored prompt
+ * count). Rounding is reconciled on the largest row so the rows still sum to
+ * `total` exactly — a composition that visibly disagrees with the total beside
+ * it reads as a bug, not as two estimates.
+ */
+export function scaleMessageSourceTokens(tokens: MessageSourceTokens, factor: number): MessageSourceTokens {
+	const scaled = emptyMessageSourceTokens();
+	const keys = Object.keys(scaled) as Array<keyof MessageSourceTokens>;
+	let largest: keyof MessageSourceTokens = "userMessages";
+	let sum = 0;
+	for (const key of keys) {
+		scaled[key] = Math.max(0, Math.round(tokens[key] * factor));
+		sum += scaled[key];
+		if (tokens[key] > tokens[largest]) largest = key;
+	}
+	const target = Math.max(0, Math.round(keys.reduce((acc, key) => acc + tokens[key], 0) * factor));
+	scaled[largest] = Math.max(0, scaled[largest] + (target - sum));
+	return scaled;
+}
+
+function textOf(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter(
+			(block): block is { type: "text"; text: string } => block?.type === "text" && typeof block.text === "string",
+		)
+		.map(block => block.text)
+		.join("");
+}
+
+/**
+ * Account one message into {@link MessageSourceTokens}. Assistant content is
+ * charged block by block so a reply's prose, its reasoning and its tool calls
+ * land in different rows; a user message is charged once for the reminder
+ * blocks it carries and once for what is left.
+ */
+export function accountMessageSource(message: AgentMessage, tokenizer: Tokenizer, into: MessageSourceTokens): void {
+	const role: string = message.role;
+	if (role === "assistant") {
+		const content = (message as { content?: unknown }).content;
+		if (!Array.isArray(content)) return;
+		for (const block of content) {
+			const kind = (block as { type?: string }).type;
+			if (kind === "text") {
+				into.modelReplies += tokenizer.countTokens([String((block as { text?: string }).text ?? "")]);
+			} else if (kind === "thinking") {
+				const thinking = block as { thinking?: string; thinkingSignature?: string };
+				into.thinking += tokenizer.countTokens([thinking.thinking ?? ""]);
+				// Providers bill the opaque signature with the reasoning text; the
+				// estimate has to agree or the two rows stop summing to the total.
+				if (thinking.thinkingSignature) into.thinking += tokenizer.countTokens([thinking.thinkingSignature]);
+			} else if (kind === "redactedThinking") {
+				into.thinking += tokenizer.countTokens([String((block as { data?: string }).data ?? "")]);
+			} else if (kind === "toolCall") {
+				const call = block as { name?: string; arguments?: unknown };
+				into.toolCalls += tokenizer.countTokens([
+					call.name ?? "",
+					JSON.stringify(call.arguments ?? null) ?? "null",
+				]);
+			}
+		}
+		return;
+	}
+	if (role === "toolResult") {
+		into.toolResults += tokenizer.countMessage(message);
+		return;
+	}
+	if (role === "compactionSummary" || role === "branchSummary") {
+		into.compactionSummaries += tokenizer.countMessage(message);
+		return;
+	}
+	if (role !== "user") {
+		// Custom/hook messages are injected context, never something the reader
+		// typed: they belong with the reminders.
+		into.systemReminders += tokenizer.countMessage(message);
+		return;
+	}
+	const text = textOf((message as { content?: unknown }).content);
+	const reminders = text.match(SYSTEM_REMINDER_BLOCK) ?? [];
+	const whole = tokenizer.countMessage(message);
+	if (reminders.length === 0) {
+		into.userMessages += whole;
+		return;
+	}
+	// Split by PROPORTION of the message's own estimate rather than counting
+	// each fragment: a tokenizer charges boundaries per string, so summing
+	// separately-counted fragments drifts from the whole and the rows would
+	// stop adding up to the number shown beside them.
+	const reminderText = reminders.join("");
+	const reminderShare = text.length === 0 ? 0 : reminderText.length / text.length;
+	const remindersTokens = Math.round(whole * reminderShare);
+	into.systemReminders += remindersTokens;
+	into.userMessages += Math.max(0, whole - remindersTokens);
+}
+
+/**
+ * Compaction summaries already in the window, by source. A summary is injected
+ * as a `compactionSummary` message, so this only has to separate the legacy
+ * prose preamble from the body the reader wants to see.
+ */
+export function compactionSummaryTokens(messages: readonly AgentMessage[], tokenizer: Tokenizer): number {
+	let total = 0;
+	for (const message of messages) {
+		if (message.role !== "compactionSummary") continue;
+		total += tokenizer.countMessage(message);
+	}
+	return total;
 }
 
 /**

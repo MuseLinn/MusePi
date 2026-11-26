@@ -36,6 +36,7 @@ import type { ExtensionRunner } from "../extensibility/extensions";
 import type { ContextUsage } from "../extensibility/extensions/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
+import type { MessageSourceTokens } from "../modes/utils/context-usage";
 import type { PromptContextMessage } from "../prompts/types";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -436,6 +437,10 @@ export interface ContextUsageBreakdown {
 	systemContextTokens: number;
 	skillsTokens: number;
 	messagesTokens: number;
+	/** The message half split by source, so the panel can show what the reader
+	 *  typed apart from what the harness injected. Absent on hosts that only
+	 *  publish the aggregate — the panel then falls back to `messagesTokens`. */
+	messagesBySource?: MessageSourceTokens;
 }
 
 /** Session statistics for the `/session` command. */

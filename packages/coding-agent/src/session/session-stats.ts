@@ -10,9 +10,12 @@ import { isRecord } from "@musepi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import type { ContextUsage } from "../extensibility/extensions/types";
 import {
+	accountMessageSource,
 	computeNonMessageBreakdown,
 	computeNonMessageTokens,
+	emptyMessageSourceTokens,
 	type NonMessageTokenSource,
+	scaleMessageSourceTokens,
 } from "../modes/utils/context-usage";
 import type { ContextUsageBreakdown, SessionStats } from "./agent-session-types";
 import { getLatestCompactionEntry } from "./session-context";
@@ -237,6 +240,18 @@ export class SessionStatsTracker {
 		if (!anchored) {
 			usedTokens = currentNonMessageTokens + this.#tokenizer.countMessages(activeMessages) + pendingTokens;
 		}
+		const messagesTokens = Math.max(0, usedTokens - categoryNonMessageTokens);
+		// The split describes COMPOSITION, not the anchored total: the anchor
+		// measures provider-reported prompt tokens, which no per-message
+		// estimate reproduces, so the rows are scaled onto `messagesTokens`
+		// rather than left as an independent sum that would visibly disagree
+		// with the total beside it.
+		const counted = emptyMessageSourceTokens();
+		for (const message of activeMessages) accountMessageSource(message, this.#tokenizer, counted);
+		for (const message of pendingMessages) accountMessageSource(message, this.#tokenizer, counted);
+		const countedTotal = Object.values(counted).reduce((sum, value) => sum + value, 0);
+		const messagesBySource =
+			countedTotal <= 0 ? undefined : scaleMessageSourceTokens(counted, messagesTokens / countedTotal);
 		return {
 			contextWindow,
 			anchored,
@@ -245,7 +260,8 @@ export class SessionStatsTracker {
 			systemToolsTokens: toolsTokens,
 			systemContextTokens,
 			skillsTokens,
-			messagesTokens: Math.max(0, usedTokens - categoryNonMessageTokens),
+			messagesTokens,
+			messagesBySource,
 		};
 	}
 

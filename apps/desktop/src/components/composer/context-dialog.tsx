@@ -273,12 +273,66 @@ export function ContextUsageCard({
 								CONTEXT_CELL_FILLED,
 								"gui-context-glyph--skills",
 							)}
-							{renderContextCat(
-								"context messages",
-								data.breakdown.messagesTokens,
-								data.contextWindow,
-								CONTEXT_CELL_MESSAGES,
-								"gui-context-glyph--messages",
+							{data.breakdown.messagesBySource ? (
+								<>
+									{renderContextCat(
+										"context user messages",
+										data.breakdown.messagesBySource.userMessages,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+									{renderContextCat(
+										"context system reminders",
+										data.breakdown.messagesBySource.systemReminders,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+									{renderContextCat(
+										"context compaction summary",
+										data.breakdown.messagesBySource.compactionSummaries,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+									{renderContextCat(
+										"context model replies",
+										data.breakdown.messagesBySource.modelReplies,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+									{renderContextCat(
+										"context model thinking",
+										data.breakdown.messagesBySource.thinking,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+									{renderContextCat(
+										"context tool calls",
+										data.breakdown.messagesBySource.toolCalls,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+									{renderContextCat(
+										"context tool results",
+										data.breakdown.messagesBySource.toolResults,
+										data.contextWindow,
+										CONTEXT_CELL_MESSAGES,
+										"gui-context-glyph--messages",
+									)}
+								</>
+							) : (
+								renderContextCat(
+									"context messages",
+									data.breakdown.messagesTokens,
+									data.contextWindow,
+									CONTEXT_CELL_MESSAGES,
+									"gui-context-glyph--messages",
+								)
 							)}
 							{renderContextCat(
 								"context free",

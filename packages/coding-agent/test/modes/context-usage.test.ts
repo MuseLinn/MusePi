@@ -7,14 +7,18 @@
  */
 import { describe, expect, it } from "bun:test";
 import { type } from "@musepi/musepi-type";
-import { Tokenizer } from "@musepi/pi-agent-core";
+import { type AgentMessage, Tokenizer } from "@musepi/pi-agent-core";
 import { arkToWireSchema } from "@musepi/pi-ai/utils/schema";
 import {
+	accountMessageSource,
 	type ContextBreakdown,
 	computeNonMessageBreakdown,
 	computeNonMessageTokens,
+	emptyMessageSourceTokens,
 	estimateToolSchemaTokens,
+	type MessageSourceTokens,
 	renderContextUsage,
+	scaleMessageSourceTokens,
 } from "@musepi/pi-coding-agent/modes/utils/context-usage";
 
 const tokenizer = new Tokenizer();
@@ -175,5 +179,87 @@ describe("computeNonMessageBreakdown skills filtering", () => {
 		const b = computeNonMessageBreakdown(session([], [hidden, visible]), tokenizer);
 		expect(b.skillsTokens).toBe(0);
 		expect(b.systemPromptTokens).toBe(computeNonMessageBreakdown(session([], []), tokenizer).systemPromptTokens);
+	});
+});
+
+describe("accountMessageSource", () => {
+	function into(): MessageSourceTokens {
+		return emptyMessageSourceTokens();
+	}
+
+	it("counts typed user text apart from an injected reminder", () => {
+		const message = {
+			role: "user",
+			content: "do the thing\n\n<system-reminder>hidden note</system-reminder>",
+			timestamp: 0,
+		} as unknown as AgentMessage;
+		const tokens = into();
+		accountMessageSource(message, tokenizer, tokens);
+		expect(tokens.userMessages).toBeGreaterThan(0);
+		expect(tokens.systemReminders).toBeGreaterThan(0);
+		expect(tokens.userMessages + tokens.systemReminders).toBe(tokenizer.countMessage(message));
+	});
+
+	it("charges a plain user message with no reminder entirely as user text", () => {
+		const message = { role: "user", content: "just words", timestamp: 0 } as unknown as AgentMessage;
+		const tokens = into();
+		accountMessageSource(message, tokenizer, tokens);
+		expect(tokens.systemReminders).toBe(0);
+		expect(tokens.userMessages).toBe(tokenizer.countMessage(message));
+	});
+
+	it("splits an assistant reply into prose, thinking and tool calls", () => {
+		const message = {
+			role: "assistant",
+			content: [
+				{ type: "text", text: "Here is the plan." },
+				{ type: "thinking", thinking: "consider the options" },
+				{ type: "toolCall", id: "t1", name: "read", arguments: { path: "a.ts" } },
+			],
+			timestamp: 0,
+		} as unknown as AgentMessage;
+		const tokens = into();
+		accountMessageSource(message, tokenizer, tokens);
+		expect(tokens.modelReplies).toBeGreaterThan(0);
+		expect(tokens.thinking).toBeGreaterThan(0);
+		expect(tokens.toolCalls).toBeGreaterThan(0);
+	});
+
+	it("charges tool results to their own row and compaction summaries to theirs", () => {
+		const toolResult = {
+			role: "toolResult",
+			toolCallId: "t1",
+			toolName: "read",
+			content: [{ type: "text", text: "file body" }],
+			timestamp: 0,
+		} as unknown as AgentMessage;
+		const summary = {
+			role: "compactionSummary",
+			summary: "compacted",
+			tokensBefore: 10,
+			timestamp: 0,
+		} as unknown as AgentMessage;
+		const tokens = into();
+		accountMessageSource(toolResult, tokenizer, tokens);
+		accountMessageSource(summary, tokenizer, tokens);
+		expect(tokens.toolResults).toBe(tokenizer.countMessage(toolResult));
+		expect(tokens.compactionSummaries).toBe(tokenizer.countMessage(summary));
+	});
+});
+
+describe("scaleMessageSourceTokens", () => {
+	it("keeps the rows summing to the scaled total", () => {
+		const base = emptyMessageSourceTokens();
+		base.userMessages = 7;
+		base.toolCalls = 5;
+		base.thinking = 3;
+		const scaled = scaleMessageSourceTokens(base, 100 / 15);
+		const sum = Object.values(scaled).reduce((a, b) => a + b, 0);
+		expect(sum).toBe(100);
+	});
+
+	it("survives a zero total without producing fractions", () => {
+		const scaled = scaleMessageSourceTokens(emptyMessageSourceTokens(), 0);
+		for (const value of Object.values(scaled)) expect(value).toBe(0);
 	});
 });
