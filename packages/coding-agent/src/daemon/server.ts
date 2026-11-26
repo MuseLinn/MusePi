@@ -6925,6 +6925,13 @@ export class DaemonServer {
 			case "fs.mkdir": {
 				return this.#services.get<FileService>("files").mkdir((params ?? {}) as { cwd?: string; path?: string });
 			}
+			case "fs.list": {
+				// 任一绝对目录的直接子项——"这台 daemon 上的工作区路径"选择器用。
+				// 实现归 FileService；越界与不可读都以 error 字段回传，不抛进 RPC。
+				return this.#services
+					.get<FileService>("files")
+					.list((params ?? {}) as { path?: string; showHidden?: boolean });
+			}
 			case "fs.stat": {
 				// 只读存在性探测（项目列表幽灵目录清理）——实现归 FileService。
 				return this.#services.get<FileService>("files").stat((params ?? {}) as { path?: string });

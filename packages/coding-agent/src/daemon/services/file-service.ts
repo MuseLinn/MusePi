@@ -94,6 +94,7 @@ export class FileService implements DaemonService {
 	readonly routes = {
 		"fs.delete": "deleteEntry",
 		"fs.mkdir": "mkdir",
+		"fs.list": "list",
 		"fs.read": "read",
 		"fs.readBytes": "readBytes",
 		"fs.rename": "rename",
@@ -166,6 +167,50 @@ export class FileService implements DaemonService {
 	/** RPC fs.stat：只读存在性探测（侧栏项目列表的幽灵目录清理用）——
 	 *  任何错误（不存在 / 无权限 / 参数缺失）一律归一为 exists:false，
 	 *  绝不抛错；调用方据 exists 过滤列表，探测本身无副作用。 */
+	/**
+	 * RPC fs.list：列**任一绝对目录**的直接子项，用于"这台 daemon 上的工作区
+	 * 路径"选择器。
+	 *
+	 * 与 `workspace.tree` 的分工是明确的：tree 扫描工作区、路径相对 cwd 且拒绝
+	 * 越界，因为它是文件面板的投影；而这个选择器要回答的是"这台机器上有哪些
+	 * 目录"，起点是 `/` 或盘符根，路径天然是绝对的。它只返回名字与类型，不读
+	 * 内容、不递归，隐藏项按调用方要求过滤（目录选择器默认显示，用户需要能选到
+	 * 以点开头的目录）。
+	 */
+	list(params: { path?: string; showHidden?: boolean }): {
+		path: string;
+		parent: string | null;
+		entries: Array<{ name: string; path: string; isDir: boolean }>;
+		error?: string;
+	} {
+		const p = params ?? {};
+		const showHidden = p.showHidden === true;
+		const requested = p.path?.trim();
+		const target = requested ? path.resolve(requested) : os.homedir();
+		const parent = path.dirname(target);
+		try {
+			const dirents = fs.readdirSync(target, { withFileTypes: true });
+			const entries = dirents
+				.filter(dirent => showHidden || !dirent.name.startsWith("."))
+				.map(dirent => ({
+					name: dirent.name,
+					path: path.join(target, dirent.name),
+					isDir: dirent.isDirectory(),
+				}))
+				// Directories first, then names: the selector is for picking a
+				// directory, so a list mixed with files makes the useful rows rare.
+				.sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
+			return { path: target, parent: parent === target ? null : parent, entries };
+		} catch (cause) {
+			return {
+				path: target,
+				parent: parent === target ? null : parent,
+				entries: [],
+				error: cause instanceof Error ? cause.message : String(cause),
+			};
+		}
+	}
+
 	stat(params: { path?: string }): { exists: boolean; isDirectory: boolean } {
 		const p = params ?? {};
 		if (!p.path) return { exists: false, isDirectory: false };
