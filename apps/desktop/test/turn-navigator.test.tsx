@@ -5,7 +5,13 @@ import * as path from "node:path";
 import { setLocale, type TurnIndexItem } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { TurnNavigator, type TurnNavigatorDataSource } from "../src/components/TurnNavigator";
+import {
+	readTurnNavPref,
+	TURN_NAV_KEY,
+	TurnNavigator,
+	type TurnNavigatorDataSource,
+	writeTurnNavPref,
+} from "../src/components/TurnNavigator";
 
 /**
  * Turn navigator contracts: one fixed-pitch mark per turn inside a scrollable
@@ -25,6 +31,7 @@ afterEach(async () => {
 	for (const root of roots) await act(async () => root.unmount());
 	roots.clear();
 	document.body.innerHTML = "";
+	localStorage.clear();
 });
 
 const turn = (i: number): TurnIndexItem => ({
@@ -216,5 +223,32 @@ describe("TurnNavigator geometry", () => {
 	test("the rail clears the native scrollbar by its layout width", () => {
 		const css = readFileSync(path.resolve(import.meta.dir, "../src/styles/gui-workspace.css"), "utf8");
 		expect(css).toContain("right: calc(4px + var(--mp-scrollbar-width");
+	});
+});
+
+describe("TurnNavigator preference", () => {
+	test("reads the versioned key", () => {
+		localStorage.setItem(TURN_NAV_KEY, JSON.stringify({ side: "left", style: "pacman" }));
+		expect(readTurnNavPref()).toEqual({ side: "left", style: "pacman" });
+	});
+
+	test("migrates the pre-rename omp scalars once and removes them", () => {
+		localStorage.setItem("omp-collab-turnrail-side", "left");
+		localStorage.setItem("omp-collab-turnrail-style", "pacman");
+		expect(readTurnNavPref()).toEqual({ side: "left", style: "pacman" });
+		expect(JSON.parse(localStorage.getItem(TURN_NAV_KEY)!)).toEqual({ side: "left", style: "pacman" });
+		expect(localStorage.getItem("omp-collab-turnrail-side") === null).toBe(true);
+		expect(localStorage.getItem("omp-collab-turnrail-style") === null).toBe(true);
+	});
+
+	test("invalid values fall back to the defaults", () => {
+		localStorage.setItem(TURN_NAV_KEY, JSON.stringify({ side: "up", style: 3 }));
+		expect(readTurnNavPref()).toEqual({ side: "right", style: "burger" });
+	});
+
+	test("a write merges one field", () => {
+		writeTurnNavPref({ side: "left" });
+		expect(writeTurnNavPref({ style: "pacman" })).toEqual({ side: "left", style: "pacman" });
+		expect(JSON.parse(localStorage.getItem(TURN_NAV_KEY)!)).toEqual({ side: "left", style: "pacman" });
 	});
 });

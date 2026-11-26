@@ -91,11 +91,11 @@ import { MockConversationPreview } from "../MockConversationPreview";
 import { Reveal } from "../Reveal";
 import { RightRail } from "../RightRail";
 import {
-	TURN_RAIL_CHANGED_EVENT,
-	TURN_RAIL_SIDE_KEY,
-	TURN_RAIL_STYLE_KEY,
+	readTurnNavPref,
+	TURN_NAV_CHANGED_EVENT,
 	type TurnNavigatorSide,
 	type TurnNavigatorStyle,
+	writeTurnNavPref,
 } from "../TurnNavigator";
 import { ChatSection } from "./chat";
 import { SchemaTabSection } from "./schema";
@@ -331,12 +331,8 @@ export function AppearanceSection({
 	const [transcriptFont, setTranscriptFont] = useState<string>(
 		() => localStorage.getItem(TRANSCRIPT_FONT_KEY) ?? DEFAULT_TRANSCRIPT_FONT.id,
 	);
-	const [turnRailSide, setTurnRailSide] = useState<TurnNavigatorSide>(
-		() => (localStorage.getItem(TURN_RAIL_SIDE_KEY) as TurnNavigatorSide) ?? "right",
-	);
-	const [turnRailStyle, setTurnRailStyle] = useState<TurnNavigatorStyle>(
-		() => (localStorage.getItem(TURN_RAIL_STYLE_KEY) as TurnNavigatorStyle) ?? "burger",
-	);
+	const [turnRailSide, setTurnRailSide] = useState<TurnNavigatorSide>(() => readTurnNavPref().side);
+	const [turnRailStyle, setTurnRailStyle] = useState<TurnNavigatorStyle>(() => readTurnNavPref().style);
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",
 	);
@@ -608,8 +604,8 @@ export function AppearanceSection({
 							onChange={nv => {
 								const v = nv as "right" | "left";
 								setTurnRailSide(v);
-								setPref(TURN_RAIL_SIDE_KEY, v);
-								window.dispatchEvent(new Event(TURN_RAIL_CHANGED_EVENT));
+								writeTurnNavPref({ side: v });
+								window.dispatchEvent(new Event(TURN_NAV_CHANGED_EVENT));
 							}}
 							options={[
 								{ value: "right", label: t("settings.rightSide") },
@@ -627,8 +623,8 @@ export function AppearanceSection({
 							onChange={nv => {
 								const v = nv as "burger" | "pacman";
 								setTurnRailStyle(v);
-								setPref(TURN_RAIL_STYLE_KEY, v);
-								window.dispatchEvent(new Event(TURN_RAIL_CHANGED_EVENT));
+								writeTurnNavPref({ style: v });
+								window.dispatchEvent(new Event(TURN_NAV_CHANGED_EVENT));
 							}}
 							options={[
 								{ value: "burger", label: t("settings.burgerLayers") },

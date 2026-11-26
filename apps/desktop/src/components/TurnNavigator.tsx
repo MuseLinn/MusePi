@@ -19,9 +19,76 @@ export interface TurnNavigatorDataSource {
 export type TurnNavigatorSide = "right" | "left";
 export type TurnNavigatorStyle = "burger" | "pacman";
 
-const TURN_RAIL_SIDE_KEY = "omp-collab-turnrail-side";
-const TURN_RAIL_STYLE_KEY = "omp-collab-turnrail-style";
-const TURN_RAIL_CHANGED_EVENT = "omp-turnrail-changed";
+/** Client-local preference, versioned like the shortcut registry
+ *  (`musepi.shortcut-bindings.v1`). The pre-rename `omp-collab-turnrail-*`
+ *  scalars are read once, folded in, and removed. */
+export const TURN_NAV_KEY = "musepi.turn-navigator.v1";
+export const TURN_NAV_CHANGED_EVENT = "musepi-turn-navigator-changed";
+const LEGACY_SIDE_KEY = "omp-collab-turnrail-side";
+const LEGACY_STYLE_KEY = "omp-collab-turnrail-style";
+
+interface TurnNavigatorPref {
+	side: TurnNavigatorSide;
+	style: TurnNavigatorStyle;
+}
+
+const DEFAULT_PREF: TurnNavigatorPref = { side: "right", style: "burger" };
+
+function normalizeSide(value: unknown): TurnNavigatorSide | null {
+	return value === "left" || value === "right" ? value : null;
+}
+
+function normalizeStyle(value: unknown): TurnNavigatorStyle | null {
+	return value === "burger" || value === "pacman" ? value : null;
+}
+
+/** Fold the old scalar keys into the versioned one and drop them. */
+function migrateLegacyPref(): TurnNavigatorPref | null {
+	try {
+		const side = normalizeSide(localStorage.getItem(LEGACY_SIDE_KEY));
+		const style = normalizeStyle(localStorage.getItem(LEGACY_STYLE_KEY));
+		if (side === null && style === null) return null;
+		const pref: TurnNavigatorPref = { side: side ?? DEFAULT_PREF.side, style: style ?? DEFAULT_PREF.style };
+		localStorage.setItem(TURN_NAV_KEY, JSON.stringify(pref));
+		localStorage.removeItem(LEGACY_SIDE_KEY);
+		localStorage.removeItem(LEGACY_STYLE_KEY);
+		return pref;
+	} catch {
+		return null;
+	}
+}
+
+/** Read the preference; corrupt or absent state falls back to the migrated
+ *  legacy values, then to the defaults. */
+export function readTurnNavPref(): TurnNavigatorPref {
+	try {
+		const raw = localStorage.getItem(TURN_NAV_KEY);
+		if (raw !== null) {
+			const parsed: unknown = JSON.parse(raw);
+			if (parsed !== null && typeof parsed === "object") {
+				const record = parsed as Record<string, unknown>;
+				return {
+					side: normalizeSide(record.side) ?? DEFAULT_PREF.side,
+					style: normalizeStyle(record.style) ?? DEFAULT_PREF.style,
+				};
+			}
+		}
+	} catch {
+		// corrupt JSON: fall through to the legacy migration / defaults
+	}
+	return migrateLegacyPref() ?? DEFAULT_PREF;
+}
+
+/** Merge one field into the preference and persist it. */
+export function writeTurnNavPref(patch: Partial<TurnNavigatorPref>): TurnNavigatorPref {
+	const next = { ...readTurnNavPref(), ...patch };
+	try {
+		localStorage.setItem(TURN_NAV_KEY, JSON.stringify(next));
+	} catch {
+		// storage unavailable — the session keeps the in-memory choice
+	}
+	return next;
+}
 
 /** Fixed pitch between marks. The pac-man glyph needs a taller slot. */
 const PITCH_BURGER = 10;
@@ -51,14 +118,6 @@ interface NavigatorTurn {
 	entryId?: string;
 	/** Canvas mode: node id the caller selects. */
 	id?: string;
-}
-
-function loadPref(key: string, fallback: string): string {
-	try {
-		return localStorage.getItem(key) ?? fallback;
-	} catch {
-		return fallback;
-	}
 }
 
 function reducedMotion(): boolean {
@@ -100,12 +159,9 @@ export function TurnNavigator({
 	 *  dispatches the jump, so an unloaded row is still reachable. */
 	onJumpToTurn?(entryId: string): void;
 }): ReactNode {
-	const [side, setSide] = useState<TurnNavigatorSide>(
-		() => loadPref(TURN_RAIL_SIDE_KEY, "right") as TurnNavigatorSide,
-	);
-	const [style, setStyle] = useState<TurnNavigatorStyle>(
-		() => loadPref(TURN_RAIL_STYLE_KEY, "burger") as TurnNavigatorStyle,
-	);
+	const [initialPref] = useState<TurnNavigatorPref>(readTurnNavPref);
+	const [side, setSide] = useState<TurnNavigatorSide>(initialPref.side);
+	const [style, setStyle] = useState<TurnNavigatorStyle>(initialPref.style);
 	const [preview, setPreview] = useState<number | null>(null);
 	const [active, setActive] = useState<number | null>(null);
 	const [scrollTop, setScrollTop] = useState(0);
@@ -136,11 +192,12 @@ export function TurnNavigator({
 	// Preferences are written by the appearance settings; pick them up live.
 	useEffect(() => {
 		const onChange = (): void => {
-			setSide(loadPref(TURN_RAIL_SIDE_KEY, "right") as TurnNavigatorSide);
-			setStyle(loadPref(TURN_RAIL_STYLE_KEY, "burger") as TurnNavigatorStyle);
+			const next = readTurnNavPref();
+			setSide(next.side);
+			setStyle(next.style);
 		};
-		window.addEventListener(TURN_RAIL_CHANGED_EVENT, onChange);
-		return () => window.removeEventListener(TURN_RAIL_CHANGED_EVENT, onChange);
+		window.addEventListener(TURN_NAV_CHANGED_EVENT, onChange);
+		return () => window.removeEventListener(TURN_NAV_CHANGED_EVENT, onChange);
 	}, []);
 
 	const computeActive = useCallback((): void => {
@@ -421,5 +478,3 @@ export function TurnNavigator({
 		</div>
 	);
 }
-
-export { TURN_RAIL_CHANGED_EVENT, TURN_RAIL_SIDE_KEY, TURN_RAIL_STYLE_KEY };
