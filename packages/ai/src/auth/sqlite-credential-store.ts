@@ -416,13 +416,13 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 	#cipher: McpOAuthCipher | null;
 	#closed = false;
 
-	constructor(db: Database, options: { keyPath?: string | null } = {}) {
+	constructor(db: Database, options: { keyPath?: string | null; sharedKeyAgentDir?: string } = {}) {
 		this.#db = db;
 		const keyPath =
 			options.keyPath === undefined
 				? mcpOAuthKeyPathForDatabase(db as unknown as { filename?: string })
 				: options.keyPath;
-		this.#cipher = keyPath ? createMcpOAuthCipher(keyPath) : null;
+		this.#cipher = keyPath ? createMcpOAuthCipher(keyPath, options.sharedKeyAgentDir) : null;
 		this.#initializeSchema();
 		this.#dataVersion = this.#readDataVersion();
 		this.#authRevision = this.#readAuthRevision();
@@ -576,7 +576,12 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 					// Ignore chmod failures (e.g., Windows)
 				}
 				SqliteAuthCredentialStore.#ensureAuthCredentialRefreshLeasesTable(db);
-				return new SqliteAuthCredentialStore(db, { keyPath: path.join(dir, "mcp-oauth.key") });
+				return new SqliteAuthCredentialStore(db, {
+					keyPath: path.join(dir, "mcp-oauth.key"),
+					// The database lives in the profile's agent dir, so OAuth grants
+					// follow the same master key and passphrase as everything else.
+					sharedKeyAgentDir: dir,
+				});
 			} catch (err) {
 				db?.close();
 				if (!isSqliteBusyError(err)) {

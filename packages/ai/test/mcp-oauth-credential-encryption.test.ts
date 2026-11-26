@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
+import { clearUnifiedKeysForTests, unlockMasterKeyInMemory, wrapMasterKey } from "@musepi/pi-utils/unified-master-key";
 import { SqliteAuthCredentialStore, serializeCredential } from "../src/auth/sqlite-credential-store";
 import type { OAuthCredentials } from "../src/registry/oauth/types";
 
@@ -132,9 +133,36 @@ describe("MCP OAuth credential encryption", () => {
 		store.close();
 		stores.splice(stores.indexOf(store), 1);
 
-		await fs.writeFile(path.join(path.dirname(dbPath), "mcp-oauth.key"), Buffer.alloc(32, 9), { mode: 0o600 });
+		// The profile's shared master key is what encrypts this row now.
+		await fs.writeFile(path.join(path.dirname(dbPath), ".master.key"), Buffer.alloc(32, 9), { mode: 0o600 });
+		clearUnifiedKeysForTests();
 		const reopened = await openStore(dbPath);
 		expect(reopened.getOAuth(MCP)).toBeNull();
 		expect(rawRow(dbPath, MCP).secret).not.toBeNull();
+	});
+
+	it("locks OAuth grants behind the same passphrase as the rest of the profile", async () => {
+		const dbPath = await tempDb();
+		const dir = path.dirname(dbPath);
+		const store = await openStore(dbPath);
+		store.saveOAuth(MCP, creds("access-secret"));
+		store.close();
+		stores.splice(stores.indexOf(store), 1);
+
+		wrapMasterKey(dir, "correct horse battery");
+		clearUnifiedKeysForTests();
+		delete process.env.MUSEPI_AGENT_SECRET_PASSPHRASE;
+
+		// Locked: the grant reads as unusable, and its ciphertext is untouched.
+		const locked = await openStore(dbPath);
+		expect(locked.getOAuth(MCP)).toBeNull();
+		expect(rawRow(dbPath, MCP).secret).not.toBeNull();
+		locked.close();
+		stores.splice(stores.indexOf(locked), 1);
+
+		// The same passphrase the vault uses opens it.
+		unlockMasterKeyInMemory(dir, "correct horse battery");
+		const opened = await openStore(dbPath);
+		expect(opened.getOAuth(MCP)?.access).toBe("access-secret");
 	});
 });

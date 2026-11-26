@@ -16,6 +16,15 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, scryptSync } f
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
+import {
+	clearUnifiedKeysForTests as clearSharedUnifiedKeysForTests,
+	readMasterKey,
+	rewrapMasterKey as rewrapSharedMasterKey,
+	unifiedKeyState,
+	unlockMasterKeyInMemory,
+	unwrapMasterKeyToFile as unwrapSharedMasterKeyToFile,
+	wrapMasterKey as wrapSharedMasterKey,
+} from "@musepi/pi-utils/unified-master-key";
 import { writeFileAtomically } from "../utils/atomic-file";
 
 const DEFAULT_STORE_FILE = "secrets.json";
@@ -55,11 +64,25 @@ export interface EncryptedStore {
 	wrappedKeyFile: string;
 	/** Optional environment override for the master key (hex or base64, 32 bytes). */
 	masterKeyEnv?: string;
+	/**
+	 * When set, this store derives from the profile's shared master key instead
+	 * of its own. One passphrase then protects every store in the profile, and
+	 * adopting the shared key reuses this store's existing bytes so nothing is
+	 * re-encrypted. Absent keeps the store self-contained (tests, and a store
+	 * created outside a profile).
+	 */
+	sharedKeyAgentDir?: string;
 }
 
 export function encryptedStore(
 	dir: string,
-	options: { file?: string; masterKeyFile?: string; wrappedKeyFile?: string; masterKeyEnv?: string } = {},
+	options: {
+		file?: string;
+		masterKeyFile?: string;
+		wrappedKeyFile?: string;
+		masterKeyEnv?: string;
+		sharedKeyAgentDir?: string;
+	} = {},
 ): EncryptedStore {
 	return {
 		dir,
@@ -67,6 +90,7 @@ export function encryptedStore(
 		masterKeyFile: path.join(dir, options.masterKeyFile ?? DEFAULT_MASTER_KEY_FILE),
 		wrappedKeyFile: path.join(dir, options.wrappedKeyFile ?? DEFAULT_WRAPPED_KEY_FILE),
 		...(options.masterKeyEnv ? { masterKeyEnv: options.masterKeyEnv } : {}),
+		...(options.sharedKeyAgentDir ? { sharedKeyAgentDir: options.sharedKeyAgentDir } : {}),
 	};
 }
 
@@ -134,9 +158,15 @@ export type MasterKeyState =
 /** Master keys unlocked by a passphrase in this process, keyed by wrapped-key path. */
 const unlockedKeys = new Map<string, Buffer>();
 
-/** Test-only: forget every passphrase-unlocked key. */
+/**
+ * Test-only: forget every passphrase-unlocked key.
+ *
+ * Clears the shared layer too — after the merge they are the same key, and a
+ * test that wants to observe a locked store must forget both caches.
+ */
 export function clearUnlockedMasterKeysForTests(): void {
 	unlockedKeys.clear();
+	clearSharedUnifiedKeysForTests();
 }
 
 export function cleanMasterKeyPassphrase(value: unknown): string {
@@ -260,6 +290,18 @@ async function readWrappedKey(store: EncryptedStore): Promise<WrappedMasterKey |
 
 /** Whether the store is protected by a passphrase, and whether this process can read it. */
 export async function masterKeyState(store: EncryptedStore): Promise<MasterKeyState> {
+	if (store.sharedKeyAgentDir) {
+		const shared = unifiedKeyState(store.sharedKeyAgentDir);
+		return shared.mode === "plain"
+			? { mode: "plain", protectedBy: "key-file", locked: false }
+			: {
+					mode: "passphrase",
+					protectedBy: "passphrase",
+					locked: shared.locked,
+					unlocked: !shared.locked,
+					...(shared.reason ? { reason: shared.reason } : {}),
+				};
+	}
 	const wrapped = await readWrappedKey(store);
 	if (wrapped === undefined) return { mode: "plain", protectedBy: "key-file", locked: false };
 	if (unlockedKeys.has(store.wrappedKeyFile)) {
@@ -309,6 +351,10 @@ export async function masterKeyState(store: EncryptedStore): Promise<MasterKeySt
 
 /** Unlock a passphrase-protected store for this process; the plain key is not written. */
 export async function unlockMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
+	if (store.sharedKeyAgentDir) {
+		unlockMasterKeyInMemory(store.sharedKeyAgentDir, passphrase);
+		return;
+	}
 	const secret = cleanMasterKeyPassphrase(passphrase);
 	const wrapped = await readWrappedKey(store);
 	if (wrapped === undefined) throw new Error("The secret store is not protected by a passphrase.");
@@ -318,6 +364,12 @@ export async function unlockMasterKey(store: EncryptedStore, passphrase: unknown
 
 /** Wrap the current plain master key under a passphrase, then remove the plain key file. */
 export async function encryptMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
+	if (store.sharedKeyAgentDir) {
+		// The shared key is the profile's one key; wrapping it here covers every
+		// store that derives from it, including this one.
+		wrapSharedMasterKey(store.sharedKeyAgentDir, passphrase);
+		return;
+	}
 	if ((await readWrappedKey(store)) !== undefined)
 		throw new Error("The secret store is already protected by a passphrase.");
 	const secret = cleanMasterKeyPassphrase(passphrase);
@@ -330,6 +382,10 @@ export async function encryptMasterKey(store: EncryptedStore, passphrase: unknow
 
 /** Remove the passphrase protection after proving it; the plain key file returns. */
 export async function decryptMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
+	if (store.sharedKeyAgentDir) {
+		unwrapSharedMasterKeyToFile(store.sharedKeyAgentDir, passphrase);
+		return;
+	}
 	const secret = cleanMasterKeyPassphrase(passphrase);
 	const wrapped = await readWrappedKey(store);
 	if (wrapped === undefined) throw new Error("The secret store is not protected by a passphrase.");
@@ -346,6 +402,10 @@ export async function decryptMasterKey(store: EncryptedStore, passphrase: unknow
  * two calls would leave it unprotected if the second call never ran.
  */
 export async function rephraseMasterKey(store: EncryptedStore, current: unknown, next: unknown): Promise<void> {
+	if (store.sharedKeyAgentDir) {
+		rewrapSharedMasterKey(store.sharedKeyAgentDir, current, next);
+		return;
+	}
 	const wrapped = await readWrappedKey(store);
 	if (wrapped === undefined) throw new Error("The secret store is not protected by a passphrase.");
 	if (wrapped === "malformed") throw new Error("The wrapped master key is damaged.");
@@ -379,6 +439,17 @@ async function writeMasterKeyFile(store: EncryptedStore, key: Buffer): Promise<v
 }
 
 async function readOrCreateMasterKey(store: EncryptedStore): Promise<Buffer> {
+	// A store inside a profile derives from the profile's one master key, so a
+	// single passphrase covers connector tokens, the vault and OAuth grants.
+	// The shared layer adopts this store's own key on first use, which is why
+	// switching to it re-encrypts nothing.
+	if (store.sharedKeyAgentDir) {
+		return readMasterKey({
+			agentDir: store.sharedKeyAgentDir,
+			legacyKeyPath: path.relative(store.sharedKeyAgentDir, store.masterKeyFile),
+			...(store.masterKeyEnv ? { legacyKeyEnv: store.masterKeyEnv } : {}),
+		});
+	}
 	const unlocked = unlockedKeys.get(store.wrappedKeyFile);
 	if (unlocked) return unlocked;
 	const override = parseEnvKey(store);

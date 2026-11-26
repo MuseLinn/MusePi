@@ -17,6 +17,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
+import { readMasterKey as readUnifiedMasterKey } from "@musepi/pi-utils/unified-master-key";
 
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
@@ -52,7 +53,18 @@ function readKeyFromEnv(): Buffer | undefined {
 	return decoded;
 }
 
-function readOrCreateKey(keyPath: string): Buffer {
+function readOrCreateKey(keyPath: string, sharedAgentDir?: string): Buffer {
+	// Inside a profile, derive from that profile's one master key: one
+	// passphrase then covers OAuth refresh tokens along with the vault and
+	// connector tokens. The shared layer adopts this key file on first use, so
+	// an existing database keeps decrypting.
+	if (sharedAgentDir) {
+		return readUnifiedMasterKey({
+			agentDir: sharedAgentDir,
+			legacyKeyPath: path.relative(sharedAgentDir, keyPath),
+			legacyKeyEnv: KEY_ENV,
+		});
+	}
 	const override = readKeyFromEnv();
 	if (override) return override;
 	try {
@@ -117,9 +129,9 @@ function decryptValue(envelope: string, key: Buffer, provider: string): string {
 	return Buffer.concat([decipher.update(ct), decipher.final()]).toString("utf8");
 }
 
-export function createMcpOAuthCipher(keyPath: string): McpOAuthCipher {
+export function createMcpOAuthCipher(keyPath: string, sharedAgentDir?: string): McpOAuthCipher {
 	let cachedKey: Buffer | undefined;
-	const key = (): Buffer => (cachedKey ??= readOrCreateKey(keyPath));
+	const key = (): Buffer => (cachedKey ??= readOrCreateKey(keyPath, sharedAgentDir));
 	return {
 		marker(plaintext: string): string {
 			return `${MARKER_PREFIX}${createHash("sha256").update(plaintext).digest("hex")}`;

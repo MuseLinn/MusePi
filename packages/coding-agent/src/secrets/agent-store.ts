@@ -192,6 +192,9 @@ export class AgentSecretStore {
 			file: "secrets.json",
 			masterKeyFile: ".master.key",
 			masterKeyEnv: "MUSEPI_AGENT_SECRET_KEY",
+			// The vault owns the shared key: it is the store the passphrase UI
+			// has always driven, and every other store adopts from it.
+			sharedKeyAgentDir: this.agentDir,
 		});
 	}
 
