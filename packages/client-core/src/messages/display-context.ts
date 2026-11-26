@@ -224,6 +224,7 @@ export function browserAnnotationTargetCount(context: BrowserAnnotationContext):
 }
 
 export function displayContextQuote(context: DisplayContext): string {
+	if (context.kind === "attachment-ref") return context.name;
 	return context.kind === "browser-annotation" ? context.prompt : context.quote;
 }
 
@@ -237,6 +238,9 @@ export function officeQuoteLocation(anchor: NonNullable<FileQuoteContext["office
 export function textWithoutDisplayContext(text: string, value: MessageDisplayContext | undefined): string {
 	let remaining = text;
 	for (const context of normalizeDisplayContexts(value)) {
+		// An attachment reference adds no prefix: its pointer is already in the
+		// body the reader typed, and the record only says how to paint it.
+		if (context.kind === "attachment-ref") continue;
 		if (context.kind !== "browser-annotation") {
 			const prefix = quotablePrompt(context);
 			if (remaining.startsWith(prefix)) remaining = remaining.slice(prefix.length).replace(/^\n{1,2}/, "");

@@ -3,6 +3,7 @@ import { pastedImageMentionLabels } from "./attachment-mention-paste";
 import {
 	deleteMentionTokenAfter,
 	deleteMentionTokenBefore,
+	mentionReferenceContexts,
 	removeMentionTokens,
 	spliceMentionToken,
 	spliceMentionTokenAfterSelection,
@@ -137,5 +138,41 @@ describe("removeMentionTokens (chip removal sync)", () => {
 
 	test("no matching token leaves the draft untouched", () => {
 		expect(removeMentionTokens("普通文本", "图片1")).toBe("普通文本");
+	});
+});
+
+describe("mentionReferenceContexts", () => {
+	const chips = [
+		{ kind: "image" as const, name: "shot.png" },
+		{ kind: "image" as const, name: "second.png" },
+		{ kind: "file" as const, name: "app.ts" },
+	];
+
+	test("an image token records its ordinal and name", () => {
+		expect(mentionReferenceContexts("看图 @图片2", chips)).toEqual([
+			{ kind: "attachment-ref", attachmentKind: "image", ordinal: 2, name: "second.png" },
+		]);
+	});
+
+	test("a file token records the name the pointer carries", () => {
+		expect(mentionReferenceContexts("见 @文件1", chips)).toEqual([
+			{ kind: "attachment-ref", attachmentKind: "file", name: "app.ts" },
+		]);
+	});
+
+	test("one record per attachment however often it is named", () => {
+		expect(mentionReferenceContexts("@图片1 和 @图片1", chips)).toHaveLength(1);
+	});
+
+	test("a token that does not resolve records nothing", () => {
+		expect(mentionReferenceContexts("@图片9", chips)).toEqual([]);
+	});
+
+	test("a path is not a reference and records nothing", () => {
+		expect(mentionReferenceContexts("@src/app.ts", chips)).toEqual([]);
+	});
+
+	test("text with no token costs nothing", () => {
+		expect(mentionReferenceContexts("普通消息", chips)).toEqual([]);
 	});
 });

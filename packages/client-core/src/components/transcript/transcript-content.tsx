@@ -39,7 +39,7 @@ import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
-import { parseInlineRefs } from "./inline-refs";
+import { type InlineRef, parseInlineRefs } from "./inline-refs";
 import { Markdown } from "./Markdown";
 import { requestQuoteReveal } from "./quote-highlight";
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
@@ -548,11 +548,14 @@ const USER_COLLAPSE_MIN_CHARS = 240;
 /** Renders the attachment references inside user text as chips.
  *
  * The send path turns a composer mention into plain text (`[图片 1]`,
- * `[Attachment:name]`) because that is the pointer the model reads. It is not
- * what the reader typed, so the bubble draws the same icon+label chip the
- * composer showed instead of exposing the syntax. */
-function UserTextWithRefs({ text }: { text: string }): ReactNode {
-	const refs = parseInlineRefs(text);
+ * `[Attachment:name]`) because that is the pointer the model reads, and it now
+ * records the same reference as structured data on the message. These records
+ * are preferred: they say which attachment the pointer means without the
+ * renderer having to re-derive it from prose. A message written before that
+ * record existed falls back to parsing the pointer out of the text, so older
+ * conversations keep their chips. */
+function UserTextWithRefs({ text, refs: recorded }: { text: string; refs?: readonly InlineRef[] }): ReactNode {
+	const refs = recorded && recorded.length > 0 ? matchRecordedRefs(text, recorded) : parseInlineRefs(text);
 	if (refs.length === 0) return text;
 	const parts: ReactNode[] = [];
 	let cursor = 0;
@@ -570,32 +573,101 @@ function UserTextWithRefs({ text }: { text: string }): ReactNode {
 }
 
 /**
- * A message whose text carries attachment references renders as one text flow
- * with the references drawn as chips.
+ * Locate the pointer runs a message's recorded references describe.
  *
- * The split is deliberate: a reference is an inline atom in the sentence the
- * reader wrote, and rendering each prose run through the markdown renderer
- * would wrap it in its own paragraph — the bubble would break into one line
- * per reference. Messages WITHOUT references keep the ordinary markdown body.
+ * The record says WHAT the reference is; the text says WHERE it sits. Matching
+ * on the recorded identity (an image by ordinal, a file by name) is stricter
+ * than re-parsing every bracket in the prose — a reader's own `[图片 1]` in
+ * quoted text keeps its brackets because no record claims it. A record with no
+ * matching run contributes nothing rather than a chip in the wrong place.
  */
-function UserBody({ text, plain }: { text: string; plain: boolean }): ReactNode {
+function matchRecordedRefs(text: string, recorded: readonly InlineRef[]): InlineRef[] {
+	const candidates = parseInlineRefs(text);
+	const out: InlineRef[] = [];
+	const used = new Set<number>();
+	for (const record of recorded) {
+		const index = candidates.findIndex((candidate, i) => {
+			if (used.has(i) || candidate.kind !== record.kind) return false;
+			// The label the chip shows is the identity the send path recorded:
+			// `图片 N` for an image ordinal, the attachment name for a file.
+			return candidate.label === record.label;
+		});
+		if (index === -1) continue;
+		used.add(index);
+		out.push(candidates[index]!);
+	}
+	return out.sort((a, b) => a.start - b.start);
+}
+
+/** The chip labels a message's attachment-ref records describe, in order. */
+function recordedRefs(contexts: readonly DisplayContext[]): InlineRef[] {
+	const out: InlineRef[] = [];
+	for (const context of contexts) {
+		if (context.kind !== "attachment-ref") continue;
+		out.push({
+			start: -1,
+			end: -1,
+			kind: context.attachmentKind,
+			label:
+				context.attachmentKind === "image" && context.ordinal !== undefined
+					? `图片 ${context.ordinal}`
+					: context.name,
+		});
+	}
+	return out;
+}
+/**
+ * The user body: prose, with attachment references drawn as inline chips.
+ *
+ * A reference is an atom inside the sentence the reader wrote, so a message
+ * that carries one renders as ONE text flow. Rendering each prose run through
+ * the markdown renderer instead would wrap every run in its own paragraph,
+ * breaking the bubble into one line per reference — that is why the split is
+ * not an option here, and why the reader's own line breaks are preserved by
+ * pre-wrap rather than re-interpreted.
+ *
+ * A message with no reference keeps the ordinary markdown body.
+ */
+function UserBody({
+	text,
+	plain,
+	refs,
+}: {
+	text: string;
+	plain: boolean;
+	// The message's recorded references; absent for conversation history written
+	// before they existed, which falls back to reading the pointers from text.
+	refs?: readonly InlineRef[];
+}): ReactNode {
+	const hasRefs = refs !== undefined && refs.length > 0;
 	if (plain) {
 		return (
 			<span className="tr-md tr-user-plain">
-				<UserTextWithRefs text={text} />
+				<UserTextWithRefs text={text} refs={refs} />
 			</span>
 		);
 	}
-	if (parseInlineRefs(text).length === 0) return <Markdown text={text} repair="off" />;
-	// Whitespace-preserving so the reader's own line breaks survive the split.
+	if (!hasRefs && parseInlineRefs(text).length === 0) return <Markdown text={text} repair="off" />;
+	// Whitespace-preserving so the reader's own line breaks survive.
 	return (
 		<span className="tr-md tr-user-plain tr-user-refs">
-			<UserTextWithRefs text={text} />
+			<UserTextWithRefs text={text} refs={refs} />
 		</span>
 	);
 }
 
-export function UserText({ text, plain, collapse }: { text: string; plain: boolean; collapse: boolean }): ReactNode {
+export function UserText({
+	text,
+	plain,
+	collapse,
+	refs,
+}: {
+	text: string;
+	plain: boolean;
+	collapse: boolean;
+	/** The message's recorded attachment references, when it has any. */
+	refs?: readonly InlineRef[];
+}): ReactNode {
 	const [open, setOpen] = useState(false);
 	// The clamp preview is the settled closed state only: it comes OFF when
 	// expanding (the morph grows out of the preview height with the full
@@ -616,7 +688,7 @@ export function UserText({ text, plain, collapse }: { text: string; plain: boole
 			if (!isOpen) setClamped(true);
 		},
 	});
-	const body = <UserBody text={text} plain={plain} />;
+	const body = <UserBody text={text} plain={plain} refs={refs} />;
 	if (!collapse || text.length <= USER_COLLAPSE_MIN_CHARS) return body;
 	return (
 		<div className={`tr-md tr-user-collapse${clamped ? " tr-user-collapse--clamped" : ""}`}>
@@ -644,11 +716,14 @@ export function UserText({ text, plain, collapse }: { text: string; plain: boole
 	);
 }
 
+/** The display-context kinds that render as a card above the message body. */
+type DisplayContextCardKind = Exclude<DisplayContext, { kind: "attachment-ref" }>;
+
 function DisplayContextCard({
 	context,
 	onJumpToMessage,
 }: {
-	context: DisplayContext;
+	context: DisplayContextCardKind;
 	onJumpToMessage?(messageId: string): void;
 }): ReactNode {
 	const [expanded, setExpanded] = useState(false);
@@ -736,13 +811,22 @@ export function UserMsgContent({
 	host?: ToolRenderHost;
 }): ReactNode {
 	const contexts = normalizeDisplayContexts(displayContext);
-	const cards = contexts.map((context, index) => (
-		<DisplayContextCard key={`${context.kind}-${index}`} context={context} onJumpToMessage={onJumpToMessage} />
-	));
+	// `attachment-ref` is not a card: its pointer already sits in the body, and
+	// the body renders it as a chip. Only the card-bearing kinds come through
+	// here.
+	const cards = contexts
+		.filter(context => context.kind !== "attachment-ref")
+		.map((context, index) => (
+			<DisplayContextCard key={`${context.kind}-${index}`} context={context} onJumpToMessage={onJumpToMessage} />
+		));
+	// Recorded attachment references: what the composer resolved at send time.
+	// Absent on conversation history written before they existed, which is why
+	// the body still falls back to reading the pointers out of the text.
+	const attachmentRefs = recordedRefs(contexts);
 	const userText = (text: string): ReactNode => {
 		const remainder = textWithoutDisplayContext(text, displayContext);
 		const visible = parseAttachmentRefs(remainder).text;
-		return visible ? <UserText text={visible} plain={plain} collapse={collapse} /> : null;
+		return visible ? <UserText text={visible} plain={plain} collapse={collapse} refs={attachmentRefs} /> : null;
 	};
 	// Attachment references live in the message text (the model reads them);
 	// the transcript lifts them out of the body and renders cards instead.
@@ -783,11 +867,13 @@ export function UserMsgContent({
 	if (typeof content === "string") {
 		const parsed = parseAttachmentRefs(textWithoutDisplayContext(content, displayContext));
 		if (contexts.length === 0 && parsed.refs.length === 0)
-			return <UserText text={content} plain={plain} collapse={collapse} />;
+			return <UserText text={content} plain={plain} collapse={collapse} refs={attachmentRefs} />;
 		return (
 			<>
 				{cards}
-				{parsed.text ? <UserText text={parsed.text} plain={plain} collapse={collapse} /> : null}
+				{parsed.text ? (
+					<UserText text={parsed.text} plain={plain} collapse={collapse} refs={attachmentRefs} />
+				) : null}
 				{attachments.length > 0 && <UserAttachmentCards refs={attachments} host={host} />}
 			</>
 		);

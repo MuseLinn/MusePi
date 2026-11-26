@@ -78,6 +78,7 @@ import {
 	deleteMentionTokenAfter,
 	deleteMentionTokenBefore,
 	expandMentionTokens,
+	mentionReferenceContexts,
 	resolveMentionChip,
 } from "./composer/mention-token";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
@@ -1657,6 +1658,9 @@ export function SessionComposer({
 			// address is the `blob://` line the upload prepends; tokens whose
 			// attachment is gone no longer resolve and stay verbatim.
 			const expanded = expandMentionTokens(payload, attachments);
+			// The same resolution also yields the records the bubble needs to paint
+			// those pointers as chips; the text keeps the pointer the model reads.
+			const referenceContexts = mentionReferenceContexts(payload, attachments);
 			const finalMsg = composeDisplayContextPrompt(quotes, expanded);
 			// TUI "." / "c" continue-shortcut parity: a bare dot or c (no
 			// quote/attachment) is the "continue working" signal — delivered
@@ -1729,7 +1733,7 @@ export function SessionComposer({
 					dispatchSend(wireText, {
 						images: imageParts,
 						deliverAs: delivery,
-						displayContext: messageDisplayContext(quotes),
+						displayContext: messageDisplayContext([...quotes, ...referenceContexts]),
 						videos: videos.parts,
 						correlation: sendCorrelation,
 					});
@@ -1744,7 +1748,7 @@ export function SessionComposer({
 				// "/queue"/"=>" → followUp (after the current turn yields);
 				// "." / "c" → continue (hidden synthetic resume, TUI parity).
 				deliverAs: isContinueShortcut ? "continue" : delivery,
-				displayContext: messageDisplayContext(quotes),
+				displayContext: messageDisplayContext([...quotes, ...referenceContexts]),
 				videos: videos.parts,
 				correlation: sendCorrelation,
 			});

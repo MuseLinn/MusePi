@@ -148,6 +148,27 @@ export type DisplayContext =
 			pdf?: PdfQuoteAnchor;
 			office?: OfficeQuoteAnchor;
 			comment?: string;
+	  }
+	| {
+			/**
+			 * An attachment the composer referenced with `@`.
+			 *
+			 * The sent text still carries the model-facing pointer (`[图片 1]`,
+			 * `[Attachment:name]`) — the reader's message is what the model reads.
+			 * This record is what lets the transcript paint that run as the same
+			 * icon+label chip the composer showed, instead of making the renderer
+			 * re-parse the pointer out of prose it cannot trust.
+			 *
+			 * `ordinal` and `name` together form the lookup key: an image is
+			 * addressed by its 1-based position among the message's images, a file
+			 * by the name the pointer carries.
+			 */
+			kind: "attachment-ref";
+			attachmentKind: "image" | "file";
+			/** 1-based position among the message's images; absent for a file. */
+			ordinal?: number;
+			/** The attachment's own name (the pointer's tail). */
+			name: string;
 	  };
 
 export type MessageDisplayContext = DisplayContext | DisplayContext[];

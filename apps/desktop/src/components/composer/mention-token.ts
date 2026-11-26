@@ -167,10 +167,45 @@ export function expandMentionTokens(text: string, attachments: readonly MentionE
 	});
 }
 
+/**
+ * The structured records a send travels with, one per resolved mention.
+ *
+ * The expanded text already carries the model-facing pointer; these records are
+ * what let the transcript paint that pointer as the chip the composer showed.
+ * Deriving them from the SAME resolution the expansion used is what keeps the
+ * two from disagreeing — a token that did not resolve leaves no record, so the
+ * bubble renders it as the plain text it now is.
+ */
+export function mentionReferenceContexts(
+	text: string,
+	attachments: readonly MentionExpandableAttachment[],
+): Array<{ kind: "attachment-ref"; attachmentKind: "image" | "file"; ordinal?: number; name: string }> {
+	if (!text.includes("@")) return [];
+	const out: Array<{ kind: "attachment-ref"; attachmentKind: "image" | "file"; ordinal?: number; name: string }> = [];
+	const seen = new Set<string>();
+	for (const m of text.matchAll(MENTION_RE)) {
+		const idx = m.index ?? 0;
+		if (followedByPathSeparator(text, idx + m[0].length)) continue;
+		const hit = resolveMentionChip(m[1] ?? "", attachments);
+		if (!hit) continue;
+		// One record per distinct attachment: a message that names the same image
+		// twice still has one chip for it.
+		const key = `${hit.chip.kind}:${hit.chip.name}:${hit.ordinal}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push({
+			kind: "attachment-ref",
+			attachmentKind: hit.chip.kind,
+			...(hit.chip.kind === "image" ? { ordinal: hit.ordinal } : {}),
+			name: hit.chip.name,
+		});
+	}
+	return out;
+}
+
 /** Fast pre-check for retargetMentionTokens (avoids the map build on
  *  drafts with no ordinal tokens). */
 const ORDINAL_TOKEN_SOURCE = /@(图片|文件)[1-9]\d*/;
-
 /**
  * Retarget ordinal mention tokens after the chip array changed (reorder /
  * remove): a token keeps pointing at the SAME chip, so its number is
