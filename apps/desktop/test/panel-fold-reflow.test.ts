@@ -5,18 +5,20 @@ import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/tools/browser/launch";
 
 /**
- * The right panel's fold must not re-lay out the transcript.
+ * The right panel's fold is ONE motion: box, gutter and contents move together.
  *
- * The panel and the chat column are flex siblings, so an animated `width` on
- * the panel resizes the column every frame — the transcript is re-laid out 15
- * times over a 220ms fold (measured), and opening the agent capsule spent its
- * first third of a second reflowing text it was not changing. The fold now
- * snaps the box once (a delayed zero-duration `width`) and animates
- * `transform`/`opacity` on the contents, both compositor properties.
+ * The panel and the chat column are flex siblings. The fold used to snap the box
+ * (`width 0s`) and animate only the contents, which read as two different
+ * motions in one toggle — the chat column jumped a full panel width in a single
+ * frame while the panel's contents morphed. Width, the card gutter and the
+ * contents now share the same 220ms spring, once, in one direction; the cost is
+ * that the panel subtree and the transcript re-measure per frame for those
+ * 220ms.
  *
- * This samples the REAL column width frame by frame during the fold: the fixed
- * build yields one distinct width, the animated-width build a continuum. It is
- * geometric, so it cannot be asserted in happy-dom.
+ * These checks sample the REAL box frame by frame and assert the shape of that
+ * motion: the panel shrinks monotonically (never grows past its resting left
+ * edge), the column widens monotonically, and both land on the closed state.
+ * Geometric, so it cannot be asserted in happy-dom.
  */
 
 const STYLES = path.resolve(import.meta.dir, "../src/styles");
@@ -69,9 +71,9 @@ afterAll(async () => {
 }, 60_000);
 
 describe("right panel fold", () => {
-	// @guard: revert apps/desktop/src/styles/gui-chat.css:5180 | 		width 320ms 220ms,
-	// @guard: test the panel's box holds — width, left edge and gutter — until one snap
-	test("the panel's box holds — width, left edge and gutter — until one snap", async () => {
+	// @guard: revert apps/desktop/src/styles/gui-chat.css:5182 | 		width 220ms var(--spring),
+	// @guard: test the panel folds in one direction — box, gutter and contents together
+	test("the panel folds in one direction — box, gutter and contents together", async () => {
 		const result = await page.evaluate(async () => {
 			const chat = document.querySelector<HTMLElement>("#chat")!;
 			const panel = document.querySelector<HTMLElement>("#panel")!;
@@ -112,33 +114,31 @@ describe("right panel fold", () => {
 		const distinct = (values: number[]): number[] => [...new Set(values)];
 		const { resting, frames } = result;
 
-		// A per-frame width animation yields one width per frame (15 distinct in
-		// the 220ms build this replaced); a snap yields the before/after pair.
+		// The box animates: several intermediate widths, sampled per frame.
 		expect(frames.length).toBeGreaterThan(5);
-		expect(distinct(frames.map(frame => frame.width)).length).toBeLessThanOrEqual(2);
+		expect(distinct(frames.map(frame => frame.width)).length).toBeGreaterThan(2);
 
-		// THE margin regression: the closed state drops the card gutter. If that
-		// drop applies on frame 1 while the box is still full width, the panel's
-		// left edge jumps 8px right into the freed gutter — the box visibly grows
-		// before it folds. Every full-width frame must therefore keep the resting
-		// gutter and left edge, which is what a reverted `margin` transition
-		// breaks (measured: `left 764 → 772` at frame 1, margin `8px → 0px`).
+		// One direction only. The gutter drops with the box, so a frame whose
+		// margin finished early would push the panel's left edge right — the box
+		// would visibly grow while folding.
 		expect(resting.marginRight).toBeGreaterThan(0);
-		const fullWidth = frames.filter(frame => frame.width === resting.width);
-		expect(fullWidth.length).toBeGreaterThan(3);
-		for (const frame of fullWidth) {
-			expect(frame.marginRight).toBe(resting.marginRight);
-			expect(frame.left).toBe(resting.left);
+		for (let index = 1; index < frames.length; index++) {
+			expect(frames[index]!.width).toBeLessThanOrEqual(frames[index - 1]!.width + 1);
+			expect(frames[index]!.left).toBeGreaterThanOrEqual(Math.round(resting.left) - 1);
 		}
-		// Nothing but the final snap may move the column, either.
-		expect(distinct(frames.map(frame => frame.chatWidth)).length).toBeLessThanOrEqual(2);
+		// The column takes exactly the width the panel gives up.
+		const columnWidths = distinct(frames.map(frame => frame.chatWidth));
+		expect(columnWidths.length).toBeGreaterThan(2);
+		for (let index = 1; index < frames.length; index++) {
+			expect(frames[index]!.chatWidth).toBeGreaterThanOrEqual(frames[index - 1]!.chatWidth - 1);
+		}
 
 		// The panel really folded and its contents really left.
 		expect(result.panelWidth).toBe(0);
 		expect(result.bodyOpacity).toBe(0);
 	});
 
-	test("opening the panel does not animate the column width either", async () => {
+	test("opening the panel animates the column back in the same motion", async () => {
 		const result = await page.evaluate(async () => {
 			const chat = document.querySelector<HTMLElement>("#chat")!;
 			const panel = document.querySelector<HTMLElement>("#panel")!;
@@ -156,7 +156,7 @@ describe("right panel fold", () => {
 			});
 			return { distinct: [...new Set(widths)], panelWidth: Math.round(panel.getBoundingClientRect().width) };
 		});
-		expect(result.distinct.length).toBeLessThanOrEqual(2);
+		expect(result.distinct.length).toBeGreaterThan(2);
 		expect(result.panelWidth).toBe(420);
 	});
 

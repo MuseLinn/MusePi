@@ -50,7 +50,7 @@ async function writeRowPlugin(): Promise<string> {
 		path.join(dir, "index.ts"),
 		`import { sharedValue } from "../shared";
 export default {
-	Config: {},
+	Config: { "~standard": { version: 1, vendor: "profile-runtime-rows-test", validate: (value: unknown) => ({ value }) } },
 	apply(pi: any, config: any) {
 		if (config.command === "row-b" && sharedValue() === "shared-v3-fail") {
 			throw new Error("row-b replacement apply failed");
@@ -74,7 +74,7 @@ async function writeDeclinedPlugin(): Promise<string> {
 	await fs.writeFile(
 		path.join(dir, "index.ts"),
 		`export default {
-	Config: {},
+	Config: { "~standard": { version: 1, vendor: "profile-runtime-rows-test", validate: (value: unknown) => ({ value }) } },
 	apply(pi: any, config: any) {
 		const key = ${JSON.stringify(counterKey)};
 		const count = ((globalThis as any)[key] ?? 0) + 1;
