@@ -44,7 +44,8 @@ const bundleDir = path.join(tempRoot, "bundle");
 const compiledPath = path.join(tempRoot, "compiled-template-probe");
 let bundlePath: string;
 const bundledDependencyStubs: Record<string, string> = {
-	"@musepi/pi-utils": 'export const APP_NAME = "omp"; export const isEnoent = () => false;',
+	"@musepi/pi-utils":
+		'export const APP_NAME = "omp"; export const isEnoent = () => false; export const colorLuma = () => 0; export const relativeLuminance = () => 0; export const logger = { debug: () => {}, error: () => {}, info: () => {}, warn: () => {} }; export const adjustHsv = () => ({}); export const getCustomThemesDir = () => ""; export const renderMermaidAsciiSafe = async () => "";',
 	"../src/render/theme/theme":
 		"export const getResolvedThemeColors = async () => ({}); export const getThemeExportColors = async () => ({});",
 	"../../session/session-loader": "export const loadEntriesFromFile = async () => [];",

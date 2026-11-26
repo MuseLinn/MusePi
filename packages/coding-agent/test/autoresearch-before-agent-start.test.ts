@@ -38,6 +38,19 @@ function buildHarness(): { handlers: CapturedHandlers; activeTools: string[] } {
 			activeTools.splice(0, activeTools.length, ...names);
 		},
 		sendUserMessage(): void {},
+		toolManagement: {
+			getActiveTools: (): string[] => [...activeTools],
+			setActiveTools: async (names: string[]): Promise<void> => {
+				activeTools.splice(0, activeTools.length, ...names);
+			},
+			getAllTools: () => [],
+			getCommands: () => [],
+		},
+		sessionActions: {
+			appendEntry(): void {},
+			sendMessage(): void {},
+			sendUserMessage(): void {},
+		},
 		sendMessage(): void {},
 	} as unknown as ExtensionAPI;
 	createAutoresearchExtension(api);

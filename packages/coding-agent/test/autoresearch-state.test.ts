@@ -456,15 +456,23 @@ function createCommandHarness(
 		},
 		registerShortcut(): void {},
 		registerTool(): void {},
-		getActiveTools(): string[] {
-			return [];
+		toolManagement: {
+			getActiveTools(): string[] {
+				return [];
+			},
+			setActiveTools: async (): Promise<void> => {},
+			getAllTools: () => [],
+			getCommands: () => [],
 		},
-		setActiveTools: async (): Promise<void> => {},
-		sendUserMessage(content: string | unknown[]): void {
-			if (typeof content !== "string") {
-				throw new Error("Expected autoresearch command to send plain text");
-			}
-			sentMessages.push(content);
+		sessionActions: {
+			appendEntry(): void {},
+			sendMessage(): void {},
+			sendUserMessage(content: string | unknown[]): void {
+				if (typeof content !== "string") {
+					throw new Error("Expected autoresearch command to send plain text");
+				}
+				sentMessages.push(content);
+			},
 		},
 	} as unknown as ExtensionAPI;
 	createAutoresearchExtension(api);
@@ -612,6 +620,19 @@ describe("autoresearch tool-call hook", () => {
 			async setActiveTools(): Promise<void> {},
 			sendMessage(): void {},
 			sendUserMessage(): void {},
+			toolManagement: {
+				getActiveTools: (): string[] => [...activeTools],
+				setActiveTools: async (names: string[]): Promise<void> => {
+					activeTools.splice(0, activeTools.length, ...names);
+				},
+				getAllTools: () => [],
+				getCommands: () => [],
+			},
+			sessionActions: {
+				appendEntry(): void {},
+				sendMessage(): void {},
+				sendUserMessage(): void {},
+			},
 		} as unknown as ExtensionAPI;
 		createAutoresearchExtension(api);
 		expect(handlers.has("tool_call")).toBe(false);

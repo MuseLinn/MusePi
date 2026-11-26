@@ -338,7 +338,7 @@ async function expectShippedHostPluginsListed(): Promise<void> {
 	const entries = await loadAllExtensions(process.cwd(), []);
 
 	for (const name of ["hmr", "memory-sharpshooter"] as const) {
-		const entry = entries.find(candidate => candidate.name === name && candidate.path.includes("bundled-plugins"));
+		const entry = entries.find(candidate => candidate.name === name && candidate.path.includes("plugins"));
 		expect(entry, `${name} must be listed`).toBeDefined();
 		expect(entry).toMatchObject({ kind: "plugin-module", state: "active", source: { level: "native" } });
 	}
