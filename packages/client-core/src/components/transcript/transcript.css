@@ -6026,3 +6026,46 @@ a.tr-tool-search-title:hover {
 		animation: none;
 	}
 }
+
+/* Attachment reference inside a sent user message (`[图片 1]`,
+ * `[Attachment:name]`).
+ *
+ * The message stores the pointer the model reads, not what the reader typed;
+ * the bubble draws the same icon+label chip the composer showed, so the
+ * syntax never reaches the reader. Inline-block on the text baseline, with
+ * the token's own spacing — a box with a fixed height would drift off the
+ * line and split when the message wraps. */
+.tr-inline-ref {
+	display: inline-block;
+	max-width: 18em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: baseline;
+	margin: 0 1px;
+	padding: 0 5px;
+	border-radius: var(--radius-xs, 4px);
+	background: color-mix(in oklab, var(--accent) 12%, transparent);
+	color: color-mix(in oklab, var(--accent) 85%, var(--fg));
+	font-weight: 500;
+}
+
+.tr-inline-ref::before {
+	content: "";
+	display: inline-block;
+	width: 11px;
+	height: 11px;
+	margin-right: 3px;
+	vertical-align: -1px;
+	background-color: currentColor;
+	-webkit-mask: var(--tr-inline-ref-icon) center / contain no-repeat;
+	mask: var(--tr-inline-ref-icon) center / contain no-repeat;
+}
+
+.tr-inline-ref--image {
+	--tr-inline-ref-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M4%205a2%202%200%200%201%202-2h12a2%202%200%200%201%202%202v14a2%202%200%200%201-2%202H6a2%202%200%200%201-2-2V5zm2%2012h12l-3.5-4.5L12%2016l-2-2.5L6%2017z'/></svg>");
+}
+
+.tr-inline-ref--file {
+	--tr-inline-ref-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M6%202h7l5%205v15H6V2zm7%201.6V8h4.4L13%203.6z'/></svg>");
+}

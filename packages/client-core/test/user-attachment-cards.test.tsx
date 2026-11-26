@@ -39,12 +39,16 @@ describe("UserMsgContent attachment cards", () => {
 		expect(html).toContain(`>${t("tools.attachmentPreview")}<`);
 	});
 
-	test("keeps a name-only mention in the body", () => {
+	test("keeps a name-only mention in the body, drawn as a chip not a card", () => {
 		const html = renderToStaticMarkup(
 			<UserMsgContent content={"[Attachment:notes.md]\n指令"} plain collapse={false} />,
 		);
 
-		expect(html).toContain("[Attachment:notes.md]");
+		// The name survives in the body (there is no blob address to make a card
+		// from), but the `[Attachment:…]` syntax does not reach the reader.
+		expect(html).toContain("notes.md");
+		expect(html).not.toContain("[Attachment:notes.md]");
+		expect(html).toContain("tr-inline-ref--file");
 		expect(html).not.toContain("tr-attach-card");
 	});
 

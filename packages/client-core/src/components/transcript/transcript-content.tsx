@@ -39,6 +39,7 @@ import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
+import { parseInlineRefs } from "./inline-refs";
 import { Markdown } from "./Markdown";
 import { requestQuoteReveal } from "./quote-highlight";
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
@@ -544,6 +545,56 @@ export function MsgContent({
  * lines with an expand/collapse toggle. */
 const USER_COLLAPSE_MIN_CHARS = 240;
 
+/** Renders the attachment references inside user text as chips.
+ *
+ * The send path turns a composer mention into plain text (`[图片 1]`,
+ * `[Attachment:name]`) because that is the pointer the model reads. It is not
+ * what the reader typed, so the bubble draws the same icon+label chip the
+ * composer showed instead of exposing the syntax. */
+function UserTextWithRefs({ text }: { text: string }): ReactNode {
+	const refs = parseInlineRefs(text);
+	if (refs.length === 0) return text;
+	const parts: ReactNode[] = [];
+	let cursor = 0;
+	for (const ref of refs) {
+		if (ref.start > cursor) parts.push(text.slice(cursor, ref.start));
+		parts.push(
+			<span key={ref.start} className={`tr-inline-ref tr-inline-ref--${ref.kind}`}>
+				{ref.label}
+			</span>,
+		);
+		cursor = ref.end;
+	}
+	if (cursor < text.length) parts.push(text.slice(cursor));
+	return <>{parts}</>;
+}
+
+/**
+ * A message whose text carries attachment references renders as one text flow
+ * with the references drawn as chips.
+ *
+ * The split is deliberate: a reference is an inline atom in the sentence the
+ * reader wrote, and rendering each prose run through the markdown renderer
+ * would wrap it in its own paragraph — the bubble would break into one line
+ * per reference. Messages WITHOUT references keep the ordinary markdown body.
+ */
+function UserBody({ text, plain }: { text: string; plain: boolean }): ReactNode {
+	if (plain) {
+		return (
+			<span className="tr-md tr-user-plain">
+				<UserTextWithRefs text={text} />
+			</span>
+		);
+	}
+	if (parseInlineRefs(text).length === 0) return <Markdown text={text} repair="off" />;
+	// Whitespace-preserving so the reader's own line breaks survive the split.
+	return (
+		<span className="tr-md tr-user-plain tr-user-refs">
+			<UserTextWithRefs text={text} />
+		</span>
+	);
+}
+
 export function UserText({ text, plain, collapse }: { text: string; plain: boolean; collapse: boolean }): ReactNode {
 	const [open, setOpen] = useState(false);
 	// The clamp preview is the settled closed state only: it comes OFF when
@@ -565,7 +616,7 @@ export function UserText({ text, plain, collapse }: { text: string; plain: boole
 			if (!isOpen) setClamped(true);
 		},
 	});
-	const body = plain ? <span className="tr-md tr-user-plain">{text}</span> : <Markdown text={text} repair="off" />;
+	const body = <UserBody text={text} plain={plain} />;
 	if (!collapse || text.length <= USER_COLLAPSE_MIN_CHARS) return body;
 	return (
 		<div className={`tr-md tr-user-collapse${clamped ? " tr-user-collapse--clamped" : ""}`}>
