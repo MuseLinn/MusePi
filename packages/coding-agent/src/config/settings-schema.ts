@@ -64,6 +64,7 @@ import {
 	SERVICE_TIER_OPENAI_OPTIONS,
 	SERVICE_TIER_OPENAI_VALUES,
 } from "./service-tier";
+import { type SettingDescriptor, settingsRegistry } from "./settings-registry";
 
 /** Unified settings schema - single source of truth for all settings.
  *
@@ -7096,6 +7097,27 @@ export const SETTINGS_SCHEMA = {
 	"thinkingBudgets.max": { type: "number", default: 32768 },
 } as const;
 
+// ── Core descriptors ───────────────────────────────────────────────────────
+// Seed the registry before any consumer reads it: the module body below only
+// declares types and accessors, so registration here precedes every import site.
+settingsRegistry.registerMany(
+	Object.entries(SETTINGS_SCHEMA).map(([key, def]) => {
+		const entry = def as {
+			type: SettingDescriptor["type"];
+			default: unknown;
+			values?: readonly string[];
+			ui?: SettingDescriptor["ui"];
+			credential?: boolean;
+		};
+		const descriptor: SettingDescriptor = { key, type: entry.type, default: entry.default };
+		if (entry.values) descriptor.values = entry.values;
+		if (entry.ui) descriptor.ui = entry.ui;
+		if (entry.credential === true) descriptor.credential = true;
+		return descriptor;
+	}),
+	"core",
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Type Inference
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7128,12 +7150,13 @@ export type SettingValue<P extends SettingPath> = Schema[P] extends { type: "boo
 
 /** Get the default value for a setting path */
 export function getDefault<P extends SettingPath>(path: P): SettingValue<P> {
-	return SETTINGS_SCHEMA[path].default as SettingValue<P>;
+	const descriptor = settingsRegistry.get(path);
+	return (descriptor?.default ?? SETTINGS_SCHEMA[path]?.default) as SettingValue<P>;
 }
 
 /** Check if a path has UI metadata (should appear in settings panel) */
-export function hasUi(path: SettingPath): boolean {
-	return path in SETTINGS_SCHEMA && "ui" in SETTINGS_SCHEMA[path];
+export function hasUi(path: string): boolean {
+	return settingsRegistry.get(path)?.ui !== undefined;
 }
 
 /**
@@ -7141,8 +7164,11 @@ export function hasUi(path: SettingPath): boolean {
  * without an explicit request. Drives both CLI redaction and settings-panel
  * masking, so the two cannot disagree.
  */
-export function isCredential(path: SettingPath): boolean {
-	const def = SETTINGS_SCHEMA[path];
+export function isCredential(path: string): boolean {
+	const descriptor = settingsRegistry.get(path);
+	if (descriptor?.credential === true) return true;
+	if (descriptor) return descriptor.ui?.secret === true;
+	const def = SETTINGS_SCHEMA[path as SettingPath];
 	if ("credential" in def && def.credential === true) return true;
 	// `ui.secret` predates this marker and still means "never display". Reading
 	// both here keeps ONE accessor, so the two spellings cannot produce
@@ -7151,17 +7177,13 @@ export function isCredential(path: SettingPath): boolean {
 }
 
 /** Get UI metadata for a path (undefined if no UI) */
-export function getUi(path: SettingPath): AnyUiMetadata | undefined {
-	const def = SETTINGS_SCHEMA[path];
-	return "ui" in def ? (def.ui as AnyUiMetadata) : undefined;
+export function getUi(path: string): AnyUiMetadata | undefined {
+	return settingsRegistry.get(path)?.ui as AnyUiMetadata | undefined;
 }
 
 /** Get all paths for a specific tab */
 export function getPathsForTab(tab: SettingTab): SettingPath[] {
-	return (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(path => {
-		const ui = getUi(path);
-		return ui?.tab === tab;
-	});
+	return settingsRegistry.pathsForTab(tab) as SettingPath[];
 }
 
 /** All paths marked `ui.tuiOnly` — settings that only affect the terminal
@@ -7176,20 +7198,24 @@ export function getPathsForTab(tab: SettingTab): SettingPath[] {
  *  (e.g. a settings-panel filter or a CLI `--tui-only` listing) has one place
  *  to ask instead of re-deriving it from SETTINGS_SCHEMA. */
 export function tuiOnlySettingKeys(): SettingPath[] {
-	return (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(path => getUi(path)?.tuiOnly === true);
+	return settingsRegistry.keys().filter(path => getUi(path)?.tuiOnly === true) as SettingPath[];
 }
 
 /** Get the type of a setting */
-export function getType(path: SettingPath): SettingDef["type"] {
-	return SETTINGS_SCHEMA[path].type;
+export function getType(path: string): SettingDef["type"] {
+	const descriptor = settingsRegistry.get(path);
+	if (descriptor) return descriptor.type as SettingDef["type"];
+	return SETTINGS_SCHEMA[path as SettingPath].type as SettingDef["type"];
 }
 
 /** Get enum values for an enum setting. `memory.backend` also accepts ids a
  *  plugin contributed, so its list is composed from the provider registry. */
-export function getEnumValues(path: SettingPath): readonly string[] | undefined {
-	const def = SETTINGS_SCHEMA[path];
-	if (!("values" in def)) return undefined;
-	const values = def.values as readonly string[];
+export function getEnumValues(path: string): readonly string[] | undefined {
+	const descriptor = settingsRegistry.get(path);
+	const values =
+		descriptor?.values ??
+		(SETTINGS_SCHEMA[path as SettingPath] as { values?: readonly string[] } | undefined)?.values;
+	if (!values) return undefined;
 	return path === "memory.backend" ? memoryBackendIds(values) : values;
 }
 

@@ -12,7 +12,6 @@
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { resolveReleaseChannel, VERSION } from "@musepi/pi-utils";
 import { isSensitiveSettingPath, type Settings } from "../../config/settings";
-import type { SettingPath } from "../../config/settings-schema";
 import { managedBrowserBridgeUrl } from "../../tools/browser/managed-bridge";
 import type { DaemonConnection, DaemonSessionHost } from "../session-host";
 import type { DaemonService } from "./types";
@@ -341,7 +340,8 @@ export class SettingsService implements DaemonService {
 		// renders from the single source of truth instead of a
 		// hardcoded copy that drifts.
 		const p = (params ?? {}) as { tabs?: string[]; all?: boolean };
-		const { getEnumValues, SETTINGS_SCHEMA, SETTING_TABS } = await import("../../config/settings-schema");
+		const { getEnumValues, SETTING_TABS } = await import("../../config/settings-schema");
+		const { settingsRegistry } = await import("../../config/settings-registry");
 		// Extension-contributed settings (registerSetting, e.g. the
 		// swarm style extension's display.taskCardStyle) live in the
 		// host-level cache — merged so the panel shows them without
@@ -366,8 +366,8 @@ export class SettingsService implements DaemonService {
 		const out: Record<string, unknown[]> = {};
 		for (const tab of tabs) {
 			const items: unknown[] = [];
-			for (const [key, def] of Object.entries(SETTINGS_SCHEMA)) {
-				const ui = (def as { ui?: { tab?: string; options?: unknown } }).ui;
+			for (const [key, def] of settingsRegistry.entries()) {
+				const ui = def.ui;
 				if (!ui || ui.tab !== tab) continue;
 				const item: Record<string, unknown> = { key, type: def.type, default: def.default, ui };
 				// Enums whose options live in the schema's `values`
@@ -375,7 +375,7 @@ export class SettingsService implements DaemonService {
 				// ui.options — without them the GUI would render a
 				// text input instead of a select.
 				if (def.type === "enum" && !ui.options) {
-					const values = getEnumValues(key as SettingPath);
+					const values = getEnumValues(key);
 					if (values && values.length > 0) {
 						item.ui = { ...ui, options: values.map(v => ({ value: v, label: v })) };
 					}

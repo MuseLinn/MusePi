@@ -11,6 +11,7 @@
 
 import { TERMINAL } from "@musepi/pi-tui";
 import { Settings } from "../../config/settings";
+import { settingsRegistry } from "../../config/settings-registry";
 import {
 	type AnyUiMetadata,
 	getDefault,
@@ -333,6 +334,12 @@ function pathToSettingDef(path: SettingPath): SettingDef | null {
 
 /** Cache of generated definitions */
 let cachedDefs: SettingDef[] | null = null;
+
+// A provider/extension descriptor registered after first render (plugin mount,
+// reload) must rebuild the menu instead of serving the pre-plugin list.
+settingsRegistry.onDidChange(() => {
+	cachedDefs = null;
+});
 
 /** Invalidate the cache (call after locale changes so defs rebuild with fresh translations). */
 export function invalidateSettingDefsCache(): void {
