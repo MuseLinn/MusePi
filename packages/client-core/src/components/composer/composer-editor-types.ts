@@ -14,12 +14,25 @@ export interface ComposerSelection {
 }
 
 /** One painted token range. The caller owns token semantics; the editor only
- *  paints `className` and reads `mentionName` for the hover card. */
+ *  paints `className` and reads `mentionName` for the hover card.
+ *
+ * `revealAs` turns a token that would otherwise read as raw text (a file
+ * path, a `history://` reference) into an icon+label chip. The DOCUMENT keeps
+ * the literal text — the send path and the parsers need it — while the
+ * editor renders the chip in its place, so nothing downstream has to know
+ * the composer decided to look nicer.
+ */
 export interface EditorMark {
 	from: number;
 	to: number;
 	className: string;
 	mentionName?: string;
+	/** Label shown in place of the raw range; absent = paint the text itself. */
+	revealAs?: {
+		label: string;
+		/** Icon family: a file, a folder, or a session. */
+		kind: "file" | "folder" | "session";
+	};
 }
 
 /** Attachment data behind a mention hover card, resolved by the caller. */

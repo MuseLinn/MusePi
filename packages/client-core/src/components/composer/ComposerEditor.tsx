@@ -6,6 +6,7 @@ import {
 	interceptKeymap,
 	mapPosition,
 	marksField,
+	referenceAtomicRanges,
 	refreshMarks,
 	selectionOf,
 	valuePropWrite,
@@ -144,6 +145,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						interceptKeymap(event => handlersRef.current.onKeyDown?.(event) ?? false),
 						keymap.of([...standardKeymap, ...historyKeymap]),
 						marksField(marksRef),
+						referenceAtomicRanges(marksRef),
 						EditorView.updateListener.of(update => {
 							const handlers = handlersRef.current;
 							if (update.docChanged) {

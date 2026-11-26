@@ -407,7 +407,7 @@ export function HeroComposer({
 		surface?.send ? surface.send(value, payload) : onSubmit(value, payload as never);
 	const localIntake = useAttachments(rpc, { stageFiles: false });
 	const { attachments, setAttachments, addFiles } = surface?.intake ?? attachmentsApi ?? localIntake;
-	const { marks, resolveMention } = useComposerMarks(text, attachments);
+	const { marks, resolveMention } = useComposerMarks(text, attachments, rpc);
 	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps
 	// its shape. The first sent message applies the mode (goal: the
@@ -780,16 +780,9 @@ export function HeroComposer({
 		atIdx,
 		setAtIdx,
 		atFilter,
+		atQuery,
 		onAtInput,
 		insertAt,
-		hashOpen,
-		setHashOpen,
-		hashIdx,
-		setHashIdx,
-		hashFilter,
-		hashLabel,
-		onHashInput,
-		insertHash,
 	} = useCompletion({
 		rpc,
 		cwd: project ?? undefined,
@@ -869,12 +862,11 @@ export function HeroComposer({
 	});
 	// / @ # completion preview (composer parity): one floating menu for all
 	// three triggers, portaled so the glass samples real content behind it.
-	const compOpen = slashOpen || atOpen || hashOpen;
+	const compOpen = slashOpen || atOpen;
 	const { anchorRef: compAnchorRef, renderMenu: renderCompMenu } = useFloatingMenu(compOpen, open => {
 		if (open) return;
 		setSlashOpen(false);
 		setAtOpen(false);
-		setHashOpen(false);
 	});
 	// Only one completion menu is mounted at a time (conditional render), so
 	// a single ref tracks whichever is open. The menu scrolls internally
@@ -901,7 +893,6 @@ export function HeroComposer({
 		onValueChange: value => {
 			onSlashInput(value);
 			onAtInput(value);
-			onHashInput(value);
 		},
 		onMentionClick: start => {
 			const ta = taRef.current;
@@ -1799,12 +1790,8 @@ export function HeroComposer({
 									atOpen={atOpen}
 									atEntries={atFilter}
 									atIdx={atIdx}
+									atQuery={atQuery}
 									onPickAt={insertAt}
-									hashOpen={hashOpen}
-									hashSessions={hashFilter}
-									hashIdx={hashIdx}
-									hashLabel={hashLabel}
-									onPickHash={insertHash}
 								/>,
 							)}
 
@@ -1895,15 +1882,7 @@ export function HeroComposer({
 											list: atFilter,
 											idx: atIdx,
 											setIdx: setAtIdx,
-											insert: () =>
-												atFilter[atIdx] && insertAt(atFilter[atIdx]!.insertPath ?? atFilter[atIdx]!.path),
-										},
-										{
-											open: hashOpen,
-											list: hashFilter,
-											idx: hashIdx,
-											setIdx: setHashIdx,
-											insert: () => hashFilter[hashIdx] && insertHash(hashFilter[hashIdx]!.id),
+											insert: () => atFilter[atIdx] && insertAt(atFilter[atIdx]!),
 										},
 									];
 									for (const m of menus) {
@@ -1927,7 +1906,6 @@ export function HeroComposer({
 											e.preventDefault();
 											setSlashOpen(false);
 											setAtOpen(false);
-											setHashOpen(false);
 											return;
 										}
 									}

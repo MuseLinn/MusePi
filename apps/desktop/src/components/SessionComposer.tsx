@@ -352,7 +352,7 @@ export function SessionComposer({
 				);
 	const localIntake = useAttachments(rpc);
 	const { attachments, setAttachments, addFiles, onPaste } = surface?.intake ?? attachmentsApi ?? localIntake;
-	const { marks, resolveMention } = useComposerMarks(text, attachments);
+	const { marks, resolveMention } = useComposerMarks(text, attachments, rpc);
 	// Annotation screenshots use the ordinary attachment pipeline; their text
 	// stays in display context until send.
 	const addFilesRef = useRef(addFiles);
@@ -514,16 +514,9 @@ export function SessionComposer({
 		atIdx,
 		setAtIdx,
 		atFilter,
+		atQuery,
 		onAtInput,
 		insertAt,
-		hashOpen,
-		setHashOpen,
-		hashIdx,
-		setHashIdx,
-		hashFilter,
-		hashLabel,
-		onHashInput,
-		insertHash,
 	} = useCompletion({ rpc, cwd, sessionId, setText });
 	useDraftPersistence({
 		sessionId,
@@ -1327,7 +1320,6 @@ export function SessionComposer({
 			if (historyIndex !== null) setHistoryIndex(null);
 			onSlashInput(value);
 			onAtInput(value);
-			onHashInput(value);
 		},
 		onMentionClick: start => {
 			const ta = taRef.current;
@@ -1339,15 +1331,11 @@ export function SessionComposer({
 	// The completion menus (@/ #//) share one portaled anchor: the textarea.
 	// Portaling lets the frosted glass sample real content behind the menu
 	// (in-place, the composer frame's own backdrop is all the blur sees).
-	const { anchorRef: menuAnchorRef, renderMenu: renderFloatMenu } = useFloatingMenu(
-		slashOpen || atOpen || hashOpen,
-		open => {
-			if (open) return;
-			setSlashOpen(false);
-			setAtOpen(false);
-			setHashOpen(false);
-		},
-	);
+	const { anchorRef: menuAnchorRef, renderMenu: renderFloatMenu } = useFloatingMenu(slashOpen || atOpen, open => {
+		if (open) return;
+		setSlashOpen(false);
+		setAtOpen(false);
+	});
 	// Todo panel: portaled the same way (gui-todo-panel used to be an
 	// absolute child of the composer frame — it popped up past the chat
 	// surface's overflow:hidden and got clipped, the panel's lower half
@@ -1891,33 +1879,11 @@ export function SessionComposer({
 			if (e.key === "Enter" || e.key === "Tab") {
 				e.preventDefault();
 				const pick = atFilter[atIdx];
-				if (pick) insertAt(pick.path);
+				if (pick) insertAt(pick);
 				return;
 			}
 			if (e.key === "Escape") {
 				setAtOpen(false);
-				return;
-			}
-		}
-		if (hashOpen && hashFilter.length > 0) {
-			if (e.key === "ArrowDown") {
-				e.preventDefault();
-				setHashIdx(v => (v + 1) % hashFilter.length);
-				return;
-			}
-			if (e.key === "ArrowUp") {
-				e.preventDefault();
-				setHashIdx(v => (v - 1 + hashFilter.length) % hashFilter.length);
-				return;
-			}
-			if (e.key === "Enter" || e.key === "Tab") {
-				e.preventDefault();
-				const pick = hashFilter[hashIdx];
-				if (pick) insertHash(pick.id);
-				return;
-			}
-			if (e.key === "Escape") {
-				setHashOpen(false);
 				return;
 			}
 		}
@@ -2315,7 +2281,6 @@ export function SessionComposer({
 								insertComposerToken(taRef.current, token, setText, next => {
 									onSlashInput(next);
 									onAtInput(next);
-									onHashInput(next);
 								})
 							}
 						/>
@@ -2554,12 +2519,8 @@ export function SessionComposer({
 						atOpen={atOpen}
 						atEntries={atFilter}
 						atIdx={atIdx}
+						atQuery={atQuery}
 						onPickAt={insertAt}
-						hashOpen={hashOpen}
-						hashSessions={hashFilter}
-						hashIdx={hashIdx}
-						hashLabel={hashLabel}
-						onPickHash={insertHash}
 					/>,
 				)}
 			</ComposerFrame>

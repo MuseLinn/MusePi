@@ -1,29 +1,48 @@
 import type { ComposerEditorHandle } from "@musepi/client-core/src/components/composer/composer-editor-types";
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { type AtCompletionEntry, loadAtCompletionEntries, rankAtCompletionEntries } from "../../lib/at-completion";
+import {
+	type AtCandidate,
+	type AtCompletionEntry,
+	loadAtCompletionEntries,
+	rankAtCandidates,
+} from "../../lib/at-completion";
 import { currentLine, tokenQuery } from "../../lib/completion-trigger";
 import type { RpcClient } from "../../lib/rpc";
 import { rankSlashEntries } from "../../lib/slash-rank";
 import { autosize } from "../composer-autosize";
 import type { SessionListNode } from "../SessionList";
 import type { SlashEntry } from "../SlashRow";
-import type { HashCompletionEntry } from "./completion-menus";
+import type { SessionCompletionEntry } from "./completion-menus";
 
 /** Composer-intercepted slash commands (open GUI panels or fire GUI-owned
  *  RPCs instead of hitting the agent) — they win ties in the / completion
  *  ranking. */
 const SLASH_GUI_NATIVE: ReadonlySet<string> = new Set(["usage", "context", "guided-goal"]);
 
+/** How many sessions the "@" menu offers before the query narrows them. */
+const AT_SESSION_LIMIT = 50;
+
+/** Display title for a session row: the session tree's label, else the cwd
+ *  basename, else a short id slice. The inserted token always keeps the full
+ *  id, so a short label can never change what gets referenced. */
+function sessionRowLabel(entry: { id: string; cwd?: string }, labels: ReadonlyMap<string, string>): string {
+	const tree = labels.get(entry.id);
+	if (tree) return tree;
+	const base = entry.cwd?.split("/").filter(Boolean).at(-1);
+	if (base) return base;
+	return entry.id.slice(0, 8);
+}
+
 /**
- * "@"/"#"/"//" completion machinery (TUI parity): the three completion
- * state machines share the textarea anchor and the draft setter. "/"
- * lists the daemon's builtin registry (commands.list), "@" the workspace
- * tree scan (workspace.tree), "#" the session list (session.list with
- * session.tree labels) — Enter/click inserts the token via the shared
- * textarea ref. Pure state + handlers (no effects); the menus themselves
- * render through CompletionMenus, which owns the portaled anchor and the
- * scroll-into-view effect.
+ * "@"/"/" completion machinery (TUI parity): both state machines share the
+ * textarea anchor and the draft setter. "/" lists the daemon's builtin
+ * registry (commands.list); "@" owns every reference — the workspace tree
+ * scan (workspace.tree) plus the session list (session.list with
+ * session.tree titles), so a conversation is pulled in the same way a file
+ * is. Enter/click inserts the token via the shared textarea ref. Pure state + handlers (no effects); the menus
+ * themselves render through CompletionMenus, which owns the portaled anchor
+ * and the scroll-into-view effect.
  */
 export function useCompletion({
 	rpc,
@@ -57,24 +76,17 @@ export function useCompletion({
 	onSlashInput(value: string): void;
 	insertSlash(name: string): void;
 	// "@" completion (TUI/ZCode parity): @ = files & folders from the
-	// workspace tree scan (workspace.tree), NOT agents.
+	// workspace tree scan (workspace.tree) plus the session list
+	// (session.list) — one menu, two kinds of reference.
 	atOpen: boolean;
 	setAtOpen(open: boolean): void;
 	atIdx: number;
 	setAtIdx: Dispatch<SetStateAction<number>>;
-	atFilter: AtCompletionEntry[];
+	atFilter: AtCandidate[];
+	/** Current "@" query, for marking the matched substring in each row. */
+	atQuery: string;
 	onAtInput(value: string): void;
-	insertAt(path: string): void;
-	// "#" completion (insert a session reference): lists session.list, with
-	// titles resolved from session.tree labels (fallback: cwd basename).
-	hashOpen: boolean;
-	setHashOpen(open: boolean): void;
-	hashIdx: number;
-	setHashIdx: Dispatch<SetStateAction<number>>;
-	hashFilter: HashCompletionEntry[];
-	hashLabel(e: { id: string; cwd?: string }): string;
-	onHashInput(value: string): void;
-	insertHash(id: string): void;
+	insertAt(candidate: AtCandidate | string): void;
 } {
 	const taRef = useRef<ComposerEditorHandle | null>(null);
 	// Slash-command completion (TUI parity): typing "/" lists the daemon's
@@ -106,16 +118,11 @@ export function useCompletion({
 		atRequestRef.current += 1;
 		setAtEntries(null);
 	}, [sessionId, cwd, extraRoots]);
-	// "#" completion (insert a session reference): lists session.list, with
-	// titles resolved from session.tree labels (fallback: cwd basename).
-	const [hashOpen, setHashOpen] = useState(false);
-	const [hashQuery, setHashQuery] = useState("");
-	/** Index (in the full textarea value) of the "#" that opened the session
-	 *  token — mirrors slashAnchor/atAnchor so a mid-line "#" splices in place. */
-	const [hashAnchor, setHashAnchor] = useState<number | null>(null);
-	const [hashSessions, setHashSessions] = useState<HashCompletionEntry[] | null>(null);
-	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
-	const [hashIdx, setHashIdx] = useState(0);
+	/** Session candidates for the "@" menu — loaded on first open, so a
+	 *  session is referenced the same way a file is. */
+	const [atSessions, setAtSessions] = useState<SessionCompletionEntry[] | null>(null);
+	/** Session titles from session.tree (renames / first-message labels). */
+	const [sessionLabels, setSessionLabels] = useState<Map<string, string>>(new Map());
 
 	const slashFilter = (() => {
 		const q = slashQuery.toLowerCase();
@@ -228,52 +235,28 @@ export function useCompletion({
 						if (atRequestRef.current === request) setAtEntries([]);
 					});
 			}
-		} else {
-			setAtOpen(false);
-		}
-	};
-
-	const atFilter = rankAtCompletionEntries(
-		atEntries?.filter(
-			e =>
-				e.name.toLowerCase().includes(atQuery.toLowerCase()) ||
-				e.path.toLowerCase().includes(atQuery.toLowerCase()),
-		) ?? [],
-		atQuery,
-	);
-
-	const insertAt = (path: string): void => {
-		const ta = taRef.current;
-		if (!ta) return;
-		// Replace the "@query" token in place: the @ may sit mid-line after
-		// Chinese text or punctuation, so the split runs through its anchor.
-		const anchor = atAnchor ?? ta.value.lastIndexOf("\n");
-		const prefix = ta.value.slice(0, anchor + 1); // up to and including "@"
-		const rest = ta.value.slice(anchor + 1 + atQuery.length);
-		setText(`${prefix}${path} ${rest}`);
-		setAtOpen(false);
-		requestAnimationFrame(() => autosize(taRef.current));
-	};
-
-	const onHashInput = (value: string): void => {
-		// Same shared trigger rule as "/" and "@" (lib/completion-trigger).
-		const { line, lineStart } = currentLine(value);
-		const hit = tokenQuery(line, "#");
-		if (hit) {
-			setHashQuery(hit.query);
-			setHashAnchor(lineStart + hit.anchor);
-			setHashOpen(true);
-			setHashIdx(0);
-			if (!hashSessions && rpc) {
+			// Sessions join the same menu: "@" is one gesture ("pull that thing
+			// in"), and two sigils for files and conversations would make the
+			// reader remember which reaches which. Loaded alongside the tree so
+			// the list never shows one kind and then the other.
+			if (!atSessions && rpc) {
+				const request = ++atRequestRef.current;
 				void rpc
-					.request<{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[]>("session.list", {})
-					.then(list => setHashSessions(list ?? []))
-					.catch(() => setHashSessions([]));
-				// Titles come from the session tree (renames/首条消息 labels);
-				// fetch alongside the list so rows show names, not raw ids.
+					.request<SessionCompletionEntry[]>("session.list", {})
+					.then(list => {
+						if (atRequestRef.current !== request) return;
+						setAtSessions(list ?? []);
+					})
+					.catch(() => {
+						if (atRequestRef.current === request) setAtSessions([]);
+					});
+				// Titles live in the session tree rather than the list, and a
+				// row that only says an id slice is not something a reader can
+				// choose between.
 				void rpc
 					.request<SessionListNode[]>("session.tree", {})
 					.then(nodes => {
+						if (atRequestRef.current !== request) return;
 						const labels = new Map<string, string>();
 						const walk = (ns: SessionListNode[]): void => {
 							for (const n of ns) {
@@ -283,44 +266,63 @@ export function useCompletion({
 							}
 						};
 						walk(nodes ?? []);
-						setHashLabels(labels);
+						setSessionLabels(labels);
 					})
 					.catch(() => {});
 			}
 		} else {
-			setHashOpen(false);
+			setAtOpen(false);
 		}
 	};
 
-	const hashFilter =
-		hashSessions?.filter(
-			e =>
-				(e.id ?? "").toLowerCase().includes(hashQuery.toLowerCase()) ||
-				(e.cwd ?? "").toLowerCase().includes(hashQuery.toLowerCase()),
-		) ?? [];
+	// Rank first, then cap: taking the first 50 rows of an unsorted list would
+	// hide the session that actually matches the query behind the newest ones.
+	const atRanked = rankAtCandidates(
+		[
+			...(atSessions ?? [])
+				.filter(s => s.id !== sessionId && s.subagent !== true && s.advisor !== true)
+				.map(
+					(s): AtCandidate => ({
+						kind: "session",
+						id: s.id,
+						name: sessionRowLabel(s, sessionLabels),
+						cwd: s.cwd,
+						updatedAt: s.updatedAt,
+					}),
+				),
+			...(atEntries ?? []).map((e): AtCandidate => ({ kind: "file", ...e })),
+		],
+		atQuery,
+	);
+	// A picker is not a directory listing: cap the session half so a long
+	// history cannot push the file half out of the menu.
+	let sessionSlots = AT_SESSION_LIMIT;
+	const atFilter = atRanked.filter(candidate => {
+		if (candidate.kind !== "session") return true;
+		if (sessionSlots <= 0) return false;
+		sessionSlots -= 1;
+		return true;
+	});
 
-	// Display title for a # row: session.tree label, else cwd basename,
-	// else a short id slice (the inserted token always keeps the full id).
-	const hashLabel = (e: { id: string; cwd?: string }): string => {
-		const tree = hashLabels.get(e.id);
-		if (tree) return tree;
-		const base = e.cwd?.split("/").filter(Boolean).at(-1);
-		if (base) return base;
-		return e.id.slice(0, 8);
-	};
-
-	const insertHash = (id: string): void => {
+	const insertAt = (candidate: AtCandidate | string): void => {
 		const ta = taRef.current;
 		if (!ta) return;
-		// Splice through the recorded "#" anchor (it may sit mid-line).
-		const anchor = hashAnchor ?? ta.value.lastIndexOf("\n") + 1;
-		const prefix = ta.value.slice(0, anchor);
-		const rest = ta.value.slice(anchor + hashQuery.length + 1);
-		// Insert a read-tool-resolvable internal URL (TUI parity: the "#"
-		// GitHub-ref completion rewrites to issue://pr:// URLs). The model
-		// can `read history://<id>` to inspect the referenced session.
-		setText(`${prefix}history://${id} ${rest}`);
-		setHashOpen(false);
+		// A session inserts a read-tool-resolvable URL; a file inserts its path
+		// (absolute for additional roots, whose relative path would resolve
+		// against the wrong directory).
+		const inserted =
+			typeof candidate === "string"
+				? candidate
+				: candidate.kind === "session"
+					? `history://${candidate.id}`
+					: (candidate.insertPath ?? candidate.path);
+		// Replace the "@query" token in place: the @ may sit mid-line after
+		// Chinese text or punctuation, so the split runs through its anchor.
+		const anchor = atAnchor ?? ta.value.lastIndexOf("\n");
+		const prefix = ta.value.slice(0, anchor + 1); // up to and including "@"
+		const rest = ta.value.slice(anchor + 1 + atQuery.length);
+		setText(`${prefix}${inserted} ${rest}`);
+		setAtOpen(false);
 		requestAnimationFrame(() => autosize(taRef.current));
 	};
 
@@ -339,15 +341,8 @@ export function useCompletion({
 		atIdx,
 		setAtIdx,
 		atFilter,
+		atQuery,
 		onAtInput,
 		insertAt,
-		hashOpen,
-		setHashOpen,
-		hashIdx,
-		setHashIdx,
-		hashFilter,
-		hashLabel,
-		onHashInput,
-		insertHash,
 	};
 }

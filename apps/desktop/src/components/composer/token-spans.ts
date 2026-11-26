@@ -14,12 +14,15 @@ import { parseMentionTokens } from "./mention-token";
  * token whose attachment was removed stops resolving and reverts to text.
  */
 
-export type HighlightKind = "slash" | "bang" | "magic" | "mention";
+export type HighlightKind = "slash" | "bang" | "magic" | "mention" | "reference";
 
 export interface HighlightSpan {
 	start: number;
 	end: number;
 	kind: HighlightKind;
+	/** For `reference` spans: what the token points at, and the label to show
+	 *  in its place. Absent on every other kind. */
+	reference?: { kind: "file" | "folder" | "session"; label: string };
 }
 
 /** Standalone magic keywords (same prose-boundary regex as the agent and
@@ -41,6 +44,42 @@ const LEADING_SLASH_RE = /(^|\n)(\/[^\s/][^\s]*)/gu;
  *  body), so inner whitespace rides inside the pill. */
 const LEADING_BANG_RE = /(^|\n)(!!?[^\S\n]*[^\s]+)/gu;
 
+/** `@` followed by a session reference or a file path.
+ *
+ * Inserting from the `@` menu writes the raw token (`history://<id>`,
+ * `src/app.ts`) rather than a display name, because that is what the send
+ * path forwards and what the read tool resolves. Left as-is it reads as a
+ * wall of characters in the composer; this pattern is what lets the editor
+ * show it as a chip instead. The path branch requires a separator (or a
+ * trailing `/`) so prose like `@张三` stays plain text. */
+const AT_REFERENCE_RE = /@(history:\/\/[^\s]+|[^\s@]*[/\\][^\s]*)/gu;
+
+/**
+ * What an `@` reference points at, plus the label to render for it.
+ *
+ * A session shows its id's leading slice — the title lives in the session
+ * list, which this parser deliberately does not reach into; a path shows its
+ * last segment so a deep path still says what it is.
+ */
+function referenceOf(
+	raw: string,
+	sessionTitle?: SessionTitleResolver,
+): { kind: "file" | "folder" | "session"; label: string } | null {
+	if (raw.startsWith("history://")) {
+		const id = raw.slice("history://".length).split(/[/?#]/)[0] ?? "";
+		// A titled session says what the conversation was about; an id slice
+		// only says that *some* session was referenced.
+		const title = id === "" ? undefined : sessionTitle?.(id)?.trim();
+		return { kind: "session", label: title !== undefined && title !== "" ? title : id.slice(0, 8) || "session" };
+	}
+	if (raw === "" || raw === "/" || raw === "\\") return null;
+	const isFolder = raw.endsWith("/") || raw.endsWith("\\");
+	const segments = raw.split(/[/\\]/).filter(Boolean);
+	const last = segments.at(-1);
+	if (last === undefined) return null;
+	return { kind: isFolder ? "folder" : "file", label: last };
+}
+
 /** Attachment data behind a mention pill, resolved by the host from its
  *  live chip list. Returning null means "no chip with this name" — the
  *  token is plain text: not painted here, not expanded on send. */
@@ -54,9 +93,27 @@ export interface MentionPreview {
 
 export type MentionResolver = (name: string) => MentionPreview | null;
 
-export function parseHighlightSpans(text: string, resolveMention: MentionResolver): HighlightSpan[] {
+/** Session id → display title, supplied by the host that owns the session
+ *  list. Absent (or returning undefined) falls back to the id slice. */
+export type SessionTitleResolver = (sessionId: string) => string | undefined;
+
+export function parseHighlightSpans(
+	text: string,
+	resolveMention: MentionResolver,
+	sessionTitle?: SessionTitleResolver,
+): HighlightSpan[] {
 	const spans: HighlightSpan[] = [];
-	// Mentions first: only candidates that resolve against the live chips
+	// "@" references to a file or a session come first: they are whole tokens
+	// (a path, a history:// URL) that must render as one chip, and the mention
+	// scanner below would otherwise split a path at its slashes.
+	for (const m of text.matchAll(AT_REFERENCE_RE)) {
+		const idx = m.index ?? 0;
+		const raw = m[1] ?? "";
+		const reference = referenceOf(raw, sessionTitle);
+		if (reference === null) continue;
+		spans.push({ start: idx, end: idx + m[0].length, kind: "reference", reference });
+	}
+	// Mentions next: only candidates that resolve against the live chips
 	// are painted. Pushed BEFORE slash/bang/magic so the stable sort hands
 	// equal-start regions to the mention pill (an attachment literally
 	// named "workflowz" reads as a reference, not the thinking trigger);
@@ -101,4 +158,7 @@ export const HL_CLASS: Record<HighlightKind, string> = {
 	bang: "gui-ta-hl-bang",
 	magic: "gui-ta-hl-magic",
 	mention: "gui-ta-hl-mention",
+	// References paint their own chip class; borrowing the mention class would
+	// also apply its ::before glyph box, which a reference does not use.
+	reference: "gui-ta-ref",
 };

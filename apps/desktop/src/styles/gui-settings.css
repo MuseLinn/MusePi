@@ -9988,3 +9988,88 @@ body.gui-resizing {
 	}
 }
 
+
+/* "@" completion — files and sessions in one list, split by a quiet heading.
+ *
+ * Rows are a three-lane flex: glyph, name (never truncated away), then the
+ * trailing column right-aligned with margin-left:auto so a long path can
+ * never push the name out of the row. Matched text is emphasised instead of
+ * relying on the reader scanning for it.
+ */
+.gui-at-menu {
+	min-width: 320px;
+	max-width: 520px;
+	padding: 4px;
+}
+
+.gui-at-section {
+	padding: 6px 10px 3px;
+	color: var(--color-text-muted);
+	font-family: inherit;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+/* A heading that opens a second group needs air above it; the first heading
+ * sits directly under the menu's own padding. */
+.gui-at-section--after {
+	margin-top: 4px;
+}
+
+/* Rows are the shared dropdown row (`.gui-model-opt`): layout, hover and the
+ * keyboard-active wash already live there, so `@` adds only what is its own —
+ * the matched run, the trailing column and the root badge. */
+
+.gui-at-icon {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	color: var(--color-text-faint);
+}
+
+.gui-at-icon--dir {
+	color: var(--color-accent);
+}
+
+.gui-at-name {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 500;
+}
+
+.gui-at-slash {
+	margin-left: 1px;
+	color: var(--color-text-faint);
+}
+
+/* The matched run: brighter than the row, not a highlight box — the row's own
+ * hover/active fill already carries the selection state. */
+.gui-at-hit {
+	color: var(--color-text);
+	font-weight: 700;
+}
+
+.gui-at-root {
+	flex: none;
+	padding: 0 4px;
+	border-radius: var(--radius-xs, 4px);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-at-meta {
+	flex: none;
+	margin-left: auto;
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding-left: 12px;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}

@@ -1,6 +1,6 @@
 /**
- * Trigger rules for the composer's inline completion panels (`/` commands,
- * `@` mentions, `#` session refs).
+ * Trigger rules for the composer's inline completion panels (`/` commands and
+ * `@` references — files and sessions share the one `@`).
  *
  * These live in one module because BOTH composers use them — the session
  * composer (`composer/use-completion`) and the welcome composer
@@ -9,7 +9,7 @@
  * line-leading token, so the empty state and an open session behaved
  * differently for the same keystroke.
  *
- * The rule for all three tokens is the same: the character opens its panel
+ * The rule for both tokens is the same: the character opens its panel
  * when it is not glued to an ASCII word character, so a line start, whitespace,
  * CJK body text ("请看@文件") and punctuation ("（@组件") all trigger, while an
  * email-ish `foo@bar` and a path-ish `foo/bar` do not.
@@ -46,7 +46,7 @@ export function currentLine(value: string): { line: string; lineStart: number } 
  * Query text a completion panel should filter by, or `null` when the panel must
  * stay closed.
  *
- * All three tokens are single words — a mention never contains whitespace, and a
+ * Both tokens are single words — a mention never contains whitespace, and a
  * space after a `/` means the user moved on to prose ("/clear then do X") — so a
  * whitespace-bearing tail closes the panel rather than filtering by it.
  */

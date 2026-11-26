@@ -15,6 +15,92 @@ export interface AtCompletionEntry {
 	ignored?: boolean;
 }
 
+/**
+ * One "@" candidate: a file from the workspace tree, or a session the reader
+ * wants to reference.
+ *
+ * Files and sessions share the menu because "@" is one gesture — "pull that
+ * thing in" — and the reader should not have to remember which sigil reaches
+ * which kind. A session row inserts `history://<id>` instead of a path, which
+ * the read tool resolves to that session's transcript.
+ */
+export type AtCandidate =
+	| ({ kind: "file" } & AtCompletionEntry)
+	| {
+			kind: "session";
+			/** Session id — the value inserted as `history://<id>`. */
+			id: string;
+			/** Display title (the session's name, else its first prompt). */
+			name: string;
+			/** Directory the session ran in, shown as the trailing column. */
+			cwd?: string;
+			/** Last activity, ISO string; drives the within-group order. */
+			updatedAt?: string;
+			/** Directory name of the owning workspace, for the meta line. */
+			workspaceName?: string;
+	  };
+
+/** Group headings the "@" menu renders, in menu order. */
+export type AtCandidateGroup = "session" | "file";
+
+export function atCandidateGroup(candidate: AtCandidate): AtCandidateGroup {
+	return candidate.kind === "session" ? "session" : "file";
+}
+
+/**
+ * Rank one candidate against the query, lower being better. Sessions and
+ * files rank independently — a query that names a session title should not be
+ * outranked by a file that merely contains the same substring.
+ */
+function atMatchRank(candidate: AtCandidate, query: string): number {
+	if (query === "") return 0;
+	const name = candidate.name.toLowerCase();
+	if (name === query) return 0;
+	if (name.startsWith(query)) return 1;
+	if (name.includes(query)) return 2;
+	const path = (candidate.kind === "session" ? (candidate.cwd ?? "") : candidate.path).toLowerCase();
+	if (path.includes(query)) return 3;
+	return 4;
+}
+
+/** Whether a candidate survives the query at all. */
+function atMatches(candidate: AtCandidate, query: string): boolean {
+	if (query === "") return true;
+	if (candidate.kind === "session") {
+		return (
+			candidate.name.toLowerCase().includes(query) ||
+			(candidate.cwd ?? "").toLowerCase().includes(query) ||
+			candidate.id.toLowerCase().includes(query)
+		);
+	}
+	return candidate.name.toLowerCase().includes(query) || candidate.path.toLowerCase().includes(query);
+}
+
+/**
+ * Order the "@" list: sessions first (referencing another conversation is a
+ * rarer, more deliberate act than picking a file, so it should not sit below
+ * a hundred tree entries), each group ranked by match quality and then by
+ * recency.
+ */
+export function rankAtCandidates(candidates: readonly AtCandidate[], query: string): AtCandidate[] {
+	const q = query.trim().toLowerCase();
+	const matched = candidates.filter(candidate => atMatches(candidate, q));
+	return matched.sort((a, b) => {
+		const byGroup = atCandidateGroup(a) === atCandidateGroup(b) ? 0 : atCandidateGroup(a) === "session" ? -1 : 1;
+		if (byGroup !== 0) return byGroup;
+		const byRank = atMatchRank(a, q) - atMatchRank(b, q);
+		if (byRank !== 0) return byRank;
+		if (a.kind === "session" && b.kind === "session") {
+			return Date.parse(b.updatedAt ?? "") - Date.parse(a.updatedAt ?? "") || 0;
+		}
+		if (a.kind === "file" && b.kind === "file") {
+			if (a.ignored !== b.ignored) return a.ignored ? 1 : -1;
+			if (a.isDir !== b.isDir) return a.isDir ? 1 : -1;
+		}
+		return 0;
+	});
+}
+
 interface TreeEntry {
 	name: string;
 	path: string;

@@ -359,7 +359,10 @@ export function AttachMenu({
 						className="gui-attach-opt"
 						role="menuitem"
 						onClick={() => {
-							onInsert("#");
+							// "@" now owns both files and sessions, so the insert
+							// button opens that one menu instead of a "#" that no
+							// longer exists.
+							onInsert("@");
 							setOpen(false);
 						}}
 					>

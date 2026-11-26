@@ -7,8 +7,47 @@ import {
 	StateEffect,
 	StateField,
 } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
+import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
 import type { ComposerSelection, EditorMark } from "./composer-editor-types";
+
+/**
+ * One reference rendered as an icon+label chip in place of its raw text.
+ *
+ * The document keeps the literal token (a path, a `history://` URL) because
+ * the send path and the parsers read it; only the PAINT is replaced. The
+ * widget is inline-block so it sits on the text baseline instead of opening
+ * a line box of its own — that is what keeps a chip from drifting off the
+ * line the way a fixed-height flex pill did.
+ */
+class ReferenceChipWidget extends WidgetType {
+	constructor(
+		readonly label: string,
+		readonly kind: "file" | "folder" | "session",
+		readonly className: string,
+	) {
+		super();
+	}
+
+	override eq(other: ReferenceChipWidget): boolean {
+		return other.label === this.label && other.kind === this.kind && other.className === this.className;
+	}
+
+	override toDOM(): HTMLElement {
+		const chip = document.createElement("span");
+		// `className` already carries the reference class from the caller; only
+		// the kind variant is added here, so the two spellings cannot drift.
+		chip.className = `${this.className} gui-ta-ref--${this.kind}`;
+		chip.textContent = this.label;
+		// The chip stands in for text the user can still edit around; letting it
+		// swallow pointer events would make the range feel like an object.
+		chip.setAttribute("aria-hidden", "true");
+		return chip;
+	}
+
+	override ignoreEvent(): boolean {
+		return false;
+	}
+}
 
 /** Marks the transaction that writes a changed `value` prop into the editor. */
 export const valuePropWrite = Annotation.define<true>();
@@ -20,6 +59,17 @@ export function marksField(marksRef: { current: readonly EditorMark[] }): Extens
 	const build = (): DecorationSet => {
 		const ranges: Range<Decoration>[] = [];
 		for (const mark of marksRef.current) {
+			if (mark.revealAs !== undefined) {
+				// A reference reads as a chip, not as its raw token. Replace the
+				// whole range (never mark it) so the literal path/URL is not also
+				// painted underneath the widget.
+				ranges.push(
+					Decoration.replace({
+						widget: new ReferenceChipWidget(mark.revealAs.label, mark.revealAs.kind, mark.className),
+					}).range(mark.from, mark.to),
+				);
+				continue;
+			}
 			if (mark.mentionName !== undefined && mark.to - mark.from > 1) {
 				// The `@` is syntax, not content: the pill shows an icon + `图片1`.
 				// Replace the sigil with nothing while the document keeps it — the
@@ -41,6 +91,24 @@ export function marksField(marksRef: { current: readonly EditorMark[] }): Extens
 			return decorations;
 		},
 		provide: field => EditorView.decorations.from(field),
+	});
+}
+
+/**
+ * Reference chips are atomic: the caret steps over them instead of walking
+ * through the raw token the widget hides. Without this the hidden path is
+ * still editable one character at a time, which reads as the chip randomly
+ * breaking when someone presses ← near it.
+ */
+export function referenceAtomicRanges(marksRef: { current: readonly EditorMark[] }): Extension {
+	return EditorView.atomicRanges.of(view => {
+		const ranges: Range<Decoration>[] = [];
+		for (const mark of marksRef.current) {
+			if (mark.revealAs === undefined) continue;
+			const widget = new ReferenceChipWidget(mark.revealAs.label, mark.revealAs.kind, mark.className);
+			ranges.push(Decoration.replace({ widget }).range(mark.from, mark.to));
+		}
+		return Decoration.set(ranges, true);
 	});
 }
 
