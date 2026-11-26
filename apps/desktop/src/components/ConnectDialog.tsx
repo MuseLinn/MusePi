@@ -53,6 +53,7 @@ export function ConnectDialog({
 	rpc,
 	catalog: catalogProp,
 	onOpenWorkspace,
+	onStepChange,
 	framed = true,
 }: {
 	open: boolean;
@@ -67,8 +68,12 @@ export function ConnectDialog({
 	onOpenWorkspace(cwd: string): void;
 	/** Embed the same wizard in the instance manager without a nested modal. */
 	framed?: boolean;
+	/** Reports the visible step, so an embedding dialog can spring its height
+	 *  when the wizard advances instead of snapping. */
+	onStepChange?(step: number): void;
 }): ReactNode {
 	const [step, setStep] = useState(0);
+	useEffect(() => onStepChange?.(step), [step, onStepChange]);
 	const [method, setMethod] = useState<"ssh" | "docker" | null>(null);
 	// Host list (step 1).
 	const [hosts, setHosts] = useState<RemoteHostEntry[] | null>(null);

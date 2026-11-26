@@ -290,42 +290,19 @@ describe("empty, loading and error states", () => {
 		expect(text(host)).not.toContain(t("settings.instanceConnectionFailed"));
 	});
 
-	test("a failed probe shows the daemon's own reason, not one generic sentence", async () => {
-		// The workspace axis beside this one renders its real error; a single
-		// "cannot connect" for a timeout, a refused token and a DNS failure
-		// sends every user to the same wrong fix. The probe's socket is made to
-		// fail deterministically, and the transport's own words must reach the UI.
-		const RealWebSocket = globalThis.WebSocket;
-		class FailingSocket extends EventTarget {
-			constructor() {
-				super();
-				queueMicrotask(() => this.dispatchEvent(new Event("error")));
-			}
-			close(): void {}
-		}
-		(globalThis as { WebSocket?: unknown }).WebSocket = FailingSocket;
+	test("the shared form refuses an incomplete row in place, in the axis that owns it", async () => {
+		// The instance axis now renders the same form the disconnected gate does,
+		// so validation lives in one place. A missing label is refused before any
+		// target is stored, and the sentence lands inside this axis.
 		const host = await render();
 		const daemon = await openAddForm(host);
-		const inputs = daemon.querySelectorAll<HTMLInputElement>("input.gui-input");
-		const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-		await act(async () => {
-			setter?.call(inputs[0], "Dead box");
-			inputs[0]?.dispatchEvent(new Event("input", { bubbles: true }));
-			setter?.call(inputs[1], "ws://127.0.0.1:1");
-			inputs[1]?.dispatchEvent(new Event("input", { bubbles: true }));
-		});
-		const submit = daemon.querySelector<HTMLButtonElement>(".gui-loc-actions .gui-btn-primary");
+		const submit = daemon.querySelector<HTMLButtonElement>(".gui-conn-form-actions .gui-btn-primary");
 		await act(async () => {
 			submit?.click();
-			await Bun.sleep(400);
+			await Bun.sleep(30);
 		});
-		const alert = daemon.querySelector('[role="alert"]');
-		const text = alert?.textContent ?? "";
-		(globalThis as { WebSocket?: unknown }).WebSocket = RealWebSocket;
-		// The generic sentence is still there — it names what to check — and the
-		// transport's own reason must accompany it.
-		expect(text).toContain(t("settings.instanceConnectionFailed"));
-		expect(text).toContain("cannot connect to ws://127.0.0.1:1");
+		expect(daemon.querySelector(".gui-conn-error")?.textContent).toBe(t("settings.connectionLabelRequired"));
+		expect(sections(host)[1]?.querySelector(".gui-conn-error")).toBeNull();
 	});
 
 	test("a rejected endpoint is reported inline, in the axis that rejected it", async () => {
@@ -339,14 +316,14 @@ describe("empty, loading and error states", () => {
 			setter?.call(inputs[1], "ftp://nope");
 			inputs[1]?.dispatchEvent(new Event("input", { bubbles: true }));
 		});
-		const submit = daemon.querySelector<HTMLButtonElement>(".gui-loc-actions .gui-btn-primary");
+		const submit = daemon.querySelector<HTMLButtonElement>(".gui-conn-form-actions .gui-btn-primary");
 		await act(async () => {
 			submit?.click();
 			await Bun.sleep(30);
 		});
 		// The reason lands in the axis that failed, not in a shared banner.
-		expect(daemon.querySelector('[role="alert"]')?.textContent).toBe(t("settings.instanceUrlInvalid"));
-		expect(sections(host)[1]?.querySelector('[role="alert"]')).toBeNull();
+		expect(daemon.querySelector(".gui-conn-error")?.textContent).toBe(t("settings.instanceUrlInvalid"));
+		expect(sections(host)[1]?.querySelector(".gui-conn-error")).toBeNull();
 	});
 });
 

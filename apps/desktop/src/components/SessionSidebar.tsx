@@ -40,6 +40,7 @@ import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { DialogFrame } from "./DialogFrame";
 import { GroupedSessionList } from "./GroupedSessionList";
+import type { ConnectionTarget } from "../lib/connection/targets";
 import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
 import { ProjectDialog, type ProjectDialogTarget } from "./ProjectDialog";
@@ -173,7 +174,7 @@ export function SessionSidebar({
 	onReconnect,
 	hosts,
 	onSwitchHost,
-	onAddHost,
+	onAddTarget,
 	onRemoveHost,
 }: {
 	nodes: SessionListNode[];
@@ -277,7 +278,7 @@ export function SessionSidebar({
 	/** Switch the GUI to a host (remote or the implicit local daemon). */
 	onSwitchHost(host: RemoteHost | null): void;
 	/** Persist a new host entry from the add form. */
-	onAddHost(host: { label: string; url: string; token?: string }): void;
+	onAddTarget(target: ConnectionTarget): void;
 	/** Remove a saved host by id. */
 	onRemoveHost(id: string): void;
 }): ReactNode {
@@ -2026,7 +2027,7 @@ export function SessionSidebar({
 							daemonUrl={daemonUrl}
 							hosts={hosts}
 							onSwitchHost={onSwitchHost}
-							onAddHost={onAddHost}
+							onAddTarget={onAddTarget}
 							onRemoveHost={onRemoveHost}
 							onReconnect={onReconnect}
 							onDisconnect={onDisconnect}

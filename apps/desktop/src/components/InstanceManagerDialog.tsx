@@ -34,13 +34,14 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { CatalogHost } from "../lib/connection/remote-lifecycle";
-import { stripToken } from "../lib/connection/targets";
+import { type ConnectionTarget, stripToken } from "../lib/connection/targets";
 import { useHostCatalog } from "../lib/connection/use-host-catalog";
 import { buildWsUrl, normalizeRemoteHostUrl, type RemoteHost } from "../lib/remote-hosts";
-import { RpcClient } from "../lib/rpc";
+import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { ConnectDialog } from "./ConnectDialog";
 import { ConnectionLocationRow } from "./ConnectionLocationRow";
+import { ConnectionManager } from "./ConnectionManager";
 import { DialogFrame } from "./DialogFrame";
 
 /** Loopback endpoints are forwards, not locations: the daemon answers there,
@@ -93,7 +94,7 @@ export function InstanceManagerDialog({
 	daemonUrl,
 	hosts,
 	onSwitchHost,
-	onAddHost,
+	onAddTarget,
 	onRemoveHost,
 	onDisconnect,
 	onOpenWorkspace,
@@ -106,20 +107,21 @@ export function InstanceManagerDialog({
 	daemonUrl: string;
 	hosts: RemoteHost[];
 	onSwitchHost(host: RemoteHost | null): void;
-	onAddHost(host: { label: string; url: string; token?: string }): void;
+	/** Adds the target the shared form built; `hosts` is derived from it, so
+	 *  the row appears in this list without a second write. */
+	onAddTarget(target: ConnectionTarget): void;
 	onRemoveHost(id: string): void;
 	onDisconnect(): void;
 	onOpenWorkspace(cwd: string): void;
 	onOpenDisclaimer(): void;
 }): ReactNode {
 	const { catalog, refresh } = useHostCatalog();
-	const [draft, setDraft] = useState({ label: "", url: "", token: "" });
-	const [adding, setAdding] = useState(false);
 	const [formOpen, setFormOpen] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	/** Wizard step, reported by the embedded wizard: advancing it changes the
+	 *  dialog's height, so the frame springs instead of snapping. */
+	const [wizardStep, setWizardStep] = useState(0);
 	useEffect(() => {
 		if (!open) return;
-		setError(null);
 		setFormOpen(false);
 		// The files can change under a long-lived window; opening is the moment
 		// the user expects the list to be current. `refresh` is a dependency
@@ -127,49 +129,6 @@ export function InstanceManagerDialog({
 		// `use-host-catalog.ts`, guarded by `test/use-host-catalog-identity`).
 		refresh();
 	}, [open, refresh]);
-
-	const addInstance = async (): Promise<void> => {
-		let url: string;
-		try {
-			url = normalizeRemoteHostUrl(draft.url);
-		} catch {
-			setError(t("settings.instanceUrlInvalid"));
-			return;
-		}
-		const label = draft.label.trim();
-		const token = draft.token.trim() || undefined;
-		if (!label) return;
-		setAdding(true);
-		setError(null);
-		const probe = new RpcClient(buildWsUrl({ id: "probe", label, url, token }));
-		let timer: Timer | null = null;
-		try {
-			await Promise.race([
-				(async () => {
-					await probe.connect();
-					await probe.request("system.meta", {}, { timeoutMs: 5000 });
-				})(),
-				new Promise<never>((_, reject) => {
-					timer = setTimeout(() => reject(new Error("Instance connection timed out")), 6000);
-				}),
-			]);
-			onAddHost({ label, url, token });
-			setDraft({ label: "", url: "", token: "" });
-			setFormOpen(false);
-		} catch (cause) {
-			// The reason, not a summary: a timeout, a refused token and a DNS
-			// failure need different fixes, and the workspace axis beside this one
-			// already shows its own error text. The sentence that says what to
-			// check stays as the second line, because the raw message alone does
-			// not name the token.
-			const reason = cause instanceof Error ? cause.message : String(cause);
-			setError(`${t("settings.instanceConnectionFailed")} — ${reason}`);
-		} finally {
-			if (timer !== null) clearTimeout(timer);
-			probe.close();
-			setAdding(false);
-		}
-	};
 
 	const activeHostId = useMemo(
 		() => hosts.find(host => buildWsUrl(host) === daemonUrl)?.id ?? null,
@@ -231,6 +190,7 @@ export function InstanceManagerDialog({
 			onClose={onClose}
 			label={t("settings.connectionLocations")}
 			className="gui-dialog--instance-manager"
+			morphKey={`${formOpen}:${wizardStep}`}
 		>
 			<div className="gui-dialog-head">
 				<span className="text-[14px] font-semibold">{t("settings.connectionLocations")}</span>
@@ -273,73 +233,19 @@ export function InstanceManagerDialog({
 							{t("settings.addInstance")}
 						</button>
 					) : (
-						<>
-							<div className="gui-loc-fields">
-								<label className="gui-field">
-									<span className="gui-field-label">{t("settings.instanceLabel")}</span>
-									<input
-										className="gui-input"
-										value={draft.label}
-										onChange={e => setDraft(current => ({ ...current, label: e.target.value }))}
-									/>
-								</label>
-								<label className="gui-field">
-									<span className="gui-field-label">{t("settings.instanceUrlLabel")}</span>
-									<input
-										className="gui-input font-mono"
-										value={draft.url}
-										placeholder={t("settings.hostUrlPlaceholder")}
-										spellCheck={false}
-										onChange={e => setDraft(current => ({ ...current, url: e.target.value }))}
-									/>
-								</label>
-								<label className="gui-field">
-									<span className="gui-field-label">{t("settings.remoteToken")}</span>
-									<input
-										className="gui-input font-mono"
-										value={draft.token}
-										type="password"
-										onChange={e => setDraft(current => ({ ...current, token: e.target.value }))}
-									/>
-								</label>
-							</div>
-
-							{error && (
-								<p className="gui-loc-error" role="alert">
-									{error}
-								</p>
-							)}
-
-							<div className="gui-loc-actions">
-								<button
-									type="button"
-									className="gui-btn gui-btn-primary"
-									disabled={adding || !draft.label.trim() || !draft.url.trim()}
-									onClick={() => void addInstance()}
-								>
-									<MorphIcon
-										icon={adding ? LoaderCircleIconData : PlusIconData}
-										size={14}
-										spring="snappy"
-										reducedMotion="user"
-										className={adding ? "gui-spin" : undefined}
-									/>
-									{adding ? t("settings.connecting2") : t("settings.testAndAddInstance")}
-								</button>
-								<button
-									type="button"
-									className="gui-btn"
-									disabled={adding}
-									onClick={() => {
-										setFormOpen(false);
-										setDraft({ label: "", url: "", token: "" });
-										setError(null);
-									}}
-								>
-									{t("settings.cancel2")}
-								</button>
-							</div>
-						</>
+						<ConnectionManager
+							formOnly
+							embedded
+							state={connected ? "connected" : "disconnected-by-user"}
+							catalog={catalog}
+							onConnect={() => {}}
+							onAdd={target => {
+								onAddTarget(target);
+								setFormOpen(false);
+							}}
+							onRemove={() => {}}
+							onCopy={() => {}}
+						/>
 					)}
 				</section>
 
@@ -359,6 +265,7 @@ export function InstanceManagerDialog({
 						onClose={onClose}
 						rpc={rpc}
 						onOpenWorkspace={onOpenWorkspace}
+						onStepChange={setWizardStep}
 					/>
 				</section>
 			</div>

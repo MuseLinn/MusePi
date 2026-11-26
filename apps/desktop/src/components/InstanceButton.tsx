@@ -8,11 +8,13 @@
  */
 import { t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { ConnectionTarget } from "../lib/connection/targets";
 import { projectRuntimeVersions } from "../lib/daemon-version";
 import { checkAppUpdates, getShellVersion } from "../lib/electron";
 import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
+import { morphSurfaceFrom } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { InstanceManagerDialog } from "./InstanceManagerDialog";
 import { MenuPopup } from "./MenuPopup";
@@ -23,7 +25,7 @@ export function InstanceButton({
 	daemonUrl,
 	hosts,
 	onSwitchHost,
-	onAddHost,
+	onAddTarget,
 	onRemoveHost,
 	onReconnect,
 	onDisconnect,
@@ -40,7 +42,7 @@ export function InstanceButton({
 	daemonUrl: string;
 	hosts: RemoteHost[];
 	onSwitchHost(host: RemoteHost | null): void;
-	onAddHost(host: { label: string; url: string; token?: string }): void;
+	onAddTarget(target: ConnectionTarget): void;
 	onRemoveHost(id: string): void;
 	onReconnect(): void;
 	onDisconnect(): void;
@@ -273,9 +275,15 @@ export function InstanceButton({
 				<button
 					type="button"
 					className="gui-view-opt"
-					onClick={() => {
-						setOpen(false);
-						onOpenManager(() => setManagerOpen(true));
+					onClick={event => {
+						// The row is the old snapshot; the dialog carries the same
+						// name, so the browser morphs one into the other instead of
+						// fading a panel in.
+						const row = event.currentTarget;
+						morphSurfaceFrom(row, "gui-instance-locations", () => {
+							setOpen(false);
+							onOpenManager(() => setManagerOpen(true));
+						});
 					}}
 				>
 					<Icon name="settings-3" className="h-3.5 w-3.5" />
@@ -326,7 +334,7 @@ export function InstanceButton({
 				daemonUrl={daemonUrl}
 				hosts={hosts}
 				onSwitchHost={onSwitchHost}
-				onAddHost={onAddHost}
+				onAddTarget={onAddTarget}
 				onRemoveHost={onRemoveHost}
 				onDisconnect={onDisconnect}
 				onOpenDisclaimer={onOpenDisclaimer}

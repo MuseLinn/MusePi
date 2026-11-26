@@ -5226,7 +5226,7 @@ function AppInner(): ReactNode {
 				daemonUrl={url}
 				hosts={hosts}
 				onSwitchHost={switchHost}
-				onAddHost={addHost}
+				onAddTarget={addTarget}
 				onRemoveHost={removeHost}
 				onReconnect={() => void boot()}
 				onDisconnect={disconnect}
@@ -5392,7 +5392,7 @@ function AppInner(): ReactNode {
 							onReconnect={() => void boot()}
 							hosts={hosts}
 							onSwitchHost={switchHost}
-							onAddHost={addHost}
+							onAddTarget={addTarget}
 							onRemoveHost={removeHost}
 							showFooter={false}
 							gettingStarted={<GettingStartedCard onAction={handleGettingStarted} />}

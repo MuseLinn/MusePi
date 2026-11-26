@@ -192,11 +192,11 @@ const STATUS_LABEL: Record<RowStatus, CopyKey> = {
 
 export function ConnectionManager({
 	state,
-	targets,
-	statuses,
-	activeTargetId,
-	busyId,
-	lastError,
+	targets = [],
+	statuses = {},
+	activeTargetId = null,
+	busyId = null,
+	lastError = null,
 	detect = defaultWslRunner,
 	platform,
 	catalog = [],
@@ -207,19 +207,29 @@ export function ConnectionManager({
 	onAdd,
 	onRemove,
 	onCopy,
+	onShapeChange,
 	children,
+	/** Rendered inside another surface (the locations dialog's instance axis):
+	 *  the host already states which axis this is, so the brand header would
+	 *  repeat it and the dialog's own head sits directly above. */
+	embedded = false,
+	/** Render only the add form. The locations dialog already owns the list
+	 *  and its rows; this is how it offers the same four ways to add an
+	 *  instance (typed endpoint, WSL, SSH forward, container) without a
+	 *  second implementation that can drift. */
+	formOnly = false,
 }: {
 	state: ConnectionState;
 	/** Stored rows, local first (see `target-store.loadTargets`). */
-	targets: readonly ConnectionTarget[];
+	targets?: readonly ConnectionTarget[];
 	/** Status beside the list — a failed attempt never rewrites a row. */
-	statuses: TargetStatusMap;
+	statuses?: TargetStatusMap;
 	/** Row selected as the current target (token-insensitive), if any. */
-	activeTargetId: string | null;
+	activeTargetId?: string | null;
 	/** Id of the target with an attempt in flight, if any. */
-	busyId: string | null;
+	busyId?: string | null;
 	/** Last attempt error for the row being attempted. */
-	lastError: string | null;
+	lastError?: string | null;
 	/** WSL runner seam — tests inject a stub; the shell passes the default. */
 	detect?: WslRunner;
 	platform?: string;
@@ -244,10 +254,16 @@ export function ConnectionManager({
 	onAdd(target: ConnectionTarget): void;
 	onRemove(id: string): void;
 	onCopy(text: string): void;
+	/** Reports the form's shape (`adding` + kind + editing row) whenever it
+	 *  changes, so a hosting dialog can spring its own height instead of
+	 *  snapping when the form opens or switches kind. */
+	onShapeChange?(shape: string): void;
 	/** Extra actions the entrance owns (导出诊断 on the failure surface). */
 	children?: ReactNode;
+	embedded?: boolean;
+	formOnly?: boolean;
 }): ReactNode {
-	const [adding, setAdding] = useState(false);
+	const [adding, setAdding] = useState(formOnly);
 	/** Row being edited; null means the form is creating a new target. */
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -393,6 +409,10 @@ export function ConnectionManager({
 		setAdding(false);
 		setEditingId(null);
 	};
+
+	useEffect(() => {
+		onShapeChange?.(`${adding ? "add" : "rest"}:${draft.kind}:${editingId ?? ""}`);
+	}, [adding, draft.kind, editingId, onShapeChange]);
 
 	const renderRow = (target: ConnectionTarget): ReactNode => {
 		const status = rowStatus(target, activeTargetId, statuses, busyId, state === "connected");
@@ -588,34 +608,38 @@ export function ConnectionManager({
 	};
 
 	return (
-		<div className="gui-conn" data-state={state}>
-			<header className="gui-conn-head">
-				<div className="gui-brand">
-					<span className="gui-brand-mark">π</span> {MUSEPI_BRAND}
-				</div>
-				<p className="gui-conn-sub">
-					{showFailure
-						? t("settings.cannotReachLocalDaemon")
-						: state === "unconfigured"
-							? t("settings.connectionUnconfigured")
-							: state === "starting"
-								? t("settings.connecting2")
-								: state === "connected"
-									? t("settings.connectionConnectedHint")
-									: t("settings.connectionDisconnected")}
-				</p>
-				{/* The same sentence the locations dialog leads with. This surface
-				 * sets the instance axis only, and saying so is what stops the row
-				 * list from reading as "all the places MusePi can be". */}
-				<p className="gui-conn-axis">{t("settings.instanceAxisHint")}</p>
-			</header>
+		<div className="gui-conn" data-state={state} data-embedded={embedded ? "true" : "false"}>
+			{embedded || formOnly ? null : (
+				<header className="gui-conn-head">
+					<div className="gui-brand">
+						<span className="gui-brand-mark">π</span> {MUSEPI_BRAND}
+					</div>
+					<p className="gui-conn-sub">
+						{showFailure
+							? t("settings.cannotReachLocalDaemon")
+							: state === "unconfigured"
+								? t("settings.connectionUnconfigured")
+								: state === "starting"
+									? t("settings.connecting2")
+									: state === "connected"
+										? t("settings.connectionConnectedHint")
+										: t("settings.connectionDisconnected")}
+					</p>
+					{/* The same sentence the locations dialog leads with. This surface
+					 * sets the instance axis only, and saying so is what stops the row
+					 * list from reading as "all the places MusePi can be". */}
+					<p className="gui-conn-axis">{t("settings.instanceAxisHint")}</p>
+				</header>
+			)}
 
-			<section className="gui-conn-section" aria-labelledby="gui-conn-targets">
-				<h2 className="gui-conn-title" id="gui-conn-targets">
-					{t("settings.instanceAxisTitle")}
-				</h2>
-				<ul className="gui-conn-list">{targets.map(renderRow)}</ul>
-			</section>
+			{formOnly ? null : (
+				<section className="gui-conn-section" aria-labelledby="gui-conn-targets">
+					<h2 className="gui-conn-title" id="gui-conn-targets">
+						{t("settings.instanceAxisTitle")}
+					</h2>
+					<ul className="gui-conn-list">{targets.map(renderRow)}</ul>
+				</section>
+			)}
 
 			{adding ? (
 				<section
@@ -867,7 +891,7 @@ export function ConnectionManager({
 						</button>
 					</div>
 				</section>
-			) : (
+			) : formOnly ? null : (
 				<button
 					type="button"
 					className="gui-btn gui-conn-add"
