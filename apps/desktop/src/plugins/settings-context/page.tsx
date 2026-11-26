@@ -1,10 +1,11 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { DirectoryListEditor } from "../../components/DirectoryListEditor";
+import { SchemaTabSection } from "../../components/settings-sections/schema";
 import { pickDirectory } from "../../lib/electron";
 import type { RpcClient } from "../../lib/rpc";
-import { DirectoryListEditor } from "../DirectoryListEditor";
-import { SchemaTabSection } from "./schema";
+import type { SlotComponentProps } from "../../lib/slot-host";
 
 /**
  * Settings → 上下文: the global default roots every new session inherits.
@@ -81,12 +82,12 @@ function WorkspaceDirectoriesSection({ rpc }: { rpc: RpcClient | null }): ReactN
 
 /** Settings → 上下文: TUI context-tab parity (general/compaction/
  *  TTSR/experimental groups), schema driven. */
-export function ContextSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function ContextSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.context")}</h2>
-			<WorkspaceDirectoriesSection rpc={rpc} />
-			<SchemaTabSection rpc={rpc} tabs={["context"]} excludeKeys={["workspace.additionalDirectories"]} />
+			<WorkspaceDirectoriesSection rpc={rpc ?? null} />
+			<SchemaTabSection rpc={rpc ?? null} tabs={["context"]} excludeKeys={["workspace.additionalDirectories"]} />
 		</>
 	);
 }

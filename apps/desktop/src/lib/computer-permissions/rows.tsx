@@ -1,8 +1,8 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { openExternalUrl } from "../../lib/electron";
-import type { RpcClient } from "../../lib/rpc";
+import { openExternalUrl } from "../electron";
+import type { RpcClient } from "../rpc";
 
 /**
  * macOS computer-use 权限面板:三项权限(屏幕录制/辅助功能/输入监控)+

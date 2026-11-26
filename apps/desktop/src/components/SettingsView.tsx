@@ -359,8 +359,6 @@ export function SettingsView({
 								/>
 							) : (
 								<>
-									{activeSection === "shell" && <ShellSection rpc={rpc} />}
-									{activeSection === "tools" && <ToolsSection rpc={rpc} />}
 									{activeSection === "media" && (
 										<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
 									)}
@@ -394,7 +392,6 @@ export function SettingsView({
 									{activeSection === "git" && <GitSection rpc={rpc} />}
 									{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
 									{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
-									{activeSection === "context" && <ContextSection rpc={rpc} />}
 									{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 									{activeSection.startsWith("ext:")
 										? (() => {
@@ -458,16 +455,13 @@ import {
 	BrowserSection,
 	CompanionSection,
 	ConnectorsSection,
-	ContextSection,
 	GitSection,
 	IndexesSection,
 	InteractionSection,
 	MediaSection,
 	ModesSection,
 	SessionMemorySection,
-	ShellSection,
 	SkillsSection,
 	SubagentsSection,
-	ToolsSection,
 	VoiceSection,
 } from "./settings-sections";

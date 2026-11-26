@@ -4,8 +4,8 @@ import { setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { hasUi, SETTINGS_SCHEMA } from "../../../packages/coding-agent/src/config/settings-schema";
-import { ShellSection } from "../src/components/settings-sections/shell";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
+import ShellSettingsPage from "../src/plugins/settings-shell/page";
 
 setLocale("zh-CN");
 afterAll(() => setLocale("en-US"));
@@ -60,7 +60,7 @@ function mount(fake: FakeRpc): { host: HTMLDivElement; root: Root } {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
-	act(() => root.render(createElement(ShellSection, { rpc: asRpc(fake) })));
+	act(() => root.render(createElement(ShellSettingsPage, { rpc: asRpc(fake) })));
 	return { host, root };
 }
 

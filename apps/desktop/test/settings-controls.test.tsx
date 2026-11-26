@@ -581,7 +581,7 @@ describe("plugin config lists", () => {
 
 describe("context page directories", () => {
 	it("renders the directory editor and drops the schema comma row", async () => {
-		const { ContextSection } = await import("../src/components/settings-sections/context");
+		const { default: ContextSettingsPage } = await import("../src/plugins/settings-context/page");
 		const rpc = {
 			request: async (method: string) => {
 				if (method === "settings.schema") {
@@ -609,7 +609,7 @@ describe("context page directories", () => {
 		document.body.appendChild(element);
 		root = createRoot(element);
 		await act(async () => {
-			root?.render(createElement(ContextSection, { rpc: rpc as never }));
+			root?.render(createElement(ContextSettingsPage, { rpc: rpc as never }));
 			await Bun.sleep(10);
 		});
 		expect(element.querySelector(".gui-settings-directories")).not.toBeNull();

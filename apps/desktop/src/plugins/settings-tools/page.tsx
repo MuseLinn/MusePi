@@ -1,10 +1,10 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import type { RpcClient } from "../../lib/rpc";
-import { ComputerPermissionsDialog } from "../ComputerPermissionsDialog";
-import { ComputerPermissionsSection } from "./computer-permissions";
-import { SchemaTabSection } from "./schema";
+import { ComputerPermissionsDialog } from "../../components/ComputerPermissionsDialog";
+import { SchemaTabSection } from "../../components/settings-sections/schema";
+import { ComputerPermissionsSection } from "../../lib/computer-permissions/rows";
+import type { SlotComponentProps } from "../../lib/slot-host";
 
 /** localStorage dismiss 标记:首次启用 computer 时弹出的权限引导,
  *  用户点"稍后"后不再自动弹出(设置面板仍可手动进入)。 */
@@ -14,7 +14,7 @@ const PERMISSIONS_DISMISSED_KEY = "musepi-gui-computer-permissions-dismissed";
  *  browser/computer/github/output-limits/execution/discovery/dev groups),
  *  schema driven. macOS computer-use 权限区 + 首次启用引导弹窗(Kimi Work
  *  parity:computer 开启时检测屏幕录制/辅助功能/输入监控,缺失弹窗引导授权)。 */
-export function ToolsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function ToolsSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	const [dialogOpen, setDialogOpen] = useState(false);
 
 	// 首次启用 computer 功能时,若权限缺失且用户未 dismiss,弹出权限引导。
@@ -57,18 +57,18 @@ export function ToolsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.tools")}</h2>
-			<ComputerPermissionsSection rpc={rpc} />
+			<ComputerPermissionsSection rpc={rpc ?? null} />
 			{/* computer.glow lives in 浏览器与桌面 (its custom row live-applies
 			 * via the omp-glow-setting event) — the schema copy would duplicate
 			 * it here (user: 工具/浏览器与桌面 重合). */}
-			<SchemaTabSection rpc={rpc} tabs={["tools"]} excludeKeys={["computer.glow", "computer.viewer"]} />
+			<SchemaTabSection rpc={rpc ?? null} tabs={["tools"]} excludeKeys={["computer.glow", "computer.viewer"]} />
 			{/* Tool approvals moved from 交互 (group-level dedupe): the
 			 * approval policy gates exactly the tools toggled above. */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("settings.approvals")}</div>
-				<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Approvals"]} />
+				<SchemaTabSection rpc={rpc ?? null} tabs={["interaction"]} groups={["Approvals"]} />
 			</div>
-			<ComputerPermissionsDialog rpc={rpc} open={dialogOpen} onClose={dismiss} />
+			<ComputerPermissionsDialog rpc={rpc ?? null} open={dialogOpen} onClose={dismiss} />
 		</>
 	);
 }

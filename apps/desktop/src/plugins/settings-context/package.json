@@ -1,0 +1,15 @@
+{
+	"name": "musepi-settings-context",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned context settings page: compaction window, default workspace roots and the context schema rows.",
+	"type": "module",
+	"musepi": {
+		"icon": "🧩",
+		"label": "MusePi Context Settings",
+		"description": "Compaction window and the default workspace roots.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}
