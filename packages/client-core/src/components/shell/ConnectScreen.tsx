@@ -29,6 +29,7 @@ const PAIR_HOST_KEY = "musepi.collab.pairHost";
 const SKIP_KEY = "musepi.collab.skipped";
 /** Pre-rename spelling; read so a device that skipped earlier stays skipped. */
 const LEGACY_SKIP_KEY = "omp-collab-skipped";
+
 /** Pair endpoint port (daemon server.ts PAIR_PORT). */
 const PAIR_PORT = 8301;
 

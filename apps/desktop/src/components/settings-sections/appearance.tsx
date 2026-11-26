@@ -69,12 +69,14 @@ import {
 	setCompanionAccessory,
 	setCompanionDecorFlag,
 } from "../../lib/companion-decor";
+import { PET_CHANGED_EVENT } from "../../lib/companion-events";
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
 import { THEME_PRESET_LABEL } from "../../lib/theme-preset-labels";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
+import { dispatchUserAvatarChanged } from "../../lib/user-avatar";
 import { Icon } from "../../vendor/oc-icons";
 import { AppRail, type RailItem } from "../AppRail";
 import {
@@ -171,10 +173,10 @@ function CompanionDecorSection(): ReactNode {
 			const pet = activeCompanionArt();
 			setActivePetId(pet.kind === "builtin" ? pet.id : "");
 		};
-		window.addEventListener("omp-pet-changed", refresh);
+		window.addEventListener(PET_CHANGED_EVENT, refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
-			window.removeEventListener("omp-pet-changed", refresh);
+			window.removeEventListener(PET_CHANGED_EVENT, refresh);
 			window.removeEventListener("storage", refresh);
 		};
 	}, []);
@@ -745,7 +747,7 @@ export function AppearanceSection({
 								onClick={() => {
 									setAvatarId(p.id);
 									localStorage.setItem("musepi-gui-avatar", p.id);
-									window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+									dispatchUserAvatarChanged();
 								}}
 							>
 								<span className="gui-avatar-card__stage">{p.render("working", 32)}</span>

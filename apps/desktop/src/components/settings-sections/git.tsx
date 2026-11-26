@@ -651,7 +651,7 @@ export function GitPrefsRow(): ReactNode {
 						localStorage.setItem("musepi-gui-gitmoji", next ? "1" : "0");
 						// Live consumers (ContextPanel gitmojiOn badge) re-read
 						// on this event — same-window storage events don't fire.
-						window.dispatchEvent(new CustomEvent("omp-gitmoji-changed"));
+						window.dispatchEvent(new CustomEvent("musepi-gitmoji-changed"));
 					}}
 					aria-label={t("general.enableGitmojiPicker")}
 				>

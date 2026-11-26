@@ -1,11 +1,14 @@
 import { setLocale } from "../i18n/index.js";
 import { isHarmonyShell } from "./capacitor";
 import { cssColorToHex } from "./color";
+import { readVersionedOneOf } from "./storage-keys";
 import {
+	ACCENT_KEY,
 	ACCENT_PRESETS,
 	type AccentPreference,
 	setAccentPreference,
 	setThemePreference,
+	THEME_KEY,
 	type ThemePreference,
 } from "./theme";
 
@@ -111,14 +114,18 @@ function pushPref(key: NativePrefKey, value: string): void {
 /** Current values the page holds, in the shell's vocabulary. */
 function currentPrefs(): Record<NativePrefKey, string> {
 	const root = document.documentElement;
-	const theme = localStorage.getItem("omp-collab-theme");
-	const accent = localStorage.getItem("omp-collab-accent");
+	const theme = readVersionedOneOf(THEME_KEY, ["system", "light", "dark"] as const) ?? "system";
+	const accent =
+		readVersionedOneOf(
+			ACCENT_KEY,
+			ACCENT_PRESETS.map(p => p.id),
+		) ?? "theme";
 	const font = localStorage.getItem(FONT_SCALE_KEY);
 	const locale = localStorage.getItem("omp.collab.locale");
 	const material = localStorage.getItem(MATERIAL_KEY);
 	return {
-		theme: theme === "light" || theme === "dark" ? theme : "system",
-		accent: accent && ACCENT_PRESETS.some(p => p.id === accent) ? accent : "theme",
+		theme,
+		accent,
 		fontScale: font === "13" || font === "17" ? font : "15",
 		locale: locale?.toLowerCase().startsWith("en") ? "en-US" : "zh-CN",
 		tabBarMaterial: material ?? "0",

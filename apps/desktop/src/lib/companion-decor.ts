@@ -29,6 +29,8 @@
  * docs/gui-design.md §5l for the shape/accessory split.
  */
 
+import { dispatchPetChanged } from "./companion-events";
+
 export const COMPANION_DECOR_KEY = "musepi-gui-pet-decor";
 
 /** Wearable accessories on the builtin orb (blobstudio's accessory slot,
@@ -124,5 +126,5 @@ export function setCompanionAccessory(value: CompanionAccessory): void {
 /** Broadcast to mounted renderers (the settings page is a different tree
  *  than the composer; a storage event alone would not reach it). */
 export function notifyPetDecorChanged(): void {
-	if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+	if (typeof window !== "undefined") dispatchPetChanged();
 }

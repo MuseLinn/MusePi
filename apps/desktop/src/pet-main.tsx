@@ -29,6 +29,8 @@
  */
 
 import { COMPACT_MORPH_SPRING, setLocale, t } from "@musepi/client-core";
+import { readVersionedOneOf } from "@musepi/client-core/src/lib/storage-keys";
+import { THEME_KEY } from "@musepi/client-core/src/lib/theme";
 import {
 	AppWindow,
 	ArrowUp,
@@ -1001,8 +1003,8 @@ function PetApp(): ReactNode {
 		const applyScheme = (): void => {
 			let pref: "system" | "light" | "dark" = "system";
 			try {
-				const v = localStorage.getItem("omp-collab-theme");
-				if (v === "light" || v === "dark" || v === "system") pref = v;
+				const v = readVersionedOneOf(THEME_KEY, ["system", "light", "dark"] as const);
+				if (v !== null) pref = v;
 			} catch {
 				/* storage unavailable — follow the system */
 			}
@@ -1017,7 +1019,9 @@ function PetApp(): ReactNode {
 		const mq = window.matchMedia("(prefers-color-scheme: dark)");
 		const onMq = (): void => {
 			try {
-				if ((localStorage.getItem("omp-collab-theme") ?? "system") === "system") applyScheme();
+				if ((readVersionedOneOf(THEME_KEY, ["system", "light", "dark"] as const) ?? "system") === "system") {
+					applyScheme();
+				}
 			} catch {
 				applyScheme();
 			}

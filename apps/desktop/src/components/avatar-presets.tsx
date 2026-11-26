@@ -8,6 +8,7 @@ import {
 	type SpriteMood,
 } from "../lib/companion";
 import type { CompanionEffectTier } from "../lib/companion-effects";
+import { dispatchUserAvatarChanged, USER_AVATAR_EVENT } from "../lib/user-avatar";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
 import { AoraAvatar } from "./AoraAvatar";
 import { BuiltinCompanionArt, CompanionArtBox, type GazeVec, useCompanionDecor } from "./CompanionArt";
@@ -124,7 +125,7 @@ export function setPunkSeed(seed: string): void {
 	} catch {
 		// storage unavailable — face stays random this session
 	}
-	if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+	if (typeof window !== "undefined") dispatchUserAvatarChanged();
 }
 
 export function randomPunkSeed(): string {
@@ -139,10 +140,10 @@ export function PunkAvatar({ size, seed }: { size: number; seed?: string }): Rea
 	const [bump, setBump] = useState(0);
 	useEffect(() => {
 		const on = (): void => setBump(b => b + 1);
-		window.addEventListener("omp-avatar-changed", on);
+		window.addEventListener(USER_AVATAR_EVENT, on);
 		window.addEventListener("storage", on);
 		return () => {
-			window.removeEventListener("omp-avatar-changed", on);
+			window.removeEventListener(USER_AVATAR_EVENT, on);
 			window.removeEventListener("storage", on);
 		};
 	}, []);

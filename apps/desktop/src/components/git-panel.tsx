@@ -500,8 +500,8 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 	// the gitmoji badges in the context panel in sync.
 	useEffect(() => {
 		const sync = (): void => setGitmojiOn(localStorage.getItem("musepi-gui-gitmoji") !== "0");
-		window.addEventListener("omp-gitmoji-changed", sync);
-		return () => window.removeEventListener("omp-gitmoji-changed", sync);
+		window.addEventListener("musepi-gitmoji-changed", sync);
+		return () => window.removeEventListener("musepi-gitmoji-changed", sync);
 	}, []);
 	const [commitOpen, setCommitOpen] = useState(false);
 	const [commitMsg, setCommitMsg] = useState("");

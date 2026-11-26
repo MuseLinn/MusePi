@@ -22,6 +22,7 @@ import {
 } from "@musepi/pi-wire";
 import { MaterializedView } from "@musepi/sdk";
 import { dismissActionToastSource, pushActionToast } from "./action-toast";
+import { dispatchPetActivity } from "./companion-events";
 import { type FetchHistoryPage, loadAlignedHistoryBatch } from "./history-batch";
 import { dispatchNotification, documentUnfocused, type FocusReport, type NotifyContext } from "./notify";
 import type { StreamEvent } from "./rpc";
@@ -65,7 +66,7 @@ export function dispatchCompanionActivity(
 	sessionId?: string,
 ): void {
 	if (typeof window === "undefined") return;
-	window.dispatchEvent(new CustomEvent("omp-pet-activity", { detail: { kind, text, requestId, sessionId } }));
+	dispatchPetActivity({ kind, text, requestId: requestId ?? "", sessionId: sessionId ?? "" });
 }
 
 /** Matches guest-client's ActiveTool shape (the Transcript consumes it). */

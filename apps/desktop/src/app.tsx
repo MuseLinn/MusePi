@@ -13,6 +13,7 @@ import type { MessageDisplayContext, SessionEntry, SessionPresence, SubagentProg
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
+import { PET_ACTIVITY_EVENT, PET_CHANGED_EVENT } from "./lib/companion-events";
 // Loaded for its host-table registration: compiled input-card artifacts bind
 // to `window.MusePiHostModules.composer`.
 import "./components/Composer";
@@ -4259,7 +4260,7 @@ function AppInner(): ReactNode {
 		// state actually flips (the activeTools map changes per tool frame).
 		let glowOn = false;
 		// computer.glow setting (default on) — cached here; the settings
-		// page dispatches "omp-glow-setting" after toggling to force a
+		// page dispatches "musepi-glow-setting" after toggling to force a
 		// re-read on the next snapshot.
 		let glowEnabled = true;
 		let glowFetched = false;
@@ -4269,7 +4270,7 @@ function AppInner(): ReactNode {
 		const onGlowSetting = (): void => {
 			glowFetched = false;
 		};
-		window.addEventListener("omp-glow-setting", onGlowSetting);
+		window.addEventListener("musepi-glow-setting", onGlowSetting);
 		const attach = (): void => {
 			unsub?.();
 			if (store) {
@@ -4430,8 +4431,8 @@ function AppInner(): ReactNode {
 		const unsubTrayNew = electronAPI.onTrayNewSession?.(() => {
 			void createSession();
 		});
-		window.addEventListener("omp-pet-activity", onBubble);
-		window.addEventListener("omp-pet-changed", onPetChanged);
+		window.addEventListener(PET_ACTIVITY_EVENT, onBubble);
+		window.addEventListener(PET_CHANGED_EVENT, onPetChanged);
 		// DEFAULT-role model changed via the selector's "set as DEFAULT"
 		// target or the settings role tab: refresh the welcome preselect (a
 		// boot-time snapshot would otherwise keep showing the OLD default on
@@ -4625,11 +4626,11 @@ function AppInner(): ReactNode {
 			unsubTrayOpen?.();
 			unsubTrayNew?.();
 			if (recentTimer !== null) clearInterval(recentTimer);
-			window.removeEventListener("omp-pet-activity", onBubble);
-			window.removeEventListener("omp-pet-changed", onPetChanged);
+			window.removeEventListener(PET_ACTIVITY_EVENT, onBubble);
+			window.removeEventListener(PET_CHANGED_EVENT, onPetChanged);
 			window.removeEventListener("musepi-gui-default-model-changed", onDefaultModelChanged);
 			window.removeEventListener("musepi-gui-default-mode-changed", onDefaultModeChanged);
-			window.removeEventListener("omp-glow-setting", onGlowSetting);
+			window.removeEventListener("musepi-glow-setting", onGlowSetting);
 		};
 	}, [store, sendPrompt, decideApproval, createSession, markAllRead]);
 

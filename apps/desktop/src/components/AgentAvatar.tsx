@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { AgentSignals } from "../lib/agent-signals";
+import { USER_AVATAR_EVENT } from "../lib/user-avatar";
 import type { OrbState } from "../vendor/thinking-orbs";
 import { AVATAR_STORAGE_KEY, avatarPreset, ORB_TO_SIGNALS } from "./avatar-presets";
 
@@ -59,10 +60,10 @@ export function AgentAvatar({
 				// storage unavailable
 			}
 		};
-		window.addEventListener("omp-avatar-changed", on);
+		window.addEventListener(USER_AVATAR_EVENT, on);
 		window.addEventListener("storage", on);
 		return () => {
-			window.removeEventListener("omp-avatar-changed", on);
+			window.removeEventListener(USER_AVATAR_EVENT, on);
 			window.removeEventListener("storage", on);
 		};
 	}, []);

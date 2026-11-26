@@ -16,6 +16,7 @@
  */
 
 import type { SessionPresence } from "@musepi/pi-wire";
+import { dispatchPetChanged } from "../lib/companion-events";
 import type { OrbState } from "../vendor/thinking-orbs";
 import { type AgentSignals, activityVerbForTool, DROWSY_AFTER_MS } from "./agent-signals";
 
@@ -1047,7 +1048,7 @@ export function migrateSpritePackageContent(): void {
 		}
 		if (changed) {
 			saveSpritePackages(pets);
-			window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+			dispatchPetChanged();
 		}
 	})();
 }

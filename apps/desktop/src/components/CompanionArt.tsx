@@ -39,6 +39,7 @@ import {
 } from "../lib/companion";
 import { type CompanionAccessory, type CompanionDecor, companionDecor } from "../lib/companion-decor";
 import { CompanionEffects, type CompanionEffectTier, effectsForState, TIER_STRENGTH } from "../lib/companion-effects";
+import { PET_CHANGED_EVENT } from "../lib/companion-events";
 import {
 	applyYaw,
 	companionStateDirection,
@@ -77,7 +78,7 @@ import {
 export type { GazeVec } from "../lib/companion-gaze";
 
 /** Live pet prefs: re-resolves when settings change (the settings page
- *  dispatches "omp-pet-changed" after saving; storage events cover other
+ *  dispatches PET_CHANGED_EVENT after saving; storage events cover other
  *  tabs/pet windows). */
 export function useCompanionArt(): {
 	enabled: boolean;
@@ -102,10 +103,10 @@ export function useCompanionArt(): {
 				art: activeCompanionArt(),
 				decor: companionDecor(),
 			});
-		window.addEventListener("omp-pet-changed", refresh);
+		window.addEventListener(PET_CHANGED_EVENT, refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
-			window.removeEventListener("omp-pet-changed", refresh);
+			window.removeEventListener(PET_CHANGED_EVENT, refresh);
 			window.removeEventListener("storage", refresh);
 		};
 	}, []);
@@ -119,10 +120,10 @@ export function useCompanionDecor(): CompanionDecor {
 	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
 	useEffect(() => {
 		const refresh = (): void => setDecor(companionDecor());
-		window.addEventListener("omp-pet-changed", refresh);
+		window.addEventListener(PET_CHANGED_EVENT, refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
-			window.removeEventListener("omp-pet-changed", refresh);
+			window.removeEventListener(PET_CHANGED_EVENT, refresh);
 			window.removeEventListener("storage", refresh);
 		};
 	}, []);

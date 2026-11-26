@@ -45,9 +45,9 @@ gui-main (flex ROW)
 
 | 轴 | DOM 属性 | 取值 | 存储 key |
 |---|---|---|---|
-| 配色方案 | `data-theme` / `data-color-scheme` | `light` / `dark`(始终显式解析,无 system) | `omp-collab-theme` |
-| 强调色 | `data-accent` | `brand` / `mono` / `ocean` / `jade` / `custom` | `omp-collab-accent`(+ `omp-collab-accent-custom`) |
-| 界面主题 | `data-ui-theme` | 浅色:`default` / `warm` / `cool`;深色:`default` / `midnight` / `graphite` | `omp-collab-ui-theme-light` / `-dark` |
+| 配色方案 | `data-theme` / `data-color-scheme` | `light` / `dark`(始终显式解析,无 system) | `musepi.theme.preference.v1`(迁移自 `omp-collab-theme`) |
+| 强调色 | `data-accent` | `brand` / `mono` / `ocean` / `jade` / `custom` | `musepi.theme.accent.v1`(+ `.accent-custom.v1`);迁移自 `omp-collab-*` |
+| 界面主题 | `data-ui-theme` | 浅色:`default` / `warm` / `cool`;深色:`default` / `midnight` / `graphite` | `musepi.theme.ui-light.v1` / `.ui-dark.v1`;迁移自 `omp-collab-ui-theme-*` |
 
 - **解析规则**:`data-ui-theme` = 方案为 light 时取浅色主题选择,dark 时取深色主题选择;tokens.css 用 `[data-theme="light"][data-ui-theme="warm"]` 形式限定,浅色预设不会漏进深色方案。
 - **自定义强调色**:用户在设置里选色后,`applyAccent()` 内联写入 `--accent` 全家桶(`--accent-fg` 按 WCAG 亮度取深/浅、`--accent-muted` 18% 透明、`--accent-hover` 深色方案提亮/浅色方案压暗、`--accent-bd` 35%、`--brand-mark-gradient` 渐变);切回预设时清除内联变量,恢复 tokens.css 预设块。

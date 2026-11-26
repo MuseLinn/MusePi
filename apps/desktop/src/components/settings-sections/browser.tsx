@@ -143,7 +143,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		void rpc?.request("settings.set", { key, value: next }).then(() => {
 			refresh();
 			// The app's glow latch caches this setting — poke it to re-read.
-			if (key === "computer.glow") window.dispatchEvent(new Event("omp-glow-setting"));
+			if (key === "computer.glow") window.dispatchEvent(new Event("musepi-glow-setting"));
 			else window.dispatchEvent(new Event("musepi-browser-settings-changed"));
 		});
 	};

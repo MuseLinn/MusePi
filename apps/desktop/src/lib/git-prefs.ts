@@ -16,8 +16,11 @@ const CHANGES_VIEW_KEY = "musepi-gui-git-view";
 /** How the changes panel lists files: a flat list or a nested tree. */
 export type ChangesView = "flat" | "tree";
 
-/** Fired after any git pref changes; live consumers re-read on it. */
-export const GIT_PREFS_EVENT = "omp-git-prefs-changed";
+/** Fired after any git pref changes; live consumers re-read on it. `omp-` is
+ *  the pre-rename alias, still dispatched for out-of-tree listeners. */
+export const GIT_PREFS_EVENT = "musepi-git-prefs-changed";
+/** @deprecated Pre-rename alias. Dispatched for compatibility only. */
+export const LEGACY_GIT_PREFS_EVENT = "omp-git-prefs-changed";
 
 /**
  * Whether gitignored paths are listed. Defaults to ON: a tree that silently
@@ -46,7 +49,7 @@ export function writeChangesView(value: ChangesView): void {
 	} catch {
 		// storage unavailable — the in-memory state still drives this render
 	}
-	window.dispatchEvent(new CustomEvent(GIT_PREFS_EVENT));
+	dispatchGitPrefsChanged();
 }
 
 export function readShowIgnored(): boolean {
@@ -63,7 +66,7 @@ export function writeShowIgnored(value: boolean): void {
 	} catch {
 		// storage unavailable — the in-memory state still drives this render
 	}
-	window.dispatchEvent(new CustomEvent(GIT_PREFS_EVENT));
+	dispatchGitPrefsChanged();
 }
 
 /**
@@ -85,7 +88,13 @@ export function writeShowHidden(value: boolean): void {
 	} catch {
 		// storage unavailable — the in-memory state still drives this render
 	}
+	dispatchGitPrefsChanged();
+}
+
+/** Broadcast both spellings: `musepi-` is canonical, `omp-` is the alias. */
+function dispatchGitPrefsChanged(): void {
 	window.dispatchEvent(new CustomEvent(GIT_PREFS_EVENT));
+	window.dispatchEvent(new CustomEvent(LEGACY_GIT_PREFS_EVENT));
 }
 
 /** Subscribe to pref changes; returns the unsubscribe handle. */

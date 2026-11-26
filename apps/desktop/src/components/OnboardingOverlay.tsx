@@ -37,6 +37,7 @@ import { KeyRound, Languages, Layers, Mic, Sparkles } from "lucide";
 import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { PET_CHANGED_EVENT } from "../lib/companion-events";
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
 import { usePrompt } from "../lib/prompt-dialog";
@@ -229,8 +230,8 @@ function DemoContent({
 	const decor = useCompanionDecor();
 	useEffect(() => {
 		const on = (): void => setPet(companionArtForId(companionArtId()));
-		window.addEventListener("omp-pet-changed", on);
-		return () => window.removeEventListener("omp-pet-changed", on);
+		window.addEventListener(PET_CHANGED_EVENT, on);
+		return () => window.removeEventListener(PET_CHANGED_EVENT, on);
 	}, []);
 	if (step === 0) {
 		// Language — bilingual speech bubbles.

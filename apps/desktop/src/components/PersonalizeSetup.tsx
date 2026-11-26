@@ -2,6 +2,8 @@ import { type TranslationKey, t, tLoose } from "@musepi/client-core";
 import { CircleCheck as CircleCheckIconData, Circle as CircleIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useEffect, useState } from "react";
+import { dispatchPetChanged } from "../lib/companion-events";
+import { dispatchUserAvatarChanged } from "../lib/user-avatar";
 import "../i18n/companion-style";
 import {
 	artFormatForPackage,
@@ -67,7 +69,7 @@ export function PersonalizeSetup({
 		} catch {
 			// storage unavailable
 		}
-		window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+		dispatchUserAvatarChanged();
 	};
 
 	const toggleSmooth = (): void => {
@@ -86,7 +88,7 @@ export function PersonalizeSetup({
 		tapFeedback();
 		setSelectedPet(id);
 		setCompanionArtId(id);
-		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+		dispatchPetChanged();
 	};
 
 	const companionOptions: { id: string; displayName: string; description: string; mode: CompanionArtFormat }[] = [
@@ -121,7 +123,7 @@ export function PersonalizeSetup({
 		tapFeedback();
 		setCompanionArtFormat(mode);
 		setSelectedPet(companionArtId());
-		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+		dispatchPetChanged();
 	};
 
 	const pickPlacement = (mode: "input" | "desktop"): void => {
@@ -131,7 +133,7 @@ export function PersonalizeSetup({
 		} catch {
 			// storage unavailable
 		}
-		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+		dispatchPetChanged();
 	};
 
 	return (

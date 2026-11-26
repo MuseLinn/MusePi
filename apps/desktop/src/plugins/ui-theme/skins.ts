@@ -44,9 +44,9 @@ export interface ScrollbarSkin {
 export const SCROLLBAR_STYLE_KEY = "musepi-gui-scrollbar-style";
 export const SCROLLBAR_SKINS_KEY = "musepi-gui-scrollbar-skins";
 /** Fired on the window when the imported-skin registry changes. */
-export const SCROLLBAR_SKINS_CHANGED_EVENT = "omp-scrollbar-skins-changed";
+export const SCROLLBAR_SKINS_CHANGED_EVENT = "musepi-scrollbar-skins-changed";
 /** Fired on the window when the active skin id changes. */
-export const SCROLLBAR_STYLE_CHANGED_EVENT = "omp-scrollbar-style-changed";
+export const SCROLLBAR_STYLE_CHANGED_EVENT = "musepi-scrollbar-style-changed";
 
 /** Smallest and largest bar width a skin may request. Beyond 16px the bar
  *  takes a visible strip of content width on every scroller. */

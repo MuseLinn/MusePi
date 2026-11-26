@@ -11,8 +11,11 @@
 export const USER_AVATAR_URL_KEY = "musepi-gui-user-avatar";
 export const USER_AVATAR_MODE_KEY = "musepi-gui-user-avatar-mode";
 
-/** Fired after the source mode or the GitHub picture changes. */
-export const USER_AVATAR_EVENT = "omp-avatar-changed";
+/** Fired after the source mode or the GitHub picture changes. `omp-` is the
+ *  pre-rename alias, kept dispatched so an out-of-tree listener still hears it. */
+export const USER_AVATAR_EVENT = "musepi-user-avatar-changed";
+/** @deprecated Pre-rename alias. Dispatched for compatibility only. */
+export const LEGACY_USER_AVATAR_EVENT = "omp-avatar-changed";
 
 /** `auto` = GitHub photo → identity-derived pixel face → initial letter;
  *  `punk` = the user-chosen pixel face; `initial` = the letter chip only. */
@@ -48,13 +51,19 @@ export function readUserAvatarPrefs(): UserAvatarPrefs {
 	}
 }
 
+/** Broadcast both spellings: `musepi-` is canonical, `omp-` is the alias. */
+export function dispatchUserAvatarChanged(): void {
+	window.dispatchEvent(new CustomEvent(USER_AVATAR_EVENT));
+	window.dispatchEvent(new CustomEvent(LEGACY_USER_AVATAR_EVENT));
+}
+
 export function writeUserAvatarMode(mode: UserAvatarMode): void {
 	try {
 		localStorage.setItem(USER_AVATAR_MODE_KEY, mode);
 	} catch {
 		// storage unavailable — the in-memory state still drives this render
 	}
-	window.dispatchEvent(new CustomEvent(USER_AVATAR_EVENT));
+	dispatchUserAvatarChanged();
 }
 
 /**
@@ -83,7 +92,7 @@ export function syncUserAvatarUrl(url: string | null): void {
 	} catch {
 		// storage unavailable — nothing to publish
 	}
-	if (changed) window.dispatchEvent(new CustomEvent(USER_AVATAR_EVENT));
+	if (changed) dispatchUserAvatarChanged();
 }
 
 /** Subscribe to changes: the same-window event plus `storage` for other

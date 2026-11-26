@@ -3,6 +3,7 @@ import { Monitor, Moon, Palette, Sun } from "lucide";
 import type { IconInput } from "morphicons";
 import { defineMorphIcon } from "morphicons/element";
 import { useSyncExternalStore } from "react";
+import { readVersioned, readVersionedOneOf, type VersionedKey, writeVersioned } from "./storage-keys";
 
 export type SystemTheme = "light" | "dark";
 export type ThemePreference = "system" | "light" | "dark";
@@ -15,9 +16,14 @@ export type ThemePreference = "system" | "light" | "dark";
  *  presets and "custom" remain user overrides on top of it. */
 export type AccentPreference = "theme" | "brand" | "mono" | "ocean" | "jade" | "custom";
 
-const STORAGE_KEY = "omp-collab-theme";
-const ACCENT_STORAGE_KEY = "omp-collab-accent";
-const CUSTOM_ACCENT_STORAGE_KEY = "omp-collab-accent-custom";
+/** Client-local appearance keys. `musepi.<area>.v1` is the current spelling;
+ *  the `omp-collab-*` names are the pre-rename ones, migrated on first read. */
+export const THEME_KEY: VersionedKey = { key: "musepi.theme.preference.v1", legacy: ["omp-collab-theme"] };
+export const ACCENT_KEY: VersionedKey = { key: "musepi.theme.accent.v1", legacy: ["omp-collab-accent"] };
+export const CUSTOM_ACCENT_KEY: VersionedKey = {
+	key: "musepi.theme.accent-custom.v1",
+	legacy: ["omp-collab-accent-custom"],
+};
 const DARK_SCHEME_QUERY = "(prefers-color-scheme: dark)";
 
 /**
@@ -40,13 +46,7 @@ export function setNativeColorMode(mode: SystemTheme | null): void {
 }
 
 function readStoredPreference(): ThemePreference {
-	try {
-		const stored = globalThis.localStorage.getItem(STORAGE_KEY);
-		return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
-	} catch {
-		// Private-mode or blocked storage: fall back to following the system.
-		return "system";
-	}
+	return readVersionedOneOf(THEME_KEY, ["light", "dark", "system"] as const) ?? "system";
 }
 
 function getSystemTheme(): SystemTheme {
@@ -126,20 +126,31 @@ export const UNIFIED_THEME_PRESETS: ReadonlyArray<{ id: UiThemeId; label: string
 	...PAIRED,
 ];
 
-const LIGHT_THEME_STORAGE_KEY = "omp-collab-ui-theme-light";
-const DARK_THEME_STORAGE_KEY = "omp-collab-ui-theme-dark";
+const LIGHT_THEME_STORAGE_KEY: VersionedKey = {
+	key: "musepi.theme.ui-light.v1",
+	legacy: ["omp-collab-ui-theme-light"],
+};
+const DARK_THEME_STORAGE_KEY: VersionedKey = {
+	key: "musepi.theme.ui-dark.v1",
+	legacy: ["omp-collab-ui-theme-dark"],
+};
 /** Unified-mode state: "1" = one theme drives both schemes; otherwise the
  *  separate light/dark picks apply. */
-const UNIFIED_MODE_KEY = "omp-collab-ui-theme-unified-mode";
-const UNIFIED_THEME_KEY = "omp-collab-ui-theme-unified";
+const UNIFIED_MODE_KEY: VersionedKey = {
+	key: "musepi.theme.ui-unified-mode.v1",
+	legacy: ["omp-collab-ui-theme-unified-mode"],
+};
+const UNIFIED_THEME_KEY: VersionedKey = {
+	key: "musepi.theme.ui-unified.v1",
+	legacy: ["omp-collab-ui-theme-unified"],
+};
 
-function readStoredUiTheme(key: string, presets: ReadonlyArray<{ id: UiThemeId; label: string }>): UiThemeId {
-	try {
-		const stored = globalThis.localStorage.getItem(key);
-		return presets.some(p => p.id === stored) ? (stored as UiThemeId) : "default";
-	} catch {
-		return "default";
-	}
+function readStoredUiTheme(spec: VersionedKey, presets: ReadonlyArray<{ id: UiThemeId; label: string }>): UiThemeId {
+	const stored = readVersionedOneOf(
+		spec,
+		presets.map(p => p.id),
+	);
+	return stored ?? "default";
 }
 
 let lightThemeId: UiThemeId = readStoredUiTheme(LIGHT_THEME_STORAGE_KEY, LIGHT_THEME_PRESETS);
@@ -148,12 +159,8 @@ let unifiedMode: boolean = readStoredFlag(UNIFIED_MODE_KEY);
 let unifiedThemeId: UiThemeId = readStoredUiTheme(UNIFIED_THEME_KEY, UNIFIED_THEME_PRESETS);
 const uiThemeListeners = new Set<() => void>();
 
-function readStoredFlag(key: string): boolean {
-	try {
-		return globalThis.localStorage.getItem(key) === "1";
-	} catch {
-		return false;
-	}
+function readStoredFlag(spec: VersionedKey): boolean {
+	return readVersioned(spec) === "1";
 }
 
 /** Mirror the scheme-resolved theme pick onto `data-ui-theme`. Unified mode
@@ -178,13 +185,9 @@ function subscribeUiTheme(callback: () => void): () => void {
 	return () => uiThemeListeners.delete(callback);
 }
 
-function setUiThemeId(next: UiThemeId, key: string, store: (v: UiThemeId) => void): void {
+function setUiThemeId(next: UiThemeId, spec: VersionedKey, store: (v: UiThemeId) => void): void {
 	store(next);
-	try {
-		globalThis.localStorage.setItem(key, next);
-	} catch {
-		// Persistence is best-effort; still apply/emit the in-memory preference.
-	}
+	writeVersioned(spec, next);
 	applyUiTheme();
 	emitUiTheme();
 }
@@ -230,11 +233,7 @@ export function useUiThemePreferences(): {
 		unifiedThemeId: unifiedId,
 		setUnifiedMode: next => {
 			unifiedMode = next;
-			try {
-				globalThis.localStorage.setItem(UNIFIED_MODE_KEY, next ? "1" : "0");
-			} catch {
-				// best-effort persistence
-			}
+			writeVersioned(UNIFIED_MODE_KEY, next ? "1" : "0");
 			applyUiTheme();
 			emitUiTheme();
 		},
@@ -472,11 +471,7 @@ export function setThemePreference(next: ThemePreference): void {
 	withColorTransition(
 		() => {
 			preference = next;
-			try {
-				globalThis.localStorage.setItem(STORAGE_KEY, next);
-			} catch {
-				// Persistence is best-effort; still apply/emit the in-memory preference.
-			}
+			writeVersioned(THEME_KEY, next);
 			applyResolvedTheme();
 			// Emit INSIDE the swap callback: the store must read the NEW
 			// preference. Emitting outside it (synchronously after
@@ -530,22 +525,10 @@ export function useThemePreference(): {
 /* ── Accent axis — orthogonal to the scheme; recolours only the accent. ── */
 
 function readStoredAccent(): AccentPreference {
-	try {
-		const stored = globalThis.localStorage.getItem(ACCENT_STORAGE_KEY);
-		// No stored preference → FOLLOW THE THEME. Existing installs keep the
-		// explicit preset they chose; a missing value used to mean "brand",
-		// which pinned every color theme to one global gold.
-		return stored === "theme" ||
-			stored === "brand" ||
-			stored === "mono" ||
-			stored === "ocean" ||
-			stored === "jade" ||
-			stored === "custom"
-			? stored
-			: "theme";
-	} catch {
-		return "theme";
-	}
+	// No stored preference → FOLLOW THE THEME. Existing installs keep the
+	// explicit preset they chose; a missing value used to mean "brand",
+	// which pinned every color theme to one global gold.
+	return readVersionedOneOf(ACCENT_KEY, ["theme", "brand", "mono", "ocean", "jade", "custom"] as const) ?? "theme";
 }
 
 /** Default custom accent = the brand gold, so the picker never opens empty. */
@@ -557,11 +540,7 @@ function normalizeHex(input: string): string | null {
 }
 
 function readStoredCustomAccent(): string {
-	try {
-		return normalizeHex(globalThis.localStorage.getItem(CUSTOM_ACCENT_STORAGE_KEY) ?? "") ?? DEFAULT_CUSTOM_ACCENT;
-	} catch {
-		return DEFAULT_CUSTOM_ACCENT;
-	}
+	return normalizeHex(readVersioned(CUSTOM_ACCENT_KEY) ?? "") ?? DEFAULT_CUSTOM_ACCENT;
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -726,11 +705,7 @@ export function setAccentPreference(next: AccentPreference): void {
 	withColorTransition(
 		() => {
 			accent = next;
-			try {
-				globalThis.localStorage.setItem(ACCENT_STORAGE_KEY, next);
-			} catch {
-				// Persistence is best-effort; still apply/emit the in-memory preference.
-			}
+			writeVersioned(ACCENT_KEY, next);
 			applyAccent();
 			// Emit inside the swap (see setThemePreference) so the swatch
 			// buttons read the NEW accent, not the pre-swap value.
@@ -749,11 +724,7 @@ export function setCustomAccentColor(input: string): void {
 	const hex = normalizeHex(input);
 	if (!hex) return;
 	customAccent = hex;
-	try {
-		globalThis.localStorage.setItem(CUSTOM_ACCENT_STORAGE_KEY, hex);
-	} catch {
-		// Persistence is best-effort; still apply/emit the in-memory preference.
-	}
+	writeVersioned(CUSTOM_ACCENT_KEY, hex);
 	if (accent === "custom") {
 		applyAccent();
 	}
@@ -774,12 +745,8 @@ export function applyCustomAccent(input: string): void {
 		() => {
 			customAccent = hex;
 			accent = "custom";
-			try {
-				globalThis.localStorage.setItem(CUSTOM_ACCENT_STORAGE_KEY, hex);
-				globalThis.localStorage.setItem(ACCENT_STORAGE_KEY, "custom");
-			} catch {
-				// Persistence is best-effort; still apply/emit the in-memory preference.
-			}
+			writeVersioned(CUSTOM_ACCENT_KEY, hex);
+			writeVersioned(ACCENT_KEY, "custom");
 			applyAccent();
 			// Emit inside the swap so subscribers read the NEW color.
 			emitAccent();

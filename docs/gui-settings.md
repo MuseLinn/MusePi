@@ -46,9 +46,9 @@ gui-main (flex ROW)
 
 | Axis | DOM attribute | Values | Storage key |
 |---|---|---|---|
-| Color scheme | `data-theme` / `data-color-scheme` | `light` / `dark` (always resolved explicitly, no system) | `omp-collab-theme` |
-| Accent color | `data-accent` | `brand` / `mono` / `ocean` / `jade` / `custom` | `omp-collab-accent` (+ `omp-collab-accent-custom`) |
-| UI theme | `data-ui-theme` | Light: `default` / `warm` / `cool`; Dark: `default` / `midnight` / `graphite` | `omp-collab-ui-theme-light` / `-dark` |
+| Color scheme | `data-theme` / `data-color-scheme` | `light` / `dark` (always resolved explicitly, no system) | `musepi.theme.preference.v1` (migrates `omp-collab-theme`) |
+| Accent color | `data-accent` | `brand` / `mono` / `ocean` / `jade` / `custom` | `musepi.theme.accent.v1` (+ `.accent-custom.v1`); migrates the `omp-collab-*` names |
+| UI theme | `data-ui-theme` | Light: `default` / `warm` / `cool`; Dark: `default` / `midnight` / `graphite` | `musepi.theme.ui-light.v1` / `.ui-dark.v1`; migrates `omp-collab-ui-theme-*` |
 
 - **Resolution rule**: `data-ui-theme` takes the light-theme choice when the scheme is light, and the dark-theme choice when dark; tokens.css scopes presets as `[data-theme="light"][data-ui-theme="warm"]`, so light presets never leak into the dark scheme.
 - **Custom accent**: after the user picks a color in settings, `applyAccent()` writes the whole `--accent` family inline (`--accent-fg` dark/light per WCAG luminance, `--accent-muted` at 18% opacity, `--accent-hover` brightened for dark scheme / darkened for light scheme, `--accent-bd` at 35%, `--brand-mark-gradient` gradient); switching back to a preset clears the inline variables and restores the tokens.css preset blocks.

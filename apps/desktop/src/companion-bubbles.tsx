@@ -36,6 +36,8 @@
  */
 
 import { motionDisabled, setLocale, t } from "@musepi/client-core";
+import { readVersionedOneOf } from "@musepi/client-core/src/lib/storage-keys";
+import { THEME_KEY } from "@musepi/client-core/src/lib/theme";
 import { ArrowUp, ArrowUpRight, Check, MessageSquare, Square, X } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type CSSProperties, isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
@@ -488,8 +490,8 @@ export function CompanionBubbles(): ReactNode {
 			let pref: "system" | "light" | "dark" = "system";
 			let motionOff = false;
 			try {
-				const v = localStorage.getItem("omp-collab-theme");
-				if (v === "light" || v === "dark" || v === "system") pref = v;
+				const v = readVersionedOneOf(THEME_KEY, ["system", "light", "dark"] as const);
+				if (v !== null) pref = v;
 				motionOff = localStorage.getItem("musepi-gui-motion") === "off";
 			} catch {
 				/* storage unavailable — follow the system */
@@ -505,13 +507,15 @@ export function CompanionBubbles(): ReactNode {
 		const mq = window.matchMedia("(prefers-color-scheme: dark)");
 		const onMq = (): void => {
 			try {
-				if ((localStorage.getItem("omp-collab-theme") ?? "system") === "system") applyScheme();
+				if ((readVersionedOneOf(THEME_KEY, ["system", "light", "dark"] as const) ?? "system") === "system") {
+					applyScheme();
+				}
 			} catch {
 				applyScheme();
 			}
 		};
 		const onStorage = (event: StorageEvent): void => {
-			if (event.key === "musepi-gui-motion" || event.key === "omp-collab-theme") applyScheme();
+			if (event.key === "musepi-gui-motion" || event.key === THEME_KEY.key) applyScheme();
 		};
 		mq.addEventListener("change", onMq);
 		window.addEventListener("storage", onStorage);

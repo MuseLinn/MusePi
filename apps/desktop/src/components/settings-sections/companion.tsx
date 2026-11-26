@@ -9,6 +9,7 @@ import {
 } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { dispatchPetChanged } from "../../lib/companion-events";
 import "../../i18n/companion-style";
 import {
 	artFormatForPackage,
@@ -420,7 +421,7 @@ export function CompanionSection(): ReactNode {
 	const [importError, setImportError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState(true);
 	const commit = (): void => {
-		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+		dispatchPetChanged();
 	};
 	const setPref = (key: "musepi-gui-pet" | "musepi-gui-pet-mode" | "musepi-gui-pet-id", value: string): void => {
 		localStorage.setItem(key, value);
