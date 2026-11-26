@@ -1,5 +1,5 @@
 {
-	"name": "musepi-hooks-settings",
+	"name": "musepi-settings-hooks",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Cordis-owned hooks settings page: hook-capability extensions with enable toggles.",

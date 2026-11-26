@@ -90,6 +90,15 @@ A sent prompt lands as itself: the bubble that appears in the transcript perform
 - **Identity still matters.** `entryViewKey` keys a user row by its `requestIdentity` (`msg:<clientId>:<clientRequestId>`), the string the daemon stamps on the persisted message, so the optimistic row and the acknowledged entry are one DOM node and the entrance does not replay when the ack lands.
 - **Off switches.** `prefers-reduced-motion: reduce` and `.gui-motion-off` remove the animation; the bubble simply appears.
 
+### Verifying a change visually
+
+`bun apps/desktop/scripts/gui-probe.ts <scenario.tsx>` renders a real component against the real
+stylesheets and returns a screenshot plus structured measurements; the scenario declares the
+measurement it expects, so a run answers "is this still right" rather than "here is a picture".
+Use it for any change to a component or a `gui-*.css` sheet — a box and a computed property explain
+a layout that a picture only shows. Procedure, scenario shape and the traps already handled live in
+`.agents/skills/musepi-gui-visual-probe/SKILL.md`.
+
 ### Full-surface view transitions and the off switch
 
 `.gui-view-enter` / `.gui-view-leave` / `.gui-slot-leave` / the keeper `--enter` modifiers are the app's one full-surface transition: 300ms in, 150ms out, both animating `filter: blur()`. A blur radius change re-rasterizes the whole surface every frame, so this is the most expensive animation in the GUI — and until now it was the only one with no off switch, which also meant nobody could tell an animation stall from a layout one.

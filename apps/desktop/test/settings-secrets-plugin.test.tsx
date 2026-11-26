@@ -7,15 +7,15 @@ import {
 	resolvePluginEntry,
 } from "../../../packages/coding-agent/src/extensibility/plugins/runtime/cordis-entry";
 import { navGroups } from "../src/components/SettingsNav";
-import * as secretsPlugin from "../src/plugins/secrets-settings/index";
-import { apply } from "../src/plugins/secrets-settings/index";
+import * as secretsPlugin from "../src/plugins/settings-secrets/index";
+import { apply } from "../src/plugins/settings-secrets/index";
 
 const previousLocale = getLocaleSnapshot();
 setLocale("zh-CN");
 
 afterAll(() => setLocale(previousLocale));
 
-describe("secrets-settings Cordis plugin", () => {
+describe("settings-secrets Cordis plugin", () => {
 	it("loads as a Cordis triple rather than a bare legacy factory", () => {
 		const entry = resolvePluginEntry(secretsPlugin as never);
 		expect(declaredInject(entry)).toEqual([]);

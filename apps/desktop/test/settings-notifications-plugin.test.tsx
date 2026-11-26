@@ -7,15 +7,15 @@ import {
 	resolvePluginEntry,
 } from "../../../packages/coding-agent/src/extensibility/plugins/runtime/cordis-entry";
 import { navGroups } from "../src/components/SettingsNav";
-import * as plugin from "../src/plugins/notifications-settings/index";
-import { apply } from "../src/plugins/notifications-settings/index";
+import * as plugin from "../src/plugins/settings-notifications/index";
+import { apply } from "../src/plugins/settings-notifications/index";
 
 const previousLocale = getLocaleSnapshot();
 setLocale("zh-CN");
 
 afterAll(() => setLocale(previousLocale));
 
-describe("notifications-settings Cordis plugin", () => {
+describe("settings-notifications Cordis plugin", () => {
 	it("loads as a Cordis triple rather than a bare legacy factory", () => {
 		const entry = resolvePluginEntry(plugin as never);
 		expect(declaredInject(entry)).toEqual([]);

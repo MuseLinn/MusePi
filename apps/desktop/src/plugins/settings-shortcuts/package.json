@@ -1,5 +1,5 @@
 {
-	"name": "musepi-shortcuts-settings",
+	"name": "musepi-settings-shortcuts",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Cordis-owned keyboard shortcut editor: rebind, conflict reporting, reset.",

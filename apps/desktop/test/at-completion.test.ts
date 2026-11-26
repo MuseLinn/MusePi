@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { type AtCompletionEntry, loadAtCompletionEntries, rankAtCompletionEntries } from "../src/lib/at-completion";
+import {
+	type AtCandidate,
+	type AtCompletionEntry,
+	atCandidateGroup,
+	loadAtCompletionEntries,
+	rankAtCandidates,
+	rankAtCompletionEntries,
+} from "../src/lib/at-completion";
 
 interface TreeEntry {
 	name: string;
@@ -115,5 +122,66 @@ describe("rankAtCompletionEntries", () => {
 		const ranked = rankAtCompletionEntries([row("main.ts", { isDir: true }), row("main.ts")], "main");
 		expect(ranked[0]?.isDir).toBe(false);
 		expect(ranked[1]?.isDir).toBe(true);
+	});
+});
+
+describe("rankAtCandidates", () => {
+	const file = (name: string, path: string, extra: Record<string, unknown> = {}): AtCandidate => ({
+		kind: "file",
+		name,
+		path,
+		isDir: false,
+		depth: 1,
+		...extra,
+	});
+	const session = (id: string, name: string, updatedAt: string, cwd = "/proj"): AtCandidate => ({
+		kind: "session",
+		id,
+		name,
+		cwd,
+		updatedAt,
+	});
+
+	test("sessions lead the list so they are not buried under tree entries", () => {
+		const ranked = rankAtCandidates(
+			[file("a.ts", "src/a.ts"), session("s1", "发布准备", "2026-11-20T00:00:00.000Z")],
+			"",
+		);
+		expect(ranked.map(c => c.kind)).toEqual(["session", "file"]);
+	});
+
+	test("each group ranks its own match quality before recency", () => {
+		const ranked = rankAtCandidates(
+			[
+				session("s-old", "其它会话", "2026-11-25T00:00:00.000Z"),
+				session("s-new", "发布准备", "2026-11-01T00:00:00.000Z"),
+			],
+			"发布",
+		);
+		expect(ranked[0]).toMatchObject({ kind: "session", id: "s-new" });
+	});
+
+	test("session rows match on id and directory too", () => {
+		const byId = rankAtCandidates([session("abc123", "标题", "2026-11-20T00:00:00.000Z")], "abc1");
+		expect(byId).toHaveLength(1);
+		const byDir = rankAtCandidates([session("s", "标题", "2026-11-20T00:00:00.000Z", "/work/api")], "work/api");
+		expect(byDir).toHaveLength(1);
+	});
+
+	test("a query that matches nothing returns nothing", () => {
+		expect(rankAtCandidates([file("a.ts", "src/a.ts")], "zzz")).toEqual([]);
+	});
+
+	test("file ranking keeps ignored files last, files before folders", () => {
+		const ranked = rankAtCandidates(
+			[file("x", "a/x", { ignored: true }), file("y", "a/y", { isDir: true }), file("z", "a/z")],
+			"",
+		);
+		expect(ranked.map(c => c.kind === "file" && c.path)).toEqual(["a/z", "a/y", "a/x"]);
+	});
+
+	test("grouping is exposed for the heading rows", () => {
+		expect(atCandidateGroup(file("a", "a"))).toBe("file");
+		expect(atCandidateGroup(session("s", "t", "2026-11-20T00:00:00.000Z"))).toBe("session");
 	});
 });

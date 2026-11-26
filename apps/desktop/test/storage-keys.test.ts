@@ -1,6 +1,11 @@
 import "./happy-dom-shim";
 import { afterEach, describe, expect, test } from "bun:test";
-import { readVersioned, readVersionedOneOf, type VersionedKey, writeVersioned } from "@musepi/client-core/src/lib/storage-keys";
+import {
+	readVersioned,
+	readVersionedOneOf,
+	type VersionedKey,
+	writeVersioned,
+} from "@musepi/client-core/src/lib/storage-keys";
 
 /**
  * Versioned client-local storage: a rename must never lose a preference and

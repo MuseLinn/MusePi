@@ -1,5 +1,5 @@
 {
-	"name": "musepi-usage-settings",
+	"name": "musepi-settings-usage",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Cordis-owned usage statistics page: request mix, token and cost trends, per-workspace breakdown.",

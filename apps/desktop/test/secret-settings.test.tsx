@@ -7,7 +7,7 @@ import { navGroups } from "../src/components/SettingsNav";
 import { PromptProvider } from "../src/lib/prompt-dialog";
 import type { RpcClient } from "../src/lib/rpc";
 import { resolveActiveSection } from "../src/lib/settings-nav";
-import SecretsSettingsPage from "../src/plugins/secrets-settings/page";
+import SecretsSettingsPage from "../src/plugins/settings-secrets/page";
 
 setLocale("zh-CN");
 afterAll(() => {

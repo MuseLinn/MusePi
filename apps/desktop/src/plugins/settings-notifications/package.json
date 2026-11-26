@@ -1,5 +1,5 @@
 {
-	"name": "musepi-notifications-settings",
+	"name": "musepi-settings-notifications",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Cordis-owned notification and sound page: delivery switches, per-event toasts, templates, cues.",

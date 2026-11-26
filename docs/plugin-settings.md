@@ -46,6 +46,8 @@ A page whose body ships only as a contribution keeps no host fallback: the nav r
 
 Use `settings.section` only when the feature is a whole page.
 
+A page package is named `settings-<page>` (`musepi-settings-<page>`): the domain comes first, the page it owns last, so a directory listing groups every settings page together. One page, one package.
+
 Register the seat in `packages/collab-proto/src/extension-slots.ts` with `slot-contracts.ts`, regenerate the catalog, and document it in `docs/extensions-dev.md`.
 
 ## Composing plugins

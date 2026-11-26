@@ -46,6 +46,8 @@ scope:
 
 只有当功能本身是一整页时才用 `settings.section`。
 
+整页的包名是 `settings-<page>`（`musepi-settings-<page>`）：域在前、它拥有的那一页在后，目录列表因此把设置页聚在一起。一页一包。
+
 新增席位需在 `packages/collab-proto/src/extension-slots.ts` 与 `slot-contracts.ts` 登记，重新生成目录，并在 `docs/extensions-dev.md` 说明。
 
 ## 插件的嵌套组合

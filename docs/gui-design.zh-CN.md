@@ -91,6 +91,10 @@ lang: zh-CN
 - **身份仍然重要。** `entryViewKey` 让用户行按 `requestIdentity`（`msg:<clientId>:<clientRequestId>`）做 key——与 daemon 写在持久化消息上的字符串一致；因此乐观行与 ack 后的权威条目是同一个 DOM 节点，ack 到达时入场不会重播。
 - **关闭开关。** `prefers-reduced-motion: reduce` 与 `.gui-motion-off` 直接去掉动画，气泡正常出现。
 
+### 视觉验证改动
+
+`bun apps/desktop/scripts/gui-probe.ts <场景.tsx>` 用真实组件装配真实样式表渲染，返回截图与结构化测量；场景自己声明期望的测量，所以一次运行回答的是「这还对吗」而不只是「这是张图」。改组件或任何 `gui-*.css` 时都用它——盒子和计算属性解释布局，图片只能展示布局。流程、场景写法与已内置的坑见 `.agents/skills/musepi-gui-visual-probe/SKILL.md`。
+
 ### 全表面视图切换与关闭开关
 
 `.gui-view-enter` / `.gui-view-leave` / `.gui-slot-leave` 与 keeper 的 `--enter` 修饰符是应用里唯一一次全表面过渡：进场 300ms、退场 150ms，两者都在动 `filter: blur()`。模糊半径每帧变化都会让整个表面重新光栅化，所以这是 GUI 里最贵的一支动画——在此之前它也是唯一没有关闭开关的一支，于是没人分得清是动画卡住还是布局卡住。

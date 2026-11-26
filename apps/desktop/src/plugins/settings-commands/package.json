@@ -1,5 +1,5 @@
 {
-	"name": "musepi-commands-settings",
+	"name": "musepi-settings-commands",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Cordis-owned slash-command catalog page: every / command and skill by category.",
