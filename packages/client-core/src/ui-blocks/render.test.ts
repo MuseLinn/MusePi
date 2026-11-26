@@ -480,8 +480,9 @@ describe("card table styling reaches through the chat's table wrapper", () => {
 	});
 
 	test("the decorator really nests table inside the scroll container", async () => {
-		const markdown = await Bun.file(new URL("../components/transcript/Markdown.tsx", import.meta.url)).text();
-		// The assertion above is only correct while this stays true.
-		expect(markdown).toContain('class="tr-table-scroll"><table>');
+		// The table renderer lives with the shared markdown blocks, so the
+		// nesting is read where it is written rather than from the caller.
+		const table = await Bun.file(new URL("../../../client/markdown/src/blocks/table.tsx", import.meta.url)).text();
+		expect(table).toMatch(/className="tr-table-scroll"[\s\S]{0,200}?<table/);
 	});
 });

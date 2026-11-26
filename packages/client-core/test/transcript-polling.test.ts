@@ -6,12 +6,12 @@
  * from the same cursor forever.
  */
 import { describe, expect, it, vi } from "bun:test";
-import { encodeBase64Url } from "@musepi/collab-proto";
+import { encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
 import type { HostFrame, SessionEntry } from "@musepi/pi-wire";
 import { GuestClient } from "../src/lib/client";
 import { decideTranscriptPoll } from "../src/lib/transcript-poll";
 
-const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
+const LINK = formatCollabLink("wss://relay.example.com", "roomroomroom1234", new Uint8Array(32));
 
 function transcriptFrame(reqId: number, text: string, newSize: number, error?: string): HostFrame {
 	return { t: "transcript", reqId, text, newSize, error };

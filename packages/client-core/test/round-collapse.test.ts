@@ -281,7 +281,7 @@ describe("widget exemption", () => {
 		expect(isInsideFold(folds, 4)).toBe(false); // the reply never hides
 	});
 
-	it("does not exempt rows whose widget call failed", () => {
+	it("keeps a failed widget call visible as a failure, not as an artifact", () => {
 		const entries = [
 			user(1),
 			widgetAssistant(2, "w1"),
@@ -292,7 +292,11 @@ describe("widget exemption", () => {
 		];
 		const folds = buildRoundFolds(entries, false);
 		expect(folds).toHaveLength(1);
-		expect(folds[0]!.exempt).toEqual([]);
-		expect(isInsideFold(folds, 1)).toBe(true);
+		// The card never arrives, so the call is process — but a failure is
+		// never folded away either: the call row and its result stay visible.
+		expect(folds[0]!.failedCount).toBe(1);
+		expect(folds[0]!.exempt).toEqual([1, 2]);
+		expect(isInsideFold(folds, 1)).toBe(false);
+		expect(isInsideFold(folds, 2)).toBe(false);
 	});
 });

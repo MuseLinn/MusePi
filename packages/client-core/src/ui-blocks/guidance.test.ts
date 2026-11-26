@@ -17,14 +17,14 @@ async function read(relative: string): Promise<string> {
 
 describe("ui block guidance", () => {
 	test("the genui plugin's prompt section names every component the catalog draws", async () => {
-		const prompt = await read("bundled-plugins/visuals/visual-answers.md");
+		const prompt = await read("plugins/media/visuals/visual-answers.md");
 		for (const signature of uiBlockSignatures()) {
 			expect(prompt).toContain(signature.slice(0, signature.indexOf("(")));
 		}
 	});
 
 	test("every icon the guidance names is one the catalog draws", async () => {
-		const prompt = await read("bundled-plugins/visuals/visual-answers.md");
+		const prompt = await read("plugins/media/visuals/visual-answers.md");
 		// The Icon paragraph lists the names a model may write; a name the prompt
 		// offers but the set lacks draws nothing, which reads as a broken reply.
 		const line = prompt.split("\n").find(row => row.includes("`Icon(name, label?)` is a small mark")) ?? "";
@@ -37,14 +37,14 @@ describe("ui block guidance", () => {
 	});
 
 	test("that section teaches the language, the fence and the root rule", async () => {
-		const prompt = await read("bundled-plugins/visuals/visual-answers.md");
+		const prompt = await read("plugins/media/visuals/visual-answers.md");
 		expect(prompt).toContain("```ui");
 		expect(prompt).toContain("root = Stack");
 		expect(prompt).toContain("positional");
 	});
 
 	test("the widget tool description routes data away from pages", async () => {
-		const description = await read("bundled-plugins/visuals/prompt.md");
+		const description = await read("plugins/media/visuals/prompt.md");
 		expect(description).toContain("```ui");
 		expect(description).not.toContain("|`html`|");
 	});

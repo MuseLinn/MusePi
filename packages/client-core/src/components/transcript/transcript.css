@@ -5946,3 +5946,12 @@ a.tr-tool-search-title:hover {
 	outline: 1.5px solid var(--ring);
 	outline-offset: 1px;
 }
+
+/* Presence sheen: the band and its bright copy are ambient loops, so reduced
+ * motion parks both on their first frame instead of sweeping. */
+@media (prefers-reduced-motion: reduce) {
+	.presence-band,
+	.presence-band::before {
+		animation: none;
+	}
+}

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "bun:test";
-import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
+import { COLLAB_PROTO, encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
 import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Composer } from "../src/components/shell/Composer";
 import { GuestClient } from "../src/lib/client";
 import { CollabSocket } from "../src/lib/socket";
 
-const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
+const LINK = formatCollabLink("wss://relay.example.com", "roomroomroom1234", new Uint8Array(32));
 
 const HEADER: SessionHeader = { type: "session", id: "s1", timestamp: "2026-06-12T00:00:00Z", cwd: "/work" };
 const STATE: SessionState = { isStreaming: false, queuedMessageCount: 0, cwd: "/work", participants: [] };

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
+import { COLLAB_PROTO, encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
 import type { AgentSnapshot, SessionEntry, SessionHeader, SessionState, WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -12,7 +12,7 @@ GlobalRegistrator.register();
 const { App } = await import("../src/app");
 const { t } = await import("../src/i18n/index.js");
 
-const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
+const LINK = formatCollabLink("wss://relay.example.com", "roomroomroom1234", new Uint8Array(32));
 const SESSION: WorkspaceSessionInfo = {
 	id: "existing-session",
 	title: "Existing session",
