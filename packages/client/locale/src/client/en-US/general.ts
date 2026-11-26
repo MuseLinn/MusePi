@@ -443,7 +443,6 @@ export const general = {
 	"general.agentInfoUnavailable": "Could not read this session’s details",
 	"general.agentInfoRefreshFailed": "That worked, but the session details could not refresh: {detail}",
 	"general.accountMenu": "Account and settings",
-	"general.switchHost": "Switch host",
 	"general.sideSessionLoading": "Loading session…",
 	"general.sideSessionMissing": "No session to show",
 	"general.sideSessionPlaceholder": "Continue in this session…",

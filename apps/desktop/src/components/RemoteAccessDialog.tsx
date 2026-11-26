@@ -810,7 +810,10 @@ export function RemoteAccessDialog({
 									</div>
 								) : null}
 								{warningBlock}
-								<p className="gui-collab-scope-line">{scopeHint}</p>
+								<p className="gui-collab-scope-row">
+									<span className="gui-collab-scope-label">{t("settings.shareScope")}</span>
+									<span className="gui-collab-scope-value">{scopeHint}</span>
+								</p>
 								<div className="gui-collab-exposures">
 									<div className="gui-collab-group-head">
 										<span>{t("settings.shareExposure")}</span>
@@ -952,7 +955,6 @@ export function RemoteAccessDialog({
 					</section>
 					<section className="gui-collab-col gui-collab-channel-col">
 						<div className="gui-collab-col-head">
-							<Icon name="robot" className="h-4 w-4" />
 							<h2>{t("settings.useBotChannel")}</h2>
 						</div>
 						<p className="gui-collab-desc">{t("settings.connectChatBotLonger")}</p>

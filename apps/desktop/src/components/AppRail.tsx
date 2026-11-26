@@ -1,7 +1,6 @@
 import { punkAvatarUri, type TranslationKey, t } from "@musepi/client-core";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
-import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "../lib/user-avatar";
 import { Icon } from "../vendor/oc-icons";
@@ -153,56 +152,45 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient | null; cwd: string }): React
 	);
 }
 
-const LOCAL_DAEMON_URL = "ws://127.0.0.1:8300";
-
 /**
  * Account control — the user picture that replaced the rail's settings gear.
  *
- * The gear was a single-purpose button for a menu of account/session actions,
- * so the picture now owns that slot and the menu behind it: Settings,
- * keyboard shortcuts, session sharing, workspace remote access, host
- * switching and disconnecting. Remote access keeps BOTH entrances the rail
- * and header owned — the session share needs an open session, so the
- * workspace (mobile/browser join) row could not be folded into it. The rail
- * keeps one permanent entry (the user), and the sidebar footer mounts the
- * same control, so a gear never has to be duplicated.
+ * One job per surface. This menu owns the account and the app: settings,
+ * keyboard shortcuts, workspace remote access, disconnect. Three rows that
+ * used to live here now have a single home elsewhere, because keeping them
+ * made two adjacent popovers repeat each other with slightly different lists:
+ *
+ *  - **session sharing** belongs to the session header, which knows the
+ *    session; the account entry cannot (it must work with no session open);
+ *  - **host switching** belongs to the instance control in the rail footer,
+ *    which already shows every host and its live status;
+ *  - **instance management** belongs to that control's manager dialog, which
+ *    covers both axes (where the daemon runs, where the files live); the
+ *    endpoint-only dialog here was a second, thinner manager.
  *
  * Trigger state is self-managed; every action is the host's.
  */
 export function UserAccountButton({
 	rpc,
 	cwd,
-	hosts,
-	daemonUrl,
 	connected,
 	onOpenSettings,
 	onOpenShortcuts,
-	onOpenCollab,
 	onOpenRemoteAccess,
-	onSwitchHost,
 	onDisconnect,
-	onOpenConnectionManager,
 	compact = true,
 }: {
 	rpc: RpcClient | null;
 	/** Workspace the git identity is resolved from (the picture's source). */
 	cwd: string;
-	hosts: readonly RemoteHost[];
-	daemonUrl: string;
 	connected: boolean;
 	onOpenSettings(): void;
 	onOpenShortcuts?(): void;
-	/** Share the CURRENT session (entries in the header/session menus). */
-	onOpenCollab?(): void;
 	/** Share the WORKSPACE (mobile/browser join QR) — the rail's old
 	 *  remote-control entry, kept as its own row because the session share
 	 *  needs an open session and cannot replace it. */
 	onOpenRemoteAccess?(): void;
-	onSwitchHost(host: RemoteHost | null): void;
 	onDisconnect(): void;
-	/** The connection manager, same component the disconnected and failure
-	 *  surfaces render — this is the third entrance, not a second dialog. */
-	onOpenConnectionManager(): void;
 	/** Rail geometry (36px square) vs the sidebar footer's inline control. */
 	compact?: boolean;
 }): ReactNode {
@@ -210,7 +198,6 @@ export function UserAccountButton({
 	const [open, setOpen] = useState(false);
 	const user = useGitUser(rpc, cwd);
 	const label = t("general.accountMenu");
-	const localActive = daemonUrl === LOCAL_DAEMON_URL;
 	const close = (): void => setOpen(false);
 	return (
 		<div className="gui-account">
@@ -262,19 +249,6 @@ export function UserAccountButton({
 						<span>{t("general.keyboardShortcuts")}</span>
 					</button>
 				)}
-				{onOpenCollab && (
-					<button
-						type="button"
-						className="gui-menu-item"
-						onClick={() => {
-							close();
-							onOpenCollab();
-						}}
-					>
-						<Icon name="share-2" className="h-3.5 w-3.5" />
-						<span>{t("settings.shareCurrentSession")}</span>
-					</button>
-				)}
 				{/* Workspace sharing is its own entrance: the session share needs an
 				 * open session, so folding remote control into that row would make
 				 * mobile/browser joining unreachable on the welcome page. */}
@@ -292,55 +266,6 @@ export function UserAccountButton({
 					</button>
 				)}
 				<div className="gui-account-divider" />
-				<div className="gui-account-section">{t("general.switchHost")}</div>
-				<button
-					type="button"
-					className={`gui-account-host${localActive ? " gui-account-host--active" : ""}`}
-					aria-current={localActive ? "true" : undefined}
-					onClick={() => {
-						close();
-						if (!localActive) onSwitchHost(null);
-					}}
-				>
-					<span
-						className={`gui-account-host-dot${localActive && connected ? " gui-account-host-dot--on" : ""}`}
-						aria-hidden="true"
-					/>
-					<span className="gui-account-host-label">{t("general.local")}</span>
-					{localActive && <Icon name="check" className="h-3 w-3 ml-auto" />}
-				</button>
-				{hosts.map(host => {
-					const active = buildWsUrl(host) === daemonUrl;
-					return (
-						<button
-							key={host.id}
-							type="button"
-							className={`gui-account-host${active ? " gui-account-host--active" : ""}`}
-							aria-current={active ? "true" : undefined}
-							title={host.url}
-							onClick={() => {
-								close();
-								if (!active) onSwitchHost(host);
-							}}
-						>
-							<span className="gui-account-host-dot" aria-hidden="true" />
-							<span className="gui-account-host-label">{host.label}</span>
-							{active && <Icon name="check" className="h-3 w-3 ml-auto" />}
-						</button>
-					);
-				})}
-				<div className="gui-account-divider" />
-				<button
-					type="button"
-					className="gui-menu-item"
-					onClick={() => {
-						close();
-						onOpenConnectionManager();
-					}}
-				>
-					<Icon name="server" className="h-3.5 w-3.5" />
-					<span>{t("settings.connectionManager")}</span>
-				</button>
 				<button
 					type="button"
 					className={`gui-menu-item${connected ? "" : " gui-menu-item--disabled"}`}

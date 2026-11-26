@@ -2698,13 +2698,26 @@
 	color: var(--color-text-muted);
 }
 
-/* What is being shared is a fact with consequences, not a description: it
- * reads at full strength where the intro copy above it stays muted. */
-.gui-collab-scope-line {
+/* What is being shared is a fact with consequences, but it is a fact, not a
+ * heading: a faint label gives it structure so the sentence stops competing
+ * with the section title above it. */
+.gui-collab-scope-row {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
 	margin: 0;
 	font-size: 12px;
-	font-weight: 500;
 	line-height: 1.5;
+}
+
+.gui-collab-scope-label {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-collab-scope-value {
+	min-width: 0;
 	color: var(--color-text);
 }
 
@@ -2825,15 +2838,11 @@
 
 /* Prerequisite guidance belongs to the option that needs it, not to the
  * column: collapsed, it costs one line and stops competing with the choice. */
-.gui-collab-exposure-more {
-	border-top: 1px solid var(--border);
-}
-
 .gui-collab-exposure-more > summary {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 7px 12px;
+	padding: 0 12px 9px 36px;
 	font-size: 11px;
 	color: var(--color-text-muted);
 	cursor: pointer;
@@ -2856,7 +2865,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	padding: 0 12px 12px;
+	padding: 0 12px 12px 36px;
 }
 
 .gui-collab-install-body p {

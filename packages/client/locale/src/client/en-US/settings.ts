@@ -65,7 +65,6 @@ export const settings = {
 	"settings.instanceUrlLabel": "Service address",
 	"settings.instances": "Instances",
 	"settings.currentInstanceBadge": "Current",
-	"settings.instanceManager": "Instances & remote workspaces",
 	"settings.remoteWorkspaces": "Remote workspaces",
 	"settings.testAndAddInstance": "Test and add",
 	"settings.disconnectCurrent": "Disconnect current instance",
@@ -611,6 +610,7 @@ export const settings = {
 	"settings.remoteAccessModel":
 		"Phones, browsers and chat bots can all reach the workspace and sessions on this machine.",
 	"settings.shareSessionScopeHint": "Guests only see the session “{title}”.",
+	"settings.shareScope": "Scope",
 	"settings.shareExposure": "Network path",
 	"settings.exposureLan": "Local network",
 	"settings.exposureHealthReady": "Available",
@@ -7602,7 +7602,6 @@ export const settings = {
 	"settings.secretsPassphraseChangeHint": "Only re-wraps the master key; the key never lands in a plain file.",
 	"settings.secretsProtectionFailed": "Could not change the passphrase protection: {error}",
 	"settings.secretsUnlockFailed": "Could not unlock the vault: {error}",
-	"settings.connectionManager": "Instances & connections",
 	"settings.connectionKind": "Connection type",
 	"settings.connectionKindLocal": "Local",
 	"settings.connectionKindWsl": "WSL",

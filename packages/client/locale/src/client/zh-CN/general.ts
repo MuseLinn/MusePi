@@ -430,7 +430,6 @@ export const general = {
 	"general.agentInfoUnavailable": "无法读取会话信息",
 	"general.agentInfoRefreshFailed": "操作已完成，但会话信息未能刷新：{detail}",
 	"general.accountMenu": "账户与设置",
-	"general.switchHost": "切换主机",
 	"general.sideSessionLoading": "加载会话…",
 	"general.sideSessionMissing": "没有可显示的会话",
 	"general.sideSessionPlaceholder": "在此会话中继续输入…",

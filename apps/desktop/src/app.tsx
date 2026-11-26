@@ -25,7 +25,6 @@ import { ChatBootPlaceholder } from "./components/ChatBootPlaceholder";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { ConnectionGate } from "./components/ConnectionGate";
-import { ConnectionManager } from "./components/ConnectionManager";
 import type { CreationMessage } from "./components/CreationModeRow";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
@@ -1099,7 +1098,6 @@ function AppInner(): ReactNode {
 	/** The connection manager as an in-app overlay: this is the avatar menu's
 	 *  entrance. The disconnected and failure surfaces render the same
 	 *  component full-page, so there is one implementation, three entrances. */
-	const [connectionManagerOpen, setConnectionManagerOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
 	const [collabScope, setCollabScope] = useState<"workspace" | "session">("workspace");
 	const [remoteDisclaimerOpen, setRemoteDisclaimerOpen] = useState(false);
@@ -5189,16 +5187,11 @@ function AppInner(): ReactNode {
 		<UserAccountButton
 			rpc={rpc ?? null}
 			cwd={sessionMeta.get(selectedId ?? "")?.cwd ?? project ?? ""}
-			hosts={hosts}
-			daemonUrl={url}
 			connected={status === "open"}
 			onOpenSettings={openSettings}
 			onOpenShortcuts={() => setShortcutsOpen(true)}
-			onOpenCollab={() => openRemoteAccess("session")}
 			onOpenRemoteAccess={() => openRemoteAccess("workspace")}
-			onSwitchHost={switchHost}
 			onDisconnect={disconnect}
-			onOpenConnectionManager={() => setConnectionManagerOpen(true)}
 		/>
 	);
 	/** The old sidebar footer lived INSIDE the collapsible panel, so folding
@@ -5217,7 +5210,6 @@ function AppInner(): ReactNode {
 				onSwitchHost={switchHost}
 				onAddHost={addHost}
 				onRemoveHost={removeHost}
-				onOpenSettings={openSettings}
 				onReconnect={() => void boot()}
 				onDisconnect={disconnect}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
@@ -5356,9 +5348,7 @@ function AppInner(): ReactNode {
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenWorkspace={handleOpenRemoteWorkspace}
 							onOpenSettings={openSettings}
-							onOpenCollab={() => openRemoteAccess("session")}
 							onOpenInstanceManager={requestRemoteAccess}
-							onOpenConnectionManager={() => setConnectionManagerOpen(true)}
 							onOpenRemoteDisclaimer={viewRemoteDisclaimer}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
 							onRenameSession={renameSession}
@@ -5780,50 +5770,6 @@ function AppInner(): ReactNode {
 				catalog={hostCatalog}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
-			{/* Avatar-menu entrance: the SAME manager the disconnected and
-			 * failure surfaces render. It never shows 无法连接 copy itself —
-			 * opening it is not an attempt, and closing it changes nothing. */}
-			<DialogFrame
-				open={connectionManagerOpen}
-				onClose={() => setConnectionManagerOpen(false)}
-				label={t("settings.connectionManager")}
-				className="gui-dialog--connection-manager"
-			>
-				<div className="gui-conn-overlay">
-					<ConnectionManager
-						state={rpc ? "connected" : "disconnected-by-user"}
-						targets={connTargets}
-						statuses={targetStatuses}
-						activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
-						busyId={attempting ? attemptTargetId : null}
-						lastError={connectError}
-						managed={managedStatuses}
-						catalog={hostCatalog}
-						onStartManaged={startManagedTarget}
-						onStopManaged={stopManagedTarget}
-						detect={defaultWslRunner}
-						platform={
-							isElectron()
-								? (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform
-								: undefined
-						}
-						onConnect={target => {
-							// A connect from the overlay decides the surface: the
-							// dialog closes as soon as the attempt starts, so the
-							// user sees the splash or the failure page rather than a
-							// spinner inside a calm list.
-							if (rpc) rpcRef.current?.close();
-							rpcRef.current = null;
-							setRpc(null);
-							setConnectionManagerOpen(false);
-							void connectToTarget(target);
-						}}
-						onAdd={addTarget}
-						onRemove={removeConnTarget}
-						onCopy={text => void copyToClipboard(text)}
-					/>
-				</div>
-			</DialogFrame>
 			<CreationSavedToast saved={creationSaved} rpc={rpc} onDone={() => setCreationSaved(null)} />
 			<RemoteAccessDialog
 				rpc={rpc}

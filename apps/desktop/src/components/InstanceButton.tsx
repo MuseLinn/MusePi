@@ -25,7 +25,6 @@ export function InstanceButton({
 	onSwitchHost,
 	onAddHost,
 	onRemoveHost,
-	onOpenSettings,
 	onReconnect,
 	onDisconnect,
 	onOpenWorkspace,
@@ -43,7 +42,6 @@ export function InstanceButton({
 	onSwitchHost(host: RemoteHost | null): void;
 	onAddHost(host: { label: string; url: string; token?: string }): void;
 	onRemoveHost(id: string): void;
-	onOpenSettings(): void;
 	onReconnect(): void;
 	onDisconnect(): void;
 	onOpenWorkspace(cwd: string): void;
@@ -281,20 +279,9 @@ export function InstanceButton({
 					}}
 				>
 					<Icon name="settings-3" className="h-3.5 w-3.5" />
-					<span>{t("settings.instanceManager")}</span>
+					<span>{t("settings.connectionLocations")}</span>
 				</button>
 				<div className="my-1 border-t border-[var(--border)]" />
-				<button
-					type="button"
-					className="gui-view-opt"
-					onClick={() => {
-						setOpen(false);
-						onOpenSettings();
-					}}
-				>
-					<Icon name="settings-3" className="h-3.5 w-3.5" />
-					<span>{t("settings.settings")}</span>
-				</button>
 				<button
 					type="button"
 					className="gui-view-opt"
