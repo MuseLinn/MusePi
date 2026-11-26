@@ -386,9 +386,11 @@ describe("compaction summary action", () => {
 		const { container, root } = await mount(
 			transcriptEl([entry], { onOpenCompaction: (selected: { id: string }) => opened.push(selected.id) }),
 		);
-		const button = container.querySelector<HTMLButtonElement>(".tr-compaction-open");
+		const button = container.querySelector<HTMLButtonElement>(".tr-compact-open");
 		expect(button?.tagName).toBe("BUTTON");
 		expect(button?.textContent).toContain("791k → 76.6k tokens");
+		// The card states what the pass freed, not just the two counts.
+		expect(button?.textContent).toContain("714k");
 		await act(async () => button?.click());
 		expect(opened).toEqual(["compaction-1"]);
 		await act(async () => root.unmount());
@@ -405,7 +407,7 @@ describe("compaction summary action", () => {
 			tokensBefore: 1000,
 		};
 		const { container, root } = await mount(transcriptEl([entry]));
-		expect(container.querySelector(".tr-divider")?.textContent).not.toContain("→");
+		expect(container.querySelector(".tr-compact-card")?.textContent).not.toContain("→");
 		await act(async () => root.unmount());
 	});
 });
