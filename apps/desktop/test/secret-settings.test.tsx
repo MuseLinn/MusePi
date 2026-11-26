@@ -129,16 +129,24 @@ describe("设置页密钥", () => {
 		expect(resolveActiveSection("secrets", new Set(items.map(item => item.id)))).toBe("secrets");
 	});
 
-	test("空态：静态加密陈述保护方式，空态解释请求卡片，计数与添加动作并列", async () => {
+	test("空态：保护状态即标题，连接器是副行事实，空态解释请求卡片，计数与添加动作并列", async () => {
 		const fake = new FakeRpc();
-		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		fake.responses.set("secret.status", {
+			mode: "encrypted",
+			count: 0,
+			protectedBy: "key-file",
+			connectors: { protectedBy: "key-file", locked: false },
+		});
 		fake.responses.set("secret.list", { entries: [], count: 0 });
 
 		const scope = await mount(fake);
 
-		// 保护方式是一行事实 + 一个动作，不是一张三行状态卡。
-		expect(scope.textContent).toContain("静态加密");
+		// 状态本身就是标题：页面说的是「现在由什么保护主密钥」，不是一张并列三行的说明卡。
 		expect(scope.textContent).toContain("本机密钥文件");
+		expect(scope.textContent).toContain("主密钥保存在仅本人可读的本机文件里");
+		expect(scope.textContent).toContain("连接器凭据使用独立的本机密钥文件");
+		// 「静态加密」是恒为真的性质，不再冒充一个可选状态。
+		expect(scope.textContent).not.toContain("静态加密");
 		expect(buttonByText(scope, "用口令保护").type).toBe("button");
 		// 空态不是一句灰字：标题 + 说明请求卡片怎么来。
 		expect(scope.textContent).toContain("还没有保存任何内容。");
@@ -150,6 +158,8 @@ describe("设置页密钥", () => {
 		expect(scope.textContent).toContain("值在本机加密保存");
 		expect(fake.calls("secret.status")).toEqual([{}]);
 		expect(fake.calls("secret.list")).toEqual([{}]);
+		// 行内要说出哪些 MCP server 获了授权，所以授权表也是本页自己的读取。
+		expect(fake.calls("secret.mcpGrants")).toEqual([{}]);
 	});
 
 	test("后台未连接时不把「未读取」当成空列表", async () => {
@@ -269,7 +279,7 @@ describe("设置页密钥", () => {
 		expect(emptyScope.textContent).toContain("还没有保存任何内容。");
 	});
 
-	test("表单字段行消费共享的 gui-settings-field 原语，不再是本页私有的字段语法", async () => {
+	test("表单字段行消费共享的 gui-settings-field 原语，交付方式是真的控件而不是一行说明", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
 		fake.responses.set("secret.list", { entries: [], count: 0 });
@@ -278,16 +288,91 @@ describe("设置页密钥", () => {
 		await act(async () => buttonByText(scope, "添加密钥").click());
 
 		// 每一行都是共享原语：标签 / 提示挂在 grid area，控件在 control 格里。
-		const fields = [...scope.querySelectorAll(".gui-settings-field")];
-		expect(fields.length).toBe(3);
+		// 名称、值、用途，再加上范围（只读）与交付方式（Segmented）：五行各一件事。
+		const fields = [...scope.querySelectorAll(".gui-secret-form .gui-settings-field")];
+		expect(fields.length).toBe(5);
 		for (const field of fields) {
 			expect(field.querySelector(".gui-settings-field-label") !== null).toBe(true);
 			const control = field.querySelector(".gui-settings-field-control");
-			expect(control?.querySelector("input") !== null).toBe(true);
+			expect(control !== null).toBe(true);
 		}
+		// 前 3 行是真输入框；范围是只读事实，交付方式是分段控件。
+		expect(scope.querySelectorAll(".gui-secret-form .gui-settings-field-control input").length).toBe(3);
+		expect(scope.querySelector(".gui-secret-form .gui-secret-readonly")?.textContent).toContain("所有会话");
+		// 交付方式此前只是一行不可编辑的文字，而 daemon 一直支持这个参数。
+		const delivery = scope.querySelector('.gui-secret-form [role="radiogroup"]');
+		expect(delivery?.querySelectorAll('[role="radio"]').length).toBe(2);
 		// 页面私有的那套字段类不得再出现（否则就是第二份近似语法）。
 		expect(scope.querySelector(".gui-secret-field") === null).toBe(true);
 		expect(scope.querySelector(".gui-secret-field-label") === null).toBe(true);
+	});
+
+	test("选「文件」后提交带着 delivery: file，替换时保留原交付方式", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 1 });
+		fake.responses.set("secret.list", {
+			entries: [secretEntry({ delivery: "file" })],
+			count: 1,
+		});
+		fake.responses.set("secret.set", { entry: secretEntry({ delivery: "file" }) });
+
+		const scope = await mount(fake);
+
+		// 替换窗口打开时，分段控件必须落在已存的交付方式上，而不是默认 env。
+		const row = scope.querySelector<HTMLElement>('[data-secret-name="GITHUB_TOKEN"]')!;
+		await act(async () => row.querySelector<HTMLButtonElement>('[data-secret-action="replace"]')?.click());
+		const delivery = scope.querySelector<HTMLElement>('.gui-secret-form [role="radiogroup"]')!;
+		const fileRadio = [...delivery.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(button =>
+			(button.textContent ?? "").includes("文件"),
+		)!;
+		expect(fileRadio.getAttribute("aria-checked")).toBe("true");
+		// 说明句跟着选择走，说的是这一种交付方式怎么到达 Agent。
+		expect(scope.textContent).toContain("写成仅本人可读的文件");
+
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="value"]')!, "ghp_new_value_123");
+		await act(async () => scope.querySelector<HTMLFormElement>("form")?.requestSubmit());
+		await waitFor(() => fake.calls("secret.set").length === 1, "secret.set");
+		// 交付方式随替换一起送回去：省略它会把一个文件型条目悄悄改成环境变量。
+		expect(fake.calls("secret.set")).toEqual([
+			{ name: "GITHUB_TOKEN", value: "ghp_new_value_123", delivery: "file" },
+		]);
+	});
+
+	test("行内说出哪些 MCP server 获了授权，没授权就说没有这一行", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 2 });
+		fake.responses.set("secret.list", {
+			entries: [secretEntry(), secretEntry({ name: "STRIPE_KEY", purpose: "" })],
+			count: 2,
+		});
+		fake.responses.set("secret.mcpGrants", {
+			servers: [
+				{ server: "github", target: "url:https://mcp.github.example/api", keys: ["GITHUB_TOKEN"] },
+				{ server: "local", target: "stdio:node", keys: ["GITHUB_TOKEN", "OTHER_TOKEN"] },
+			],
+		});
+
+		const scope = await mount(fake);
+
+		const granted = scope.querySelector<HTMLElement>('[data-secret-name="GITHUB_TOKEN"] .gui-secret-row-grants');
+		expect(granted?.textContent).toContain("MCP 授权");
+		expect(granted?.textContent).toContain("github");
+		expect(granted?.textContent).toContain("local");
+		// 只有真正被授权的条目才有这一行：授权表里没提到的名字不能凭空长出来。
+		expect(scope.querySelector('[data-secret-name="STRIPE_KEY"] .gui-secret-row-grants') === null).toBe(true);
+	});
+
+	test("授权表读取失败时不谎称「没有服务器可读」", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 1 });
+		fake.responses.set("secret.list", { entries: [secretEntry()], count: 1 });
+		fake.failures.set("secret.mcpGrants", new Error("grants unavailable"));
+
+		const scope = await mount(fake);
+
+		// 「读不到」与「没人被授权」是两个事实；前者不能渲染成后者。
+		expect(scope.textContent).toContain("GITHUB_TOKEN");
+		expect(scope.querySelector(".gui-secret-row-grants") === null).toBe(true);
 	});
 
 	test("添加表单提交名字、值和用途，值输入已遮罩且提交后不回显", async () => {
@@ -310,7 +395,7 @@ describe("设置页密钥", () => {
 		await waitFor(() => fake.calls("secret.set").length === 1, "secret.set");
 
 		expect(fake.calls("secret.set")).toEqual([
-			{ name: "OPENAI_API_KEY", value: "sk-test-123456", purpose: "模型调用" },
+			{ name: "OPENAI_API_KEY", value: "sk-test-123456", purpose: "模型调用", delivery: "env" },
 		]);
 		expect(scope.textContent).not.toContain("sk-test-123456");
 		expect(scope.querySelector('[data-secret-field="value"]') === null).toBe(true);

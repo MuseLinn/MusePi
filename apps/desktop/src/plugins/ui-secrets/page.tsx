@@ -17,11 +17,12 @@
  * and the provider boundary carries a keyed placeholder instead of the value.
  */
 
-import { t } from "@musepi/client-core";
+import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
 import { KeyRound, Lock, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { HeightMorph } from "../../components/HeightMorph";
 import { tapFeedback } from "../../lib/haptic";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { SlotComponentProps } from "../../lib/slot-host";
@@ -81,6 +82,16 @@ interface GrantFormState {
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 const MIN_SECRET_VALUE_LENGTH = 4;
 const MIN_PASSPHRASE_LENGTH = 8;
+
+/** Built per render, not at module scope: a module-level `t()` freezes the
+ *  locale the page was first imported under, so switching language would leave
+ *  these two labels in the old one. */
+function deliveryOptions(): readonly SegmentedOption<SecretDelivery>[] {
+	return [
+		{ value: "env", label: t("settings.secretsDeliveryEnv") },
+		{ value: "file", label: t("settings.secretsDeliveryFile") },
+	];
+}
 
 interface SecretFormState {
 	mode: "add" | "replace";
@@ -234,14 +245,35 @@ function SecretForm({
 					</span>
 				</label>
 			)}
+			{/* Scope is fixed on this page: `secret.set` accepts "workspace" only from
+			 *  a secret-request card, which is the surface that knows which session
+			 *  asked. Delivery IS editable, because the daemon already accepts it
+			 *  here and the two shapes reach the agent differently: an env var the
+			 *  bash child sees, or a private file whose path it is told. */}
+			<div className="gui-settings-field">
+				<span className="gui-settings-field-label">{t("settings.secretsScope")}</span>
+				<span className="gui-settings-field-hint">{t("settings.secretsScopeAllHint")}</span>
+				<span className="gui-settings-field-control">
+					<span className="gui-secret-readonly">{t("settings.secretsScopeAll")}</span>
+				</span>
+			</div>
+			<div className="gui-settings-field">
+				<span className="gui-settings-field-label">{t("settings.secretsDelivery")}</span>
+				<span className="gui-settings-field-hint">
+					{form.delivery === "file" ? t("settings.secretsDeliveryFileHint") : t("settings.secretsDeliveryEnvHint")}
+				</span>
+				<span className="gui-settings-field-control">
+					<Segmented
+						className="gui-seg--compact"
+						ariaLabel={t("settings.secretsDelivery")}
+						value={form.delivery}
+						options={deliveryOptions()}
+						disabled={busy}
+						onChange={value => onChange({ delivery: value })}
+					/>
+				</span>
+			</div>
 			<div className="gui-secret-form-foot">
-				<span className="gui-settings-field-hint">
-					{t("settings.secretsScope")}: {t("settings.secretsScopeAll")}
-				</span>
-				<span className="gui-settings-field-hint">
-					{t("settings.secretsDelivery")}:{" "}
-					{form.delivery === "file" ? t("settings.secretsDeliveryFile") : t("settings.secretsDeliveryEnv")}
-				</span>
 				<div className="gui-secret-form-actions">
 					<button type="button" className="gui-btn" onClick={onCancel} disabled={busy}>
 						{t("settings.cancel")}
@@ -281,6 +313,9 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 	const [grantForm, setGrantForm] = useState<GrantFormState | null>(null);
 	const [grantBusy, setGrantBusy] = useState(false);
 	const [grantError, setGrantError] = useState<string | null>(null);
+	/** Recorded grants, so a row can say which servers may read its key. The
+	 *  grant form reloads this too; the list read alone could not answer it. */
+	const [grants, setGrants] = useState<McpGrant[]>([]);
 	const [envText, setEnvText] = useState("");
 	const [envError, setEnvError] = useState<string | null>(null);
 	const [envDone, setEnvDone] = useState<number | null>(null);
@@ -294,6 +329,7 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 		if (!rpc) {
 			setEntries([]);
 			setStatus(null);
+			setGrants([]);
 			setLoading(false);
 			setStatusError(null);
 			setListError(null);
@@ -306,7 +342,10 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 		void Promise.allSettled([
 			rpc.request<SecretStatusResult>("secret.status", {}),
 			rpc.request<SecretListResult>("secret.list", {}),
-		]).then(([statusResult, listResult]) => {
+			// A row says which MCP servers may read its key, so the grants are part
+			// of the page's own read rather than something only the grant form loads.
+			rpc.request<{ servers?: McpGrant[] }>("secret.mcpGrants", {}),
+		]).then(([statusResult, listResult, grantResult]) => {
 			if (!alive) return;
 			if (statusResult.status === "fulfilled") {
 				setStatus(statusResult.value ?? null);
@@ -320,6 +359,13 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 			} else {
 				setListError(errorText(listResult.reason));
 			}
+			// A failed grant read removes the extra line instead of claiming "no
+			// server may read this", which would be a different, wrong fact.
+			setGrants(
+				grantResult.status === "fulfilled" && Array.isArray(grantResult.value?.servers)
+					? grantResult.value.servers
+					: [],
+			);
 			setLoading(false);
 		});
 		return () => {
@@ -358,16 +404,19 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 				(server): server is McpServerOption =>
 					typeof server?.name === "string" && typeof server?.target === "string",
 			);
-			const grants = Array.isArray(recorded?.servers) ? recorded.servers : [];
+			const recordedGrants = Array.isArray(recorded?.servers) ? recorded.servers : [];
+			// The form's list is authoritative from here on, so the rows read the
+			// same snapshot instead of the page keeping a second, older copy.
+			setGrants(recordedGrants);
 			const checked = servers
 				.filter(server =>
-					grants.some(
+					recordedGrants.some(
 						grant =>
 							grant.server === server.name && grant.target === server.target && grant.keys.includes(entry.name),
 					),
 				)
 				.map(server => server.name);
-			setGrantForm({ entry, servers, grants, checked });
+			setGrantForm({ entry, servers, grants: recordedGrants, checked });
 		} catch (error) {
 			setActionError(t("settings.secretsMcpLoadFailed", { error: errorText(error) }));
 		} finally {
@@ -404,6 +453,9 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 				await rpc.request("secret.setMcpGrant", { server: server.name, target: server.target, keys: wanted });
 			}
 			setGrantForm(null);
+			// A row now states which servers may read its key, so the saved grants
+			// have to come back through the same read the rows use.
+			reload();
 		} catch (error) {
 			setGrantError(t("settings.secretsMcpSaveFailed", { error: errorText(error) }));
 		} finally {
@@ -571,6 +623,9 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 				value,
 				// Replace keeps the stored purpose; add records it when present.
 				...(form.mode === "add" && form.purpose.trim() ? { purpose: form.purpose.trim() } : {}),
+				// The picker is a real choice now, so the chosen shape is always sent;
+				// omitting it would silently create an `env` entry whatever the user picked.
+				delivery: form.delivery,
 			});
 			if (result?.entry) {
 				const entry = result.entry;
@@ -643,6 +698,18 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 		? entries.filter(entry => `${entry.name} ${entry.purpose}`.toLowerCase().includes(normalizedQuery))
 		: entries;
 	const bodyOpen = form !== null || importing || grantForm !== null;
+	// Which body is on screen. The rows and the empty state share one key because
+	// they are the same "list" state as far as the motion is concerned; the count
+	// or filter changing is not a shape change.
+	const bodyState = loading
+		? "loading"
+		: form
+			? `form:${form.mode}`
+			: importing
+				? "import"
+				: grantForm
+					? "grant"
+					: "list";
 	const locked = status?.locked === true;
 	const passphraseProtected = status?.protectedBy === "passphrase";
 	const protectionAction = locked
@@ -663,9 +730,12 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 			{listError && <WarningLine message={t("settings.secretsListFailed", { error: listError })} onRetry={reload} />}
 			{actionError && <WarningLine message={actionError} />}
 
-			{/* How the master key is stored, and the one action that changes it. A
-			 * locked store keeps this row as the only way back in, so it is not
-			 * hidden behind the list. */}
+			{/* The one question this card answers is "what protects the master key
+			 *  right now", so the state itself is the title. The key file is not a
+			 *  second fact to list beside it: it IS the state. Connectors appear as
+			 *  one subordinate line, because a passphrase that wraps only half the
+			 *  secrets would be the surprising case. A locked store keeps this card
+			 *  as the only way back in, so it never hides behind the list. */}
 			{status && (
 				<div
 					className={`gui-agent-card gui-secret-protection${locked ? " gui-secret-protection--locked" : ""}`}
@@ -682,18 +752,22 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 						</span>
 						<div className="gui-secret-protection-text">
 							<span className="gui-secret-protection-title">
-								{locked ? t("settings.secretsLockedTitle") : t("settings.secretsProtection")}
+								{locked
+									? t("settings.secretsLockedTitle")
+									: status.protectedBy === "passphrase"
+										? t("settings.secretsProtectionPassphrase")
+										: t("settings.secretsProtectionKeyFile")}
 							</span>
 							<span className="gui-secret-protection-meta">
 								{locked
 									? lockedReasonText(status.reason)
 									: status.protectedBy === "passphrase"
-										? t("settings.secretsProtectionPassphrase")
-										: t("settings.secretsProtectionKeyFile")}
+										? t("settings.secretsProtectionPassphraseMeta")
+										: t("settings.secretsProtectionKeyFileMeta")}
 							</span>
-							{/* The same passphrase wraps the connector tokens, so the row
-							 * names both rather than letting the user believe one store is
-							 * protected while the other is not. */}
+							{/* The passphrase wraps the connector tokens too, so the card
+							 *  says which way the two stores sit relative to each other
+							 *  instead of letting one look unprotected next to the other. */}
 							{status.connectors && (
 								<span
 									className="gui-secret-protection-meta"
@@ -730,132 +804,138 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 							</div>
 						)}
 					</div>
-					{protection && (
-						<form
-							className="gui-secret-protection-form"
-							data-secret-protection-form={protection.mode}
-							aria-busy={protectionBusy}
-							onSubmit={event => {
-								event.preventDefault();
-								void submitProtection();
-							}}
-							onKeyDown={event => {
-								if (event.key !== "Escape" || protectionBusy) return;
-								event.preventDefault();
-								event.stopPropagation();
-								closeProtection();
-							}}
-						>
-							<label className="gui-settings-field">
-								<span className="gui-settings-field-label">
-									{protection.mode === "change"
-										? t("settings.secretsPassphraseCurrent")
-										: t("settings.secretsPassphrase")}
-								</span>
-								{protection.mode !== "unlock" && (
-									<span className="gui-settings-field-hint">
-										{protection.mode === "protect"
-											? t("settings.secretsPassphraseHint")
-											: protection.mode === "change"
-												? t("settings.secretsPassphraseChangeHint")
-												: t("settings.secretsPassphraseRemoveHint")}
-									</span>
-								)}
-								<span className="gui-settings-field-control">
-									<input
-										type="password"
-										className="gui-secret-input"
-										data-secret-field="passphrase"
-										value={protection.passphrase}
-										autoComplete={
-											protection.mode === "unlock" || protection.mode === "change"
-												? "current-password"
-												: "new-password"
-										}
-										autoFocus
-										disabled={protectionBusy}
-										onChange={event => {
-											setProtectionError(null);
-											setProtection(current =>
-												current ? { ...current, passphrase: event.target.value } : current,
-											);
-										}}
-									/>
-								</span>
-							</label>
-							{protection.mode === "change" && (
-								<label className="gui-settings-field">
-									<span className="gui-settings-field-label">{t("settings.secretsPassphraseNext")}</span>
-									<span className="gui-settings-field-control">
-										<input
-											type="password"
-											className="gui-secret-input"
-											data-secret-field="next"
-											value={protection.next}
-											autoComplete="new-password"
-											disabled={protectionBusy}
-											onChange={event => {
-												setProtectionError(null);
-												setProtection(current =>
-													current ? { ...current, next: event.target.value } : current,
-												);
-											}}
-										/>
-									</span>
-								</label>
-							)}
-							{(protection.mode === "protect" || protection.mode === "change") && (
+					{/* The passphrase form appears in the same card, so the card grows
+					 *  rather than a second surface opening: HeightMorph keeps the
+					 *  expand and the close continuous, and the key is the mode so
+					 *  going protect → change re-eases once instead of twice. */}
+					<HeightMorph morphKey={protection?.mode ?? null} fade={false}>
+						{protection && (
+							<form
+								className="gui-secret-protection-form"
+								data-secret-protection-form={protection.mode}
+								aria-busy={protectionBusy}
+								onSubmit={event => {
+									event.preventDefault();
+									void submitProtection();
+								}}
+								onKeyDown={event => {
+									if (event.key !== "Escape" || protectionBusy) return;
+									event.preventDefault();
+									event.stopPropagation();
+									closeProtection();
+								}}
+							>
 								<label className="gui-settings-field">
 									<span className="gui-settings-field-label">
 										{protection.mode === "change"
-											? t("settings.secretsPassphraseNextConfirm")
-											: t("settings.secretsPassphraseConfirm")}
+											? t("settings.secretsPassphraseCurrent")
+											: t("settings.secretsPassphrase")}
 									</span>
+									{protection.mode !== "unlock" && (
+										<span className="gui-settings-field-hint">
+											{protection.mode === "protect"
+												? t("settings.secretsPassphraseHint")
+												: protection.mode === "change"
+													? t("settings.secretsPassphraseChangeHint")
+													: t("settings.secretsPassphraseRemoveHint")}
+										</span>
+									)}
 									<span className="gui-settings-field-control">
 										<input
 											type="password"
 											className="gui-secret-input"
-											data-secret-field="confirm"
-											value={protection.confirm}
-											autoComplete="new-password"
+											data-secret-field="passphrase"
+											value={protection.passphrase}
+											autoComplete={
+												protection.mode === "unlock" || protection.mode === "change"
+													? "current-password"
+													: "new-password"
+											}
+											autoFocus
 											disabled={protectionBusy}
 											onChange={event => {
 												setProtectionError(null);
 												setProtection(current =>
-													current ? { ...current, confirm: event.target.value } : current,
+													current ? { ...current, passphrase: event.target.value } : current,
 												);
 											}}
 										/>
 									</span>
 								</label>
-							)}
-							<div className="gui-secret-form-foot">
-								<span className="gui-settings-field-hint">{t("settings.secretsPassphraseNote")}</span>
-								<div className="gui-secret-form-actions">
-									<button
-										type="button"
-										className="gui-btn"
-										onClick={closeProtection}
-										disabled={protectionBusy}
-									>
-										{t("settings.cancel")}
-									</button>
-									<button type="submit" className="gui-btn gui-btn-primary" disabled={protectionBusy}>
-										{protectionBusy
-											? t("settings.secretsSaving")
-											: protection.mode === "change"
-												? t("settings.secretsChangePassphrase")
-												: protectionAction}
-									</button>
+								{protection.mode === "change" && (
+									<label className="gui-settings-field">
+										<span className="gui-settings-field-label">{t("settings.secretsPassphraseNext")}</span>
+										<span className="gui-settings-field-control">
+											<input
+												type="password"
+												className="gui-secret-input"
+												data-secret-field="next"
+												value={protection.next}
+												autoComplete="new-password"
+												disabled={protectionBusy}
+												onChange={event => {
+													setProtectionError(null);
+													setProtection(current =>
+														current ? { ...current, next: event.target.value } : current,
+													);
+												}}
+											/>
+										</span>
+									</label>
+								)}
+								{(protection.mode === "protect" || protection.mode === "change") && (
+									<label className="gui-settings-field">
+										<span className="gui-settings-field-label">
+											{protection.mode === "change"
+												? t("settings.secretsPassphraseNextConfirm")
+												: t("settings.secretsPassphraseConfirm")}
+										</span>
+										<span className="gui-settings-field-control">
+											<input
+												type="password"
+												className="gui-secret-input"
+												data-secret-field="confirm"
+												value={protection.confirm}
+												autoComplete="new-password"
+												disabled={protectionBusy}
+												onChange={event => {
+													setProtectionError(null);
+													setProtection(current =>
+														current ? { ...current, confirm: event.target.value } : current,
+													);
+												}}
+											/>
+										</span>
+									</label>
+								)}
+								<div className="gui-secret-form-foot">
+									<span className="gui-settings-field-hint">{t("settings.secretsPassphraseNote")}</span>
+									<div className="gui-secret-form-actions">
+										<button
+											type="button"
+											className="gui-btn"
+											onClick={closeProtection}
+											disabled={protectionBusy}
+										>
+											{t("settings.cancel")}
+										</button>
+										<button type="submit" className="gui-btn gui-btn-primary" disabled={protectionBusy}>
+											{protectionBusy
+												? t("settings.secretsSaving")
+												: protection.mode === "change"
+													? t("settings.secretsChangePassphrase")
+													: protectionAction}
+										</button>
+									</div>
 								</div>
-							</div>
-							{protectionError && (
-								<div className="gui-secret-form-error" role="alert">
-									{protectionError}
-								</div>
-							)}
-						</form>
-					)}
+								{protectionError && (
+									<div className="gui-secret-form-error" role="alert">
+										{protectionError}
+									</div>
+								)}
+							</form>
+						)}
+					</HeightMorph>
 				</div>
 			)}
 
@@ -901,229 +981,254 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 
 			{/* One body, never two: an open form replaces the rows/empty state
 			 * instead of stacking above them. `保险库 · N` stays visible because
-			 * it is a fact about the list. */}
-			{loading ? (
-				<div className="gui-secret-loading">{t("settings.loading")}</div>
-			) : form ? (
-				<SecretForm
-					form={form}
-					busy={busy}
-					error={formError}
-					onChange={patch => {
-						setFormError(null);
-						setForm(current => (current ? { ...current, ...patch } : current));
-					}}
-					onCancel={closeForm}
-					onSubmit={() => void submitForm()}
-				/>
-			) : importing ? (
-				<form
-					className="gui-agent-card gui-secret-form"
-					aria-busy={busy}
-					onSubmit={event => {
-						event.preventDefault();
-						void importEnv();
-					}}
-					onKeyDown={event => {
-						if (event.key !== "Escape" || busy) return;
-						event.preventDefault();
-						event.stopPropagation();
-						closeImport();
-					}}
-				>
-					<div className="gui-secret-form-head">
-						<span className="gui-secret-form-title">{t("settings.secretsImportTitle")}</span>
-					</div>
-					<label className="gui-settings-field">
-						<span className="gui-settings-field-label">{t("settings.secretsImportLabel")}</span>
-						<span className="gui-settings-field-hint">{t("settings.secretsImportHint")}</span>
-						<span className="gui-settings-field-control">
-							<textarea
-								className="gui-secret-input gui-secret-input--mono"
-								data-secret-field="env"
-								rows={5}
-								value={envText}
-								spellCheck={false}
-								autoComplete="off"
-								dir="ltr"
-								placeholder={t("settings.secretsImportPlaceholder")}
-								autoFocus
-								disabled={busy}
-								onChange={event => {
-									setEnvError(null);
-									setEnvDone(null);
-									setEnvText(event.target.value);
-								}}
-							/>
-						</span>
-					</label>
-					{envDone !== null && (
-						<p role="status" className="gui-note">
-							{t("settings.secretsImportDone", { count: envDone })}
-						</p>
-					)}
-					{envError && (
-						<div className="gui-secret-form-error" role="alert">
-							{envError}
+			 * it is a fact about the list.
+			 *
+			 * The body is wrapped in HeightMorph because the four states (loading,
+			 * form, import, rows/empty) differ wildly in height: switching between
+			 * them used to snap, and the page's own scroll position jumped with it.
+			 * The morph key is the state, not the content, so editing a field inside
+			 * the form does not re-animate it. */}
+			<HeightMorph morphKey={bodyState}>
+				{loading ? (
+					<div className="gui-secret-loading">{t("settings.loading")}</div>
+				) : form ? (
+					<SecretForm
+						form={form}
+						busy={busy}
+						error={formError}
+						onChange={patch => {
+							setFormError(null);
+							setForm(current => (current ? { ...current, ...patch } : current));
+						}}
+						onCancel={closeForm}
+						onSubmit={() => void submitForm()}
+					/>
+				) : importing ? (
+					<form
+						className="gui-agent-card gui-secret-form"
+						aria-busy={busy}
+						onSubmit={event => {
+							event.preventDefault();
+							void importEnv();
+						}}
+						onKeyDown={event => {
+							if (event.key !== "Escape" || busy) return;
+							event.preventDefault();
+							event.stopPropagation();
+							closeImport();
+						}}
+					>
+						<div className="gui-secret-form-head">
+							<span className="gui-secret-form-title">{t("settings.secretsImportTitle")}</span>
 						</div>
-					)}
-					<div className="gui-secret-form-foot">
-						<span className="gui-settings-field-hint">{t("settings.secretsImportScope")}</span>
-						<div className="gui-secret-form-actions">
-							<button type="button" className="gui-btn" onClick={closeImport} disabled={busy}>
-								{t("settings.cancel")}
-							</button>
-							{envDone !== null ? (
-								<button type="button" className="gui-btn gui-btn-primary" onClick={closeImport}>
-									{t("settings.secretsImportFinish")}
+						<label className="gui-settings-field">
+							<span className="gui-settings-field-label">{t("settings.secretsImportLabel")}</span>
+							<span className="gui-settings-field-hint">{t("settings.secretsImportHint")}</span>
+							<span className="gui-settings-field-control">
+								<textarea
+									className="gui-secret-input gui-secret-input--mono"
+									data-secret-field="env"
+									rows={5}
+									value={envText}
+									spellCheck={false}
+									autoComplete="off"
+									dir="ltr"
+									placeholder={t("settings.secretsImportPlaceholder")}
+									autoFocus
+									disabled={busy}
+									onChange={event => {
+										setEnvError(null);
+										setEnvDone(null);
+										setEnvText(event.target.value);
+									}}
+								/>
+							</span>
+						</label>
+						{envDone !== null && (
+							<p role="status" className="gui-note">
+								{t("settings.secretsImportDone", { count: envDone })}
+							</p>
+						)}
+						{envError && (
+							<div className="gui-secret-form-error" role="alert">
+								{envError}
+							</div>
+						)}
+						<div className="gui-secret-form-foot">
+							<span className="gui-settings-field-hint">{t("settings.secretsImportScope")}</span>
+							<div className="gui-secret-form-actions">
+								<button type="button" className="gui-btn" onClick={closeImport} disabled={busy}>
+									{t("settings.cancel")}
 								</button>
-							) : (
-								<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
-									{busy ? t("settings.secretsSaving") : t("settings.secretsImportSubmit")}
+								{envDone !== null ? (
+									<button type="button" className="gui-btn gui-btn-primary" onClick={closeImport}>
+										{t("settings.secretsImportFinish")}
+									</button>
+								) : (
+									<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
+										{busy ? t("settings.secretsSaving") : t("settings.secretsImportSubmit")}
+									</button>
+								)}
+							</div>
+						</div>
+					</form>
+				) : grantForm ? (
+					<form
+						className="gui-agent-card gui-secret-form"
+						data-secret-grant-form={grantForm.entry.name}
+						aria-busy={grantBusy}
+						onSubmit={event => {
+							event.preventDefault();
+							void saveGrant();
+						}}
+						onKeyDown={event => {
+							if (event.key !== "Escape" || grantBusy) return;
+							event.preventDefault();
+							event.stopPropagation();
+							setGrantForm(null);
+						}}
+					>
+						<div className="gui-secret-form-head">
+							<span className="gui-secret-form-title">
+								{t("settings.secretsMcpTitle", { name: grantForm.entry.name })}
+							</span>
+						</div>
+						{grantForm.servers.length === 0 ? (
+							<p className="gui-note">{t("settings.secretsMcpNoServers")}</p>
+						) : (
+							<ul className="gui-secret-grant-list">
+								{grantForm.servers.map(server => (
+									<li key={server.name}>
+										<label className="gui-secret-grant-row" data-mcp-server={server.name}>
+											<input
+												type="checkbox"
+												checked={grantForm.checked.includes(server.name)}
+												disabled={grantBusy}
+												onChange={event => toggleGrant(server.name, event.target.checked)}
+											/>
+											<span className="gui-secret-grant-name">{server.name}</span>
+											<span className="gui-secret-grant-target" title={server.target}>
+												{server.target}
+											</span>
+										</label>
+									</li>
+								))}
+							</ul>
+						)}
+						<div className="gui-secret-form-foot">
+							<span className="gui-settings-field-hint">{t("settings.secretsMcpHint")}</span>
+							<div className="gui-secret-form-actions">
+								<button
+									type="button"
+									className="gui-btn"
+									onClick={() => setGrantForm(null)}
+									disabled={grantBusy}
+								>
+									{t("settings.cancel")}
 								</button>
-							)}
+								<button
+									type="submit"
+									className="gui-btn gui-btn-primary"
+									disabled={grantBusy || grantForm.servers.length === 0}
+								>
+									{grantBusy ? t("settings.secretsSaving") : t("general.save")}
+								</button>
+							</div>
 						</div>
+						{grantError && (
+							<div className="gui-secret-form-error" role="alert">
+								{grantError}
+							</div>
+						)}
+					</form>
+				) : !listKnown ? null : entries.length === 0 ? (
+					<div className="gui-secret-empty">
+						<div className="gui-secret-empty-title">{t("settings.secretsEmptyTitle")}</div>
+						<p className="gui-secret-empty-body">{t("settings.secretsEmptyBody")}</p>
 					</div>
-				</form>
-			) : grantForm ? (
-				<form
-					className="gui-agent-card gui-secret-form"
-					data-secret-grant-form={grantForm.entry.name}
-					aria-busy={grantBusy}
-					onSubmit={event => {
-						event.preventDefault();
-						void saveGrant();
-					}}
-					onKeyDown={event => {
-						if (event.key !== "Escape" || grantBusy) return;
-						event.preventDefault();
-						event.stopPropagation();
-						setGrantForm(null);
-					}}
-				>
-					<div className="gui-secret-form-head">
-						<span className="gui-secret-form-title">
-							{t("settings.secretsMcpTitle", { name: grantForm.entry.name })}
-						</span>
-					</div>
-					{grantForm.servers.length === 0 ? (
-						<p className="gui-note">{t("settings.secretsMcpNoServers")}</p>
-					) : (
-						<ul className="gui-secret-grant-list">
-							{grantForm.servers.map(server => (
-								<li key={server.name}>
-									<label className="gui-secret-grant-row" data-mcp-server={server.name}>
-										<input
-											type="checkbox"
-											checked={grantForm.checked.includes(server.name)}
-											disabled={grantBusy}
-											onChange={event => toggleGrant(server.name, event.target.checked)}
-										/>
-										<span className="gui-secret-grant-name">{server.name}</span>
-										<span className="gui-secret-grant-target" title={server.target}>
-											{server.target}
-										</span>
-									</label>
-								</li>
-							))}
-						</ul>
-					)}
-					<div className="gui-secret-form-foot">
-						<span className="gui-settings-field-hint">{t("settings.secretsMcpHint")}</span>
-						<div className="gui-secret-form-actions">
-							<button type="button" className="gui-btn" onClick={() => setGrantForm(null)} disabled={grantBusy}>
-								{t("settings.cancel")}
-							</button>
-							<button
-								type="submit"
-								className="gui-btn gui-btn-primary"
-								disabled={grantBusy || grantForm.servers.length === 0}
-							>
-								{grantBusy ? t("settings.secretsSaving") : t("general.save")}
-							</button>
-						</div>
-					</div>
-					{grantError && (
-						<div className="gui-secret-form-error" role="alert">
-							{grantError}
-						</div>
-					)}
-				</form>
-			) : !listKnown ? null : entries.length === 0 ? (
-				<div className="gui-secret-empty">
-					<div className="gui-secret-empty-title">{t("settings.secretsEmptyTitle")}</div>
-					<p className="gui-secret-empty-body">{t("settings.secretsEmptyBody")}</p>
-				</div>
-			) : visible.length === 0 ? (
-				<div className="gui-secret-none">{t("settings.secretsNoMatch")}</div>
-			) : (
-				<ul className="gui-secret-list">
-					{visible.map(entry => {
-						const meta = [
-							entry.delivery === "file" ? t("settings.secretsDeliveryFile") : null,
-							entry.scope === "all" ? null : scopeLabel(entry.scope),
-							entry.purpose || null,
-							entry.lastUsedAt ? lastUsedText(entry) : null,
-						]
-							.filter(Boolean)
-							.join(" · ");
-						return (
-							<li key={entry.name} className="gui-agent-card gui-secret-row" data-secret-name={entry.name}>
-								<span className="gui-secret-row-icon">
-									<KeyRound size={13} aria-hidden="true" />
-								</span>
-								<div className="gui-secret-row-main">
-									<div className="gui-secret-row-head">
-										<span className="gui-secret-name">{entry.name}</span>
+				) : visible.length === 0 ? (
+					<div className="gui-secret-none">{t("settings.secretsNoMatch")}</div>
+				) : (
+					<ul className="gui-secret-list">
+						{visible.map(entry => {
+							// `file` delivery is the unusual shape, so it earns a word; "env"
+							// is the default and stays silent. Purpose, scope and last use
+							// follow, and the servers that may read the key close the line:
+							// "who can use this" was the one fact the row did not answer.
+							const grantedTo = grants
+								.filter(grant => grant.keys.includes(entry.name))
+								.map(grant => grant.server);
+							const meta = [
+								entry.delivery === "file" ? t("settings.secretsDeliveryFile") : null,
+								entry.scope === "all" ? null : scopeLabel(entry.scope),
+								entry.purpose || null,
+								entry.lastUsedAt ? lastUsedText(entry) : null,
+							]
+								.filter(Boolean)
+								.join(" · ");
+							return (
+								<li key={entry.name} className="gui-agent-card gui-secret-row" data-secret-name={entry.name}>
+									<span className="gui-secret-row-icon">
+										<KeyRound size={13} aria-hidden="true" />
+									</span>
+									<div className="gui-secret-row-main">
+										<div className="gui-secret-row-head">
+											<span className="gui-secret-name">{entry.name}</span>
+										</div>
+										{meta !== "" && <div className="gui-secret-row-meta-line">{meta}</div>}
+										{grantedTo.length > 0 && (
+											<div className="gui-secret-row-grants" data-secret-granted={grantedTo.join(",")}>
+												{t("settings.secretsMcpGrantedTo", { servers: grantedTo.join("、") })}
+											</div>
+										)}
 									</div>
-									{meta !== "" && <div className="gui-secret-row-meta-line">{meta}</div>}
-								</div>
-								<div className="gui-secret-row-actions">
-									{entry.scope !== "all" && (
+									<div className="gui-secret-row-actions">
+										{entry.scope !== "all" && (
+											<button
+												type="button"
+												className="gui-btn gui-btn-ghost"
+												data-secret-action="widen"
+												disabled={widening === entry.name || locked}
+												onClick={() => void widen(entry)}
+											>
+												{t("settings.secretsAllowAll")}
+											</button>
+										)}
 										<button
 											type="button"
 											className="gui-btn gui-btn-ghost"
-											data-secret-action="widen"
-											disabled={widening === entry.name || locked}
-											onClick={() => void widen(entry)}
+											data-secret-action="mcp"
+											disabled={locked || grantBusy}
+											onClick={() => void openGrant(entry)}
 										>
-											{t("settings.secretsAllowAll")}
+											{t("settings.secretsMcpAccess")}
 										</button>
-									)}
-									<button
-										type="button"
-										className="gui-btn gui-btn-ghost"
-										data-secret-action="mcp"
-										disabled={locked || grantBusy}
-										onClick={() => void openGrant(entry)}
-									>
-										{t("settings.secretsMcpAccess")}
-									</button>
-									<button
-										type="button"
-										className="gui-btn gui-btn-ghost"
-										data-secret-action="replace"
-										disabled={locked}
-										onClick={() => openReplace(entry)}
-									>
-										{t("settings.secretsReplace")}
-									</button>
-									<button
-										type="button"
-										className="gui-btn gui-btn-ghost gui-btn-icon"
-										data-secret-action="delete"
-										aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
-										disabled={deleting === entry.name || locked}
-										onClick={() => void remove(entry)}
-									>
-										<Trash2 size={13} aria-hidden="true" />
-									</button>
-								</div>
-							</li>
-						);
-					})}
-				</ul>
-			)}
+										<button
+											type="button"
+											className="gui-btn gui-btn-ghost"
+											data-secret-action="replace"
+											disabled={locked}
+											onClick={() => openReplace(entry)}
+										>
+											{t("settings.secretsReplace")}
+										</button>
+										<button
+											type="button"
+											className="gui-btn gui-btn-ghost gui-btn-icon"
+											data-secret-action="delete"
+											aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
+											disabled={deleting === entry.name || locked}
+											onClick={() => void remove(entry)}
+										>
+											<Trash2 size={13} aria-hidden="true" />
+										</button>
+									</div>
+								</li>
+							);
+						})}
+					</ul>
+				)}
+			</HeightMorph>
 
 			<p className="gui-note gui-secret-footnote">{t("settings.secretsFootnote")}</p>
 		</div>
