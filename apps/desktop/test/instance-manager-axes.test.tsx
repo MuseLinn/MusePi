@@ -85,180 +85,54 @@ async function openAddForm(host: HTMLElement): Promise<HTMLElement> {
 	return daemon;
 }
 
-describe("the dialog states the two-axis model", () => {
-	test("the purpose sentence says both axes and that they can differ", async () => {
+describe("the dialog manages instances, and only instances", () => {
+	test("the lede names the one axis this dialog owns", async () => {
 		const host = await render();
-		expect(text(host)).toContain(t("settings.connectionPurpose"));
+		expect(text(host)).toContain(t("settings.instanceAxisHint"));
 	});
 
-	test("each axis is a named section with its own one-sentence hint", async () => {
+	test("a project's files are not chosen here", async () => {
+		// Choosing where a project's files live belongs to 添加项目, which already
+		// asks for a main directory. A second picker in this dialog offered two
+		// answers to one question and pushed the instance list into half a pane.
 		const host = await render();
-		const [daemon, files] = sections(host);
-		expect(daemon?.querySelector(".gui-loc-section-title")?.textContent).toBe(t("settings.instanceAxisTitle"));
-		expect(daemon?.querySelector(".gui-loc-section-hint")?.textContent).toBe(t("settings.instanceAxisHint"));
-		expect(files?.querySelector(".gui-loc-section-title")?.textContent).toBe(t("settings.workspaceAxisTitle"));
-		expect(files?.querySelector(".gui-loc-section-hint")?.textContent).toBe(t("settings.workspaceAxisHint"));
+		expect(text(host)).not.toContain(t("settings.workspaceAxisTitle"));
+		expect(document.body.querySelectorAll(".gui-loc-section")).toHaveLength(1);
+		// The four-step mount wizard is gone with it.
+		expect(text(host)).not.toContain(t("settings.selectMethod"));
+		expect(text(host)).not.toContain(t("settings.selectRemoteDirectoryOpen"));
 	});
 
-	test("both axes are visible at once — no tab hides one of them", async () => {
-		// The regression this pins: tabs let the user see only half the model,
-		// which is exactly why the two concepts kept reading as each other's
-		// mode.
+	test("the instance list is the whole surface — no tab hides part of it", async () => {
 		const host = await render();
 		expect(document.body.querySelectorAll('[role="tablist"]')).toHaveLength(0);
-		expect(sections(host)).toHaveLength(2);
-		expect(text(host)).toContain(t("settings.instanceAxisTitle"));
-		expect(text(host)).toContain(t("settings.workspaceAxisTitle"));
+		expect(sections(host)).toHaveLength(1);
 	});
 
-	test("a section heading is not restated by a nested heading", async () => {
-		// `DialogFrame` portals to `document.body`, so querying `host` returned
-		// `[]` and `expect([]).toEqual([])` could never fail. The assertion has to
-		// read the portal, and it has to fail on something real — hence the
-		// non-empty precondition: with zero sections found the equality below
-		// would pass vacuously all over again.
+	test("the dialog title is not restated by a section heading", async () => {
+		// `DialogFrame` portals to `document.body`, so the assertion has to read
+		// the portal. With one axis there is no section title left at all.
 		await render();
-		const titles = Array.from(document.body.querySelectorAll<HTMLElement>(".gui-loc-section-title")).map(
-			node => node.textContent,
-		);
-		expect(titles).toHaveLength(2);
-		expect(titles).toContain(t("settings.instanceAxisTitle"));
-		expect(titles).toContain(t("settings.workspaceAxisTitle"));
-		// The embedded wizard must not print a second heading for the axis the
-		// section already names: the section headings are the only headings.
-		const headings = Array.from(document.body.querySelectorAll<HTMLElement>("h2, h3")).map(node => node.textContent);
-		expect(headings).toEqual(titles);
+		const titles = Array.from(document.body.querySelectorAll<HTMLElement>(".gui-loc-section-title"));
+		expect(titles).toHaveLength(0);
+		// A screen-reader-only h2 is the landmark's label, not a restated title.
+		const visibleHeadings = Array.from(document.body.querySelectorAll<HTMLElement>("h2, h3"))
+			.filter(node => !node.classList.contains("sr-only"))
+			.map(node => node.textContent);
+		expect(visibleHeadings).not.toContain(t("settings.instanceAxisTitle"));
 	});
 });
 
-describe("each axis asks for its own fields", () => {
-	test("the daemon axis asks for an endpoint and a token, never a directory", async () => {
+describe("the add form is the instance form", () => {
+	test("it asks for an endpoint and a token, never a directory", async () => {
 		const host = await render();
 		const daemon = await openAddForm(host);
 		const labels = Array.from(daemon.querySelectorAll(".gui-field-label")).map(node => node.textContent ?? "");
 		expect(labels).toContain(t("settings.instanceLabel"));
 		expect(labels).toContain(t("settings.instanceUrlLabel"));
 		expect(labels).toContain(t("settings.remoteToken"));
-		// A directory belongs to the files axis.
+		// A directory belongs to 添加项目, not to an instance.
 		expect(labels).not.toContain(t("settings.workspaceDirectory"));
-	});
-
-	test("the files axis asks for a host and a directory, never a daemon endpoint", async () => {
-		const host = await render({ rpc: rpcStub([{ name: "build-box", host: "build.example.com" }]) });
-		const files = sections(host)[1] as HTMLElement;
-		const labels = Array.from(files.querySelectorAll(".gui-field-label")).map(node => node.textContent ?? "");
-		// Step 0 is the method choice; the host fields arrive at step 1.
-		const next = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes(t("settings.next")),
-		);
-		await act(async () => next?.click());
-		const ssh = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes("SSH"),
-		);
-		await act(async () => {
-			ssh?.click();
-			await Bun.sleep(10);
-		});
-		const afterMethod = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes(t("settings.next")),
-		);
-		await act(async () => {
-			afterMethod?.click();
-			await Bun.sleep(20);
-		});
-		const hostLabels = Array.from(files.querySelectorAll(".gui-loc-name, .gui-field-label")).map(
-			node => node.textContent ?? "",
-		);
-		// A host list, not an endpoint form: the daemon endpoint belongs to the
-		// other axis.
-		expect(labels.length + hostLabels.length).toBeGreaterThan(0);
-		expect(files.querySelectorAll(".gui-loc-list").length).toBeGreaterThan(0);
-	});
-});
-
-describe("one host appears once across both surfaces", () => {
-	function installBridge(): void {
-		(globalThis as { musepiShell?: unknown }).musepiShell = {
-			sshConfig: async () => ({
-				ok: true,
-				documents: [
-					{
-						path: "~/.ssh/config",
-						text: "Host build-box\n  HostName build.example.com\n  User me\n",
-					},
-				],
-				musepi: [],
-			}),
-		};
-	}
-
-	test("a catalog host is not listed twice in the wizard's list", async () => {
-		installBridge();
-		const host = await render({ rpc: rpcStub([{ name: "build-box", host: "build.example.com" }]) });
-		const files = sections(host)[1] as HTMLElement;
-		const next = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes(t("settings.next")),
-		);
-		await act(async () => next?.click());
-		const ssh = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes("SSH"),
-		);
-		await act(async () => {
-			ssh?.click();
-			await Bun.sleep(10);
-		});
-		const afterMethod = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes(t("settings.next")),
-		);
-		await act(async () => {
-			afterMethod?.click();
-			await Bun.sleep(30);
-		});
-		const names = Array.from(files.querySelectorAll(".gui-loc-name")).map(node => node.textContent);
-		expect(names.filter(name => name === "build-box")).toHaveLength(1);
-	});
-
-	test("the wizard reads the catalog the dialog passed, not a second one", async () => {
-		// The manager used to render the wizard without a catalog, so the wizard
-		// silently performed its own read while the list beside it knew nothing.
-		// One bridge read now serves both.
-		let reads = 0;
-		(globalThis as { musepiShell?: unknown }).musepiShell = {
-			sshConfig: async () => {
-				reads += 1;
-				return {
-					ok: true,
-					documents: [{ path: "~/.ssh/config", text: "Host only-here\n  HostName h.example.com\n" }],
-					musepi: [],
-				};
-			},
-		};
-		const host = await render();
-		const files = sections(host)[1] as HTMLElement;
-		/** What the manager itself has read so far (its open-time refresh). */
-		const beforeWizard = reads;
-		const next = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes(t("settings.next")),
-		);
-		await act(async () => next?.click());
-		const ssh = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes("SSH"),
-		);
-		await act(async () => {
-			ssh?.click();
-			await Bun.sleep(10);
-		});
-		const afterMethod = Array.from(files.querySelectorAll<HTMLButtonElement>("button")).find(button =>
-			(button.textContent ?? "").includes(t("settings.next")),
-		);
-		await act(async () => {
-			afterMethod?.click();
-			await Bun.sleep(30);
-		});
-		expect(text(files)).toContain("only-here");
-		// A wizard that received no catalog would read it itself here; the
-		// passed catalog means the count does not move.
-		expect(reads).toBe(beforeWizard);
 	});
 });
 
@@ -302,7 +176,9 @@ describe("empty, loading and error states", () => {
 			await Bun.sleep(30);
 		});
 		expect(daemon.querySelector(".gui-conn-error")?.textContent).toBe(t("settings.connectionLabelRequired"));
-		expect(sections(host)[1]?.querySelector(".gui-conn-error")).toBeNull();
+		// There is one surface now, so the sentence can only be here — and it must
+		// not have leaked into the dialog-level footer either.
+		expect(document.body.querySelectorAll(".gui-conn-error")).toHaveLength(1);
 	});
 
 	test("a rejected endpoint is reported inline, in the axis that rejected it", async () => {
@@ -321,9 +197,9 @@ describe("empty, loading and error states", () => {
 			submit?.click();
 			await Bun.sleep(30);
 		});
-		// The reason lands in the axis that failed, not in a shared banner.
+		// The reason lands on the row being added, not in a shared banner.
 		expect(daemon.querySelector(".gui-conn-error")?.textContent).toBe(t("settings.instanceUrlInvalid"));
-		expect(sections(host)[1]?.querySelector(".gui-conn-error")).toBeNull();
+		expect(document.body.querySelectorAll(".gui-conn-error")).toHaveLength(1);
 	});
 });
 

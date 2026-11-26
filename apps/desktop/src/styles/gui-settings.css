@@ -6698,12 +6698,6 @@ body.gui-resizing {
 	view-transition-name: device-signin;
 }
 
-/* The locations dialog opens from the instance control's row: one composited
- * group morphs from that row's rectangle, so the dialog reads as the row
- * unfolding rather than a panel appearing on top of it. */
-.gui-dialog--instance-manager {
-	view-transition-name: gui-instance-locations;
-}
 
 .gui-marketplace-detail {
 	view-transition-name: marketplace-detail;

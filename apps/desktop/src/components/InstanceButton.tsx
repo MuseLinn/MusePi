@@ -14,7 +14,6 @@ import { checkAppUpdates, getShellVersion } from "../lib/electron";
 import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
-import { morphSurfaceFrom } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { InstanceManagerDialog } from "./InstanceManagerDialog";
 import { MenuPopup } from "./MenuPopup";
@@ -275,15 +274,18 @@ export function InstanceButton({
 				<button
 					type="button"
 					className="gui-view-opt"
-					onClick={event => {
-						// The row is the old snapshot; the dialog carries the same
-						// name, so the browser morphs one into the other instead of
-						// fading a panel in.
-						const row = event.currentTarget;
-						morphSurfaceFrom(row, "gui-instance-locations", () => {
-							setOpen(false);
-							onOpenManager(() => setManagerOpen(true));
-						});
+					onClick={() => {
+						// Open from the rail control, not from this row. Naming a row
+						// inside a popover as the old snapshot made the *popover* the
+						// leaving surface: the transition re-snapshotted the whole
+						// page (which is what dropped the backdrop's `backdrop-filter`
+						// — a filter on a snapshot nested in another filtered layer
+						// does not composite) and replayed on close, which is the
+						// flash. A shell element outside every popover is the honest
+						// pair, and it is the control the user actually pressed to
+						// reach this dialog.
+						setOpen(false);
+						onOpenManager(() => setManagerOpen(true));
 					}}
 				>
 					<Icon name="settings-3" className="h-3.5 w-3.5" />
@@ -338,10 +340,6 @@ export function InstanceButton({
 				onRemoveHost={onRemoveHost}
 				onDisconnect={onDisconnect}
 				onOpenDisclaimer={onOpenDisclaimer}
-				onOpenWorkspace={cwd => {
-					setManagerOpen(false);
-					onOpenWorkspace(cwd);
-				}}
 			/>
 		</div>
 	);

@@ -38,7 +38,6 @@ import { useHostCatalog } from "../lib/connection/use-host-catalog";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
-import { ConnectDialog } from "./ConnectDialog";
 import { ConnectionLocationRow } from "./ConnectionLocationRow";
 import { ConnectionManager } from "./ConnectionManager";
 import { DialogFrame } from "./DialogFrame";
@@ -96,7 +95,6 @@ export function InstanceManagerDialog({
 	onAddTarget,
 	onRemoveHost,
 	onDisconnect,
-	onOpenWorkspace,
 	onOpenDisclaimer,
 }: {
 	open: boolean;
@@ -111,14 +109,12 @@ export function InstanceManagerDialog({
 	onAddTarget(target: ConnectionTarget): void;
 	onRemoveHost(id: string): void;
 	onDisconnect(): void;
-	onOpenWorkspace(cwd: string): void;
 	onOpenDisclaimer(): void;
 }): ReactNode {
 	const { catalog, refresh } = useHostCatalog();
 	const [formOpen, setFormOpen] = useState(false);
 	/** Wizard step, reported by the embedded wizard: advancing it changes the
 	 *  dialog's height, so the frame springs instead of snapping. */
-	const [wizardStep, setWizardStep] = useState(0);
 	useEffect(() => {
 		if (!open) return;
 		setFormOpen(false);
@@ -194,7 +190,7 @@ export function InstanceManagerDialog({
 			onClose={onClose}
 			label={t("settings.connectionLocations")}
 			className="gui-dialog--instance-manager"
-			morphKey={`${formOpen}:${wizardStep}`}
+			morphKey={`${formOpen}`}
 		>
 			<div className="gui-dialog-head">
 				<span className="text-[15px] font-semibold">{t("settings.connectionLocations")}</span>
@@ -203,19 +199,20 @@ export function InstanceManagerDialog({
 				</button>
 			</div>
 
-			{/* The model in one sentence, before either axis. It answers "are these
-			 * the same thing at different places?" without a paragraph. */}
-			<p className="gui-loc-purpose">{t("settings.connectionPurpose")}</p>
+			{/* One sentence about the one axis this dialog owns. Where a project's
+			 * files live is chosen when the project is added (添加项目), so
+			 * repeating a workspace picker here made two answers for one
+			 * question. */}
+			<p className="gui-loc-purpose">{t("settings.instanceAxisHint")}</p>
 
 			<div className="gui-instance-manager-body">
 				<section className="gui-loc-section" aria-labelledby="gui-loc-instances">
-					<header className="gui-loc-section-head">
-						<h2 className="gui-loc-section-title" id="gui-loc-instances">
-							{t("settings.instanceAxisTitle")}
-						</h2>
-						<p className="gui-loc-section-hint">{t("settings.instanceAxisHint")}</p>
-					</header>
-
+					{/* The dialog head already names the surface, so the section title
+					 * is read by assistive tech and painted for nobody: a landmark
+					 * that points at nothing is the a11y regression this replaces. */}
+					<h2 className="sr-only" id="gui-loc-instances">
+						{t("settings.instanceAxisTitle")}
+					</h2>
 					<ul className="gui-loc-list">
 						{renderHost(null)}
 						{hosts.map(renderHost)}
@@ -251,26 +248,6 @@ export function InstanceManagerDialog({
 							onCopy={() => {}}
 						/>
 					)}
-				</section>
-
-				<section className="gui-loc-section" aria-labelledby="gui-loc-workspaces">
-					<header className="gui-loc-section-head">
-						<h2 className="gui-loc-section-title" id="gui-loc-workspaces">
-							{t("settings.workspaceAxisTitle")}
-						</h2>
-						<p className="gui-loc-section-hint">{t("settings.workspaceAxisHint")}</p>
-					</header>
-					{/* The catalog read above is the wizard's only source, so the two
-					 * sections cannot disagree about which hosts exist. */}
-					<ConnectDialog
-						open={open}
-						framed={false}
-						catalog={catalog}
-						onClose={onClose}
-						rpc={rpc}
-						onOpenWorkspace={onOpenWorkspace}
-						onStepChange={setWizardStep}
-					/>
 				</section>
 			</div>
 

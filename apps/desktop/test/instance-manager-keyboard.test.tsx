@@ -76,8 +76,8 @@ describe("keyboard and containment", () => {
 			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 		});
 		expect(closes).toBe(1);
-		// Both sections survive the press: nothing collapsed.
-		expect(document.body.querySelectorAll(".gui-loc-section")).toHaveLength(2);
+		// The surface survives the press: nothing collapsed.
+		expect(document.body.querySelectorAll(".gui-loc-section")).toHaveLength(1);
 	});
 
 	test("focus starts inside the dialog, not on the page behind it", async () => {
@@ -85,38 +85,32 @@ describe("keyboard and containment", () => {
 		expect(dialog().contains(document.activeElement)).toBe(true);
 	});
 
-	test("focus order follows reading order: the daemon axis comes first", async () => {
+	test("focus order starts inside the instance surface", async () => {
 		await render();
 		const focusable = Array.from(
 			dialog().querySelectorAll<HTMLElement>(
 				'button:not([disabled]), input, select, [tabindex]:not([tabindex="-1"])',
 			),
 		);
-		const daemonIndex = focusable.findIndex(
-			node => node.closest(".gui-loc-section") === document.body.querySelectorAll(".gui-loc-section")[0],
-		);
-		const filesIndex = focusable.findIndex(
-			node => node.closest(".gui-loc-section") === document.body.querySelectorAll(".gui-loc-section")[1],
-		);
-		expect(daemonIndex).toBeGreaterThanOrEqual(0);
-		expect(filesIndex).toBeGreaterThan(daemonIndex);
+		// The dialog owns one axis now, so every focusable control belongs to it.
+		expect(focusable.length).toBeGreaterThan(0);
+		// The add form and the list live inside the one section; the dialog head's
+		// close button and the footer's two actions are deliberately outside it.
+		const inside = focusable.filter(node => node.closest(".gui-loc-section") !== null);
+		expect(inside.length).toBeGreaterThan(0);
+		expect(focusable.length - inside.length).toBeLessThanOrEqual(3);
 	});
 
 	test("a section is reachable by its own heading id", async () => {
 		await render();
 		// `aria-labelledby` pointing at nothing is the silent a11y regression.
-		for (const section of Array.from(document.body.querySelectorAll<HTMLElement>(".gui-loc-section"))) {
+		const sections = Array.from(document.body.querySelectorAll<HTMLElement>(".gui-loc-section"));
+		expect(sections).toHaveLength(1);
+		for (const section of sections) {
 			const id = section.getAttribute("aria-labelledby");
 			expect(id).not.toBeNull();
 			expect(document.getElementById(id as string)).not.toBeNull();
 		}
-	});
-
-	test("the two sections are siblings, not nested regions", async () => {
-		await render();
-		const sections = Array.from(document.body.querySelectorAll<HTMLElement>(".gui-loc-section"));
-		expect(sections).toHaveLength(2);
-		expect(sections[0]?.contains(sections[1] as Node)).toBe(false);
 	});
 
 	test("the remove control is keyboard reachable, not hover-only", async () => {
