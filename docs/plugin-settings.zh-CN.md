@@ -42,6 +42,8 @@ scope:
 
 整页使用 `settings.section` 并沿用该页既有 id：内容归插件，导航行与深链保留。“钩子”页是最小的例子。
 
+内容只由插件提供的整页不保留宿主回退：导航行随贡献出现，插件缺席或编译失败时该页消失，而不是打开一个空页。这类页的 id 要与页面组件一同登记在设置导航的“插件独占”集合里。
+
 只有当功能本身是一整页时才用 `settings.section`。
 
 新增席位需在 `packages/collab-proto/src/extension-slots.ts` 与 `slot-contracts.ts` 登记，重新生成目录，并在 `docs/extensions-dev.md` 说明。
