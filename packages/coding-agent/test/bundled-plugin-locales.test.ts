@@ -58,7 +58,7 @@ describe("bundled plugin display text", () => {
 	});
 
 	test("a language the product does not ship falls back to English, not to Chinese", async () => {
-		const meta = await readExtensionPluginMeta(path.join(BUNDLED, "terminal", "index.ts"));
+		const meta = await readExtensionPluginMeta(path.join(BUNDLED, "shell", "terminal", "index.ts"));
 		expect(resolveLocalizedText(meta?.labelText, "fr-FR", meta?.label)).toBe("Terminal");
 		expect(resolveLocalizedText(meta?.labelText, "zh-CN", meta?.label)).toBe("终端");
 	});

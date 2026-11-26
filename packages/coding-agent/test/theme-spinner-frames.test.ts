@@ -8,7 +8,7 @@ import { getConfigRootDir, getCustomThemesDir, removeWithRetries, setAgentDir } 
 
 // Path of the built-in dark theme JSON, used as a known-valid base we can
 // extend with custom `symbols.spinnerFrames` shapes.
-const DARK_THEME_PATH = path.join(import.meta.dir, "..", "src", "modes", "theme", "dark.json");
+const DARK_THEME_PATH = path.join(import.meta.dir, "..", "src", "render", "theme", "dark.json");
 
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 const fallbackAgentDir = path.join(getConfigRootDir(), "agent");

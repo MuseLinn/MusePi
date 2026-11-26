@@ -42,6 +42,7 @@ function makeHost(opts: { live?: Record<string, Record<string, unknown>> }): Hos
 			return live;
 		},
 		checkpointSeq: async () => 0,
+		projectionsSnapshot: () => undefined,
 		catchup: async () => {},
 		touch: () => {},
 		subscribe: async (sessionId: string, conn: DaemonConnection) => {

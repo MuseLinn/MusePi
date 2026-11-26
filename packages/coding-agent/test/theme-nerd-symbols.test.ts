@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { getThemeByName } from "@musepi/pi-coding-agent/render/theme/theme";
 import { getAgentDir, getCustomThemesDir, removeWithRetries, setAgentDir } from "@musepi/pi-utils";
 
-const DARK_THEME_PATH = path.join(import.meta.dir, "..", "src", "modes", "theme", "dark.json");
+const DARK_THEME_PATH = path.join(import.meta.dir, "..", "src", "render", "theme", "dark.json");
 
 let tempAgentDir: string | undefined;
 let originalAgentDir = "";

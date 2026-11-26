@@ -93,7 +93,7 @@ describe("preset switch rebuilds the tool slate before the first message", () =>
 describe("switched-away preset records stay gone", () => {
 	it("does not list or resurrect the design persona after switching to chat", async () => {
 		const session = await createWithMode("design");
-		const personaPath = path.resolve(PACKAGE_ROOT, "preset-design", "index.ts");
+		const personaPath = path.resolve(PACKAGE_ROOT, "prompt", "preset-design", "index.ts");
 		const hasPersona = (): boolean =>
 			session.listLoadedExtensions().some(extension => path.resolve(extension.path) === personaPath);
 

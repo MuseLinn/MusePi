@@ -136,7 +136,14 @@ describe("daemon session.branchAt", () => {
 		const tA2 = Date.now() - 1000;
 		const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
 			{ role: "user", timestamp: tA, content: [{ type: "text", text: "第一轮 A" }] },
-			{ role: "assistant", timestamp: tA2, content: [{ type: "text", text: "助手回复 A" }] },
+			{
+				role: "assistant",
+				timestamp: tA2,
+				content: [{ type: "text", text: "助手回复 A" }],
+				model: "test/model",
+				stopReason: "stop",
+				usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } },
+			},
 		]);
 		cleanup.push(async () => {
 			ws.close();
