@@ -103,38 +103,15 @@ function fixture(): string {
 						<span class="text-[14px] font-semibold">连接位置</span>
 						<button type="button" class="gui-tool-btn" aria-label="关闭">×</button>
 					</div>
-					<p class="gui-loc-purpose">实例决定守护进程在哪台机器上运行，工作区决定会话的文件在哪台机器上。两者可以相同，也可以不同。</p>
+					<p class="gui-loc-purpose">决定会话由哪台机器上的 MusePi 守护进程运行。</p>
 					<div class="gui-instance-manager-body">
 						<section class="gui-loc-section" aria-labelledby="a">
-							<header class="gui-loc-section-head">
-								<h2 class="gui-loc-section-title" id="a">后台服务（实例）</h2>
-								<p class="gui-loc-section-hint">决定会话由哪台机器上的 MusePi 守护进程运行。</p>
-							</header>
+							<h2 class="sr-only" id="a">后台服务（实例）</h2>
 							<ul class="gui-loc-list">
 								${row({ name: "本机", where: "127.0.0.1:8300", status: "已连接" }, 0, "dot")}
 								${rows}
 							</ul>
 							<button type="button" class="gui-btn gui-btn-primary gui-loc-add">＋ 添加实例</button>
-						</section>
-						<section class="gui-loc-section" aria-labelledby="b">
-							<header class="gui-loc-section-head">
-								<h2 class="gui-loc-section-title" id="b">工作区文件</h2>
-								<p class="gui-loc-section-hint">本机文件直接打开；与实例同一台机器时随实例一起用；只有文件在远端时，才在这里挂载目录。</p>
-							</header>
-							<div class="gui-connect-embedded">
-								<div class="gui-wizard-split flex min-h-0 flex-1">
-									<div class="gui-wizard-rail w-36 flex-shrink-0 border-r p-3">
-										<div class="mb-3 text-[13px] font-medium">1 选择方式</div>
-										<div class="mb-3 text-[13px]">2 填写配置</div>
-										<div class="mb-3 text-[13px]">3 连接中</div>
-										<div class="mb-3 text-[13px]">4 选择目录</div>
-									</div>
-									<div class="gui-wizard-body flex min-w-0 flex-1 flex-col p-4">
-										<ul class="gui-loc-list">${wizardRows}</ul>
-										<button type="button" class="mt-3 self-start text-[13px]">＋ 新电脑</button>
-									</div>
-								</div>
-							</div>
 						</section>
 					</div>
 					<footer class="gui-loc-foot">

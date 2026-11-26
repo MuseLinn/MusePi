@@ -163,13 +163,10 @@ function fixture(): string {
 						<span class="text-[14px] font-semibold">Connection locations</span>
 						<button type="button" class="gui-tool-btn" aria-label="Close">×</button>
 					</div>
-					<p class="gui-loc-purpose">An instance decides which machine runs the daemon; a workspace decides which machine holds the files.</p>
+					<p class="gui-loc-purpose">Decides which machine's MusePi daemon runs the session.</p>
 					<div class="gui-instance-manager-body">
 						<section class="gui-loc-section" aria-labelledby="gui-loc-instances">
-							<header class="gui-loc-section-head">
-								<h2 class="gui-loc-section-title" id="gui-loc-instances">Daemon (instance)</h2>
-								<p class="gui-loc-section-hint">Decides which machine's MusePi daemon runs the session.</p>
-							</header>
+							<h2 class="sr-only" id="gui-loc-instances">Daemon (instance)</h2>
 							<ul class="gui-loc-list">${daemonRows}</ul>
 							<div class="gui-loc-fields">
 								<label class="gui-field"><span class="gui-field-label">Instance label</span><input class="gui-input" /></label>
@@ -177,20 +174,6 @@ function fixture(): string {
 							</div>
 							<div class="gui-loc-actions">
 								<button type="button" class="gui-btn gui-btn-primary">Test and add</button>
-							</div>
-						</section>
-						<section class="gui-loc-section" aria-labelledby="gui-loc-workspaces">
-							<header class="gui-loc-section-head">
-								<h2 class="gui-loc-section-title" id="gui-loc-workspaces">Workspace files</h2>
-								<p class="gui-loc-section-hint">Local files open directly; only files on another machine need a mount here.</p>
-							</header>
-							<div class="gui-connect-embedded">
-								<div class="gui-wizard-split flex min-h-0 flex-1">
-									<div class="gui-wizard-rail w-36 flex-shrink-0 border-r p-3"></div>
-									<div class="gui-wizard-body flex min-w-0 flex-1 flex-col p-4">
-										<ul class="gui-loc-list">${workspaceRows}</ul>
-									</div>
-								</div>
 							</div>
 						</section>
 					</div>
@@ -346,17 +329,18 @@ afterAll(async () => {
 	await browser.close();
 }, 60_000);
 
-describe("two-axis dialog at 1280", () => {
-	test("the two axes sit side by side, both inside the dialog", async () => {
+describe("single-axis dialog at 1280", () => {
+	test("one section, and the dialog is sized for it", async () => {
 		await mount(1280, 900);
 		const geometry = await readGeometry();
-		expect(geometry.sections).toHaveLength(2);
-		expect(geometry.sectionsSideBySide).toBe(true);
-		for (const section of geometry.sections) {
-			expect(section.width).toBeGreaterThan(200);
-			expect(section.left).toBeGreaterThanOrEqual(geometry.dialog.left);
-			expect(section.right).toBeLessThanOrEqual(geometry.dialog.right);
-		}
+		expect(geometry.sections).toHaveLength(1);
+		const [section] = geometry.sections;
+		// The frame must not keep the two-pane width: at 1040px the single list
+		// sat against a blank right half, which reads as a failed layout.
+		expect(geometry.dialog.width).toBeLessThan(700);
+		expect(section!.width).toBeGreaterThan(300);
+		expect(section!.left).toBeGreaterThanOrEqual(geometry.dialog.left);
+		expect(section!.right).toBeLessThanOrEqual(geometry.dialog.right);
 	});
 
 	test("the dialog body is the only scroller and declares both axes", async () => {
@@ -377,22 +361,14 @@ describe("two-axis dialog at 1280", () => {
 	});
 });
 
-describe("two-axis dialog at the narrowest supported window (720)", () => {
-	test("the sections stack instead of squeezing side by side", async () => {
+describe("single-axis dialog at the narrowest supported window (720)", () => {
+	test("the section stays inside the dialog and readable", async () => {
 		await mount(720, 640);
 		const geometry = await readGeometry();
-		expect(geometry.sections).toHaveLength(2);
-		expect(geometry.sectionsStacked).toBe(true);
-		expect(geometry.sectionsSideBySide).toBe(false);
-	});
-
-	test("stacking keeps both sections inside the dialog and readable", async () => {
-		await mount(720, 640);
-		const geometry = await readGeometry();
-		for (const section of geometry.sections) {
-			expect(section.width).toBeGreaterThan(240);
-			expect(section.right).toBeLessThanOrEqual(geometry.dialog.right);
-		}
+		expect(geometry.sections).toHaveLength(1);
+		const [section] = geometry.sections;
+		expect(section!.width).toBeGreaterThan(240);
+		expect(section!.right).toBeLessThanOrEqual(geometry.dialog.right);
 	});
 
 	test("no nested scrollbar appears at the narrow width either", async () => {
@@ -404,58 +380,33 @@ describe("two-axis dialog at the narrowest supported window (720)", () => {
 	});
 });
 
-describe("row anatomy is identical in both lists", () => {
-	test("every row in both lists has a status slot", async () => {
+describe("row anatomy", () => {
+	test("every row has a status slot", async () => {
 		await mount(1280, 900);
 		const geometry = await readGeometry();
-		// Five rows across the two lists (three daemon, two workspace); none may
-		// omit the trailing slot, which is what made half the daemon list end
-		// early in the shape this replaced.
+		// Three daemon rows; none may omit the trailing slot, which is what made
+		// half the list end early in the shape this replaced.
 		expect(geometry.daemonCells).toHaveLength(3);
-		expect(geometry.workspaceCells).toHaveLength(2);
-		for (const cell of [...geometry.daemonCells, ...geometry.workspaceCells]) {
-			expect(cell.hasStatus).toBe(true);
-		}
+		for (const cell of geometry.daemonCells) expect(cell.hasStatus).toBe(true);
 	});
 
-	test("name and where sit at exactly the same x in both lists", async () => {
+	test("name and where sit at the same x on every row", async () => {
 		await mount(1280, 900);
 		const geometry = await readGeometry();
 		// Exact, not bounded: the row is one component, so a divergence is a
-		// defect rather than a permitted variation. Left-anchored cells must
-		// match regardless of the list's width — this is the assertion that
-		// catches a 7px dot beside a 24px glyph shifting the name.
-		const all = [...geometry.daemonCells, ...geometry.workspaceCells];
-		const first = all[0]!;
-		for (const cell of all) {
+		// defect rather than a permitted variation. A 7px dot beside a 24px glyph
+		// shifting the name is what this catches.
+		const first = geometry.daemonCells[0]!;
+		for (const cell of geometry.daemonCells) {
 			expect(cell.name).toBe(first.name);
 			expect(cell.where).toBe(first.where);
 		}
 	});
 
-	test("the status slot sits at exactly the same offset from the row's trailing edge", async () => {
+	test("the status slot sits at a constant offset from the row's trailing edge", async () => {
 		await mount(1280, 900);
 		const geometry = await readGeometry();
-		// The lists differ in width, so a trailing slot cannot share an absolute
-		// x; what must be identical is its position inside the row. This is the
-		// assertion that catches "half the daemon rows have no trailing slot".
-		const all = [...geometry.daemonCells, ...geometry.workspaceCells];
-		const first = all[0]!;
-		expect(first.trailingGap).not.toBeNull();
-		for (const cell of all) {
-			expect(cell.hasStatus).toBe(true);
-			expect(cell.trailingGap).toBe(first.trailingGap);
-		}
-	});
-
-	test("the row box is the target, and it spans the row", async () => {
-		await mount(1280, 900);
-		const geometry = await readGeometry();
-		// M86: the wash and the hit area are one rectangle.
-		expect(Math.abs(geometry.rowMain.height - geometry.row.height)).toBeLessThanOrEqual(1);
-		expect(geometry.rowMain.left).toBe(geometry.row.left);
-		// Remove is a sibling at the trailing edge, not inside the button.
-		expect(geometry.rowMain.width).toBeLessThan(geometry.row.width);
-		expect(geometry.rowMain.width).toBeGreaterThan(geometry.row.width * 0.6);
+		const gaps = geometry.daemonCells.map(cell => cell.trailingGap);
+		expect(new Set(gaps).size).toBe(1);
 	});
 });

@@ -2846,16 +2846,18 @@
 .gui-dialog.gui-dialog--instance-manager {
 	display: flex;
 	flex-direction: column;
-	width: min(1040px, 94vw);
+	/* Sized for one list, not the two-pane version this replaced: a 1040px
+	 * frame with a 460px floor left the right half and the bottom empty, which
+	 * reads as a layout that failed rather than a dialog that is calm. */
+	width: min(560px, 92vw);
 	height: auto;
-	min-height: min(46vh, 460px);
-	max-height: min(88vh, 880px);
+	max-height: min(80vh, 720px);
 	overflow: hidden;
 }
 
-/* The model in one sentence, above both axes. It is the whole answer to
- * "are these the same thing at different places?", so it is not a subtitle
- * under a heading — it is the first thing read. */
+/* The one axis in one sentence: what this dialog decides, read before the
+ * list. It stayed after the second axis left because the sentence, not the
+ * layout, is what makes the row list mean something. */
 .gui-loc-purpose {
 	margin: 0;
 	padding: 10px 20px 0;
@@ -2867,7 +2869,7 @@
 
 .gui-instance-manager-body {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr);
 	align-content: start;
 	gap: 24px;
 	min-height: 0;
@@ -2949,9 +2951,10 @@
 }
 
 .gui-loc-row {
-	/* One name column width for both lists. A shared custom property is what
-	 * lets the two surfaces agree without either knowing the other's markup. */
-	--gui-loc-name-w: 140px;
+	/* One name column for every list that uses this row. Narrower than the
+	 * two-pane version's 140px: at this dialog's width a fixed 140px column took
+	 * a quarter of the row and ellipsised the endpoint beside it. */
+	--gui-loc-name-w: 96px;
 	display: flex;
 	align-items: center;
 	min-width: 0;
