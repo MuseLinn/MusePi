@@ -854,12 +854,14 @@ describe("wave 3 commands", () => {
 		expect(output[0]).toBe("Memory backend is off — there is nothing to show.");
 	});
 
-	it("/memory stats: still names the backend when a real backend simply has no stats hook", async () => {
+	it("/memory stats: reports the musemem backend's own root and artifacts", async () => {
 		const { output, runtime } = createRuntime();
 		runtime.settings.set("memory.backend" as never, "musemem" as never);
 		const result = await executeAcpBuiltinSlashCommand("/memory stats", runtime);
 		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toBe("Memory stats is not available for the musemem backend.");
+		// musemem grew a stats hook; the panel names its project root and what
+		// the two artifacts currently hold instead of the generic fallback line.
+		expect(output.some(line => line.includes("Project memory root:"))).toBe(true);
 	});
 
 	// /todo start fuzzy match
