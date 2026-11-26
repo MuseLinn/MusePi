@@ -55,6 +55,7 @@ import { initializeExtensions } from "../modes/runtime-init";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { previewLine, TRUNCATE_LENGTHS } from "../render/render-utils";
 import type { AuthStorage } from "../session/auth-storage";
+import { sessionHeaderPreset } from "../session/session-entries";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
 import {
@@ -1607,7 +1608,7 @@ export class DaemonSessionHost {
 				...(projectMetadata ? { projectMetadata } : {}),
 				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
-				...(params.modeId ? { modeId: params.modeId } : {}),
+				...(params.modeId ? { agentPreset: params.modeId } : {}),
 			}),
 		);
 		const live = await this.#adoptAgentSession(
@@ -1643,7 +1644,7 @@ export class DaemonSessionHost {
 		this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
 		if (params.modeId) {
 			live.modeId = params.modeId;
-			this.persistHeaderPatch(live.sessionId, { modeId: params.modeId });
+			this.persistHeaderPatch(live.sessionId, { agentPreset: params.modeId });
 		}
 		// M3.2 双写:daemon 会话头(权威,经 view-store 列+快照头保留语义) +
 		// `<cwd>/.musepi/project.json` 镜像(恢复/分享/artifact-scan 关联源)。
@@ -1714,9 +1715,11 @@ export class DaemonSessionHost {
 		// see `modeId` at create time. `live.modeId` is display state — without
 		// passing it here a reopened chat/design session ran the default work
 		// prompt and full slate while the GUI chip still showed the preset.
-		const persistedModeId = (persisted?.header as { modeId?: unknown } | undefined)?.modeId;
+		const persistedHeader = persisted?.header as { agentPreset?: unknown; modeId?: unknown } | undefined;
+		const persistedModeId = persistedHeader?.agentPreset ?? persistedHeader?.modeId;
 		const resumeModeId =
-			manager.getHeader()?.modeId ?? (typeof persistedModeId === "string" ? persistedModeId : undefined);
+			sessionHeaderPreset(manager.getHeader()) ??
+			(typeof persistedModeId === "string" ? persistedModeId : undefined);
 		const result = await this.#withSessionBootstrapLock(async () =>
 			createAgentSession({
 				cwd: resumeCwd,
@@ -1760,7 +1763,7 @@ export class DaemonSessionHost {
 				},
 				...(await desktopSessionPromptInputs(resumeCwd)),
 				...(projectMetadata ? { projectMetadata } : {}),
-				...(resumeModeId ? { modeId: resumeModeId } : {}),
+				...(resumeModeId ? { agentPreset: resumeModeId } : {}),
 			}),
 		);
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -2046,7 +2049,9 @@ export class DaemonSessionHost {
 			// 守护进程快照头 —— SDK 的 create 只 resolve 提示词/settings,
 			// 从不把 modeId 写进 JSONL 头,所以仅读 SDK 头会让空态 chip 选的
 			// design 会话在重启/重激活后丢掉预设(GUI 的 design 风格 chip 不显示)。
-			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? persisted?.header?.modeId ?? undefined,
+			modeId:
+				sessionHeaderPreset(agentSession.sessionManager?.getHeader()) ??
+				sessionHeaderPreset(persisted?.header as never),
 			// Non-journaled envelope kinds carry seq 0; the journal owns the
 			// kind:"event" seq space outright.
 			journal,
@@ -2533,6 +2538,9 @@ export class DaemonSessionHost {
 		patch: {
 			model?: string;
 			thinkingLevel?: string;
+			/** The session's agent preset; `modeId` is the pre-rename spelling. */
+			agentPreset?: string | null;
+			/** @deprecated Read-only fallback; new writes use `agentPreset`. */
 			modeId?: string | null;
 			projectMetadata?: Record<string, unknown> | null;
 			/** M4 P1 连接器白名单。null = 清除回未配置;数组(可空)= 已配置。 */

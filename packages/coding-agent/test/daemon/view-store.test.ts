@@ -173,7 +173,7 @@ describe("ViewStore cross-session tables", () => {
 		const store = tempStore();
 		// 1) persistHeaderPatch arms the preset off the snapshot header.
 		const armed = snapshot("s1", [{ role: "user", content: "y", timestamp: 1 }], 1);
-		(armed.header as { modeId?: string }).modeId = "design";
+		(armed.header as { agentPreset?: string }).agentPreset = "design";
 		store.upsert("s1", armed);
 		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
 		// 2) a streaming schedulePersist / idle-close replays the MaterializedView
@@ -190,8 +190,11 @@ describe("ViewStore cross-session tables", () => {
 		store.upsert("s1", replay);
 		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
 		// 3) the stored snapshot header carries the preset too, so adopt() can
-		//    restore live.modeId after a restart (not just the query column).
-		expect((store.load("s1")!.header as { modeId?: string }).modeId).toBe("design");
+		//    restore the live preset after a restart (not just the query column).
+		//    The key is `agentPreset` now; the read allows the pre-rename `modeId`
+		//    so a session written before the rename still restores its preset.
+		const storedHeader = store.load("s1")!.header as { agentPreset?: string; modeId?: string };
+		expect(storedHeader.agentPreset ?? storedHeader.modeId).toBe("design");
 		// 4) an explicit clear (persistHeaderPatch with null) still wins.
 		const cleared = snapshot("s1", [{ role: "user", content: "y", timestamp: 1 }], 1);
 		(cleared.header as { modeId?: string }).modeId = null as never;

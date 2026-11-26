@@ -361,6 +361,7 @@ import type { BuildSessionContextOptions, SessionContext } from "./session-conte
 import { getRestorableSessionModels } from "./session-context";
 import { formatSessionDumpText } from "./session-dump-format";
 import type { BranchSummaryEntry, NewSessionOptions } from "./session-entries";
+import { sessionHeaderPreset } from "./session-entries";
 import { SessionHandoff, type SessionHandoffHost } from "./session-handoff";
 import {
 	COMPACTION_CHECK_NONE,
@@ -5344,7 +5345,7 @@ export class AgentSession {
 	 */
 	/** The selected agent preset (dsh's `agentPreset`); persisted as header `modeId`. */
 	getAgentPreset(): string | null {
-		return this.sessionManager.getHeader()?.modeId ?? null;
+		return sessionHeaderPreset(this.sessionManager.getHeader()) ?? null;
 	}
 
 	/** dsh-shaped alias: select (or clear) the session's agent preset. */

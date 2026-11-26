@@ -33,6 +33,16 @@ export interface SessionHeader {
 	titleSource?: SessionTitleSource;
 	timestamp: string;
 	cwd: string;
+	/**
+	 * The agent preset this session runs (dsh's name for it).
+	 *
+	 * Older builds wrote the same value as `modeId`, which read as the approval
+	 * mode (`tools.approvalMode`) although it never meant that. Both are read so a
+	 * session saved by an older build still resumes with its preset; only
+	 * `agentPreset` is written now.
+	 */
+	agentPreset?: string;
+	/** @deprecated Read-only fallback for sessions written before `agentPreset`. */
 	modeId?: string;
 	/**
 	 * Additional workspace directories beyond `cwd` (multi-root workspace).
@@ -45,6 +55,16 @@ export interface SessionHeader {
 	previousSessionFiles?: string[];
 	/** Provider prompt-cache identity inherited by exact-route full forks. */
 	providerPromptCacheKey?: string;
+}
+
+/**
+ * The preset a session header names, preferring the current field.
+ *
+ * One reader for both spellings: a header written before the rename carries
+ * `modeId`, and returning `undefined` for those would drop the preset on resume.
+ */
+export function sessionHeaderPreset(header: SessionHeader | undefined | null): string | undefined {
+	return header?.agentPreset ?? header?.modeId;
 }
 
 export interface NewSessionOptions {

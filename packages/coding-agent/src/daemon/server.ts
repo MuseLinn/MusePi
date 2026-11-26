@@ -5137,7 +5137,7 @@ export class DaemonServer {
 				if (live) {
 					const result = await live.agentSession.setMode(p.modeId ?? null, { hot: true });
 					if (!result.ok) throw new Error(result.error ?? "mode switch failed");
-					if (!result.deferred && !this.#host.persistHeaderPatch(p.sessionId, { modeId: p.modeId ?? null })) {
+					if (!result.deferred && !this.#host.persistHeaderPatch(p.sessionId, { agentPreset: p.modeId ?? null })) {
 						logger.warn("session.setMode: failed to persist modeId to session header", {
 							sessionId: p.sessionId,
 						});
@@ -5145,7 +5145,7 @@ export class DaemonServer {
 					return { ok: true, deferred: result.deferred === true };
 				}
 				// History session: persist — applies when the session is next continued.
-				if (!this.#host.persistHeaderPatch(p.sessionId, { modeId: p.modeId ?? null })) {
+				if (!this.#host.persistHeaderPatch(p.sessionId, { agentPreset: p.modeId ?? null })) {
 					throw new Error(`Unknown session: ${p.sessionId}`);
 				}
 				return { ok: true, persisted: true };

@@ -92,6 +92,7 @@ import {
 	persistForeignSession,
 } from "./session/foreign-session-import";
 import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./session/foreign-session-store";
+import { sessionHeaderPreset } from "./session/session-entries";
 import { resolveResumableSession, type SessionInfo } from "./session/session-listing";
 import { SessionManager } from "./session/session-manager";
 import { executeBuiltinSlashCommand } from "./slash-commands/builtin-registry";
@@ -988,7 +989,7 @@ export async function buildSessionOptions(
 		if (parsed.preset) {
 			options.modeId = parsed.preset;
 		} else if (parsed.continue || parsed.resume) {
-			const headerModeId = sessionManager.getHeader()?.modeId;
+			const headerModeId = sessionHeaderPreset(sessionManager.getHeader());
 			if (headerModeId) options.modeId = headerModeId;
 		}
 	}

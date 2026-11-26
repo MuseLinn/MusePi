@@ -48,6 +48,7 @@ import {
 	type SessionMessageEntry,
 	type SessionTitleSource,
 	type SessionTreeNode,
+	sessionHeaderPreset,
 	type ThinkingLevelChangeEntry,
 	TITLE_CHANGE_ENTRY_TYPE,
 	type TitleChangeEntry,
@@ -2217,16 +2218,20 @@ export class SessionManager {
 	}
 
 	/**
-	 * Persist the selected agent preset in the session header (dsh's
-	 * `agentPreset`; stored as `modeId`, the field resume readers already use).
-	 * `null` clears it. Rewrites the file so a resumed session sees the change
-	 * without waiting for another append.
+	 * Persist the selected agent preset in the session header under
+	 * `agentPreset`. `null` clears it. Rewrites the file so a resumed session
+	 * sees the change without waiting for another append.
+	 *
+	 * The old `modeId` key is dropped on write: it read as the approval mode
+	 * (`tools.approvalMode`) and only ever held this value. Readers go through
+	 * `sessionHeaderPreset`, so a header that still carries `modeId` is honoured.
 	 */
 	setModeId(modeId: string | null): void {
 		const next = modeId === null ? undefined : modeId;
-		if ((this.#header.modeId ?? undefined) === next) return;
-		if (next === undefined) delete this.#header.modeId;
-		else this.#header.modeId = next;
+		if (sessionHeaderPreset(this.#header) === next && this.#header.modeId === undefined) return;
+		delete this.#header.modeId;
+		if (next === undefined) delete this.#header.agentPreset;
+		else this.#header.agentPreset = next;
 		if (!this.#persist || !this.#sessionFile) return;
 		this.#fileIsCurrent = false;
 		this.#rewriteRequired = true;

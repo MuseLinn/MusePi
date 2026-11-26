@@ -282,8 +282,13 @@ export class ViewStore {
 			typeof snapshot.header === "object" && snapshot.header
 				? (snapshot.header as unknown as Record<string, unknown>)
 				: {};
-		const headerHasModeId = "modeId" in headerObj;
-		let modeId: string | null = headerHasModeId ? ((headerObj.modeId ?? null) as string | null) : null;
+		// The header stores the preset under `agentPreset` now; `modeId` is what an
+		// older build wrote, and both are honoured so a stored session keeps its
+		// preset across the rename. The SQLite column keeps its name — it is a
+		// private store, not part of any contract.
+		const headerPresetKey = "agentPreset" in headerObj ? "agentPreset" : "modeId" in headerObj ? "modeId" : null;
+		const headerHasModeId = headerPresetKey !== null;
+		let modeId: string | null = headerPresetKey ? ((headerObj[headerPresetKey] ?? null) as string | null) : null;
 		if (!headerHasModeId) {
 			const prev = this.#db.query("SELECT mode_id FROM sessions WHERE session_id = ?").get(sessionId) as
 				| { mode_id: string | null }
@@ -349,7 +354,7 @@ export class ViewStore {
 		// path (adopt) can read persisted.header.<key> back after a restart —
 		// not just the query columns.
 		const headerPatch: Record<string, unknown> = {};
-		if (!headerHasModeId && modeId != null) headerPatch.modeId = modeId;
+		if (!headerHasModeId && modeId != null) headerPatch.agentPreset = modeId;
 		if (!("projectMetadata" in headerObj) && projectMetadata) headerPatch.projectMetadata = projectMetadata;
 		if (!("mcpServers" in headerObj) && mcpServers !== null) headerPatch.mcpServers = mcpServers;
 		const snapshotToStore: SessionSnapshot =

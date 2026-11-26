@@ -417,10 +417,10 @@ export class PresetsService implements DaemonService {
 		if (live) {
 			const result = await live.agentSession.setMode(id, { hot: true });
 			if (!result.ok) throw new Error(result.error ?? "preset switch failed");
-			if (!result.deferred) this.host.persistHeaderPatch(p.sessionId, { modeId: id });
+			if (!result.deferred) this.host.persistHeaderPatch(p.sessionId, { agentPreset: id });
 			return { ok: true, deferred: result.deferred === true, agentPreset: id };
 		}
-		if (!this.host.persistHeaderPatch(p.sessionId, { modeId: id })) {
+		if (!this.host.persistHeaderPatch(p.sessionId, { agentPreset: id })) {
 			throw new Error(`Unknown session: ${p.sessionId}`);
 		}
 		return { ok: true, persisted: true, agentPreset: id };

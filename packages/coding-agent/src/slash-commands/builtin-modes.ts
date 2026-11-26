@@ -12,6 +12,7 @@ import type { InteractiveModeContext } from "../modes/types";
 import { presetsDir } from "../presets/locations";
 import { loadModeFile, MODE_ID_PATTERN, resolveMode, validateMode } from "../presets/resolve";
 import type { AgentSession } from "../session/agent-session";
+import { sessionHeaderPreset } from "../session/session-entries";
 import type { ComputerTool } from "../tools/computer";
 import { computerExposureMode } from "../tools/computer/exposure";
 import type { InspectImageMode } from "../utils/inspect-image-mode";
@@ -681,7 +682,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				const { listModeIds } = await import("../presets/resolve");
 				const dir = presetsDir();
 				const ids = listModeIds(dir);
-				const current = runtime.sessionManager.getHeader()?.modeId;
+				const current = sessionHeaderPreset(runtime.sessionManager.getHeader());
 				if (ids.length === 0) {
 					await runtime.output(t("commands.presetListEmpty"));
 				} else {
@@ -690,7 +691,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				return commandConsumed();
 			}
 			// Bare `/preset` — show the current session preset (mode).
-			const modeId = runtime.sessionManager.getHeader()?.modeId;
+			const modeId = sessionHeaderPreset(runtime.sessionManager.getHeader());
 			if (!modeId) {
 				await runtime.output(t("commands.presetSlashNone"));
 			} else {
