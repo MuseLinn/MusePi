@@ -3,8 +3,8 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { dismissActionToast, getToasts, setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ConnectorsSection } from "../src/components/settings-sections/connectors";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
+import ConnectorsSettingsPage from "../src/plugins/connectors-settings/page";
 import { externalUrlsOpened } from "./happy-dom-shim";
 
 /**
@@ -153,7 +153,7 @@ async function mount(fake: FakeRpc, props: { onApplyPrompt?: (text: string) => v
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	mounted.add(root);
-	await act(async () => root.render(createElement(ConnectorsSection, { rpc: asRpc(fake), ...props })));
+	await act(async () => root.render(createElement(ConnectorsSettingsPage, { rpc: asRpc(fake), ...props })));
 	await flush();
 	return host;
 }

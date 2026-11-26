@@ -50,3 +50,21 @@ describe("memory Cordis plugin", () => {
 		expect(items.find(item => item.id === "session-memory")?.label).toBe(t("settings.sessionMemory"));
 	});
 });
+
+describe("memory page ownership", () => {
+	it("ships the page body in the package instead of wrapping a host component", async () => {
+		const source = await Bun.file(new URL("../src/plugins/memory/page.tsx", import.meta.url)).text();
+		expect(source).not.toContain("components/settings-sections/memory");
+		expect(source).toContain("export default function MemorySettingsPage");
+	});
+
+	it("is the only source of the 会话与记忆 memory tab, with no host fallback", async () => {
+		// `session-memory.tsx` renders `memorySlot` verbatim; unclaimed means the
+		// tab has no body rather than a host copy of the page.
+		const source = await Bun.file(
+			new URL("../src/components/settings-sections/session-memory.tsx", import.meta.url),
+		).text();
+		expect(source).not.toContain("settings-sections/memory");
+		expect(source).not.toContain("<MemorySection");
+	});
+});

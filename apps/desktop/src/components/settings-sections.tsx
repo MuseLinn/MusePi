@@ -9,7 +9,6 @@ export { TypewriterPreview, useTypewriterSample } from "./MockConversationPrevie
 export { TaskCardStylePreview } from "./settings-rows/task-card-style-preview";
 export { BrowserSection } from "./settings-sections/browser";
 export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
-export { ConnectorsSection } from "./settings-sections/connectors";
 export { GitPrefsRow, GitSection } from "./settings-sections/git";
 export { InteractionSection } from "./settings-sections/interaction";
 export { MediaSection } from "./settings-sections/media";

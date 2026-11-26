@@ -3,8 +3,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { t } from "@musepi/client-core";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { DeviceGrantPanel } from "../src/components/settings-sections/device-grant-panel";
 import type { RpcClient } from "../src/lib/rpc";
+import { DeviceGrantPanel } from "../src/plugins/connectors-settings/device-grant-panel";
 
 const roots: Root[] = [];
 

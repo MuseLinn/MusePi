@@ -6,13 +6,9 @@
  * - 输出：设置页「连接器」整页 —— 目录分组、搜索、详情弹窗、凭据表单、设备码登录、
  *   CLI 授权与本地进程批准。
  * - 生命周期：页面随设置页导航挂载；设备码轮询与 CLI 轮询属页面内 timer，卸载即停。
- * - 启停：停用/编译失败时槽位消失，SettingsView 回退内置 `ConnectorsSection`
- *   （同一 RPC 契约，验收与状态不丢失）。
+ * - 启停：停用/编译失败时槽位消失，「连接器」导航项随之消失（本页无宿主内建回退）。
  * - 冲突：独占 `settings.section` 的 `connectors` 页；不接管 `connectors.*` 的 daemon 服务。
  * - 检视入口：本目录与 `test/settings-plugin-tabs.test.tsx`。
- *
- * 现阶段页面实现仍由宿主源文件持有（插件在构建期内联，单一事实源）；下一步把实现
- * 搬进本包时，宿主保留同构回退，回退走同一 daemon 契约。
  */
 interface ConnectorsSettingsPluginApi {
 	slots: {

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { PASTE_IMAGE_MENTION_KEY } from "../../lib/composer-prefs";
 import type { RpcClient } from "../../lib/rpc";
 import { PrefToggle } from "./chat";
-import { MemorySection } from "./memory";
 import { SessionsSection } from "./sessions";
 import { PromptsSection } from "./suggestions";
 
@@ -184,7 +183,7 @@ export function SessionMemorySection({
 					</div>
 				</>
 			) : group === "memory" ? (
-				(memorySlot ?? <MemorySection rpc={rpc} />)
+				memorySlot
 			) : (
 				<PromptsSection />
 			)}

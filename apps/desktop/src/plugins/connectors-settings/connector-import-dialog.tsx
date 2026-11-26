@@ -3,9 +3,9 @@ import { Check, Square } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DialogFrame } from "../../components/DialogFrame";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
-import { DialogFrame } from "../DialogFrame";
 
 /** One server another agent on this machine has configured. */
 interface ImportCandidate {

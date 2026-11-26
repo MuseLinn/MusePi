@@ -6,8 +6,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { ScheduledTasksPanel } from "../src/components/ScheduledTasksPanel";
 import type { SessionListNode } from "../src/components/SessionList";
 import { SessionSidebar } from "../src/components/SessionSidebar";
-import { MemorySection } from "../src/components/settings-sections/memory";
 import { clearTaskNav, publishTaskNav } from "../src/lib/scheduled-task-nav";
+import MemorySettingsPage from "../src/plugins/memory/page";
 
 /**
  * Workspace rows name the FOLDER; the full cwd stays on the row's title.
@@ -144,7 +144,7 @@ describe("memory workspace selector", () => {
 				return {} as T;
 			},
 		};
-		const container = await mount(<MemorySection rpc={rpc as never} />);
+		const container = await mount(<MemorySettingsPage rpc={rpc as never} />);
 		// The workspace card is collapsed until its header is opened.
 		await act(async () => {
 			(container.querySelector(".gui-memory-workspace-toggle") as HTMLButtonElement).click();

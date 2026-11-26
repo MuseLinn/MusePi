@@ -408,9 +408,6 @@ export function SettingsView({
 										: null}
 									{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
 									{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
-									{!activeExtTab && activeSection === "connectors" && (
-										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
-									)}
 									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 								</>
 							)}
@@ -449,7 +446,6 @@ export function SettingsView({
  *  the tokens own the real values: brand = gold #d9a441). */
 import {
 	BrowserSection,
-	ConnectorsSection,
 	GitSection,
 	InteractionSection,
 	MediaSection,

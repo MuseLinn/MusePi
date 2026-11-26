@@ -4,7 +4,8 @@
  * - 输入：宿主传入的 rpc；页面读取 `settings.schema` 与既有 `memory.*` RPC。
  * - 输出：设置页「记忆」整页 —— 后端选择、工作区文件浏览、实时状态与维护操作。
  * - 生命周期：页面随设置页导航挂载/卸载；没有常驻进程或后台订阅。
- * - 启停：停用后槽位消失，SettingsView 回退内置 `MemorySection`。
+ * - 启停：停用后槽位消失，「记忆」导航项与「会话与记忆」里的记忆标签随之消失
+ *   （本页无宿主内建回退）。
  * - 冲突：独占 `settings.section` 的 `memory` 页；不接管 `memory.*` RPC 的 daemon 实现。
  * - 检视入口：本目录与 `test/memory-plugin.test.tsx`。
  */

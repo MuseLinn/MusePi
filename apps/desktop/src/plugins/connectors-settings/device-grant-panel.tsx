@@ -1,11 +1,11 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DeviceCode } from "../../components/DeviceCode";
+import { DialogFrame } from "../../components/DialogFrame";
 import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
-import { DeviceCode } from "../DeviceCode";
-import { DialogFrame } from "../DialogFrame";
 
 /**
  * A device-grant sign-in.
