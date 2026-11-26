@@ -138,13 +138,7 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 		"declaredBy": "apps/desktop/src/app.tsx",
 		"lifetime": "core",
 		"replaceRisk": "shadows-shipped-ui",
-		"occupants": [
-			{
-				"slot": "shell.overlay",
-				"source": "apps/desktop/src/plugins/ui-theme/index.ts",
-				"plugin": "musepi-ui-theme"
-			}
-		]
+		"occupants": []
 	},
 	{
 		"name": "panel.shell",

@@ -2,12 +2,12 @@
 	"name": "musepi-ui-theme",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Renderer-side theme bundle: the floating scroll progress rail, its skin catalog and the rail's appearance card.",
+	"description": "Renderer-side theme bundle: the scrollbar skin catalog, its CSS recipes and the appearance card.",
 	"type": "module",
 	"musepi": {
 		"icon": "🎨",
 		"label": "MusePi Theme",
-		"description": "Theme bundle: the floating scroll progress rail, its skin catalog and the rail's appearance card.",
+		"description": "Theme bundle: the scrollbar skin catalog, its CSS recipes and the appearance card.",
 		"extensions": ["./index.ts"]
 	}
 }

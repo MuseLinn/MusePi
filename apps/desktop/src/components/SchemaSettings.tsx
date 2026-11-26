@@ -32,7 +32,7 @@ import { JsonListEditor, TextListEditor } from "./settings-controls/ValueLists";
  * settings.schema RPC (the same single source of truth the TUI settings
  * panel renders — the GUI must not drift from it).
  */
-export interface DeclarativeCondition {
+interface DeclarativeCondition {
 	key: string;
 	equals?: unknown;
 	notEquals?: unknown;

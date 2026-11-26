@@ -1,43 +1,41 @@
 /**
- * Scrollbar skin registry — owned by the `ui-theme` Cordis bundle.
+ * Scrollbar skin catalog — owned by the `ui-theme` Cordis bundle.
  *
- * `rail.tsx` is the only renderer; this module is the shared catalog it reads
- * (and the host publishes it as `MusePiHostModules["scrollbar-skins"]` so a
- * compiled bundle and the host settings card share one instance).
+ * The scrollbar is native (`packages/client-core/src/styles/base.css`): the
+ * engine draws, sizes, drags and exposes it, so layout width, hover, keyboard
+ * and the OS accessibility surface stay the platform's. A skin is therefore
+ * only a palette plus, for a built-in, a thumb recipe:
  *
- * Two built-in bases:
- *  - `gummy`  — a jelly capsule thumb (height = visible ratio) that
- *    stretches while scrolling and springs back; accent-tinted glass.
- *  - `pacman` — the bead-string rail: a hairline thread, a string of
- *    beads at 7px pitch, and a pac-man riding the thread eating its way
- *    down (beads above it are "eaten" = dimmed).
+ *  - `classic`  — the neutral capsule, the default.
+ *  - `builtin-snake` — a tinted capsule with a head, an eye and vertebra seams.
+ *  - `builtin-gummy-rainbow` — the candy capsule with a fixed rainbow fill.
  *
- * Imported skins are petdex-shaped: a zip holding `scrollbar.json`
- * (id/displayName/base/colors/size + optional pacGlyphPath SVG) unpacked
- * by the main process, validated here, persisted to localStorage, and
- * listed in the settings picker next to the built-ins. The online market
- * IPC slots (`scrollbar-skin-search` / `scrollbar-skin-install-url`)
- * exist but are unimplemented skeletons.
+ * Built-in recipes live in `skins.css`, keyed by `html[data-scrollbar-skin]`.
+ * Imported and contributed skins only rebind the palette through
+ * `--mp-scrollbar-skin-*`, so the elevation rebinding that recolors `classic`
+ * recolors them too. `base` and `pacGlyph` remain in the import/extension wire
+ * format for compatibility; the native renderer has no place for a glyph and
+ * selects the recipe by skin id.
  */
 
 export interface ScrollbarSkinColors {
-	/** Primary tint — beads (pacman) or capsule glass (gummy). */
+	/** Primary tint — the capsule fill. */
 	accent: string;
-	/** Thread / track color. */
+	/** Track colour (reserved; the native track stays transparent). */
 	track: string;
-	/** "Eaten" beads (pacman) / scrolled region tint (gummy). */
+	/** Scrolled-region tint (reserved). */
 	eaten: string;
 }
 
 export interface ScrollbarSkin {
 	id: string;
 	displayName: string;
+	/** Legacy geometry field kept for the extension/import wire format. */
 	base: "gummy" | "pacman";
 	colors: ScrollbarSkinColors;
-	/** Rail/capsule width in px. */
+	/** Bar width in px. A native scrollbar wider than 16px eats layout. */
 	size: number;
-	/** Optional data URL of a custom SVG glyph replacing the built-in
-	 *  pac-man (pacman base only). */
+	/** Legacy glyph field kept for the wire format; unused by the native bar. */
 	pacGlyph: string | null;
 	/** Set for imported skins. */
 	importedAt?: number;
@@ -45,62 +43,59 @@ export interface ScrollbarSkin {
 
 export const SCROLLBAR_STYLE_KEY = "musepi-gui-scrollbar-style";
 export const SCROLLBAR_SKINS_KEY = "musepi-gui-scrollbar-skins";
-/** Presence toggle for the always-visible rail mode (off by default).
- *  Private: the accessors below are the only way in or out. */
-const SCROLLBAR_ALWAYS_KEY = "musepi-gui-scrollbar-always";
 /** Fired on the window when the imported-skin registry changes. */
 export const SCROLLBAR_SKINS_CHANGED_EVENT = "omp-scrollbar-skins-changed";
 /** Fired on the window when the active skin id changes. */
 export const SCROLLBAR_STYLE_CHANGED_EVENT = "omp-scrollbar-style-changed";
-/** Fired on the window when the always-visible rail mode flips. */
-export const SCROLLBAR_ALWAYS_CHANGED_EVENT = "omp-scrollbar-always-changed";
 
-const BUILTIN_PACMAN: ScrollbarSkin = {
-	id: "builtin-pacman",
-	displayName: "Pac-man",
-	base: "pacman",
+/** Smallest and largest bar width a skin may request. Beyond 16px the bar
+ *  takes a visible strip of content width on every scroller. */
+const MIN_SKIN_WIDTH = 6;
+const MAX_SKIN_WIDTH = 16;
+
+const clampWidth = (value: number): number => Math.min(MAX_SKIN_WIDTH, Math.max(MIN_SKIN_WIDTH, Math.round(value)));
+
+const BUILTIN_CLASSIC: ScrollbarSkin = {
+	id: "classic",
+	displayName: "Classic",
+	base: "gummy",
 	colors: {
-		accent: "#ffd94d",
-		track: "color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent)",
-		eaten: "#7a7462",
+		accent: "var(--color-text-faint)",
+		track: "transparent",
+		eaten: "transparent",
 	},
-	size: 12,
+	size: 8,
 	pacGlyph: null,
 };
 
-/** Snake: the previous gummy colors, reshaped — a rounded head riding a
- *  segmented body. Slimmer than the original rail so it recedes further. */
 const BUILTIN_SNAKE: ScrollbarSkin = {
 	id: "builtin-snake",
 	displayName: "Snake",
 	base: "gummy",
 	colors: {
 		accent: "var(--color-accent)",
-		track: "color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent)",
-		eaten: "transparent",
-	},
-	size: 10,
-	pacGlyph: null,
-};
-
-/** Gummy Rainbow: the candy capsule, slightly thicker than the snake and
- *  multi-color. */
-const BUILTIN_GUMMY_RAINBOW: ScrollbarSkin = {
-	id: "builtin-gummy-rainbow",
-	displayName: "Gummy Rainbow",
-	base: "gummy",
-	colors: {
-		accent: "var(--color-accent)",
-		track: "color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent)",
+		track: "transparent",
 		eaten: "transparent",
 	},
 	size: 12,
 	pacGlyph: null,
 };
 
-export const BUILTIN_SCROLLBAR_SKINS: ScrollbarSkin[] = [BUILTIN_SNAKE, BUILTIN_GUMMY_RAINBOW, BUILTIN_PACMAN];
-/** Imported skins first in the picker, built-ins after. */
-export const DEFAULT_SCROLLBAR_SKIN_ID = BUILTIN_SNAKE.id;
+const BUILTIN_GUMMY_RAINBOW: ScrollbarSkin = {
+	id: "builtin-gummy-rainbow",
+	displayName: "Gummy Rainbow",
+	base: "gummy",
+	colors: {
+		accent: "var(--color-accent)",
+		track: "transparent",
+		eaten: "transparent",
+	},
+	size: 12,
+	pacGlyph: null,
+};
+
+export const BUILTIN_SCROLLBAR_SKINS: ScrollbarSkin[] = [BUILTIN_CLASSIC, BUILTIN_SNAKE, BUILTIN_GUMMY_RAINBOW];
+export const DEFAULT_SCROLLBAR_SKIN_ID = BUILTIN_CLASSIC.id;
 
 /** Pure shape validation for a main-process unpacked skin zip. */
 export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
@@ -108,7 +103,7 @@ export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
 	const r = raw as Record<string, unknown>;
 	if (typeof r.id !== "string" || !r.id) return null;
 	if (typeof r.displayName !== "string" || !r.displayName) return null;
-	if (r.base !== "gummy" && r.base !== "pacman") return null;
+	const base = r.base === "pacman" ? "pacman" : "gummy";
 	const colors = (typeof r.colors === "object" && r.colors !== null ? r.colors : {}) as Record<string, unknown>;
 	// Colour values land in CSS custom properties, so a value that can fetch
 	// (url(), image()) is a network/execution surface, not a colour. Refuse it
@@ -117,16 +112,15 @@ export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
 		typeof value === "string" && value && !/url\s*\(|image[-\w]*\s*\(|expression\s*\(/i.test(value)
 			? value
 			: fallback;
-	const accent = color(colors.accent, BUILTIN_PACMAN.colors.accent);
+	const accent = color(colors.accent, BUILTIN_SNAKE.colors.accent);
 	const track = color(colors.track, BUILTIN_SNAKE.colors.track);
-	const eaten = color(colors.eaten, BUILTIN_PACMAN.colors.eaten);
-	const size =
-		typeof r.size === "number" && Number.isFinite(r.size) ? Math.min(24, Math.max(6, Math.round(r.size))) : 12;
+	const eaten = color(colors.eaten, BUILTIN_SNAKE.colors.eaten);
+	const size = typeof r.size === "number" && Number.isFinite(r.size) ? clampWidth(r.size) : BUILTIN_CLASSIC.size;
 	const pacGlyph = typeof r.pacGlyph === "string" && r.pacGlyph.startsWith("data:") ? r.pacGlyph : null;
 	return {
 		id: r.id,
 		displayName: r.displayName,
-		base: r.base,
+		base,
 		colors: { accent, track, eaten },
 		size,
 		pacGlyph,
@@ -149,12 +143,12 @@ export function readImportedSkins(): ScrollbarSkin[] {
 /**
  * Skins contributed by Cordis plugins (`registerScrollbarSkin`). The host
  * publishes this module as `window.MusePiHostModules["scrollbar-skins"]`, so a
- * compiled overlay bundle and the host settings picker read the SAME list
- * instead of each owning a copy.
+ * compiled bundle and the host settings picker read the SAME list instead of
+ * each owning a copy.
  */
 let contributedSkins: ScrollbarSkin[] = [];
 
-/** Replace the contributed catalog; a changed list notifies the rail/picker. */
+/** Replace the contributed catalog; a changed list notifies the picker. */
 export function setContributedScrollbarSkins(skins: readonly ScrollbarSkin[]): void {
 	const next = skins.map(skin => ({ ...skin }));
 	if (JSON.stringify(next) === JSON.stringify(contributedSkins)) return;
@@ -175,10 +169,10 @@ export function getScrollbarSkins(): ScrollbarSkin[] {
 	return out;
 }
 
-/** Resolve a skin by id, falling back to the built-in snake. */
+/** Resolve a skin by id, falling back to the neutral classic capsule. */
 export function getScrollbarSkin(id: string | null): ScrollbarSkin {
 	const skins = getScrollbarSkins();
-	return skins.find(s => s.id === id) ?? BUILTIN_SNAKE;
+	return skins.find(s => s.id === id) ?? BUILTIN_CLASSIC;
 }
 
 /** Persist an imported skin (same id replaces the old one) + notify. */
@@ -193,26 +187,41 @@ export function saveImportedSkin(skin: ScrollbarSkin): void {
 }
 
 export function readScrollbarStyle(): string {
-	return localStorage.getItem(SCROLLBAR_STYLE_KEY) ?? DEFAULT_SCROLLBAR_SKIN_ID;
-}
-
-/** Always-visible mode: a rail that a scroll gesture has already raised stays
- *  lit instead of fading to an idle ghost. It never decides WHICH containers get
- *  a rail. Off by default. */
-export function readAlwaysShowScrollbar(): boolean {
 	try {
-		return localStorage.getItem(SCROLLBAR_ALWAYS_KEY) === "1";
+		return localStorage.getItem(SCROLLBAR_STYLE_KEY) ?? DEFAULT_SCROLLBAR_SKIN_ID;
 	} catch {
-		return false;
+		return DEFAULT_SCROLLBAR_SKIN_ID;
 	}
 }
 
-/** Persist the always-visible preference + notify the overlay. */
-export function saveAlwaysShowScrollbar(value: boolean): void {
-	try {
-		localStorage.setItem(SCROLLBAR_ALWAYS_KEY, value ? "1" : "0");
-	} catch {
-		// storage unavailable — preference stays for this session only
-	}
-	window.dispatchEvent(new Event(SCROLLBAR_ALWAYS_CHANGED_EVENT));
+/** Palette names a skin may override on <html>; base.css resolves them into
+ *  the per-element tint. */
+const PALETTE_VARS = [
+	"--mp-scrollbar-skin-bg-l1",
+	"--mp-scrollbar-skin-bg-l2",
+	"--mp-scrollbar-skin-hover-l1",
+	"--mp-scrollbar-skin-hover-l2",
+	"--mp-scrollbar-skin-width",
+	"--mp-scrollbar-skin-border",
+] as const;
+
+/**
+ * Apply the selected skin to the document.
+ *
+ * A built-in is pure CSS: the attribute selects its palette block and recipe.
+ * An imported or contributed skin carries data, not a stylesheet, so its
+ * palette is written inline on <html> — the same names the CSS blocks set — and
+ * the attribute only matters when its id happens to match a built-in recipe.
+ */
+export function applyScrollbarSkin(id: string | null, root: HTMLElement = document.documentElement): void {
+	const skin = getScrollbarSkin(id);
+	for (const name of PALETTE_VARS) root.style.removeProperty(name);
+	root.dataset.scrollbarSkin = skin.id;
+	if (BUILTIN_SCROLLBAR_SKINS.includes(skin)) return;
+	const accent = skin.colors.accent;
+	root.style.setProperty("--mp-scrollbar-skin-bg-l1", accent);
+	root.style.setProperty("--mp-scrollbar-skin-bg-l2", `color-mix(in oklab, ${accent} 84%, white)`);
+	root.style.setProperty("--mp-scrollbar-skin-hover-l1", `color-mix(in oklab, ${accent} 88%, white)`);
+	root.style.setProperty("--mp-scrollbar-skin-hover-l2", `color-mix(in oklab, ${accent} 76%, white)`);
+	root.style.setProperty("--mp-scrollbar-skin-width", `${clampWidth(skin.size)}px`);
 }

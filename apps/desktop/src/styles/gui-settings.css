@@ -4,24 +4,11 @@
 	height: min(440px, 84vh);
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	/* App-styled scrollbar — the native green scrollbar on this tall form
-	 * clashed with the dialog's dark glass (user report: 样式有点不规范). */
-	scrollbar-width: thin;
-	scrollbar-color: color-mix(in oklab, var(--color-text) 22%, transparent) transparent;
 	overflow-x: clip;
-}
-.gui-dialog--settings::-webkit-scrollbar {
-	width: 8px;
-}
-.gui-dialog--settings::-webkit-scrollbar-thumb {
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 18%, transparent);
-}
-.gui-dialog--settings::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--color-text) 30%, transparent);
-}
-.gui-dialog--settings::-webkit-scrollbar-track {
-	background: transparent;
+	/* Elevated surface: rebind the bar's tint to the l2 pair so the thumb keeps
+	 * its contrast against the dialog's glass fill. */
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 
 
@@ -205,9 +192,9 @@
 	max-height: min(70vh, 560px);
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scrollbar-width: thin;
-	scrollbar-color: color-mix(in oklab, var(--color-text) 22%, transparent) transparent;
 	overflow-x: clip;
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 .gui-cpf-summary {
 	display: flex;
@@ -6711,6 +6698,13 @@ body.gui-resizing {
 	view-transition-name: device-signin;
 }
 
+/* The locations dialog opens from the instance control's row: one composited
+ * group morphs from that row's rectangle, so the dialog reads as the row
+ * unfolding rather than a panel appearing on top of it. */
+.gui-dialog--instance-manager {
+	view-transition-name: gui-instance-locations;
+}
+
 .gui-marketplace-detail {
 	view-transition-name: marketplace-detail;
 }
@@ -6868,8 +6862,9 @@ body.gui-resizing {
 	max-height: min(84vh, 760px);
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scrollbar-width: thin;
 	overflow-x: clip;
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 
 /* Device sign-in is a short, centred task: a code, one page to open, a wait. */
@@ -6879,8 +6874,9 @@ body.gui-resizing {
 	max-height: min(80vh, 560px);
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scrollbar-width: thin;
 	overflow-x: clip;
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 
 /* Import: the row itself is the control, and the badges say what the source
@@ -6891,8 +6887,9 @@ body.gui-resizing {
 	max-height: min(86vh, 760px);
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scrollbar-width: thin;
 	overflow-x: clip;
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 
 .gui-import-body {

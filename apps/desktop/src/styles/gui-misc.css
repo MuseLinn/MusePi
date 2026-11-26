@@ -165,25 +165,11 @@
 	padding-bottom: 0;
 }
 
-.gui-reminders-list::-webkit-scrollbar {
-	width: 8px;
-}
-
-.gui-reminders-list::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-.gui-reminders-list::-webkit-scrollbar-thumb {
-	background: color-mix(in oklab, var(--color-text-faint) 30%, transparent);
-	border-radius: 999px;
-	border: 2px solid transparent;
-	background-clip: content-box;
-}
-
-.gui-reminders-list::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
-	border: 2px solid transparent;
-	background-clip: content-box;
+.gui-reminders-list {
+	/* Elevated card: rebind the bar tint to the l2 pair so the thumb keeps its
+	 * contrast on the raised fill. */
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 
 .gui-reminder-row {
@@ -3074,7 +3060,8 @@ background: color-mix(in oklab, var(--fg) 12%, transparent);
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	scrollbar-width: thin;
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 	overflow-x: clip;
 }
 

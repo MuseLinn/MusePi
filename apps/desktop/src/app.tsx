@@ -185,7 +185,12 @@ import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import { withViewTransition } from "./lib/view-transition";
 import type { WorkspaceMutationResult } from "./lib/workspace-projects";
-import { FloatingScrollbar } from "./plugins/ui-theme/rail";
+import {
+	applyScrollbarSkin,
+	readScrollbarStyle,
+	SCROLLBAR_SKINS_CHANGED_EVENT,
+	SCROLLBAR_STYLE_CHANGED_EVENT,
+} from "./plugins/ui-theme/skins";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
@@ -629,6 +634,19 @@ function AppInner(): ReactNode {
 		} catch {
 			// storage unavailable
 		}
+	}, []);
+	// Scrollbar skin: the bar is native, so a skin only writes its palette and
+	// the `data-scrollbar-skin` attribute on <html>. Re-apply when the picker
+	// changes the choice and when a contributed skin replaces the selected id.
+	useEffect(() => {
+		const apply = (): void => applyScrollbarSkin(readScrollbarStyle());
+		apply();
+		window.addEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, apply);
+		window.addEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, apply);
+		return () => {
+			window.removeEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, apply);
+			window.removeEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, apply);
+		};
 	}, []);
 	// The native window material follows the UI theme (light scheme = bright
 	// vibrancy, dark = under-window): re-mirror whenever the theme module
@@ -5871,11 +5889,10 @@ function AppInner(): ReactNode {
 			{/* Update L-dialog layer: 待重启确认卡 + 失败决策卡 (design
 			 * §3.2 — 分层共存 on top of the toast, not a replacement). */}
 			<UpdateDialog />
-			{/* Floating scroll rail (fixed overlay — system scrollbars are hidden;
-			 * see plugins/ui-theme/rail.tsx). The whole overlay is one replaceable
-			 * seat: a Cordis plugin can own a different rail, and the built-in
-			 * one stays as the fallback when none is mounted. */}
-			<SlotComponentHost rpc={rpc} slot={SHELL_OVERLAY_SLOT} fallback={<FloatingScrollbar />} />
+			{/* Root-level overlay seat. The scrollbar is native now (client-core
+			 * base.css + ui-theme/skins.css), so the host contributes no fallback
+			 * here; a Cordis plugin may still own a window-level overlay. */}
+			<SlotComponentHost rpc={rpc} slot={SHELL_OVERLAY_SLOT} />
 			{/* Boot hand-off: the shell is already mounted and animating in
 			 * underneath; the splash fades out over it for one short beat. */}
 			{splashHold && (

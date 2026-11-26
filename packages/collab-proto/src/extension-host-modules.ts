@@ -102,7 +102,7 @@ function collapseSegments(value: string): string {
  * module inside `lib` (`./x`) is the same module identity, so it resolves to
  * the `lib/x` entry when the importer lives under a `lib` directory; any other
  * sibling import resolves against the importer's directory so a bundle can
- * own a shared module in its own folder (`ui-theme/rail.tsx` → `./skins`).
+ * own a shared module in its own folder (`ui-theme/settings.tsx` → `./skins`).
  * Bare requests match exactly. Returns undefined when the import stays bundled.
  */
 export function matchExtensionHostModule(request: string, importer?: string): ExtensionHostModuleKey | undefined {

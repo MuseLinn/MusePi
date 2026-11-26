@@ -173,7 +173,7 @@ export default function (pi: ExtensionAPI): void {
 
 - `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
 - `panel.shell` — 完整右栏壳（single）。`panel` 插件拥有标签、分栏和最大化呈现，`main.conversation` 不再打包右栏。
-- `shell.overlay` — 根级固定覆盖层（single）：拥有横向/纵向浮动滚动进度轨，并 portal 到 `document.body`。没有贡献者时宿主回退内置 `<FloatingScrollbar/>`。
+- `shell.overlay` — 根级固定覆盖层（single）：插件拥有的覆盖层，自行 portal 到 `document.body`；没有贡献者时宿主不渲染任何内容。滚动条是原生的，不占用此槽位。
 - `browser.host` — 常驻受管浏览器 guest 宿主（single），在应用根部挂载，独立于 `panel.tab.browser`。两个产物共享 `window.MusePiManagedBrowserHost`，不分别打包 store。
 - `settings.section` — 设置页左侧导航项（dsh 同一槽位）。每个条目自带导航身份：`id`（页 id，可为 `sessions` / `memory` 这类能力别名）、`label`、`order`、`icon` 与 `keywords`；没有 `id` 的条目不是页面。当 `id` 经 `SECTION_ALIAS` 解析后命中既有页面时**原位接管**：内置导航行保留 id、关键词与深链，注册者的 label/icon/order/keywords 覆盖该行，且不再新增 `ext:` 行。内容区挂载注册的条目，内置页分支只作为缺席或编译失败的回退。挂载的页面收到 `settingsSection: { id, close }` 与 `onApplyPrompt(text)`（把示例交给输入框并关闭设置）。设置壳本身（导航、路由、搜索、⌘K 定位）是宿主内建，不是插件。
 - `sidebar.panel.<destination id>` — 二级左栏面板（2026-11-08）：宿主按 rail 目的地 id 取唯一贡献，挂进 `.gui-side-keeper`，由 `data-panel` 决定显隐；几何读 keeper 上的 `--gui-side-w`，不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`（`task-nav`），否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板，目的地仍可用。

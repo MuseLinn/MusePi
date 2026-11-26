@@ -110,7 +110,7 @@ describe("page-owned settings row seats", () => {
 		expect(items.some(item => String(item.id).startsWith("ext:"))).toBe(false);
 		// The page it belongs to keeps exactly one row, and no row carries its label.
 		expect(items.filter(item => item.id === "appearance")).toHaveLength(1);
-		expect(items.some(item => item.label === "滚动进度轨")).toBe(false);
+		expect(items.some(item => item.label === "滚动条皮肤")).toBe(false);
 	});
 
 	it("renders the seat inside 外观 while the nav stays free of it", async () => {
@@ -118,7 +118,7 @@ describe("page-owned settings row seats", () => {
 			{
 				slot: "settings.item.appearance.rail",
 				extensionId: "/plugins/ui-theme/settings.tsx",
-				label: "滚动进度轨",
+				label: "滚动条皮肤",
 				code: SCROLL_TRACK_CARD,
 				availability: "always",
 			},
@@ -129,6 +129,6 @@ describe("page-owned settings row seats", () => {
 		// … and the nav lists 外观 once, with no second page borrowing the label.
 		const labels = navRowLabels(container);
 		expect(labels.filter(label => label === t("settings.appearance"))).toHaveLength(1);
-		expect(labels).not.toContain("滚动进度轨");
+		expect(labels).not.toContain("滚动条皮肤");
 	});
 });

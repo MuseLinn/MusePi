@@ -851,13 +851,13 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **设置 → 记忆新增工作区记忆卡**(`settings-sections/memory.tsx` + daemon `memory.workspace` / `memory.workspaceRead` / `memory.workspaceReveal`):对齐 ZCode 记忆面板,数据源是**既有**的按 cwd 记忆根(`getMemoryRoot(agentDir, cwd)` → `~/.musepi/agent/memories/<encodeProjectPath(cwd)>`,即合并管道写入的那批目录)。仅标题 + 描述头 —— **无开关**:后端启停本就在下方 schema 选择器里,同一设置放两个控件是重复(用户指出)。其下是工作区记忆目录浏览器:工作区选择器(`getMemoriesDir()` 下的目录,标签显示**文件夹名** —— 解码有损的 `encodeProjectPath` slug 取末段,基名撞车时带上父段消歧,tooltip 给原始 slug)、N 条记忆计数、名称搜索、刷新,以及文件行(图标 + 名称 + 相对时间,复用 transcript 域相对时间 key):单击把文件读进面板内查看器(`memory.workspaceRead`:仅裸文件名、仅 `.md`、512KB 上限),悬停的文件夹按钮在系统文件管理器中显示(`memory.workspaceReveal`,daemon 宿主侧执行:`explorer /select` / `open -R` / `xdg-open` —— 远程 daemon 即在远程机器上打开,与其它 daemon 侧路径语义一致)。
 - **图片灯箱新增下载按钮,操作组下移**(guest-client `image-lightbox`):下载 + 关闭渲染为一行(`.tr-img-lb-actions`,top 76px / right 16px —— 比原来的单个 X 更退一步,像 ZCode 预览头部一样避开窗口部件、成对呈现)。下载把 src 重新 fetch 成 blob(`data:` 与远程 URL 都可用),按 blob mime 命名为 `musepi-image-<时间戳>.<扩展名>`,fetch 失败时回退为新标签打开源地址而不是无响应。
 - **紧凑形态加固 + 两处空壳开关**(同轮,用户指出):状态 mini/pill 的差异条件不再被 `gitStale` 清空 —— 一轮轮询的滞后数字好过空白(链条 统计 → 文件数 → 分支 → "—" 总有产出),mini 的回退分支名从 faint 提到 muted(浅色卡上几乎不可见),`.gui-status-mini` 以 `space-between` 把展开按钮钉在右侧,行不再读作「标签-空白-按钮」。MCP 服务器的开关和 外观 → 信息状态条 的开关此前渲染为**空心胶囊** —— 两处 `gui-toggle` 按钮都缺 CSS 所定位的 `.gui-toggle-knob` 子元素(已补)。信息状态条开关此前也不实时生效:只写 localStorage,而 storage 事件同文档不触发 —— 现翻转时派发 `musepi-statusbar-info-changed`(`setStatusBarEnabled`,house 的 `musepi-dotmatrix-changed` 模式),`SessionStatusBar` 监听之;效果预览在开关开启时用真实 `gui-statusbar-info` 类渲染带示例分段的状态条。
-- **浮动滚动条:闲时变浅不消失,吃豆人轨可拖拽**(`ui-theme/rail.tsx` + `ui-theme/rail.css):覆盖滚动条在滚动停止 ~1s 后不再消失 —— 淡为 30% 透明度的幽灵轨(`data-idle`;悬停拇指恢复全不透明),进度随时可以按住拖动。双拇指共用同一拖拽契约(`onThumbDown`,按下即唤醒、保持抓取偏移);吃豆人皮肤此前**完全没有**拖拽处理 —— 现在 pac 字形在 `[data-visible]` 期间(含闲时)接回指针事件,12px 字形外套 24px 透明命中环(`::after` inset -6px)。轨道线本身保持 `pointer-events: none`(绝不吞内容上的点击)—— 只有拇指接入,既保住「幽灵轨不得拦截点击」的既有保证,又恰好让出拇指大小的一条作为把手。
 - **会话侧栏:ZCode 列表对齐一轮**(`SessionSidebar.tsx` / `SessionList.tsx` / gui-misc.css,用户指出):① 运行中指示器改为 8 芒星标**旋转**(`.gui-tree-working-spin`,ZCode ✳ parity —— 原为呼吸圆点;欢迎页提醒行保留脉动点);② 「近期」重复区块从三个 tab 全部移除 —— 它把下方分组/文件夹里已有的会话在顶部再列一遍,白占列表头部空间;`isRecentlyActive` 助手与其测试一并删除;③ 分组 tab 底栏保持**日期分组** —— 曾试过按项目文件夹自动分组「空间」,已回退(用户:与项目 tab 设计重合);导入的会话改为在导入时自动归纳进**可编辑**自定义分组(见 §30)。
 - **分组 tab 的全部展开/收起覆盖自定义分组**(`SessionSidebar.tsx`):tab 行按钮切换 `groupsAll`(null/true → 全部收起,false → 全部展开);自定义组是分组 tab 唯一的折叠块(「空间」已回退,见 §28③),展开/收起不再需要驱动文件夹块。
 - **子会话子树并入同一个全部展开/收起,并带动画**(`SessionList.tsx` + `SessionSidebar.tsx`,用户反馈):父行 chevron 折叠原是每个 `SessionList` 实例各自的 `useState`(定时任务区/各项目块/未分组区各渲染一份列表),tab 行按钮对子会话完全不生效。状态提升为模块级存储(`useSyncExternalStore`;持久化键不变,仍是 `musepi-gui-session-collapse`),另维护「有子会话的父行」id 注册表;项目 tab 按钮调用 `setAllSubtreesCollapsed`,与 `collapseAllProjects` 同方向(有收起则全展开,全展开则全收起)。折叠改为两阶段行高补间,不再瞬时剪枝:`leaving` 保持子树挂载、每行 `<li>` 补间到 0px(240ms 后提交并剪除),`entering` 先提交再长高(0px → 自然高度)——与 `use-collapse.ts` 同一 240ms `cubic-bezier(0.22,1,0.36,1)` 阶梯(`useLayoutEffect`,展开行首帧不会闪全高;动画期间重复点击忽略)。`animFor` 用剪枝前树建的父链映射取最近带相位祖先,子树剪除前每行都能拿到相位。`useSyncExternalStore` 必须给第三个 `getServerSnapshot` 参数,否则 `renderToString` 测试直接崩。
-- **浮动滚动条在容器死亡时收回**(`ui-theme/rail.tsx`):闲时幽灵化让进度条获得了「余生」,容器被卸载后幽灵会永久悬在无关 UI 上 —— 进入设置后仍挂着会话列表的幽灵轨(用户报告)。轨可见期间跑一个 ~600ms 的探活(`targetGone()`:已断连**或**尺寸归零)并完全收回(`hideForGood`:摘除 `data-visible`/`data-idle`、清空拖拽目标);140ms 的 settle 检查与 1s 的 idle 定时走同一判断,滚动后立刻切界面也在一个探活周期内收回,不再滞留。
 
-## 28b. 浮动滚动条:按容器 keyed 的轨池 + 拆分热路径(2026-10-05)
+## 28b. 浮动滚动条:按容器 keyed 的轨池 + 拆分热路径(2026-10-05 —— 已被 §28c 取代)
+
+> 已取代:§28c 移除了浮动轨,把滚动条交回引擎。以下内容是覆盖层模型的记录,不是当前行为。
 
 - **浮层按容器分配槽位,不再是全应用一条轨**(`ui-theme/rail.tsx`)。`window` capture 阶段的 `scroll` 能看到每个可滚动容器,槽位首次见到容器时绑定(`bind`),经统一的 `retire` 回收。两个各自独立滚动的窗格现在各有自己的轨 —— 扩展中心的列表列与详情列都能显示位置。`MAX_RAILS`(24)个槽位占满时回收**最冷**的一条,所以用户正在动的容器总能保住轨。
 - **所有退出路径收敛到 `retire`** —— 已卸载、尺寸归零、两轴都不再溢出、或被池回收。`measure` 对每一种都返回 `false`,调用方随即回收。这修掉了「残轨」这一类缺陷:旧 `update()` 里 `overflowY` / `scrollHeight` / 零矩形三处提前 `return` 会把上一次定位的轨留在屏幕上,而 `remeasure()` 对同样情况的处理与它们并不一致。
@@ -885,6 +885,17 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
   - 橡皮糖/贪吃蛇胶囊与横向条保持可视厚度，但增加 3px 透明边框（`background-clip: padding-box`），抓取区从约 6.6px 扩到约 12.6px，可视边缘不移动。
   - 内置皮肤目录在 bundle 的 `skins.ts` 里，轨与选择器只有一个所有者。daemon 主题插件仍可经 `registerScrollbarSkin` → `extensions.list.scrollbarSkins` 贡献皮肤；渲染端按 contributed → imported → built-in、id 去重合并，`scrollbar-skins` 宿主模块让编译后的轨与设置卡共用一份列表。
   - 契约测试：`test/ui-theme-rail.test.tsx`（轨池、悬停发现、回收、热路径、双轴、RTL、意图、闲时、层级）、`test/ui-theme-skins.test.ts`（校验与优先级）、`test/ui-theme.test.tsx`（席位 + 编译管线）。
+
+## 28c. 原生滚动条 + 皮肤预设
+
+- 决定：[ADR 0008](../adr/0008-native-scrollbars.md)。
+- **滚动条回到原生**(`packages/client-core/src/styles/base.css`):尺寸、拖拽、悬停、键盘、减少动效与系统无障碍面都交给引擎。`gui-base.css` 不再全局隐藏系统滚动条;`FloatingScrollbar` 的轨池、探活、意图闸、闲时幽灵、拖拽反解与 `stackZ` 随 `ui-theme/rail.tsx`、`rail.css`、`test/ui-theme-rail.test.tsx` 一并删除。
+- **两条渲染路径互斥**。非 `auto` 的 `scrollbar-width`/`scrollbar-color` 会让 Chromium/Safari 丢弃该元素上所有 `::-webkit-scrollbar*` 规则(含 hover 拇指),所以标准属性放在 `@supports not selector(::-webkit-scrollbar)` 里,伪元素规则留在外面。轨道保持透明,只有拇指带色。
+- **调色板 → tint 间接层**(`base.css`):`--mp-scrollbar-bg-l1`/`-l2` 与 hover 对解析成一个在 `body, body *` 上重新声明的 tint —— 继承值携带的是在 `body` 已替换好的颜色,后代无法重绑。表面通过把 `--mp-scrollbar-tint`/`-hover` 重绑到 l2 对来选择海拔:设置对话框、连接器/设备/导入对话框、提醒列表、音乐队列、OBO 表单、操作提示、BTW 正文与扩展详情。
+- **皮肤只是调色板 + 配方,不拥有行为**(`ui-theme/skins.ts`、`skins.css`):`classic` 是基础胶囊且为默认;`builtin-snake` 加头、眼与骨节;`builtin-gummy-rainbow` 是固定糖果渐变。内置配方按 `html[data-scrollbar-skin]` 选择;导入与贡献皮肤把 `--mp-scrollbar-skin-*` 内联写到 `<html>`,走经典胶囊。宽度夹在 6–16px,皮肤不能吃掉一整列内容。
+- **吃豆人退役**。原生拇指无法承载进度驱动的已吃轨迹与动画字形,已持久化的 `builtin-pacman` 解析为 `classic`;回合导航条的 `pacman` 样式是另一个设置,不受影响。
+- **应用皮肤不重绘滚动条**:`app.tsx` 启动副作用与外观卡把属性/调色板写到 `<html>`,并派发 `omp-scrollbar-style-changed`;贡献皮肤变化经 `omp-scrollbar-skins-changed` 重新应用。导航 rail 与 tab strip 用 `scrollbar-width: none` + `::-webkit-scrollbar { display: none }` 就地退出;`data-gui-scrollbar="off"` 已删除。
+- 契约测试:`test/scrollbar-skins.test.ts` 钉住双路径分流、禁止全局隐藏、tint 间接层、每个内置配方以及内置/导入皮肤的 DOM 应用;`test/ui-theme-skins.test.ts` 保留校验与优先级;`test/ui-theme.test.tsx` 保留单一设置席位与编译管线。
 
 ## 29. 会话排序:打开不得重排(2026-09-13)
 

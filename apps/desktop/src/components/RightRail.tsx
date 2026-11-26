@@ -352,7 +352,6 @@ export function RightRail({
 				ref={scrollRef}
 				className="gui-right-rail-group gui-right-rail-scroll"
 				data-feathered={feathered ? "" : undefined}
-				data-gui-scrollbar="off"
 			>
 				<DndContext
 					sensors={sensors}

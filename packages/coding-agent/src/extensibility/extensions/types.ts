@@ -2661,15 +2661,17 @@ export interface ExtensionStatusBarSegment {
 }
 
 /** One scrollbar skin contributed by an extension (registerScrollbarSkin).
- *  The rail is data-driven, so a theme bundle owns its skins without shipping
- *  renderer code: the daemon validates the shape, `extensions.list` carries it,
- *  and the GUI merges contributed ids over the built-in catalog. */
+ *  The bar is native, so a skin is data, not renderer code: the daemon
+ *  validates the shape, `extensions.list` carries it, and the GUI merges
+ *  contributed ids over the built-in catalog. Only `colors.accent` and `size`
+ *  reach the bar; the palette is written as CSS variables on `<html>`. */
 export interface ExtensionScrollbarSkin {
 	/** Registry id; a contributed id replaces the built-in with the same id. */
 	id: string;
 	/** Picker label (plugin-owned plain text, not a host i18n key). */
 	displayName: string;
-	/** Rail geometry: jelly capsule or bead rail. */
+	/** Legacy geometry field kept for wire compatibility; the native bar
+	 *  renders one capsule and selects a built-in recipe by skin id. */
 	base: "gummy" | "pacman";
 	/** Theme-bound CSS colours (a raw colour, `var(...)` or `color-mix(...)`). */
 	colors: {
@@ -2677,9 +2679,9 @@ export interface ExtensionScrollbarSkin {
 		track: string;
 		eaten: string;
 	};
-	/** Rail/capsule width in px (clamped to 6–24). */
+	/** Bar width in px (clamped to 6–16). */
 	size: number;
-	/** Optional data-URL glyph replacing the built-in Pac-man. */
+	/** Legacy glyph field kept for wire compatibility; unused natively. */
 	pacGlyph?: string | null;
 }
 

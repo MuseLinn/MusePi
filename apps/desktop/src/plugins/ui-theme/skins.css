@@ -1,0 +1,95 @@
+/* Scrollbar skin recipes — owned by the ui-theme Cordis bundle.
+ *
+ * The bar itself is native (packages/client-core/src/styles/base.css): the
+ * engine sizes, drags, hovers and exposes it. A skin therefore only supplies
+ * a palette and, optionally, a thumb background recipe. Palette overrides are
+ * read through --mp-scrollbar-skin-* on <html>, so an imported or contributed
+ * skin applies the same values inline and an elevated surface still recolors
+ * the bar by rebinding --mp-scrollbar-tint to the l2 pair.
+ *
+ * Recipes are keyed by the html attribute rather than by a custom property:
+ * a var() nested inside a custom property is substituted where the property is
+ * declared, so an inherited image string could not follow a per-surface tint.
+ *
+ * `classic` is the base (no rule): an 8px capsule with a 2px transparent border
+ * paints the 4px neutral thumb. */
+
+/* ── Snake: a rounded head, one eye, and vertebra seams down the body ─────
+ * 12px box with a 3px transparent border: the body paints 6px, the head is a
+ * 10px disc clipped to the full 12px, so it reads wider than the body. */
+html[data-scrollbar-skin="builtin-snake"] {
+	--mp-scrollbar-skin-bg-l1: var(--color-accent);
+	--mp-scrollbar-skin-bg-l2: color-mix(in oklab, var(--color-accent) 84%, white);
+	--mp-scrollbar-skin-hover-l1: color-mix(in oklab, var(--color-accent) 88%, white);
+	--mp-scrollbar-skin-hover-l2: color-mix(in oklab, var(--color-accent) 76%, white);
+	--mp-scrollbar-skin-width: 12px;
+	--mp-scrollbar-skin-border: 3px;
+}
+
+html[data-scrollbar-skin="builtin-snake"] ::-webkit-scrollbar-thumb {
+	background-color: transparent;
+	background-image:
+		radial-gradient(circle 1.6px at 50% 32%, rgb(0 0 0 / 60%) 99%, transparent),
+		radial-gradient(
+			circle at 34% 32%,
+			color-mix(in oklab, var(--mp-scrollbar-tint) 92%, white),
+			color-mix(in oklab, var(--mp-scrollbar-tint) 74%, black)
+		),
+		repeating-linear-gradient(
+			180deg,
+			transparent 0 9px,
+			color-mix(in oklab, var(--mp-scrollbar-tint) 55%, rgb(0 0 0 / 55%)) 9px 11px,
+			transparent 11px 12px
+		);
+	background-size:
+		10px 10px,
+		10px 10px,
+		100% 12px;
+	background-position:
+		50% 0,
+		50% 0,
+		0 0;
+	background-repeat: no-repeat, no-repeat, repeat-y;
+	background-clip: border-box, border-box, padding-box;
+}
+
+html[data-scrollbar-skin="builtin-snake"] ::-webkit-scrollbar-thumb:hover {
+	--mp-scrollbar-tint: var(--mp-scrollbar-tint-hover);
+}
+
+/* A horizontal thumb is short and wide: the head-at-the-top recipe would read
+ * as a stray disc. The horizontal axis keeps the plain capsule. */
+html[data-scrollbar-skin="builtin-snake"] ::-webkit-scrollbar-thumb:horizontal {
+	background-color: var(--mp-scrollbar-tint);
+	background-image: none;
+	background-clip: padding-box;
+}
+
+/* ── Gummy Rainbow: the candy capsule ────────────────────────────────────
+ * Fixed palette by design: a five-stop rainbow has no elevation rung, so this
+ * recipe ignores --mp-scrollbar-tint and the l1/l2 rebinding. The gloss layer
+ * is the candy highlight. */
+html[data-scrollbar-skin="builtin-gummy-rainbow"] {
+	--mp-scrollbar-skin-width: 12px;
+	--mp-scrollbar-skin-border: 3px;
+}
+
+html[data-scrollbar-skin="builtin-gummy-rainbow"] ::-webkit-scrollbar-thumb {
+	background-color: transparent;
+	background-image:
+		linear-gradient(180deg, rgb(255 255 255 / 62%) 0 38%, rgb(255 255 255 / 5%) 38% 100%),
+		linear-gradient(175deg, #ff8a5c 0%, #ffd94d 30%, #7ad97a 60%, #5cb8ff 85%, #b28dff 100%);
+	background-size:
+		100% 100%,
+		100% 100%;
+	background-repeat: no-repeat, no-repeat;
+	background-clip: padding-box, padding-box;
+}
+
+/* The horizontal bar reuses the same recipe; its thickness follows the box, so
+ * only the gloss needs to run across instead of down. */
+html[data-scrollbar-skin="builtin-gummy-rainbow"] ::-webkit-scrollbar-thumb:horizontal {
+	background-image:
+		linear-gradient(90deg, rgb(255 255 255 / 55%) 0 34%, rgb(255 255 255 / 4%) 34% 100%),
+		linear-gradient(95deg, #ff8a5c 0%, #ffd94d 30%, #7ad97a 60%, #5cb8ff 85%, #b28dff 100%);
+}

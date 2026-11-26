@@ -44,7 +44,7 @@ describe("imported scrollbar skin validation", () => {
 		expect(skin).not.toBeNull();
 		expect(skin!.colors.accent).toBe("oklch(0.7 0.2 30)");
 		expect(skin!.colors.track).toContain("color-mix");
-		expect(skin!.size).toBe(24);
+		expect(skin!.size).toBe(16);
 	});
 
 	test("only accepts a data-URL glyph", () => {
@@ -77,7 +77,7 @@ describe("contributed scrollbar skins", () => {
 		expect(skins[0]!.displayName).toBe("Theme Snake");
 		expect(skins[0]!.size).toBe(14);
 		// The rest of the built-in catalog is still reachable.
-		expect(skins.some(skin => skin.id === "builtin-pacman")).toBe(true);
+		expect(skins.some(skin => skin.id === "builtin-gummy-rainbow")).toBe(true);
 	});
 
 	test("contributed skins rank above imported ones", () => {

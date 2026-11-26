@@ -3,15 +3,14 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { GuiSelect } from "../../components/GuiSelect";
 import {
+	applyScrollbarSkin,
+	getScrollbarSkin,
 	getScrollbarSkins,
-	readAlwaysShowScrollbar,
 	readScrollbarStyle,
-	SCROLLBAR_ALWAYS_CHANGED_EVENT,
 	SCROLLBAR_SKINS_CHANGED_EVENT,
 	SCROLLBAR_STYLE_CHANGED_EVENT,
 	SCROLLBAR_STYLE_KEY,
 	type ScrollbarSkin,
-	saveAlwaysShowScrollbar,
 	saveImportedSkin,
 	validateImportedSkin,
 } from "./skins";
@@ -24,38 +23,53 @@ function setPref(key: string, value: string): void {
 	}
 }
 
+/** Pick the skin's label: the built-in ids are locale-owned, a contributed or
+ *  imported skin supplies its own plain-text name. */
+function skinLabel(skin: ScrollbarSkin): string {
+	switch (skin.id) {
+		case "classic":
+			return t("settings.scrollbarClassic");
+		case "builtin-snake":
+			return t("settings.snake");
+		case "builtin-gummy-rainbow":
+			return t("settings.gummyRainbow");
+		default:
+			return skin.displayName;
+	}
+}
+
 /**
- * `settings.item.ui-theme`: the rail's appearance card.
+ * `settings.item.appearance.rail`: the scrollbar appearance card.
  *
- * The card lives in the extension center (this platform's home for
- * plugin-owned settings) and owns the skin picker, zip import and the
- * always-visible switch. State is localStorage + the same window events the
- * rail listens to, so a change applies on the next frame without a restart.
- * The built-in catalog comes from the bundle's `skins.ts`; third-party skins
- * arrive through `extensions.list.scrollbarSkins` into the shared registry.
+ * The bar is native, so the card owns only the skin pick and the zip import.
+ * Choosing a skin writes localStorage, applies the palette/attribute to
+ * `<html>` and notifies the window; nothing re-renders the scrollbar itself.
  */
 export default function UiThemeSettings(): ReactNode {
-	const [skinId, setSkinId] = useState<string>(() => readScrollbarStyle());
+	const [skinId, setSkinId] = useState<string>(() => getScrollbarSkin(readScrollbarStyle()).id);
 	const [skins, setSkins] = useState<ScrollbarSkin[]>(() => getScrollbarSkins());
-	const [always, setAlways] = useState<boolean>(() => readAlwaysShowScrollbar());
 	const [importing, setImporting] = useState(false);
 	const [error, setError] = useState(false);
 
 	useEffect(() => {
-		const syncSkins = (): void => {
+		const sync = (): void => {
 			setSkins(getScrollbarSkins());
-			setSkinId(readScrollbarStyle());
+			setSkinId(getScrollbarSkin(readScrollbarStyle()).id);
 		};
-		const syncAlways = (): void => setAlways(readAlwaysShowScrollbar());
-		window.addEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, syncSkins);
-		window.addEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, syncSkins);
-		window.addEventListener(SCROLLBAR_ALWAYS_CHANGED_EVENT, syncAlways);
+		window.addEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, sync);
+		window.addEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, sync);
 		return () => {
-			window.removeEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, syncSkins);
-			window.removeEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, syncSkins);
-			window.removeEventListener(SCROLLBAR_ALWAYS_CHANGED_EVENT, syncAlways);
+			window.removeEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, sync);
+			window.removeEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, sync);
 		};
 	}, []);
+
+	const choose = (next: string): void => {
+		setSkinId(next);
+		setPref(SCROLLBAR_STYLE_KEY, next);
+		applyScrollbarSkin(next);
+		window.dispatchEvent(new Event(SCROLLBAR_STYLE_CHANGED_EVENT));
+	};
 
 	const bridge = (window as unknown as { electronAPI?: { importScrollbarSkin?(): Promise<unknown> } }).electronAPI;
 
@@ -67,22 +81,8 @@ export default function UiThemeSettings(): ReactNode {
 				<GuiSelect
 					className="gui-settings-select"
 					value={skinId}
-					onChange={next => {
-						setSkinId(next);
-						setPref(SCROLLBAR_STYLE_KEY, next);
-						window.dispatchEvent(new Event(SCROLLBAR_STYLE_CHANGED_EVENT));
-					}}
-					options={skins.map(skin => ({
-						value: skin.id,
-						label:
-							skin.id === "builtin-snake"
-								? t("settings.snake")
-								: skin.id === "builtin-gummy-rainbow"
-									? t("settings.gummyRainbow")
-									: skin.id === "builtin-pacman"
-										? t("settings.pacman")
-										: skin.displayName,
-					}))}
+					onChange={choose}
+					options={skins.map(skin => ({ value: skin.id, label: skinLabel(skin) }))}
 				/>
 				{bridge?.importScrollbarSkin ? (
 					<div className="flex items-center gap-2">
@@ -104,9 +104,7 @@ export default function UiThemeSettings(): ReactNode {
 										}
 										saveImportedSkin(skin);
 										setSkins(getScrollbarSkins());
-										setSkinId(skin.id);
-										setPref(SCROLLBAR_STYLE_KEY, skin.id);
-										window.dispatchEvent(new Event(SCROLLBAR_STYLE_CHANGED_EVENT));
+										choose(skin.id);
 									})
 									.catch(() => setError(true))
 									.finally(() => setImporting(false));
@@ -121,26 +119,6 @@ export default function UiThemeSettings(): ReactNode {
 						)}
 					</div>
 				) : null}
-			</div>
-			<div className="gui-settings-row">
-				<div className="flex-1">
-					<div className="gui-settings-row-label">{t("settings.alwaysShowScrollbars")}</div>
-					<div className="gui-settings-row-desc">{t("settings.alwaysShowScrollbarsDesc")}</div>
-				</div>
-				<button
-					type="button"
-					role="switch"
-					aria-checked={always}
-					className={`gui-toggle${always ? " gui-toggle--on" : ""}`}
-					aria-label={t("settings.alwaysShowScrollbars")}
-					onClick={() => {
-						const next = !always;
-						setAlways(next);
-						saveAlwaysShowScrollbar(next);
-					}}
-				>
-					<span className="gui-toggle-knob" />
-				</button>
 			</div>
 		</div>
 	);

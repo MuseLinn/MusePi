@@ -93,10 +93,13 @@ function openOverflow(rail: HTMLElement): void {
 }
 
 describe("right-rail overflow menu", () => {
-	test("the navigation scroller opts out of the global skin scrollbar", () => {
+	test("the navigation scroller keeps its local scrollbar opt-out", () => {
 		const rootHost = renderRail();
 		const scroller = railOf(rootHost).querySelector(".gui-right-rail-scroll");
-		expect(scroller?.getAttribute("data-gui-scrollbar")).toBe("off");
+		// The opt-out is the class that owns `scrollbar-width: none`; the retired
+		// overlay attribute must not linger as dead DOM.
+		expect(scroller?.classList.contains("gui-right-rail-scroll")).toBe(true);
+		expect(scroller?.hasAttribute("data-gui-scrollbar")).toBe(false);
 	});
 
 	test("the menu mounts OUTSIDE the clipping rail card", () => {

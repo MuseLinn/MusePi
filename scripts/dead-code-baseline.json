@@ -202,7 +202,6 @@
 	"exports apps/desktop/src/plugins/ui-theme/index.ts inject",
 	"exports apps/desktop/src/plugins/ui-theme/index.ts name",
 	"exports apps/desktop/src/plugins/ui-theme/index.ts provide",
-	"exports apps/desktop/src/plugins/ui-theme/rail.tsx default",
 	"exports apps/desktop/src/plugins/ui-theme/skins.ts BUILTIN_SCROLLBAR_SKINS",
 	"exports apps/desktop/src/plugins/ui-theme/skins.ts DEFAULT_SCROLLBAR_SKIN_ID",
 	"exports apps/desktop/src/plugins/ui-theme/skins.ts SCROLLBAR_SKINS_KEY",

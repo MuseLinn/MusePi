@@ -2683,10 +2683,10 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 }
-.gui-ext-detail::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
-	border: 2px solid transparent;
-	background-clip: content-box;
+.gui-ext-detail {
+	/* Raised detail pane: keep the thumb on the l2 rung. */
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l2);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l2);
 }
 .gui-ext-detail-empty {
 	display: grid;

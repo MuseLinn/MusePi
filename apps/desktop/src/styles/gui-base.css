@@ -315,35 +315,12 @@ html.gui-glass-adaptive {
 	--color-text-faint: color-mix(in oklab, var(--fg-faint) calc(100% - var(--gui-glass-blend) * 0.45), #000);
 }
 
-/* ── Scrollbar: hidden globally, drawn by FloatingScrollbar overlay ────
- * Chromium still parses `overflow: overlay` but lays it out exactly like
- * `auto` — the floating (zero-layout-width) scrollbar is gone. System
- * scrollbars are therefore hidden everywhere so no container ever
- * squeezes or shifts when its content becomes scrollable; the fixed
- * overlay in plugins/ui-theme/rail.tsx (skin-driven: gummy capsule or
- * pac-man bead rail) draws the progress indicator in its place. Every
- * window imports gui.css, so this is the single source of truth.
- * `!important` is load-bearing: container rules that set
- * scrollbar-width:thin have higher specificity, and Chromium 150
- * standard properties win over ::-webkit-scrollbar pseudo-elements. */
-* {
-	scrollbar-width: none !important;
-	scrollbar-color: transparent transparent !important;
-}
-*::-webkit-scrollbar {
-	display: none !important;
-	width: 0;
-	height: 0;
-}
-*::-webkit-scrollbar-track {
-	display: none !important;
-}
-*::-webkit-scrollbar-thumb {
-	display: none !important;
-}
-*::-webkit-scrollbar-corner {
-	display: none !important;
-}
+/* ── Scrollbars are native and themed by client-core's base.css ──────────
+ * The engine draws them, so layout width, drag, hover and the OS
+ * accessibility surface stay the platform's. `ui-theme/skins.css` only changes
+ * the palette and the thumb recipe. Surfaces that must not show a bar (nav
+ * rails, tab strips) opt out locally with `scrollbar-width: none` plus
+ * `::-webkit-scrollbar { display: none }`. */
 
 /* Center column: toolbar on top, chat surface below. */
 .gui-center {

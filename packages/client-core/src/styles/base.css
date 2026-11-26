@@ -100,36 +100,98 @@ textarea {
 	background: var(--accent-muted);
 }
 
-/* subtle scrollbars — canonical spec (matches gui.css): 8px rail, rounded
- * thumb floating on a transparent track via a 2px inset border. */
-* {
-	scrollbar-width: thin;
-	scrollbar-color: color-mix(in oklab, var(--fg-faint) 30%, transparent) transparent;
+/* ── Scrollbars: native, themed through one indirection ─────────────────
+ * The engine draws the bar — layout width, drag, hover, keyboard and the OS
+ * accessibility surface all stay native — and this sheet only paints it.
+ * `scrollbar-width`/`scrollbar-color` and `::-webkit-scrollbar*` are mutually
+ * exclusive: a non-`auto` standard value makes Chromium and Safari drop every
+ * pseudo-element rule for that element, the hover thumb included. Each path is
+ * therefore gated to the engines that implement it.
+ *
+ * A surface picks its elevation by rebinding the tint to the l2 pair on its own
+ * container (menu, popover, dialog). Skins (`ui-theme/skins.css`) rebind the
+ * same palette and may replace the thumb background with a gradient recipe;
+ * the tint always comes from the palette, so an elevated surface recolors every
+ * skin that is tint-driven.
+ *
+ * The alias tokens live on `body`, not `:root`: custom properties inherit
+ * downward only, so a rule on `html` would resolve the palette to the
+ * guaranteed-invalid value. */
+
+/* Registered so an invalid skin colour falls back to the initial value instead
+ * of poisoning every thumb. */
+@property --mp-scrollbar-tint {
+	syntax: "<color>";
+	inherits: true;
+	initial-value: transparent;
 }
 
-*::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+@property --mp-scrollbar-tint-hover {
+	syntax: "<color>";
+	inherits: true;
+	initial-value: transparent;
 }
 
-*::-webkit-scrollbar-thumb {
-	background: color-mix(in oklab, var(--fg-faint) 30%, transparent);
-	border: 2px solid transparent;
-	background-clip: padding-box;
-	border-radius: 999px;
+body {
+	/* Palette: a skin overrides the --mp-scrollbar-skin-* values on `html`; an
+	 * imported or contributed skin sets the same names inline. */
+	--mp-scrollbar-bg-l1: var(--mp-scrollbar-skin-bg-l1, color-mix(in oklab, var(--fg-faint) 30%, transparent));
+	--mp-scrollbar-bg-l2: var(--mp-scrollbar-skin-bg-l2, color-mix(in oklab, var(--fg-faint) 44%, transparent));
+	--mp-scrollbar-hover-l1: var(--mp-scrollbar-skin-hover-l1, color-mix(in oklab, var(--fg-faint) 50%, transparent));
+	--mp-scrollbar-hover-l2: var(--mp-scrollbar-skin-hover-l2, color-mix(in oklab, var(--fg-faint) 62%, transparent));
+	/* The bar's layout width. A surface that must align beside it reads this
+	 * instead of hardcoding the number. */
+	--mp-scrollbar-width: var(--mp-scrollbar-skin-width, 8px);
+	--mp-scrollbar-thumb-border: var(--mp-scrollbar-skin-border, 2px);
+	--mp-scrollbar-track-margin: 0px;
 }
 
-*::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--fg-faint) 50%, transparent);
-	border: 2px solid transparent;
-	background-clip: padding-box;
+/* Re-declared per element rather than inherited from `body`: an inherited value
+ * carries the colour already substituted at `body`, so a descendant rebinding
+ * the palette could not change it. `scrollbar-width` is not inherited at all. */
+body,
+body * {
+	--mp-scrollbar-tint: var(--mp-scrollbar-bg-l1);
+	--mp-scrollbar-tint-hover: var(--mp-scrollbar-hover-l1);
 }
 
-*::-webkit-scrollbar-track {
+@supports not selector(::-webkit-scrollbar) {
+	/* Firefox has no hover pseudo-element: `scrollbar-color` states one thumb
+	 * colour and the engine derives its own hover treatment. */
+	body,
+	body * {
+		scrollbar-width: thin;
+		scrollbar-color: var(--mp-scrollbar-tint) transparent;
+	}
+}
+
+/* Not gated in turn: an engine without these pseudo-elements drops the rules as
+ * unknown selectors, so a gate would only restate selector matching. */
+::-webkit-scrollbar {
+	width: var(--mp-scrollbar-width);
+	height: var(--mp-scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+	margin-block: var(--mp-scrollbar-track-margin);
 	background: transparent;
 }
 
-*::-webkit-scrollbar-corner {
+::-webkit-scrollbar-thumb {
+	border: var(--mp-scrollbar-thumb-border) solid transparent;
+	border-radius: 999px;
+	corner-shape: round;
+	background-color: var(--mp-scrollbar-tint);
+	background-clip: padding-box;
+}
+
+@media (hover: hover) {
+	::-webkit-scrollbar-thumb:hover {
+		background-color: var(--mp-scrollbar-tint-hover);
+	}
+}
+
+::-webkit-scrollbar-corner {
 	background: transparent;
 }
 

@@ -1315,7 +1315,7 @@ class ConcretePluginAPI implements ExtensionAPI, IExtensionRuntime {
 			displayName: skin.displayName,
 			base: skin.base,
 			colors: { accent: color("accent"), track: color("track"), eaten: color("eaten") },
-			size: Math.min(24, Math.max(6, Math.round(skin.size))),
+			size: Math.min(16, Math.max(6, Math.round(skin.size))),
 			...(pacGlyph ? { pacGlyph } : {}),
 		});
 	}

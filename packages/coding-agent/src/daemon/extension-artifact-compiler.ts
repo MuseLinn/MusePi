@@ -1067,7 +1067,7 @@ export async function collectStatusBarSegments(
  * Collect scrollbar skins declared by active extension-module entries
  * (registerScrollbarSkin), for extensions.list `scrollbarSkins`. Shares the
  * load-once cache; a malformed skin is skipped so one bad theme bundle cannot
- * take the rail down with it.
+ * take the skin catalog down with it.
  */
 export async function collectScrollbarSkins(
 	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,

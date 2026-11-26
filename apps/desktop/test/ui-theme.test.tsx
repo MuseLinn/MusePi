@@ -6,7 +6,7 @@ import { assertKnownComponentSlot } from "../../../packages/coding-agent/src/ext
 import { apply } from "../src/plugins/ui-theme";
 
 describe("ui-theme Cordis bundle", () => {
-	it("registers the rail overlay and the rail settings card", () => {
+	it("registers the scrollbar-skin settings card", () => {
 		const seats: { slot: string; moduleUrl: string; label: string }[] = [];
 		apply({
 			setLabel: () => undefined,
@@ -14,12 +14,11 @@ describe("ui-theme Cordis bundle", () => {
 				register: component => seats.push(component),
 			},
 		});
-		expect(seats.map(seat => seat.slot)).toEqual(["shell.overlay", "settings.item.appearance.rail"]);
-		expect(() => assertKnownComponentSlot("shell.overlay")).not.toThrow();
+		expect(seats.map(seat => seat.slot)).toEqual(["settings.item.appearance.rail"]);
 		expect(() => assertKnownComponentSlot("settings.item.appearance.rail")).not.toThrow();
 	});
 
-	it("compiles both components through the real loader pipeline", async () => {
+	it("compiles the settings card through the real loader pipeline", async () => {
 		const root = path.resolve(import.meta.dir, "..");
 		const components = await collectSlotComponents(
 			[
@@ -32,12 +31,11 @@ describe("ui-theme Cordis bundle", () => {
 			root,
 		);
 		expect(components.map(item => ({ slot: item.slot, error: item.error }))).toEqual([
-			{ slot: "shell.overlay", error: undefined },
 			{ slot: "settings.item.appearance.rail", error: undefined },
 		]);
-		// The bundle owns skins.ts in its own folder, but the compiled rail and
-		// settings card must read the HOST instance (shared contributed/imported
-		// catalog), not a bundled copy.
+		// The bundle owns skins.ts in its own folder, but the compiled settings
+		// card must read the HOST instance (shared contributed/imported catalog),
+		// not a bundled copy.
 		for (const component of components) {
 			expect(component.code).toContain("MusePiHostModules");
 			expect(component.code).toContain("scrollbar-skins");
