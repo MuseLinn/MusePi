@@ -96,6 +96,9 @@ async function runBranchAt(
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);
 	const { conn } = captureConn();
@@ -230,6 +233,9 @@ describe("session.branchAt leaf-move broadcast", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const { conn } = captureConn();

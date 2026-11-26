@@ -45,6 +45,9 @@ function stubHost(options: {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 }
 

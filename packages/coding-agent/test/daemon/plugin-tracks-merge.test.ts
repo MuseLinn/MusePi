@@ -63,7 +63,6 @@ function makeServer(): DaemonServer {
 		setOnExtensionNotification: noop,
 		setMcpAuthFlow: noop,
 		setConnectorConnectPort: noop,
-		setSessionConnectors: noop,
 		setEditorDraft: noop,
 	} as unknown as DaemonSessionHost;
 	return new DaemonServer(host);

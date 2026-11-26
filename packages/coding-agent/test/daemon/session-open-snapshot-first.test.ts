@@ -50,6 +50,9 @@ function makeHost(opts: { live?: Record<string, Record<string, unknown>> }): Hos
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	return { host, calls };
 }

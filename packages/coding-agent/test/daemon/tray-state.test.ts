@@ -48,6 +48,9 @@ describe("tray.state ambient session projection", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const conn = { id: "tray-test", send: () => {} } as DaemonConnection;
@@ -100,6 +103,9 @@ describe("tray.state ambient session projection", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const conn = { id: "session-list-test", send: () => {} } as DaemonConnection;

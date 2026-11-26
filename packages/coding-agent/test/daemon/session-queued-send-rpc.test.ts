@@ -62,6 +62,9 @@ describe("session.queuedSend RPC", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		server = new DaemonServer(host);
 	}

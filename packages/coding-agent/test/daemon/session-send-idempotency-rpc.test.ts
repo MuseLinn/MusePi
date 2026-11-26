@@ -51,6 +51,9 @@ describe("session.send idempotency", () => {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);
 	const conn = { id: "c1" } as unknown as DaemonConnection;

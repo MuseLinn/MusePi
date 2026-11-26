@@ -63,6 +63,9 @@ describe("session.catchup RPC (validation + delegation)", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const { conn } = captureConn();
@@ -89,6 +92,9 @@ describe("session.catchup RPC (validation + delegation)", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const { conn } = captureConn();

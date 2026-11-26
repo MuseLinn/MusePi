@@ -13,6 +13,9 @@ function createServer(getAsyncJobOutput: (jobId: string, options?: { tail?: numb
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	return new DaemonServer(host);
 }
@@ -51,6 +54,9 @@ describe("session.jobs question projection", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 
@@ -110,6 +116,9 @@ describe("session.jobOutput RPC", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 

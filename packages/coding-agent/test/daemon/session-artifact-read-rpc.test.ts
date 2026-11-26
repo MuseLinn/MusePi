@@ -37,6 +37,9 @@ function createServer(artifacts: Record<string, Record<string, string | null>>):
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	return new DaemonServer(host);
 }

@@ -121,7 +121,9 @@ describe("isRetriableConnectionError", () => {
 
 describe("MCPTool.execute retry on connection error", () => {
 	const noop = () => {};
-	const noCtx = {} as Parameters<MCPTool["execute"]>[3];
+	const noCtx = { sessionManager: { getSessionId: () => "session-1" } } as unknown as Parameters<
+		MCPTool["execute"]
+	>[3];
 
 	it("retries once on retriable error when reconnect succeeds", async () => {
 		let callCount = 0;

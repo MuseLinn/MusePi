@@ -36,6 +36,9 @@ describe("session.send image references", () => {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	// Built after agent-dir isolation: services capture their storage paths in
 	// the constructor.

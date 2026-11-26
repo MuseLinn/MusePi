@@ -218,6 +218,9 @@ describe("session.setDesignSystem — RPC route", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		await expect(
@@ -250,6 +253,9 @@ describe("session.setDesignSystem — RPC route", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const result = (await server.handle(
@@ -286,6 +292,9 @@ describe("session.setDesignSystem — RPC route", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		// designSystemId omitted entirely = clear, same as explicit null.
@@ -311,6 +320,9 @@ describe("session.setDesignSystem — RPC route", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 
@@ -349,6 +361,9 @@ describe("session.setDesignSystem — RPC route", () => {
 			setCollabToolProvider: () => {},
 			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
+			setPluginManagementProvider: () => {},
+			setMcpAuthFlow: () => {},
+			setConnectorConnectPort: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		await expect(

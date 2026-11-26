@@ -35,9 +35,20 @@ async function fixture(apply: string): Promise<string> {
 	return entry;
 }
 
+/** Every bundled plugin package, whether it sits at `<root>/<pkg>` or in a
+ *  `<root>/<domain>/<pkg>` group. */
 async function bundledEntries(): Promise<string[]> {
-	const dirs = await fs.readdir(PACKAGES, { withFileTypes: true });
-	return dirs.filter(entry => entry.isDirectory()).map(entry => path.join(PACKAGES, entry.name, "index.ts"));
+	const found: string[] = [];
+	const walk = async (dir: string): Promise<void> => {
+		for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			const child = path.join(dir, entry.name);
+			if (await fs.exists(path.join(child, "package.json"))) found.push(path.join(child, "index.ts"));
+			else await walk(child);
+		}
+	};
+	await walk(PACKAGES);
+	return found;
 }
 
 describe("extension label", () => {

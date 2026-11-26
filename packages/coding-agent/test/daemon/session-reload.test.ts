@@ -55,6 +55,9 @@ async function harness(
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const registry = new WorkspaceRegistry({ filePath: join(root, "projects.json"), now: () => 1 });
 	if (options.projectDirs && options.projectDirs.length > 0) {

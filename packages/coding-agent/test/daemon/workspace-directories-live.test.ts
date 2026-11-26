@@ -43,6 +43,9 @@ async function harness(options: { streaming?: boolean } = {}) {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const registry = new WorkspaceRegistry({ filePath: join(root, "projects.json"), now: () => 1 });
 	const project = await registry.create({ root: cwd, name: "P" });

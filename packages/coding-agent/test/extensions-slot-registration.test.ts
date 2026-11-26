@@ -25,6 +25,9 @@ function makeHarness() {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);
 	const conn = { id: "slots", send: () => {} } as DaemonConnection;

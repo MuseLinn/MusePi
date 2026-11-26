@@ -212,6 +212,9 @@ jobs:
    check:
       name: Lint, type check & web build
       runs-on: ubuntu-22.04
+      # The workspace type check now includes 68 plugin projects; the cold
+      # host build plus every package's own program is the long pole.
+      timeout-minutes: 90
       steps:
          - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
          - uses: ./.github/actions/bun-install

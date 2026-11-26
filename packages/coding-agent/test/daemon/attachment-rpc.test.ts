@@ -23,6 +23,9 @@ describe("attachment chunked upload RPC", () => {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const conn = { id: "c1" } as unknown as DaemonConnection;
 

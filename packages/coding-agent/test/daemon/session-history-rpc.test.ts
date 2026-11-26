@@ -31,6 +31,9 @@ function serverWith(entries: { id: string }[]): { server: DaemonServer; conn: Da
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	return {
 		server: new DaemonServer(host),

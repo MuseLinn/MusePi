@@ -100,6 +100,9 @@ async function makeHarness() {
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
+		setPluginManagementProvider: () => {},
+		setMcpAuthFlow: () => {},
+		setConnectorConnectPort: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);
 	const conn = { id: "test" } as unknown as DaemonConnection;
