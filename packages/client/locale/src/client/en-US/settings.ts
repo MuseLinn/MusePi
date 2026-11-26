@@ -78,7 +78,7 @@ export const settings = {
 	"settings.workspaceAxisTitle": "Workspace files",
 	"settings.workspaceAxisHint":
 		"Local files open directly; files on the instance's own machine come along with it; only files on another machine need a mount here.",
-	"settings.instanceListEmpty": "No other instances yet. Add one to run sessions on another machine.",
+	"settings.instanceListEmpty": "This computer is the only instance. Add one to run a session on another machine.",
 	"settings.connectionWhereSsh": "ssh {host}",
 	"settings.connectionWhereForwarded": "Reached through a tunnel",
 	"settings.connectionLocations": "Connection locations",

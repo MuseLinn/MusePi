@@ -29,14 +29,12 @@
  */
 
 import { t } from "@musepi/client-core";
-import { LoaderCircle as LoaderCircleIconData, Plus as PlusIconData } from "lucide";
-import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { CatalogHost } from "../lib/connection/remote-lifecycle";
 import { type ConnectionTarget, stripToken } from "../lib/connection/targets";
 import { useHostCatalog } from "../lib/connection/use-host-catalog";
-import { buildWsUrl, normalizeRemoteHostUrl, type RemoteHost } from "../lib/remote-hosts";
+import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { ConnectDialog } from "./ConnectDialog";
@@ -193,7 +191,7 @@ export function InstanceManagerDialog({
 			morphKey={`${formOpen}:${wizardStep}`}
 		>
 			<div className="gui-dialog-head">
-				<span className="text-[14px] font-semibold">{t("settings.connectionLocations")}</span>
+				<span className="text-[15px] font-semibold">{t("settings.connectionLocations")}</span>
 				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>

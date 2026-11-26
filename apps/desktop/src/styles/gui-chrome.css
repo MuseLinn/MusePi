@@ -2859,7 +2859,7 @@
 .gui-loc-purpose {
 	margin: 0;
 	padding: 10px 20px 0;
-	font-size: var(--ui-font-size-sm);
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--color-text-muted);
 	text-wrap: pretty;

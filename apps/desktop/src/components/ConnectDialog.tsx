@@ -37,9 +37,10 @@ interface ConnectState {
  * hosts come from the daemon's ssh.json (`remote.hosts`), connecting probes
  * the remote and mounts it via sshfs (`remote.connect`), and the directory
  * step browses the mounted tree (`remote.browse`) before opening a session
- * with cwd = the chosen remote directory. Docker stays a disabled card
- * (no container backend yet); collab-link joining plugs into the same shell
- * later.
+ * with cwd = the chosen remote directory. Mounting a container's files has no
+ * backend yet, so this axis offers SSH only and says nothing about a path it
+ * cannot take — Docker is an instance kind (where the daemon runs), not a
+ * workspace source, and the instance axis is where it lives.
  *
  * The host list is the daemon's `remote.hosts` merged with the local catalog
  * (`~/.ssh/config` read through the shell bridge), so a host the user already
@@ -358,22 +359,6 @@ export function ConnectDialog({
 									<span className="font-medium">SSH</span>
 									<span className="text-[13px] text-[var(--color-text-muted)]">
 										{t("settings.remoteHost")}
-									</span>
-								</button>
-								<button
-									type="button"
-									className="gui-conn-card relative opacity-60"
-									disabled
-									aria-disabled="true"
-									title={t("settings.dockerComingSoon")}
-								>
-									<span className="absolute right-2 top-2 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-[11px] text-[var(--color-text-faint)] ring-1 ring-[var(--border)]">
-										{t("settings.dockerComingSoon")}
-									</span>
-									<Icon name="archive-stack" className="h-5 w-5" />
-									<span className="font-medium">Docker</span>
-									<span className="text-[13px] text-[var(--color-text-muted)]">
-										{t("settings.localContainer")}
 									</span>
 								</button>
 							</div>
