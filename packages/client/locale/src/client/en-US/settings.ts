@@ -7619,6 +7619,8 @@ export const settings = {
 	"settings.connectionKindLocal": "Local",
 	"settings.connectionKindWsl": "WSL",
 	"settings.connectionKindSsh": "SSH",
+	"settings.projectHostNoInstance": "No instance for that host yet. Add it in Connection locations so the project can be created there.",
+	"settings.projectHostConnectFailed": "Could not reach {label}; the project was not created.",
 	"settings.connectionSshCardHint": "Reach a daemon on another machine over SSH",
 	"settings.connectionDockerCardHint": "Run the daemon inside an existing container",
 	"settings.connectionWslCardHint": "Run the daemon in a WSL distribution here",
@@ -7677,7 +7679,7 @@ export const settings = {
 	"settings.connectionDockerDaemonDown":
 		"The docker command exists but its daemon did not answer (socket permissions?)",
 	"settings.connectionDockerContainers": "Containers publishing the daemon port",
-	"settings.connectionDockerNone": "No container publishes this port.",
+	"settings.connectionDockerNone": "No containers to pick from — type a name instead.",
 	"settings.connectionCatalogHost": "Configured SSH hosts",
 	"settings.connectionCatalogPick": "Pick one from ~/.ssh/config or MusePi",
 	"settings.connectionCatalogFromSshConfig": "~/.ssh/config",

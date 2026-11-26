@@ -256,6 +256,28 @@
 	background: transparent;
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		border-color var(--duration-quick) ease-out,
+		background var(--duration-quick) ease-out,
+		color var(--duration-quick) ease-out;
+}
+
+/* Hover and keyboard focus share one ring: a pointer user and a keyboard user
+   get the same affordance, and the ring is drawn with outline so it never
+   changes the box the row is laid out in. */
+.gui-conn-kind-btn:hover:not(:disabled) {
+	border-color: var(--color-accent-bd);
+	color: var(--color-text);
+}
+
+.gui-conn-kind-btn:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+.gui-conn-kind-btn:active:not(:disabled) {
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
 }
 
 /* Two questions, one line each: where the daemon runs, and in what. A single
@@ -323,6 +345,33 @@
 	   the cards stretched to the tallest track (272px) instead of their own
 	   content. Reset it: a card is as tall as what it says. */
 	flex: none;
+	transition:
+		border-color var(--duration-quick) ease-out,
+		background var(--duration-quick) ease-out,
+		transform var(--duration-quick) var(--ease-appear-snappy);
+}
+
+/* Lift on hover, settle on press: the card is a choice, so it answers the
+   pointer before the click and acknowledges the click itself. Transform only —
+   the grid track stays put, so nothing around it shifts. */
+.gui-conn-transport-card:hover:not(:disabled) {
+	border-color: var(--color-accent-bd);
+	transform: translateY(-1px);
+}
+
+.gui-conn-transport-card:active:not(:disabled) {
+	transform: translateY(0);
+	background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+}
+
+.gui-conn-transport-card:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+.gui-conn-transport-card[disabled] {
+	opacity: 0.55;
+	cursor: not-allowed;
 }
 
 .gui-conn-transport-icon {

@@ -722,11 +722,21 @@
 	background: var(--color-surface-raised);
 	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition:
+		border-color var(--duration-quick) ease-out,
+		color var(--duration-quick) ease-out,
+		background var(--duration-quick) ease-out;
 }
 
 .gui-proj-host:hover {
 	border-color: var(--color-accent-bd);
 	color: var(--color-text);
+}
+
+.gui-proj-host:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
 }
 
 .gui-proj-host[aria-pressed="true"] {

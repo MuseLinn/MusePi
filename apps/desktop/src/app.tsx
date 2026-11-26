@@ -80,6 +80,7 @@ import {
 } from "./lib/companion";
 import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
 import { type BootOutcome, runBootAttempt } from "./lib/connection/boot-attempt";
+import { projectDaemonChoice } from "./lib/connection/project-instance";
 import {
 	applyTargetStatus,
 	dockerTransportOf,
@@ -191,7 +192,7 @@ import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-sta
 import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import { withViewTransition } from "./lib/view-transition";
-import type { WorkspaceMutationResult } from "./lib/workspace-projects";
+import { createProject, type WorkspaceMutationResult } from "./lib/workspace-projects";
 import {
 	applyScrollbarSkin,
 	readScrollbarStyle,
@@ -2645,7 +2646,15 @@ function AppInner(): ReactNode {
 
 	/** Connect from one stored target: the only path the manager uses. */
 	const connectToTarget = useCallback(
-		async (target: ConnectionTarget): Promise<void> => {
+		/**
+		 * Switch the shell to one instance.
+		 *
+		 * Returns whether the socket actually opened: a caller that must run a
+		 * write on that daemon (creating a project in its registry, for one) has
+		 * no way to tell success from a silent failure otherwise, and a swallowed
+		 * failure would send the request to the previous daemon.
+		 */
+		async (target: ConnectionTarget): Promise<boolean> => {
 			const targetUrl = buildWsUrl({ id: target.id, label: target.label, url: target.url, token: target.token });
 			const endpoint = stripToken(targetUrl);
 			setDisconnectedByUser(false);
@@ -2678,10 +2687,12 @@ function AppInner(): ReactNode {
 			try {
 				await connect(targetUrl);
 				attribute(endpoint, null);
+				return true;
 			} catch (err) {
 				// The row keeps its error; the list is never replaced by it.
 				attribute(endpoint, err instanceof Error ? err.message : String(err));
 				setLastAttemptFailed(true);
+				return false;
 			} finally {
 				setAttempting(false);
 				setAttemptTargetId(null);
@@ -3469,6 +3480,41 @@ function AppInner(): ReactNode {
 	/** Open the project dialog first; the primary folder is chosen inside it,
 	 *  like Kimi's create/edit project sheet. Registration happens on save, so
 	 *  a cancelled dialog leaves the registry untouched. */
+	/**
+	 * Create the project on the daemon that owns it.
+	 *
+	 * `workspace.create` both registers the row and resolves `root` on the
+	 * receiving daemon, so a project whose files are on another machine has to
+	 * be created there — sending the request to whichever daemon is connected
+	 * would record a path that daemon cannot see. bitfun resolves a workspace to
+	 * one provider and fails rather than borrowing another; this does the same,
+	 * and the one honest move available here is to connect to the named instance
+	 * first.
+	 */
+	const createProjectOnChosenInstance = useCallback(
+		async (params: {
+			name: string;
+			root: string;
+			additionalDirs: readonly string[];
+		}): Promise<WorkspaceMutationResult> => {
+			const choice = projectDaemonChoice(projectLocation, connTargetsRef.current, chosenTargetIdRef.current);
+			if (choice.kind === "missing-host") throw new Error(t("settings.connectionHostRequired"));
+			if (choice.kind === "unreachable") {
+				throw new Error(t("settings.projectHostNoInstance"));
+			}
+			let reached: string = "";
+			if (choice.kind === "switch") {
+				reached = choice.target.label;
+				const switched = await connectToTarget(choice.target);
+				if (!switched) throw new Error(t("settings.projectHostConnectFailed", { label: reached }));
+			}
+			const client = rpcRef.current;
+			if (!client) throw new Error(t("settings.projectHostConnectFailed", { label: reached }));
+			return createProject(client, params.root, params.name, params.additionalDirs);
+		},
+		[projectLocation, connectToTarget],
+	);
+
 	const addProject = useCallback((): void => {
 		setProjectDialog({
 			mode: "create",
@@ -5860,6 +5906,7 @@ function AppInner(): ReactNode {
 					setProjectLocation(next);
 					setProjectDialog(current => (current ? { ...current, location: next } : current));
 				}}
+				onCreate={createProjectOnChosenInstance}
 				hosts={connTargets.flatMap(row =>
 					row.kind === "ssh" && row.sshHost ? [{ id: row.id, label: row.label, host: row.sshHost }] : [],
 				)}

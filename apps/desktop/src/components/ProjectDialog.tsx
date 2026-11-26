@@ -76,6 +76,7 @@ export function ProjectDialog({
 	location: locationProp,
 	onLocationChange,
 	hosts = [],
+	onCreate,
 }: {
 	open: boolean;
 	mode: "create" | "edit";
@@ -104,6 +105,20 @@ export function ProjectDialog({
 	onLocationChange?(next: ProjectLocationChoice): void;
 	/** Instances the location chips can point at, newest first. */
 	hosts?: readonly { id: string; label: string; host: string }[];
+	/**
+	 * Creates the project, when the caller owns which daemon receives it.
+	 *
+	 * `workspace.create` both registers the row and resolves `root` on the
+	 * receiving daemon, so a project whose files live elsewhere has to be
+	 * created there. The shell owns that decision (it is the one that can
+	 * connect), so the dialog hands over the facts and takes the result.
+	 * Absent, the dialog writes through its own `rpc`.
+	 */
+	onCreate?(input: {
+		name: string;
+		root: string;
+		additionalDirs: readonly string[];
+	}): Promise<WorkspaceMutationResult>;
 }): ReactNode {
 	const [name, setName] = useState("");
 	const [primary, setPrimary] = useState("");
@@ -204,7 +219,9 @@ export function ProjectDialog({
 		setError(null);
 		try {
 			if (mode === "create") {
-				const result = await createProject(rpc, primary, trimmedName, additional);
+				const result = onCreate
+					? await onCreate({ name: trimmedName, root: primary, additionalDirs: additional })
+					: await createProject(rpc, primary, trimmedName, additional);
 				onSaved(result);
 				onClose();
 				return;
