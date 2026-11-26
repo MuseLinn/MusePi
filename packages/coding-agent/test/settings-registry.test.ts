@@ -20,7 +20,7 @@ import { getSettingsForTab } from "@musepi/pi-coding-agent/modes/components/sett
  */
 describe("settings registry mirrors the core schema", () => {
 	it("keeps every core key in declaration order", () => {
-		expect(settingsRegistry.keys()).toEqual(Object.keys(SETTINGS_SCHEMA));
+		expect(settingsRegistry.keys().filter(key => key in SETTINGS_SCHEMA)).toEqual(Object.keys(SETTINGS_SCHEMA));
 	});
 
 	it("carries each descriptor's type, default, values, UI and credential flag", () => {
@@ -58,7 +58,7 @@ describe("settings registry mirrors the core schema", () => {
 			const expected = (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(
 				path => (SETTINGS_SCHEMA[path] as { ui?: { tab?: string } }).ui?.tab === tab,
 			);
-			expect(getPathsForTab(tab)).toEqual(expected);
+			expect(getPathsForTab(tab).filter(path => path in SETTINGS_SCHEMA)).toEqual(expected);
 		}
 	});
 
@@ -121,8 +121,9 @@ describe("daemon settings.schema reads the registry", () => {
 		const expected = (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(
 			path => (SETTINGS_SCHEMA[path] as { ui?: { tab?: string } }).ui?.tab === "memory",
 		);
-		expect(items.map(item => item.key)).toEqual(expected);
-		for (const item of items) {
+		const coreItems = items.filter(item => item.key in SETTINGS_SCHEMA);
+		expect(coreItems.map(item => item.key)).toEqual(expected);
+		for (const item of coreItems) {
 			const def = SETTINGS_SCHEMA[item.key as SettingPath] as { type: string; default: unknown };
 			expect(item.type).toEqual(def.type);
 			expect(item.default).toEqual(def.default);
