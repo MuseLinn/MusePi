@@ -28,7 +28,6 @@ import { resolveModelCapabilities } from "@musepi/pi-catalog/identity";
 import { getBundledProviders } from "@musepi/pi-catalog/models";
 import { DesktopSession, getWorkProfile } from "@musepi/pi-natives";
 import {
-	$env,
 	getAgentDir,
 	getBlobsDir,
 	getConfigRootDir,
@@ -105,6 +104,7 @@ import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
 import { getDesignSystem } from "../presets/design-systems";
+import { presetsDir } from "../presets/locations";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import manualContinuePrompt from "../prompts/system/manual-continue.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
@@ -1565,9 +1565,10 @@ export class DaemonServer {
 		}
 	}
 
-	/** 预设目录(决策 #5):env MUSEPI_MODES_DIR 可覆盖(隔离测试),默认 <home>/.musepi/modes。 */
+	/** 预设写入目录：env MUSEPI_MODES_DIR 优先（测试隔离），否则
+	 *  `<home>/.musepi/presets`；读取面见 presets/locations。 */
 	#modesDir(): string {
-		return $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+		return presetsDir();
 	}
 
 	/** Resolve a workspace-memory request to its per-cwd memory directory

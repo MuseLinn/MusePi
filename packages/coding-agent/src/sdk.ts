@@ -162,6 +162,7 @@ import {
 } from "./plugins-runtime/loader";
 import { readAssetPolicy } from "./presets/asset-policy";
 import { readDesignSystemSelection, registerExtensionDesignSystem } from "./presets/design-systems";
+import { presetsDir } from "./presets/locations";
 import {
 	createModeResolver,
 	type ExtraModeLookup,
@@ -2617,7 +2618,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			ext.modes.map(mode => ({ extensionId: ext.resolvedPath, mode })),
 		);
 		if (options.modeId) {
-			const modeDir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			const modeDir = options.modeDir ?? presetsDir();
 			ensureModeTemplates(modeDir);
 			profileModes = await collectProfilePresetDefinitions(cwd, options.profileHome ?? os.homedir());
 			modeRuntime.resolved = createModeResolver(modeDir, { extraModes: extensionModeLookup }).resolve(
@@ -4376,7 +4377,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			let next: ResolvedMode;
 			try {
-				const dir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+				const dir = options.modeDir ?? presetsDir();
 				ensureModeTemplates(dir);
 				next = createModeResolver(dir, { extraModes: extensionModeLookup }).resolve(modeId);
 			} catch (error) {

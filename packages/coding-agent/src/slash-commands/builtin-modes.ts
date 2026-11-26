@@ -1,4 +1,3 @@
-import * as os from "node:os";
 import * as path from "node:path";
 import {
 	expandRoleAlias,
@@ -10,6 +9,7 @@ import type { SettingPath, Settings } from "../config/settings";
 import { t } from "../i18n/index.js";
 import { describeLoopLimitRuntime } from "../modes/loop-limit";
 import type { InteractiveModeContext } from "../modes/types";
+import { presetsDir } from "../presets/locations";
 import { loadModeFile, MODE_ID_PATTERN, resolveMode, validateMode } from "../presets/resolve";
 import type { AgentSession } from "../session/agent-session";
 import type { ComputerTool } from "../tools/computer";
@@ -679,7 +679,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			// in-process so it works without a daemon).
 			if (args[0] === "list") {
 				const { listModeIds } = await import("../presets/resolve");
-				const dir = process.env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+				const dir = presetsDir();
 				const ids = listModeIds(dir);
 				const current = runtime.sessionManager.getHeader()?.modeId;
 				if (ids.length === 0) {
@@ -738,7 +738,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				await runtime.output(t("commands.modesValidateFail", modeId, `invalid mode id: ${modeId}`));
 				return commandConsumed();
 			}
-			const dir = process.env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			const dir = presetsDir();
 			const errors: string[] = [];
 			try {
 				const def = loadModeFile(dir, modeId);

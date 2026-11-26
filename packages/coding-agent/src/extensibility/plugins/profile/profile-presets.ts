@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { getActiveProfile } from "@musepi/pi-utils";
+import { presetsDir } from "../../../presets/locations";
 import { ensureModeTemplates, listModeIds, type ModeDefinition, type PresetPluginRow } from "../../../presets/resolve";
 import { applyDshProfile, type DshApplication } from "../dsh/dsh-apply";
 import type { DshValue } from "../dsh/dsh-patch";
@@ -129,9 +130,8 @@ export async function writeDefaultPresetId(
 		.filter(row => AGENT_PRESET_PACKAGES.has(row.name) && row.disabled !== true)
 		.map(presetDefinition)
 		.filter(row => row !== null);
-	const modeDir = path.join(home, ".musepi", "modes");
-	ensureModeTemplates(modeDir);
-	const fileIds = listModeIds(modeDir);
+	ensureModeTemplates(presetsDir(home));
+	const fileIds = listModeIds(presetsDir(home));
 	if (!fileIds.includes(id) && !definitions.some(definition => definition.id === id)) {
 		throw new Error(`Unknown agent preset: ${id}`);
 	}

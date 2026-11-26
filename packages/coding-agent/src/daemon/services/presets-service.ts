@@ -34,6 +34,7 @@ export interface KnownExtension {
 }
 
 export interface PresetsServiceDeps {
+	/** The one preset directory (read and write). */
 	modesDir(): string;
 	knownExtensions(): Promise<readonly KnownExtension[]>;
 	broadcastModesChanged(): void;
@@ -94,6 +95,7 @@ export class PresetsService implements DaemonService {
 		const { t } = await import("../../i18n/index.js");
 		const dir = this.host.modesDir();
 		ensureModeTemplates(dir);
+		// 读取面覆盖旧目录：升级后既有预设仍然出现，且同 id 时先读到的优先。
 		const ids = listModeIds(dir);
 		const modes: Array<{
 			id: string;
