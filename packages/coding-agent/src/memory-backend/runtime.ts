@@ -1,11 +1,12 @@
 import type { AgentSession } from "../session/agent-session";
 import { resolveMemoryBackend } from "./resolve";
-import type {
-	MemoryBackendId,
-	MemoryBackendOperationContext,
-	MemoryBackendSaveInput,
-	MemoryBackendSearchOptions,
-	MemoryRuntimeContext,
+import {
+	type MemoryBackendId,
+	type MemoryBackendOperationContext,
+	type MemoryBackendSaveInput,
+	type MemoryBackendSearchOptions,
+	type MemoryRuntimeContext,
+	memoryBackendCapabilities,
 } from "./types";
 export function createMemoryRuntimeContext(context: MemoryBackendOperationContext): MemoryRuntimeContext {
 	const settings = context.session?.settings;
@@ -25,7 +26,7 @@ export function createMemoryRuntimeContext(context: MemoryBackendOperationContex
 				};
 			}
 			const backend = await resolveMemoryBackend(settings);
-			return backend.status
+			const status = backend.status
 				? await backend.status(context)
 				: {
 						backend: backend.id,
@@ -34,6 +35,7 @@ export function createMemoryRuntimeContext(context: MemoryBackendOperationContex
 						searchable: false,
 						message: "This memory backend does not expose structured status.",
 					};
+			return { ...status, capabilities: memoryBackendCapabilities(backend) };
 		},
 		async search(query: string, options?: MemoryBackendSearchOptions) {
 			if (!settings) return unavailableSearch("off", query, "No active agent session.");

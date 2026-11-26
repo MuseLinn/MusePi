@@ -10,7 +10,12 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import { onHindsightScopeChanged, type Settings } from "../config/settings";
-import type { MemoryBackend, MemoryBackendStartOptions, MemoryPromptPreparation } from "../memory-backend/types";
+import type {
+	MemoryBackend,
+	MemoryBackendStartOptions,
+	MemoryBackendStatus,
+	MemoryPromptPreparation,
+} from "../memory-backend/types";
 import type { AgentSession } from "../session/agent-session";
 import { type BankScope, computeBankScope } from "./bank";
 import { createHindsightClient } from "./client";
@@ -140,6 +145,33 @@ export const hindsightBackend: MemoryBackend = {
 		if (!primary) return;
 		await primary.flushRetainQueue();
 		await primary.forceRetainCurrentSession();
+	},
+
+	async status({ session }): Promise<MemoryBackendStatus> {
+		const state = session?.getHindsightSessionState?.();
+		const config = state?.config ?? (session ? loadHindsightConfig(session.settings) : undefined);
+		if (!config) {
+			return {
+				backend: "hindsight",
+				active: false,
+				writable: false,
+				searchable: false,
+				message: "Hindsight is not initialised for this session.",
+			};
+		}
+		const configured = isHindsightConfigured(config);
+		const bank = state?.bankId ?? config.bankId ?? undefined;
+		return {
+			backend: "hindsight",
+			active: configured,
+			writable: configured,
+			searchable: false,
+			...(bank ? { retainBank: bank, recallBanks: [bank] } : {}),
+			scope: config.scoping,
+			message: configured
+				? `Bank: ${bank ?? "(pending)"}; scoping: ${config.scoping}; global scope: ${config.globalScope ? "on" : "off"}.`
+				: "Hindsight needs hindsight.apiUrl before it can recall or retain.",
+		};
 	},
 
 	async preCompactionContext(

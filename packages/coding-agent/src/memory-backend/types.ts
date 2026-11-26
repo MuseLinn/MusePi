@@ -47,6 +47,14 @@ export interface MemoryBackendStatus {
 	database?: string;
 	message?: string;
 	error?: string;
+	/** Which optional maintenance hooks this backend implements, so a host can
+	 *  hide an action instead of offering one that only reports "unavailable". */
+	capabilities?: {
+		stats?: boolean;
+		diagnose?: boolean;
+		queue?: boolean;
+		clearGlobal?: boolean;
+	};
 }
 
 export interface MemoryBackendSearchOptions {
@@ -234,4 +242,16 @@ export interface MemoryBackend {
 		session?: AgentSession,
 		signal?: AbortSignal,
 	): Promise<string | undefined>;
+}
+
+/** What a host may offer for this backend, derived from the hooks it actually implements. */
+export function memoryBackendCapabilities(
+	backend: Pick<MemoryBackend, "stats" | "diagnose" | "queuePreview" | "clearGlobal">,
+): NonNullable<MemoryBackendStatus["capabilities"]> {
+	return {
+		stats: typeof backend.stats === "function",
+		diagnose: typeof backend.diagnose === "function",
+		queue: typeof backend.queuePreview === "function",
+		clearGlobal: typeof backend.clearGlobal === "function",
+	};
 }

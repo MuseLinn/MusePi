@@ -15,6 +15,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir } from "@musepi/pi-utils";
+import { memoryBackendCapabilities } from "../../memory-backend/types";
 import type { DaemonSessionHost } from "../session-host";
 import type { DaemonService } from "./types";
 
@@ -72,7 +73,10 @@ export class MemoryService implements DaemonService {
 		const status = backend.status
 			? await backend.status({ agentDir: getAgentDir(), cwd: this.host.cwd() })
 			: { backend: backend.id, active: false, writable: false, searchable: false };
-		return { id: backend.id, status };
+		return {
+			id: backend.id,
+			status: { ...status, capabilities: memoryBackendCapabilities(backend) },
+		};
 	}
 
 	async view(params: unknown): Promise<unknown> {

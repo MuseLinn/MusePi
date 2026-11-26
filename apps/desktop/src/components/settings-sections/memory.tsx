@@ -539,12 +539,9 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 					disabled={busy !== null}
 					hidden={s?.capabilities?.clearGlobal !== true}
 					onClick={() =>
-						runOk(
-							"memory.clear",
-							t("settings.memoryClearGlobal"),
-							t("settings.memoryClearGlobalConfirm"),
-							{ scope: "global" },
-						)
+						runOk("memory.clear", t("settings.memoryClearGlobal"), t("settings.memoryClearGlobalConfirm"), {
+							scope: "global",
+						})
 					}
 				>
 					{t("settings.memoryClearGlobal")}

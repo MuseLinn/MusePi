@@ -399,6 +399,22 @@ describe("compaction dependency gates", () => {
 	});
 });
 
+describe("memory backend gates", () => {
+	it("shows the MuseMem group only while MuseMem (or its former id) is selected", () => {
+		const row = item("musemem.globalScope");
+		expect(isSettingShown(row, { "memory.backend": "musemem" })).toBe(true);
+		expect(isSettingShown(row, { "memory.backend": "local" })).toBe(true);
+		expect(isSettingShown(row, { "memory.backend": "hindsight" })).toBe(false);
+		expect(isSettingShown(row, {})).toBe(false);
+	});
+
+	it("keeps the Hindsight block off while another backend is selected", () => {
+		const row = item("hindsight.globalScope");
+		expect(isSettingShown(row, { "memory.backend": "hindsight" })).toBe(true);
+		expect(isSettingShown(row, { "memory.backend": "musemem" })).toBe(false);
+	});
+});
+
 describe("array editors", () => {
 	it("keeps a value that contains commas intact", () => {
 		const scope = mount([item("tools.xdevInlineDevices")], { "tools.xdevInlineDevices": ["a,b"] });

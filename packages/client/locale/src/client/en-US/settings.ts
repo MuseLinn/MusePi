@@ -7466,17 +7466,22 @@ export const settings = {
 		"Let retain and learn take scope: global, which stores a memory without the project tag so every project recalls it. Needs global or per-project-tagged scoping",
 	"settings.memoryBackendOff": "Off",
 	"settings.memoryBackendLocal": "Local summaries",
+	"settings.memoryBackendMusemem": "MuseMem",
 	"settings.memoryBackendMnemopi": "Mnemopi",
 	"settings.memoryBackendHindsight": "Hindsight",
 	"settings.memoryBackendSharpshooter": "Sharpshooter",
 	"settings.memoryHintOff": "Memory is off; sessions neither recall nor retain.",
 	"settings.memoryHintLocal":
 		"Local summaries are active; `learn` lessons go to learned.md and structured search is unavailable.",
+	"settings.memoryHintMusemem":
+		"Project summaries and cross-project lessons are active; `learn` writes either, and structured search is unavailable.",
 	"settings.memoryHintMnemopi":
 		"Local SQLite memory is active; recall, retain, reflect, and memory_edit are available.",
 	"settings.memoryHintHindsight": "Connected to Hindsight remote memory; recall, retain, and reflect are available.",
 	"settings.memoryHintSharpshooter":
 		"Project decision memory is active; architecture, product, and style decisions consolidate in the background.",
+	"settings.memoryClearGlobal": "Clear cross-project lessons",
+	"settings.memoryClearGlobalConfirm": "Delete every lesson shared across projects? Each project's own memory stays.",
 	"settings.memoryStatusEmpty": "This backend has no status metrics to show.",
 	"settings.memoryWorkspaceEmptyHint": "The local summary pipeline has not written memory files yet.",
 	"settings.memory.group.maintenance": "Memory Maintenance",
