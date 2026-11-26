@@ -12,12 +12,10 @@ export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat
 export { CompanionCard, CompanionMarket, CompanionMarketCard, CompanionSection } from "./settings-sections/companion";
 export { ConnectorsSection } from "./settings-sections/connectors";
 export { ContextSection } from "./settings-sections/context";
-export { FilesLspSection } from "./settings-sections/files";
 export { GitPrefsRow, GitSection } from "./settings-sections/git";
 export { IndexesSection } from "./settings-sections/indexes";
 export { InteractionSection } from "./settings-sections/interaction";
 export { MediaSection } from "./settings-sections/media";
-export { ModelSection } from "./settings-sections/model";
 export { ModesSection } from "./settings-sections/modes";
 export { SchemaTabSection } from "./settings-sections/schema";
 export { SessionMemorySection } from "./settings-sections/session-memory";

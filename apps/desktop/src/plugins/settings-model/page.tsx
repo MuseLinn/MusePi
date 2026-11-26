@@ -3,22 +3,23 @@ import { ChevronDown as ChevronDownIconData, ChevronUp as ChevronUpIconData } fr
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChromaGroup } from "../../components/ChromaGroup";
+import { DialogFrame } from "../../components/DialogFrame";
+import { GuiSelect, type SelectOption } from "../../components/GuiSelect";
+import { HeightMorph } from "../../components/HeightMorph";
+import { MenuPopup } from "../../components/MenuPopup";
+import { ModelSelector } from "../../components/ModelSelector";
+import { ModelBrandIcon } from "../../components/model-brand-icon";
+import { SchemaTabSection } from "../../components/settings-sections/schema";
 import { openExternalUrl } from "../../lib/electron";
 import { usePrompt } from "../../lib/prompt-dialog";
 import { reportRequestFailure } from "../../lib/report-request-failure";
-import type { RpcClient } from "../../lib/rpc";
 import { logoutProvider } from "../../lib/rpc-commands";
+import type { SlotComponentProps } from "../../lib/slot-host";
+import { useProviderCatalog, useProviderEvents } from "../../lib/use-provider-catalog";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
-import { ChromaGroup } from "../ChromaGroup";
-import { DialogFrame } from "../DialogFrame";
-import { GuiSelect, type SelectOption } from "../GuiSelect";
-import { HeightMorph } from "../HeightMorph";
-import { MenuPopup } from "../MenuPopup";
-import { ModelSelector } from "../ModelSelector";
-import { ModelBrandIcon } from "../model-brand-icon";
-import { type CustomProvider, CustomProviderPane } from "./custom-provider";
-import { SchemaTabSection } from "./schema";
+import { CustomProviderPane } from "./custom-provider";
 
 /**
  * ZCode-parity appearance settings, sectioned like the reference: 本地化
@@ -125,47 +126,32 @@ interface CredentialInfo {
 	note?: string | null;
 }
 
-export function ModelSection({
-	providers,
-	apiProviders,
-	custom,
-	loginState,
-	pendingLogins,
-	onLogin,
-	onLogout,
-	onSubmitInput,
-	onCancelLogin,
-	onChanged,
-	rpc,
-	sessionId,
-	openAddProvider = false,
-}: {
-	providers: ProviderInfo[] | null;
-	apiProviders: ApiProviderInfo[];
-	custom: CustomProvider[];
-	loginState: {
-		providerId: string;
-		url?: string;
-		launchUrl?: string;
-		instructions?: string;
-		message?: string;
-		waitingInput?: boolean;
-	} | null;
-	/** Provider ids whose OAuth/API login is in flight — only THOSE provider
-	 *  login controls are disabled, so one pending login doesn't freeze every
-	 *  other provider's button (user report: "登录按钮有时点击没反应"). */
-	pendingLogins: string[];
-	onLogin(providerId: string): void;
-	onLogout(providerId: string): void;
-	onSubmitInput(value: string): void;
-	onCancelLogin(): void;
-	onChanged(): void;
-	rpc: RpcClient | null;
-	sessionId: string | null;
-	/** The pane was opened BY the 添加供应商 entry — land with the custom
-	 *  provider add dialog already open (see CustomProviderPane). */
-	openAddProvider?: boolean;
-}): ReactNode {
+export default function ModelSettingsPage({ rpc, sessionId, settingsSection }: SlotComponentProps): ReactNode {
+	// The provider catalog and its login flows come from the shared hook, so
+	// this page owns no copy of that state; the daemon's auth envelopes are
+	// subscribed here because the page is mounted on its own.
+	const providerEvent = useProviderEvents(rpc ?? null);
+	const {
+		providers,
+		apiProviders,
+		custom,
+		loginState,
+		pendingLogins,
+		login,
+		logout,
+		submitLoginInput,
+		cancelLogin,
+		reload,
+	} = useProviderCatalog({ rpc: rpc ?? null, sessionId: sessionId ?? null, providerEvent });
+	const onLogin = login;
+	const onLogout = logout;
+	const onSubmitInput = submitLoginInput;
+	const onCancelLogin = cancelLogin;
+	const onChanged = reload;
+	// Only the capability entry (`providers`) opens the add form — arriving from
+	// the nav is a plain visit. The host passes the requested section id, so the
+	// distinction survives the page moving into this package.
+	const openAddProvider = settingsSection?.id === "providers";
 	// 横向边缘羽化:顶部 tab 条横向滚动时左右羽化(只在溢出时出现)。
 	const modelTabsRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(modelTabsRef);
@@ -1946,7 +1932,7 @@ export function ModelSection({
 							 * page-bottom flat block) so the providers tab is the
 							 * single home for everything provider-side. */}
 							<div className="gui-schema-card">
-								<SchemaTabSection rpc={rpc} tabs={["providers"]} />
+								<SchemaTabSection rpc={rpc ?? null} tabs={["providers"]} />
 							</div>
 						</>
 					)}
@@ -1963,8 +1949,8 @@ export function ModelSection({
 					{activeTab === "custom" && (
 						<CustomProviderPane
 							custom={custom}
-							rpc={rpc}
-							sessionId={sessionId}
+							rpc={rpc ?? null}
+							sessionId={sessionId ?? null}
 							onChanged={onChanged}
 							initialAddOpen={openAddProvider}
 						/>

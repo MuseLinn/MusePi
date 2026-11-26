@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type TranslationKey, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ModelSection } from "../src/components/settings-sections/model";
 import type { RpcClient } from "../src/lib/rpc";
+import ModelSettingsPage from "../src/plugins/settings-model/page";
 
 const mounted = new Set<Root>();
 
@@ -56,24 +56,7 @@ describe("role model thinking and fallback editors", () => {
 		document.body.appendChild(container);
 		const root = createRoot(container);
 		mounted.add(root);
-		await act(async () =>
-			root.render(
-				<ModelSection
-					providers={[]}
-					apiProviders={[]}
-					custom={[]}
-					loginState={null}
-					pendingLogins={[]}
-					onLogin={() => {}}
-					onLogout={() => {}}
-					onSubmitInput={() => {}}
-					onCancelLogin={() => {}}
-					onChanged={() => {}}
-					rpc={rpc}
-					sessionId={null}
-				/>,
-			),
-		);
+		await act(async () => root.render(<ModelSettingsPage rpc={rpc} sessionId={null} />));
 		await flush(10);
 		const mainThinking = container.querySelector<HTMLButtonElement>(".gui-role-thinking");
 		expect(mainThinking?.textContent).toContain(t("general.auto"));

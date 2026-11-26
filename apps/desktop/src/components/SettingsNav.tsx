@@ -336,8 +336,9 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 };
 
 /** Nav ids whose page body ships as a plugin contribution only. The host keeps
- *  no fallback renderer, so the row is gated on a loaded contribution: an
- *  absent or failed plugin removes the page instead of opening it blank. */
+ *  no fallback renderer, so the row is gated on a contribution claiming it —
+ *  but only once the contribution list is KNOWN: before the registry answers,
+ *  every page would look unclaimed and the whole nav would blink empty. */
 const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set([
 	"secrets",
 	"hooks",
@@ -347,6 +348,8 @@ const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set([
 	"usage",
 	"general",
 	"appearance",
+	"files",
+	"model",
 ]);
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The
@@ -366,6 +369,10 @@ export function navGroups(
 		url?: string;
 		error?: string;
 	}>,
+	/** Whether `extTabs` is the complete answer. Callers that always have the
+	 *  full list (static rosters) omit it; a live registry passes false while
+	 *  the first read is still in flight. */
+	options: { contributionsKnown?: boolean } = {},
 ): { title: string; items: SectionDef[] }[] {
 	const groups: { title: string; items: SectionDef[] }[] = [
 		{
@@ -418,9 +425,11 @@ export function navGroups(
 	// for them, so a missing contribution would open a blank page. Their row
 	// exists only while a contribution claims it (a compile failure retracts
 	// it, like a missing plugin).
-	const claimed = new Set(extTabs.filter(c => c.id && !c.error).map(c => c.id as string));
-	for (const group of groups) {
-		group.items = group.items.filter(item => !PLUGIN_OWNED_SECTIONS.has(item.id) || claimed.has(item.id));
+	if (options.contributionsKnown !== false) {
+		const claimed = new Set(extTabs.filter(c => c.id && !c.error).map(c => c.id as string));
+		for (const group of groups) {
+			group.items = group.items.filter(item => !PLUGIN_OWNED_SECTIONS.has(item.id) || claimed.has(item.id));
+		}
 	}
 	// A page whose id names an existing page TAKES IT OVER: the built-in row
 	// (and its id, keywords and deep links) stays, and the extension does not
@@ -542,6 +551,7 @@ export function SettingsNav({
 	onQueryChange,
 	settingsRows,
 	onSelectRow,
+	contributionsKnown = true,
 }: {
 	extTabs: ReadonlyArray<{
 		slot: string;
@@ -561,8 +571,11 @@ export function SettingsNav({
 	 *  and jump to the page that renders it. */
 	settingsRows?: readonly SettingSearchRow[];
 	onSelectRow?(section: string, key: string): void;
+	/** False while the contribution list is still loading: plugin-owned pages
+	 *  keep their rows until the answer is known. */
+	contributionsKnown?: boolean;
 }): ReactNode {
-	const groups = navGroups(extTabs);
+	const groups = navGroups(extTabs, { contributionsKnown });
 	const sectionLabels = new Map(groups.flatMap(group => group.items.map(item => [item.id, item.label] as const)));
 	const pageLabel = (section: string): string => sectionLabels.get(section) ?? section;
 	const settingMatches = matchSettingRows(settingsRows ?? [], query);

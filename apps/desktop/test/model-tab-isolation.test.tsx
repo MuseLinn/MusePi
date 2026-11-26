@@ -7,8 +7,8 @@ import "@lobehub/icons";
 import { describe, expect, it } from "bun:test";
 import { t } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CustomProviderPane } from "../src/components/settings-sections/custom-provider";
-import { ModelSection } from "../src/components/settings-sections/model";
+import { CustomProviderPane } from "../src/plugins/settings-model/custom-provider";
+import ModelSettingsPage from "../src/plugins/settings-model/page";
 
 // 设置 → 模型与供应商的 tab 隔离契约:自定义供应商区块只属于它自己的 tab。
 // 回归背景:该区块曾无条件渲染,于是"角色模型/模型行为/供应商"三个 tab 底部
@@ -18,30 +18,7 @@ const paneMarker = t("settings.customProvidersHint");
 const paneButton = t("settings.addCustomProvider");
 
 function sectionHtml(): string {
-	return renderToStaticMarkup(
-		<ModelSection
-			providers={[]}
-			apiProviders={[]}
-			custom={
-				[
-					{
-						name: "verify-provider",
-						baseUrl: "https://example.test/v1",
-						models: [{ id: "m-1", name: "Model One" }],
-					},
-				] as never
-			}
-			loginState={null}
-			pendingLogins={[]}
-			onLogin={() => {}}
-			onLogout={() => {}}
-			onSubmitInput={() => {}}
-			onCancelLogin={() => {}}
-			onChanged={() => {}}
-			rpc={null}
-			sessionId={null}
-		/>,
-	);
+	return renderToStaticMarkup(<ModelSettingsPage rpc={null} sessionId={null} />);
 }
 
 describe("模型与供应商 tab 隔离", () => {

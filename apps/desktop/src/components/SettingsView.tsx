@@ -1,19 +1,17 @@
-import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { reportRequestFailure } from "../lib/report-request-failure";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
-import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
-import { cancelProviderLogin, logoutProvider, submitProviderLoginInput } from "../lib/rpc-commands";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import { useSettingSearchRows } from "../lib/settings-search";
 import {
 	SETTINGS_SECTION_SLOT,
 	SlotComponentMount,
+	useExtensionRegistry,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
+import { useProviderCatalog } from "../lib/use-provider-catalog";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
@@ -103,6 +101,11 @@ export function SettingsView({
 	// 内核级 slot(P1):`settings.section` 的每个条目挂为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
 	const extSettingsTabs = useSlotComponents(rpc, SETTINGS_SECTION_SLOT);
+	// A page whose body is plugin-owned keeps its nav row only while a
+	// contribution claims it — but the registry answers asynchronously, so until
+	// the first read lands every page would look unclaimed. Hold the rows until
+	// the answer is known instead of blinking the nav empty.
+	const contributionsKnown = useExtensionRegistry(rpc) !== null;
 	// 会话管理插件页:声明 `settings.section` 且 id 为 `sessions` 的条目接管内置「会话」分区。
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
 	/** A page entry takes over its nav id when `id` names an existing page
@@ -126,7 +129,7 @@ export function SettingsView({
 	// resolved ONCE per render (the nav below AND the id validation read it) so
 	// a section can never be active without a nav row — and every nav row is
 	// guaranteed to have a content branch.
-	const groups = navGroups(extSettingsTabs);
+	const groups = navGroups(extSettingsTabs, { contributionsKnown });
 	const navSectionIds = new Set(groups.flatMap(g => g.items.map(i => i.id)));
 	// The id actually rendered: aliases resolve to their page, anything unknown
 	// (a DOM event that reached `initialSection` through `onX={openSettings}`,
@@ -265,21 +268,18 @@ export function SettingsView({
 		prevSearchRef.current = { q, section: activeSection };
 		if (scroll && rows.length > 0) rows[0].scrollIntoView({ block: "center", behavior: "smooth" });
 	}, [settingsQuery, activeSection]);
-	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
-	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
-	const [custom, setCustom] = useState<CustomProvider[]>([]);
-	const [loginState, setLoginState] = useState<{
-		providerId: string;
-		url?: string;
-		launchUrl?: string;
-		instructions?: string;
-		message?: string;
-		waitingInput?: boolean;
-	} | null>(null);
-	// Provider ids whose OAuth/API login is in flight. Kept per-provider so a
-	// pending login only disables THAT provider's buttons (user report: "设置
-	// 界面的模型登录按钮有时点击没反应").
-	const [pendingLogins, setPendingLogins] = useState<string[]>([]);
+	const {
+		providers,
+		apiProviders,
+		custom,
+		loginState,
+		pendingLogins,
+		login,
+		logout,
+		submitLoginInput,
+		cancelLogin,
+		reload: loadProviders,
+	} = useProviderCatalog({ rpc, sessionId, providerEvent });
 	// Content-boundary feather (transcript parity): the section content
 	// scrolls inside the settings surface — the shared hook flips its
 	// data-top-scroll / data-bottom-scroll mask attrs. (The nav column owns
@@ -295,175 +295,6 @@ export function SettingsView({
 	useLayoutEffect(() => {
 		setNavSlot(document.getElementById("gui-settings-nav-slot"));
 	}, []);
-
-	const loadProviders = useCallback(async (): Promise<void> => {
-		if (!rpc) return;
-		try {
-			const raw = (await rpc.request<unknown>("providers.list", {
-				sessionId: sessionId ?? undefined,
-			})) as { oauth?: unknown; api?: unknown } | ProviderInfo[] | null;
-			// Pre-{oauth,api} daemons return the bare OAuth array — degrade
-			// to the auth section only instead of crashing the page.
-			if (Array.isArray(raw)) {
-				setProviders(raw as ProviderInfo[]);
-				setApiProviders([]);
-			} else {
-				setProviders(Array.isArray(raw?.oauth) ? (raw.oauth as ProviderInfo[]) : []);
-				setApiProviders(Array.isArray(raw?.api) ? (raw.api as ApiProviderInfo[]) : []);
-			}
-		} catch (err) {
-			// An empty list is the honest fallback for "the read failed", but
-			// without this trace it is indistinguishable from "nothing is
-			// configured" — the login/logout entry points then look deleted.
-			console.error("[gui] providers.list failed", err);
-			setProviders([]);
-		}
-		try {
-			const cfg = await rpc.request<{
-				providers?: Record<
-					string,
-					{
-						label?: string;
-						baseUrl?: string;
-						models?: {
-							id: string;
-							name?: string;
-							api?: string;
-							supportsTools?: boolean;
-							input?: string[];
-							contextWindow?: number;
-							maxTokens?: number;
-						}[];
-					}
-				>;
-			}>("models.listCustom", { sessionId: sessionId ?? undefined });
-			setCustom(
-				Object.entries(cfg?.providers ?? {}).map(([name, v]) => ({
-					name,
-					...(v?.label ? { label: v.label } : {}),
-					...(v?.baseUrl ? { baseUrl: v.baseUrl } : {}),
-					models: Array.isArray(v?.models) ? v.models : [],
-				})),
-			);
-		} catch (err) {
-			// Separate from providers.list on purpose: a failed custom-model
-			// read must not wipe the providers that just loaded.
-			console.warn("[gui] models.listCustom failed", err);
-		}
-	}, [rpc, sessionId]);
-
-	useEffect(() => {
-		void loadProviders();
-	}, [loadProviders]);
-
-	// Provider auth/prompt envelopes drive the inline login panel.
-	useEffect(() => {
-		if (!providerEvent) return;
-		const p = providerEvent.payload as {
-			providerId?: string;
-			url?: string;
-			launchUrl?: string;
-			instructions?: string;
-			message?: string;
-			placeholder?: string;
-		};
-		if (providerEvent.kind === "provider-auth") {
-			setLoginState({
-				providerId: p.providerId ?? "",
-				url: p.url,
-				...(p.launchUrl ? { launchUrl: p.launchUrl } : {}),
-				...(p.instructions ? { instructions: p.instructions } : {}),
-				...(p.message ? { message: p.message } : {}),
-			});
-		} else if (providerEvent.kind === "provider-prompt") {
-			setLoginState(s => ({
-				providerId: p.providerId ?? s?.providerId ?? "",
-				...(s?.url ? { url: s.url } : {}),
-				...(s?.message ? { message: s.message } : {}),
-				waitingInput: true,
-			}));
-		} else if (providerEvent.kind === "provider-progress") {
-			setLoginState(s => ({
-				providerId: s?.providerId ?? "",
-				...(s?.url ? { url: s.url } : {}),
-				...(p.message ? { message: p.message } : {}),
-				...(s?.waitingInput ? { waitingInput: true } : {}),
-			}));
-		}
-	}, [providerEvent]);
-
-	const login = async (providerId: string): Promise<void> => {
-		// The daemon's providers.login only needs providerId — a session is
-		// NOT required. The old `!sessionId` guard silently swallowed clicks
-		// from the settings page opened without an active session.
-		if (!rpc) return;
-		setPendingLogins(p => (p.includes(providerId) ? p : [...p, providerId]));
-		setLoginState({ providerId });
-		try {
-			const result = await rpc.request<{ ok: boolean }>(
-				"providers.login",
-				{ sessionId, providerId },
-				{ timeoutMs: PROVIDER_LOGIN_TIMEOUT_MS },
-			);
-			if (result?.ok) {
-				// Only clear the login panel if THIS provider's flow is still
-				// the one being shown (a later login may have taken the spot).
-				setLoginState(s => (s?.providerId === providerId ? null : s));
-				await loadProviders();
-			}
-		} catch (err) {
-			// Keep the auth URL/instructions on screen so the user can still
-			// open the link or cancel — the daemon flow may still be running.
-			setLoginState(s =>
-				s?.providerId === providerId ? { ...s, message: err instanceof Error ? err.message : String(err) } : s,
-			);
-		} finally {
-			setPendingLogins(p => p.filter(x => x !== providerId));
-		}
-	};
-
-	const submitLoginInput = async (value: string): Promise<void> => {
-		if (!rpc || !loginState) return;
-		try {
-			await submitProviderLoginInput(rpc, loginState.providerId, value);
-			setLoginState(s => (s ? { ...s, waitingInput: false } : s));
-		} catch (err) {
-			// Keep the input open and say why it did not take — an unanswered
-			// prompt looked like a dead button.
-			const message = err instanceof Error ? err.message : String(err);
-			setLoginState(s => (s ? { ...s, message } : s));
-		}
-	};
-
-	const cancelLogin = async (): Promise<void> => {
-		if (!rpc || !loginState) return;
-		try {
-			await cancelProviderLogin(rpc, loginState.providerId);
-		} catch (err) {
-			// The dialog closes either way; a failed abort would otherwise leave
-			// the daemon flow running with no trace.
-			console.warn("[gui] providers.loginCancel failed", err);
-		}
-		setLoginState(null);
-		// loginCancel aborts the daemon flow, which settles the providers.login
-		// RPC — but the reply can race the dialog close. Clear the pending flag
-		// HERE as well: a stuck flag left the provider's login buttons disabled
-		// for the full 5-minute RPC timeout ("点了添加另一个凭证后再点不弹").
-		const id = loginState.providerId;
-		setPendingLogins(p => p.filter(x => x !== id));
-	};
-
-	const logout = async (providerId: string): Promise<void> => {
-		if (!rpc) return;
-		try {
-			await logoutProvider(rpc, { providerId });
-			await loadProviders();
-		} catch (err) {
-			// A failed logout used to write loginState, which renders the
-			// "Login to …" panel — i.e. failure looked like a login prompt.
-			reportRequestFailure(t("settings.logout"), err);
-		}
-	};
 
 	return (
 		<div className="gui-settings-view">
@@ -495,6 +326,7 @@ export function SettingsView({
 							onQueryChange={setSettingsQuery}
 							settingsRows={settingRows}
 							onSelectRow={jumpToSetting}
+							contributionsKnown={contributionsKnown}
 						/>
 					);
 					return navSlot ? createPortal(nav, navSlot) : nav;
@@ -527,25 +359,6 @@ export function SettingsView({
 								/>
 							) : (
 								<>
-									{activeSection === "model" && (
-										<ModelSection
-											providers={providers}
-											apiProviders={apiProviders}
-											custom={custom}
-											loginState={loginState}
-											pendingLogins={pendingLogins}
-											onLogin={login}
-											onLogout={logout}
-											onSubmitInput={submitLoginInput}
-											onCancelLogin={cancelLogin}
-											onChanged={loadProviders}
-											rpc={rpc}
-											sessionId={sessionId}
-											// Only the capability entry (`providers`) opens the add
-											// form — arriving from the nav is a plain visit.
-											openAddProvider={section === "providers"}
-										/>
-									)}
 									{activeSection === "shell" && <ShellSection rpc={rpc} />}
 									{activeSection === "tools" && <ToolsSection rpc={rpc} />}
 									{activeSection === "media" && (
@@ -582,7 +395,6 @@ export function SettingsView({
 									{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
 									{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
 									{activeSection === "context" && <ContextSection rpc={rpc} />}
-									{activeSection === "files" && <FilesLspSection rpc={rpc} />}
 									{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 									{activeSection.startsWith("ext:")
 										? (() => {
@@ -647,12 +459,10 @@ import {
 	CompanionSection,
 	ConnectorsSection,
 	ContextSection,
-	FilesLspSection,
 	GitSection,
 	IndexesSection,
 	InteractionSection,
 	MediaSection,
-	ModelSection,
 	ModesSection,
 	SessionMemorySection,
 	ShellSection,

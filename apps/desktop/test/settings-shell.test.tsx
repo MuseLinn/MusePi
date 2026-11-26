@@ -168,6 +168,11 @@ describe("SettingsNav interaction", () => {
 			root.render(
 				createElement(SettingsNav, {
 					extTabs: [],
+					// This suite exercises the click/highlight path, not plugin
+					// ownership: declare the contribution list unsettled so every
+					// page keeps its row (a live registry hides unclaimed
+					// plugin-owned pages once it answers).
+					contributionsKnown: false,
 					activeSection,
 					onSelect: (id: string) => picked.push(id),
 					onBack: () => {},
@@ -216,6 +221,7 @@ describe("SettingsNav interaction", () => {
 			const [query, setQuery] = useState("");
 			return createElement(SettingsNav, {
 				extTabs: [],
+				contributionsKnown: false,
 				activeSection: "appearance",
 				onSelect: (id: string) => picked.push(id),
 				onBack: () => {},

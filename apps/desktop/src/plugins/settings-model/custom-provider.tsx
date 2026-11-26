@@ -7,18 +7,18 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { reportRequestFailure } from "../../lib/report-request-failure";
-import type { RpcClient } from "../../lib/rpc";
-import { addProviderModels } from "../../lib/rpc-commands";
-import { Icon } from "../../vendor/oc-icons";
 import {
 	type CustomProviderDraft,
 	CustomProviderForm,
 	type CustomProviderPayload,
 	customProviderDraftFrom,
 	emptyCustomProviderDraft,
-} from "../CustomProviderForm";
-import { DialogFrame } from "../DialogFrame";
+} from "../../components/CustomProviderForm";
+import { DialogFrame } from "../../components/DialogFrame";
+import { reportRequestFailure } from "../../lib/report-request-failure";
+import type { RpcClient } from "../../lib/rpc";
+import { addProviderModels } from "../../lib/rpc-commands";
+import { Icon } from "../../vendor/oc-icons";
 
 export interface CustomProvider {
 	name: string;

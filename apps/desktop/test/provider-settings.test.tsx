@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ModelSection } from "../src/components/settings-sections/model";
 import type { RpcClient } from "../src/lib/rpc";
+import ModelSettingsPage from "../src/plugins/settings-model/page";
 
 const mounted = new Set<Root>();
 
@@ -20,58 +20,47 @@ afterEach(async () => {
 	document.body.innerHTML = "";
 });
 
-type ModelSectionProps = Parameters<typeof ModelSection>[0];
-
+/** Mount the model page with its catalog served by the given rpc — the page
+ *  reads `providers.list` / `models.listCustom` itself since it moved into the
+ *  settings-model package. */
 async function renderProviders(
 	rpc: RpcClient,
 	options: {
-		oauth?: ModelSectionProps["providers"];
-		api?: ModelSectionProps["apiProviders"];
-		onLogin?: ModelSectionProps["onLogin"];
+		oauth?: unknown[];
+		api?: unknown[];
 	} = {},
 ): Promise<void> {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
 	const root = createRoot(container);
 	mounted.add(root);
-	await act(async () =>
-		root.render(
-			<ModelSection
-				providers={
-					options.oauth ?? [
-						{
-							id: "agnes-global",
-							name: "Sapiens AI (Agnes) (Global)",
-							available: true,
-							loggedIn: false,
-							loginKind: "api-key",
-						},
-					]
-				}
-				apiProviders={
-					options.api ?? [
-						{
-							id: "agnes-global",
-							name: "Sapiens AI (Agnes) (Global)",
-							modelCount: 5,
-							models: ["agnes-3.0-flash"],
-							configured: false,
-						},
-					]
-				}
-				custom={[]}
-				loginState={null}
-				pendingLogins={[]}
-				onLogin={options.onLogin ?? (() => {})}
-				onLogout={() => {}}
-				onSubmitInput={() => {}}
-				onCancelLogin={() => {}}
-				onChanged={() => {}}
-				rpc={rpc}
-				sessionId={null}
-			/>,
-		),
-	);
+	const catalog = {
+		oauth: options.oauth ?? [
+			{
+				id: "agnes-global",
+				name: "Sapiens AI (Agnes) (Global)",
+				available: true,
+				loggedIn: false,
+				loginKind: "api-key",
+			},
+		],
+		api: options.api ?? [
+			{
+				id: "agnes-global",
+				name: "Sapiens AI (Agnes) (Global)",
+				modelCount: 5,
+				models: ["agnes-3.0-flash"],
+				configured: false,
+			},
+		],
+	};
+	const original = rpc.request.bind(rpc);
+	(rpc as unknown as { request: typeof rpc.request }).request = (async (method: string, params?: unknown) => {
+		if (method === "providers.list") return catalog;
+		if (method === "models.listCustom") return { providers: {} };
+		return original(method, params as never);
+	}) as typeof rpc.request;
+	await act(async () => root.render(<ModelSettingsPage rpc={rpc} sessionId={null} />));
 	await flush(10);
 	const providersTab = [...document.body.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(
 		tab => tab.textContent === t("settings.providers"),
@@ -103,8 +92,16 @@ describe("provider setup actions", () => {
 	});
 
 	it("keeps the real OAuth action when it shares a credential store with an API-key flow", async () => {
+		// The page issues the login itself now, so the assertion watches the RPC
+		// the click produces rather than a host callback.
 		const logins: string[] = [];
-		await renderProviders(rpcWithImportError(), {
+		const rpc = rpcWithImportError();
+		const originalRequest = rpc.request.bind(rpc);
+		(rpc as unknown as { request: typeof rpc.request }).request = (async (method: string, params?: unknown) => {
+			if (method === "providers.login") logins.push(String((params as { providerId?: string })?.providerId));
+			return originalRequest(method, params as never);
+		}) as typeof rpc.request;
+		await renderProviders(rpc, {
 			oauth: [
 				{ id: "zai", name: "Z.AI", available: true, loggedIn: false, loginKind: "api-key" },
 				{
@@ -117,7 +114,6 @@ describe("provider setup actions", () => {
 				},
 			],
 			api: [{ id: "zai", name: "Z.AI", modelCount: 1, models: ["glm-5.2"], configured: false }],
-			onLogin: id => logins.push(id),
 		});
 		const login = [...document.body.querySelectorAll<HTMLButtonElement>(".gui-creds-menu button")].find(button =>
 			button.textContent?.includes(t("settings.login")),
