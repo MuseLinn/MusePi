@@ -47,7 +47,7 @@ lang: zh-CN
 - **等高卡片**：侧栏面板与 `.gui-chat-column` / `.gui-page-card` 是同一张卡片：从 48px rail/顶栏带下方开始，镜像内容列 gutter，半径、阴影、表面一致。卡片线上方是窗口拖动面。`data-panel` 只决定哪个已挂载 pane 生效，绝不切 `display`，否则宽度折叠会丢。
 - **窗口拖动**：`-webkit-app-region` 在整个桌面渲染进程只有一个归属文件（`gui-window-drag.css`）。组件用 `data-gui-window-drag="band"` 或 `"off"` 表达意图；Chromium 把该属性当作继承属性，未声明区域的带是死带，交互子树必须显式 `off`。带只画空 chrome；同一元素既是 `band` 又是 `off` 属于矛盾，类型检查直接拒绝（同一属性两个字面量是 TS17001）。portal 浮层在自身根节点排除。原生覆盖式标题栏画在页面之上，每个窗口预留自己的覆盖层避让（macOS 红绿灯、win32/linux 标题按钮）。归属文件之外有三张样式表声明该属性，守卫要求恰好是那三处。契约：`test/window-drag-contract.test.ts`。
 - **顶栏共存与 hover peek**：`--gui-rail-w` 是唯一的 52px 宽度，收起时的 header spacer 减去它，会话标题前不会多出空白。没有左面板的目的地隐藏折叠按钮但保留收起值 spacer。面板关闭时，悬停声明了 `panelId` 的 rail 按钮会浮出该目的地已挂载的面板（`data-panel` = 悬停 id）；空白带与无面板目的地不浮任何东西。浮层 `fixed`、`top: 56px`、`left: calc(--gui-rail-w + 8px)`、`z-index: 42`，8px 滑入，移开 140ms 收起。悬停只预览，点击才提交目的地与面板。`lib/rail-peek.ts` 负责闸门。
-- **侧栏动效**：折叠按 220ms `--spring` 过渡 `width`，配 160ms 淡出与延迟 visibility。hover peek 保持卡片几何，只按 140ms 过渡 `opacity` 与 `translateX(-8px)`。`data-peek-open` 与 `data-panel` 分离：离开按钮立刻取消 hover，面板 id 保留 140ms 让 pane 在退出期间保持挂载。减少动效时全部关闭。
+- **侧栏动效**：折叠按 320ms `--spring` 过渡 `width`，配 160ms 淡出与延迟 visibility。折叠是裁切不是重排：收起时区域保持展开宽度，不会重新折行；三个面板共用同一套级联。hover peek 保持卡片几何，只按 140ms 过渡 `opacity` 与 `translateX(-8px)`。`data-peek-open` 与 `data-panel` 分离：离开按钮立刻取消 hover，面板 id 保留 140ms 让 pane 在退出期间保持挂载。减少动效时全部关闭。
 - **窄屏 shell**：窗口放不下侧栏 + 会话最小宽 + 已停靠面板时，侧栏改为覆盖式抽屉；阈值由这些宽度计算（`lib/sidebar-drawer.ts`），不是固定断点。关闭时隐藏且 inert，打开时不压缩聊天列。
 
 ### 1.3 表面约定

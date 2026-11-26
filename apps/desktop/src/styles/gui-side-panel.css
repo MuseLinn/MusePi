@@ -179,12 +179,56 @@
 	flex-shrink: 0;
 }
 
+/* Fold timing for this surface's two regions. gui-composer.css owns the shared
+ * cascade (menu → tabstrip → list), but it loads BEFORE this file, so its
+ * identical-state selectors would lose to the base rules below; the timing is
+ * re-declared here, next to the regions it times. `gui-side-panel-head` leads
+ * (it is the primary action), the scroll body follows 25ms later — the same
+ * top-to-bottom order the session sidebar uses. */
+.gui-pane-side--immersive .gui-side-panel-head,
+.gui-pane-side--immersive .gui-side-panel-scroll {
+	transition:
+		opacity 160ms ease-out,
+		transform 160ms ease-out;
+}
+
+.gui-pane-side--collapsed .gui-side-panel-scroll {
+	transition-delay: 25ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-pane-side--immersive .gui-side-panel-head,
+	.gui-pane-side--immersive .gui-side-panel-scroll,
+	.gui-pane-side--collapsed .gui-side-panel-scroll {
+		transition: none;
+	}
+}
+
 .gui-side-panel {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
 	overflow: hidden;
+}
+
+/* The fold animates the pane's own width to 0 (`--gui-pane-transition`). Left
+ * alone, every region inside re-lays-out on each frame: rows, search fields and
+ * section titles re-wrap against a shrinking column, so the fold reads as the
+ * panel being crushed rather than emptied. Pinning each region to the expanded
+ * width keeps their layout fixed and lets the narrowing pane clip more of them —
+ * the collapsed rail's rows follow the same "clip, never reflow" contract.
+ *
+ * The floor goes on the REGIONS, not on `.gui-side-panel` itself: that element
+ * carries `width: 0 !important`, which outranks a normal `min-width` and would
+ * leave the rule inert (measured: the head collapsed to 20px). Covering the
+ * session sidebar's regions too keeps all three panes on one rule. */
+.gui-pane-side--collapsed .gui-side-menu,
+.gui-pane-side--collapsed .gui-tabstrip,
+.gui-pane-side--collapsed .gui-sessions-tab,
+.gui-pane-side--collapsed .gui-side-panel-head,
+.gui-pane-side--collapsed .gui-side-panel-scroll {
+	min-width: var(--gui-side-w);
 }
 
 /* ── Head: primary action, then one tools row. Fixed rhythm, no stacking

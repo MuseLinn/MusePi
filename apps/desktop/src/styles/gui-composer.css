@@ -2638,19 +2638,31 @@ button.gui-stats-pill {
  * On collapse each region fades + lifts out top-to-bottom in sequence
  * (side-menu → tabstrip → session list); the user footer stays opaque
  * and slides out left (it reads as a card, not a row). The pane width
- * still animates via --gui-pane-transition (220ms spring) alongside.
+ * still animates via --gui-pane-transition (320ms spring) alongside.
  * Expand reverses immediately — no cascade delay — so reopening stays
- * snappy. */
+ * snappy.
+ *
+ * The scheduled and capability panels are the SAME surface language
+ * (`gui-side-panel.css`) but carried none of this: their head, tools row and
+ * body were cut by `overflow: hidden` alone, so folding them read as the pane
+ * being sliced instead of emptied. Naming their regions here gives all three
+ * panes one fold. The rules that sit in gui-side-panel.css (which loads last)
+ * only add each region's own transition, because a rule here would lose the
+ * cascade to that file's identical-state selectors. */
 .gui-pane-side--immersive .gui-side-menu,
 .gui-pane-side--immersive .gui-tabstrip,
-.gui-pane-side--immersive .gui-sessions-tab {
+.gui-pane-side--immersive .gui-sessions-tab,
+.gui-pane-side--immersive .gui-side-panel-head,
+.gui-pane-side--immersive .gui-side-panel-scroll {
 	transition:
 		opacity 160ms ease-out,
 		transform 160ms ease-out;
 }
 .gui-pane-side--collapsed .gui-side-menu,
 .gui-pane-side--collapsed .gui-tabstrip,
-.gui-pane-side--collapsed .gui-sessions-tab {
+.gui-pane-side--collapsed .gui-sessions-tab,
+.gui-pane-side--collapsed .gui-side-panel-head,
+.gui-pane-side--collapsed .gui-side-panel-scroll {
 	opacity: 0;
 	transform: translateY(-4px);
 }
