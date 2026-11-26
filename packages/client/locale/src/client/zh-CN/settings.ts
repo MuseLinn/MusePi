@@ -246,6 +246,8 @@ export const settings = {
 	"settings.memoryOff": "已关闭",
 	"settings.memoryOutputClose": "关闭输出",
 	"settings.memoryBackendWithId": "记忆后端 {id}",
+	"settings.memoryBackendSettings": "后端设置",
+	"settings.memoryPluginOwned": "插件自带",
 	"settings.memoryActive": "活跃",
 	"settings.memoryWritable": "可写",
 	"settings.memorySearchable": "可检索",

@@ -46,6 +46,7 @@ Layout: `apps/` holds deployable surfaces, `packages/` holds reusable libraries,
 | Changelog and release | `.agents/rules/release.md` |
 | GUI design or interaction | `docs/gui-design.md`, `docs/gui-design.zh-CN.md`; dialogs also `docs/gui-dialog-spec.md`, widgets also `docs/gui-widget-spec.md`; reusable components and their tokens: `docs/gui-components.md` |
 | GUI RPC, lifecycle, implementation gotchas | `docs/gui-implementation.md`, `docs/gui-implementation.zh-CN.md` |
+| Settings ownership, plugin-owned settings, settings UI | `docs/plugin-settings.md`, `docs/plugin-settings.zh-CN.md` |
 | Extension API or HMR | `docs/extensions-dev.md`, `docs/extensions-dev.zh-CN.md`, `docs/capability-seams.md` |
 | i18n architecture | `docs/i18n.md`, `docs/i18n.zh-CN.md` |
 

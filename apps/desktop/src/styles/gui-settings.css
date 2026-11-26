@@ -7228,6 +7228,25 @@ body.gui-resizing {
 	color: var(--color-text-muted);
 }
 
+/* ── Settings: backend settings page header (plugin-owned rows) ─────── */
+.gui-memory-backend-page-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 6px;
+}
+.gui-memory-plugin-badge {
+	flex-shrink: 0;
+	padding: 1px 7px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-size: 10.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}
+
 /* ── Settings: memory status strip (compact, capability-driven) ──────── */
 .gui-memory-maintenance {
 	margin-top: 18px;

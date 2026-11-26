@@ -272,6 +272,8 @@ export const settings = {
 	"settings.memoryOff": "Off",
 	"settings.memoryOutputClose": "Close output",
 	"settings.memoryBackendWithId": "Memory backend {id}",
+	"settings.memoryBackendSettings": "Backend settings",
+	"settings.memoryPluginOwned": "Plugin-provided",
 	"settings.memoryActive": "Active",
 	"settings.memoryWritable": "Writable",
 	"settings.memorySearchable": "Searchable",

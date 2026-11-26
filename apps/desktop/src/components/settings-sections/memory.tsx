@@ -117,19 +117,27 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const backend = status?.status?.backend;
 	return (
 		<>
-			{/* The schema owns the backend picker and each backend's own groups;
-			 *  no page-level heading sits above them, so the first group reads as
-			 *  the page's first level instead of a nested duplicate. */}
-			<SchemaTabSection
-				rpc={rpc}
-				tabs={["memory"]}
-				onChanged={key => {
-					if (/^(memory|mnemopi|hindsight|sharpshooter)\./.test(key)) {
-						// Let the daemon finish its backend transition before re-reading.
-						setTimeout(loadStatus, 200);
-					}
-				}}
-			/>
+			<div className="gui-settings-section gui-memory-backend-page">
+				{backend && backend !== "off" ? (
+					<div className="gui-memory-backend-page-head">
+						<div className="min-w-0">
+							<div className="gui-settings-section-title">{t("settings.memoryBackendSettings")}</div>
+							{backendHint(backend) ? <div className="gui-settings-row-desc">{backendHint(backend)}</div> : null}
+						</div>
+						<span className="gui-memory-plugin-badge">{t("settings.memoryPluginOwned")}</span>
+					</div>
+				) : null}
+				<SchemaTabSection
+					rpc={rpc}
+					tabs={["memory"]}
+					onChanged={key => {
+						if (/^(memory|mnemopi|hindsight|sharpshooter)\./.test(key)) {
+							// Let the daemon finish its backend transition before re-reading.
+							setTimeout(loadStatus, 200);
+						}
+					}}
+				/>
+			</div>
 			{backend === "off" ? null : (
 				<MemoryMaintenance
 					rpc={rpc}

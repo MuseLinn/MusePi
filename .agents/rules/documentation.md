@@ -48,3 +48,7 @@ Preserve every operative proposition when pruning: actor, action, condition, tim
 Current-state docs describe how the system works, not how a change happened. Remove dead design-session references, review dialogue, phase labels, speculative generalities, and control-flow narration. Changelogs and ADRs are the appropriate homes for history and rationale.
 
 GUI behavior updates both `docs/gui-design*` and `docs/gui-implementation*` as applicable. Extension API changes update `docs/extensions-dev*`. Model-visible prompt and UI text changes need behavior or snapshot evidence.
+
+## Settings and plugin UI
+
+`docs/plugin-settings.md` owns the value/UI ownership model: core schema keeps type/default/credential, a plugin owns its row through `registerUi`, and removing the plugin must not change behavior. Load it before adding, moving, or exposing a setting; code and the schema remain authoritative when the guide and implementation disagree.
