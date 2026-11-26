@@ -101,7 +101,13 @@ function installMicrophone(result: "ready" | "denied") {
 			? Promise.resolve({ getTracks: () => [{ readyState: "live", stop }] })
 			: Promise.reject({ name: "NotAllowedError" }),
 	);
-	Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
+	Object.defineProperty(navigator, "mediaDevices", {
+		configurable: true,
+		value: {
+			getUserMedia,
+			enumerateDevices: async () => [{ deviceId: "default", kind: "audioinput", label: "System default" }],
+		},
+	});
 	return { getUserMedia, stop };
 }
 
@@ -110,11 +116,14 @@ describe("onboarding voice setup", () => {
 		const mic = installMicrophone("ready");
 		await mountVoiceStep();
 
-		await act(async () => button("Check microphone").click());
+		// No detection button: the mounted device picker opens the microphone,
+		// reads a level and releases the track on its own.
 		await flush();
-		expect(mic.getUserMedia).toHaveBeenCalledTimes(1);
-		expect(mic.stop).toHaveBeenCalledTimes(1);
-		expect(host.textContent).toContain("Microphone ready");
+		// The picker probes once for permission and opens the stream again for
+		// the level meter; both tracks are released.
+		expect(mic.getUserMedia.mock.calls.length).toBeGreaterThanOrEqual(1);
+		expect(mic.stop.mock.calls.length).toBeGreaterThanOrEqual(1);
+		expect(host.textContent).toContain("Microphone permission granted");
 
 		await act(async () => button("Download recognition model").click());
 		expect(rpc.requests.some(request => request.method === "stt.modelDownload")).toBe(true);
@@ -180,7 +189,6 @@ describe("onboarding voice setup", () => {
 		installMicrophone("denied");
 		await mountVoiceStep();
 
-		await act(async () => button("Check microphone").click());
 		await flush();
 		expect(host.textContent).toContain("Microphone permission denied");
 

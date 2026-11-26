@@ -76,6 +76,7 @@ export interface SchemaItem {
 const CONDITIONS: Record<string, (values: Record<string, unknown>) => boolean> = {
 	mnemopiActive: v => v["memory.backend"] === "mnemopi",
 	hindsightActive: v => v["memory.backend"] === "hindsight",
+	musememActive: v => v["memory.backend"] === "musemem" || v["memory.backend"] === "local",
 	autolearnActive: v => v["autolearn.enabled"] === true,
 	advisorEnabled: v => v["advisor.enabled"] === true,
 	autoThinkingActive: v => v.defaultThinkingLevel === "auto",

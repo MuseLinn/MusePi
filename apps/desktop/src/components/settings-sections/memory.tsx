@@ -24,6 +24,13 @@ interface MemoryBackendStatus {
 	database?: string;
 	message?: string;
 	error?: string;
+	/** Which optional maintenance calls the daemon's backend actually implements. */
+	capabilities?: {
+		stats?: boolean;
+		diagnose?: boolean;
+		queue?: boolean;
+		clearGlobal?: boolean;
+	};
 }
 
 interface MemoryStatusResponse {
@@ -34,6 +41,8 @@ interface MemoryStatusResponse {
 /** Localized display name for the active backend. */
 function backendLabel(id: string): string {
 	switch (id) {
+		case "musemem":
+			return t("settings.memoryBackendMusemem");
 		case "local":
 			return t("settings.memoryBackendLocal");
 		case "mnemopi":
@@ -54,6 +63,8 @@ function backendLabel(id: string): string {
 /** One-line explanation of what the active backend does. */
 function backendHint(id: string): string {
 	switch (id) {
+		case "musemem":
+			return t("settings.memoryHintMusemem");
 		case "local":
 			return t("settings.memoryHintLocal");
 		case "mnemopi":
@@ -122,14 +133,16 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					}}
 				/>
 			</div>
-			{backend === "local" && <WorkspaceMemory rpc={rpc} />}
-			<MemoryMaintenance
-				rpc={rpc}
-				status={status}
-				loading={loading}
-				statusError={statusError}
-				onReload={loadStatus}
-			/>
+			{backend === "musemem" || backend === "local" ? <WorkspaceMemory rpc={rpc} /> : null}
+			{backend === "off" ? null : (
+				<MemoryMaintenance
+					rpc={rpc}
+					status={status}
+					loading={loading}
+					statusError={statusError}
+					onReload={loadStatus}
+				/>
+			)}
 		</>
 	);
 }
@@ -355,7 +368,12 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 	};
 
 	/** enqueue/clear → { ok }; clear asks for confirmation first. */
-	const runOk = (method: "memory.enqueue" | "memory.clear", label: string, confirmText?: string): void => {
+	const runOk = (
+		method: "memory.enqueue" | "memory.clear",
+		label: string,
+		confirmText?: string,
+		params?: Record<string, unknown>,
+	): void => {
 		if (!rpc || busy) return;
 		const go = (): void => {
 			setBusy(method);
@@ -363,7 +381,7 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 			setOutput(null);
 			setActionError(null);
 			void rpc
-				.request<{ ok: boolean }>(method, {})
+				.request<{ ok: boolean }>(method, params ?? {})
 				.then(res => {
 					if (res?.ok) {
 						setOutputLabel(label);
@@ -407,6 +425,7 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 						</div>
 					</div>
 					{backendHint(s.backend) ? <div className="gui-memory-status-note">{backendHint(s.backend)}</div> : null}
+					{s.message ? <div className="gui-memory-status-note">{s.message}</div> : null}
 					<div className="gui-memory-status-grid">
 						{s.workingCount !== undefined && (
 							<div className="gui-memory-status-item">
@@ -501,6 +520,7 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 					className="gui-btn"
 					disabled={busy !== null}
 					onClick={() => runText("memory.stats", t("settings.memoryStats"))}
+					hidden={s?.capabilities?.stats !== true}
 				>
 					{t("settings.memoryStats")}
 				</button>
@@ -509,8 +529,25 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 					className="gui-btn"
 					disabled={busy !== null}
 					onClick={() => runText("memory.diagnose", t("settings.memoryDiagnose"))}
+					hidden={s?.capabilities?.diagnose !== true}
 				>
 					{t("settings.memoryDiagnose")}
+				</button>
+				<button
+					type="button"
+					className="gui-btn gui-btn--danger gui-memory-clear"
+					disabled={busy !== null}
+					hidden={s?.capabilities?.clearGlobal !== true}
+					onClick={() =>
+						runOk(
+							"memory.clear",
+							t("settings.memoryClearGlobal"),
+							t("settings.memoryClearGlobalConfirm"),
+							{ scope: "global" },
+						)
+					}
+				>
+					{t("settings.memoryClearGlobal")}
 				</button>
 				<button
 					type="button"
