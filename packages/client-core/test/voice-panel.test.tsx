@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { COLLAB_PROTO, encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
+import { COLLAB_PROTO, formatCollabLink } from "@musepi/collab-proto";
 import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import { VoicePanel } from "../src/components/panels/VoicePanel";

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import { EditorView } from "@codemirror/view";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { COLLAB_PROTO, encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
+import { COLLAB_PROTO, formatCollabLink } from "@musepi/collab-proto";
 import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

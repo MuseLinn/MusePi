@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { COLLAB_PROTO, encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
+import { COLLAB_PROTO, formatCollabLink } from "@musepi/collab-proto";
 import type {
 	AgentSnapshot,
 	AssistantMessage,

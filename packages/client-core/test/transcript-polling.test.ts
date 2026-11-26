@@ -6,7 +6,7 @@
  * from the same cursor forever.
  */
 import { describe, expect, it, vi } from "bun:test";
-import { encodeBase64Url, formatCollabLink } from "@musepi/collab-proto";
+import { formatCollabLink } from "@musepi/collab-proto";
 import type { HostFrame, SessionEntry } from "@musepi/pi-wire";
 import { GuestClient } from "../src/lib/client";
 import { decideTranscriptPoll } from "../src/lib/transcript-poll";
