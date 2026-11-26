@@ -11,6 +11,9 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dispatchPetChanged } from "../../lib/companion-events";
 import "../../i18n/companion-style";
+import { BuiltinCompanionArt, SpriteSheetArt } from "../../components/CompanionArt";
+import { GuiSelect } from "../../components/GuiSelect";
+import { Reveal } from "../../components/Reveal";
 import {
 	artFormatForPackage,
 	BUILTIN_SPRITE_PRESETS,
@@ -42,9 +45,6 @@ import {
 // decor record; the EDITING controls moved to general.tsx CompanionDecorSection.
 import { type CompanionDecor, companionDecor } from "../../lib/companion-decor";
 import { Icon } from "../../vendor/oc-icons";
-import { BuiltinCompanionArt, SpriteSheetArt } from "../CompanionArt";
-import { GuiSelect } from "../GuiSelect";
-import { Reveal } from "../Reveal";
 
 /** Style picker: the mode gate that decides which creation paths the
  *  appearance section offers. */
@@ -409,7 +409,7 @@ export function CompanionMarket({
 /** The ball's gloss / accessory editing lives with the avatar-style cards in
  *  the appearance page (appearance.tsx CompanionDecorSection), where the pet
  *  preset previews it; this page keeps the pick + size + market concerns. */
-export function CompanionSection(): ReactNode {
+export default function PetSettingsPage(): ReactNode {
 	const [enabled, setEnabled] = useState<boolean>(() => companionEnabled());
 	const [mode, setMode] = useState<CompanionPlacement>(() => companionPlacement());
 	const [selectedArtId, setSelectedPetId] = useState<string>(() => companionArtId());

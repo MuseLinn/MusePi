@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import type { RpcClient } from "../lib/rpc";
+import type { SlotComponentProps } from "../../lib/slot-host";
 
 /** Settings tab: 数据迁移 (Proma MigrationSettings pattern). The daemon's
  *  agent has file tools, so packing/unpacking runs as a prompted workflow:
@@ -14,7 +14,7 @@ import type { RpcClient } from "../lib/rpc";
  *  - daemonDir: RUNTIME-ONLY temp dir (os.tmpdir()/musepi-daemon) — socket,
  *    journal/, materialized.db, channels.json. Ephemeral; never a backup
  *    source except channels.json, which lives there too by design. */
-export function MigrationSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export default function MigrationSettingsPage({ rpc }: SlotComponentProps): ReactNode {
 	const [dirs, setDirs] = useState<{ agentDir: string; daemonDir: string } | null>(null);
 	const [copied, setCopied] = useState<string | null>(null);
 

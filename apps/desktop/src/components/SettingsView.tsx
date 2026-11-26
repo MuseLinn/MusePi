@@ -14,7 +14,6 @@ import {
 import { useProviderCatalog } from "../lib/use-provider-catalog";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { HeightMorph } from "./HeightMorph";
-import { MigrationSection } from "./MigrationSection";
 import { navGroups, SettingsNav } from "./SettingsNav";
 
 /** Entry points address a section by CAPABILITY, the nav addresses it by
@@ -362,7 +361,6 @@ export function SettingsView({
 									{activeSection === "media" && (
 										<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
 									)}
-									{activeSection === "pet" && <CompanionSection />}
 									{activeSection === "session-memory" && (
 										<SessionMemorySection
 											rpc={rpc}
@@ -409,13 +407,11 @@ export function SettingsView({
 											})()
 										: null}
 									{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
-									{activeSection === "migration" && <MigrationSection rpc={rpc} />}
 									{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
 									{!activeExtTab && activeSection === "connectors" && (
 										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
 									)}
 									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
-									{!activeExtTab && activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 								</>
 							)}
 							{/* 页面自有行席位(dsh `children` 粒度):`settings.item.<page>.*`
@@ -453,10 +449,8 @@ export function SettingsView({
  *  the tokens own the real values: brand = gold #d9a441). */
 import {
 	BrowserSection,
-	CompanionSection,
 	ConnectorsSection,
 	GitSection,
-	IndexesSection,
 	InteractionSection,
 	MediaSection,
 	ModesSection,

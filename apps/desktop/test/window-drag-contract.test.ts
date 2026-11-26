@@ -657,7 +657,7 @@ describe("window drag — one owner for the property", () => {
 		expect(headerTags.length).toBeGreaterThan(100);
 		expect(headerTags.some(tag => tag.text.includes('"gui-header-spacer"'))).toBe(true);
 
-		const companion = path.join(SRC, "components/settings-sections/companion.tsx");
+		const companion = path.join(SRC, "plugins/settings-pet/page.tsx");
 		const companionTags = jsxTags(fs.readFileSync(companion, "utf8"), "companion.tsx");
 		expect(companionTags.length).toBeGreaterThan(80);
 		// Past the old desync boundary (~line 668) the scan must still see tags.
