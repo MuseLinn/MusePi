@@ -342,65 +342,114 @@
 	cursor: default;
 }
 
-/* ── Dictation state line (composer children, above the editor) ─────────
- * One quiet line, not a status bar. The transcript is painted AT THE CARET in
- * the editor and the clock + input level ride inside the mic capsule, so this
- * row only has to say which phase we are in and how to leave it.
+/* ── Dictation strip (composer children, above the editor) ──────────────
+ * One band across the composer while capturing, the shape KiroCrew uses: a
+ * tinted strip with a live dot, the phase word, the clock and ONE input-level
+ * meter. The recognised words are painted at the caret in the editor, so the
+ * strip never repeats them.
  *
- * What it used to draw — a second pulsing mic orb with two RMS rings beside a
- * 13-bar RMS wave, plus "recognized text will appear here" — repeated the
- * capsule's facts within 40px and described a behaviour that no longer exists. */
+ * History, so this is not undone by taste: the strip once carried a second
+ * pulsing mic orb with two RMS rings beside a 13-bar RMS wave (same level, two
+ * drawings); a later pass pushed the clock and meter into the mic button as an
+ * expanding capsule, which had already been tried and reverted by direction;
+ * and the button's icon carried an endless opacity pulse on top of whatever
+ * meter was beside it. One strip, one meter, and a button that only shows state. */
 .gui-voice-strip {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	min-height: 20px;
+	min-height: 24px;
 	/* Aligns with the editor's text column, not the card edge: the frame pads
-	 * 10px and `.cm-content` adds 2px, so anything else makes this line look
-	 * indented relative to the sentence below it. */
-	margin: 0;
-	padding: 0 2px;
+	 * 10px and `.cm-content` adds 2px. */
+	margin: 0 -2px;
+	padding: 2px 8px;
+	border-radius: var(--radius-md);
+	/* The danger tint is the "this is being recorded" signal at a glance. */
+	/* Text/background are a deliberate PAIR, the way KiroCrew's strip pairs
+	 * `text-danger-text` with `bg-danger-subtle`: the danger token alone is
+	 * tuned for a neutral surface, and on its own tint — especially in the light
+	 * theme's grey card — it read washed out. The ink is mixed toward the body
+	 * text colour so it stays legible on both themes. */
+	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
+	color: color-mix(in oklab, var(--color-danger) 62%, var(--color-text));
 }
 
-/* The one motion mark: a calm "live" pulse. It is not a level meter — the
- * capsule carries the level, and two meters for one input read as noise. */
+/* Live dot: the one motion mark. It states "capture is open" — it is not a
+ * level meter (the meter below is), and it stops the moment capture does. */
 .gui-voice-dot {
 	width: 6px;
 	height: 6px;
 	flex: none;
 	border-radius: 50%;
-	background: var(--color-danger);
-	box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger) 40%, transparent);
+	background: currentColor;
+	box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 40%, transparent);
 	animation: gui-voice-dot-pulse 1.6s ease-out infinite;
-}
-
-.gui-voice-strip--transcribing .gui-voice-dot {
-	background: var(--color-accent);
-	animation: none;
-	opacity: 0.5;
 }
 
 @keyframes gui-voice-dot-pulse {
 	0% {
-		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger) 40%, transparent);
+		box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 40%, transparent);
 	}
 	70% {
-		box-shadow: 0 0 0 5px color-mix(in oklab, var(--color-danger) 0%, transparent);
+		box-shadow: 0 0 0 5px color-mix(in oklab, currentColor 0%, transparent);
 	}
 	100% {
-		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger) 0%, transparent);
+		box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 0%, transparent);
 	}
 }
 
 .gui-voice-strip-label {
-	color: var(--color-text-secondary);
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	line-height: 18px;
+	white-space: nowrap;
 }
 
-.gui-voice-strip--transcribing .gui-voice-strip-label {
-	color: var(--color-accent);
+.gui-voice-strip-time {
+	font-size: var(--ui-font-size-xs);
+	font-variant-numeric: tabular-nums;
+	line-height: 18px;
+	opacity: 0.85;
+}
+
+/* The input level, scaled by real microphone RMS. 72px wide like KiroCrew's
+ * 80px meter: wide enough to read as a level, narrow enough to sit beside the
+ * clock without pushing the Esc hint off a narrow composer. */
+.gui-voice-meter {
+	width: 72px;
+	height: 4px;
+	flex: none;
+	overflow: hidden;
+	border-radius: 999px;
+	/* The track is the strip's ink at low alpha; the FILL is the pure danger /
+	 * accent colour, not `currentColor` — the ink is mixed toward body text for
+	 * legibility, and reusing it here sank the moving part into its own track. */
+	background: color-mix(in oklab, currentColor 18%, transparent);
+}
+
+.gui-voice-meter > i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--color-danger);
+	transition: width 80ms linear;
+}
+
+.gui-voice-strip--transcribing .gui-voice-meter > i {
+	background: var(--color-accent);
+}
+
+/* Transcribing: the request is in flight, so the band stays and Esc still
+ * cancels — but the phase is no longer "capturing", so the meter is gone and
+ * the dot holds still rather than claiming a live input. */
+.gui-voice-strip--transcribing {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: color-mix(in oklab, var(--color-accent) 60%, var(--color-text));
+}
+
+.gui-voice-strip--transcribing .gui-voice-dot {
+	animation: none;
+	opacity: 0.6;
 }
 
 .gui-voice-strip-hint {

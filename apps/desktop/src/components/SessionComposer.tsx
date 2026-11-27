@@ -2407,13 +2407,11 @@ export function SessionComposer({
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}
-						{/* Mic capsule: it carries the clock and the input level while
-						 * recording; the in-input line carries only the phase. */}
+						{/* Mic: a state icon only. The clock, the level and the phase
+						 * all live in the in-input dictation strip. */}
 						<VoiceButton
 							state={dictation.phase}
 							disabled={!sttEnabled}
-							seconds={dictation.seconds}
-							level={dictation.level}
 							onToggle={() => void voiceSetup.onToggle()}
 						/>
 						{/* 三合一 send control:

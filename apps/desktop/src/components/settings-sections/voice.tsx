@@ -1054,10 +1054,10 @@ export function VoiceSection({ rpc, sessionId }: { rpc: RpcClient | null; sessio
 										{dictationPhase === "recording" && (
 											<>
 												<span className="gui-voice-seconds">{recordSeconds}s</span>
-												{/* Live level meter rides the dictating capsule's
-												 * inner bottom edge (same contract as the real
-												 * composer mic — .gui-voice-level is absolutely
-												 * positioned inside the button). */}
+												{/* Live level meter on the capsule's inner bottom edge.
+												 * This capsule belongs to the mic TEST, which has no
+												 * status strip; the composer mic stays a plain icon and
+												 * shows its clock and meter in the dictation strip. */}
 												<span
 													className="gui-voice-level"
 													style={{ width: `${Math.min(100, Math.round(recordLevel * 100))}%` }}

@@ -38,10 +38,9 @@ describe("voice status strip", () => {
 	});
 
 	test("carries no second mic, no second level meter and no stale hint", () => {
-		const host = render(createElement(VoiceStatusStrip, { phase: "recording" }));
-		// The mic capsule already pulses and already shows the level, and the
-		// transcript is painted at the caret: a second orb, rings or a 13-bar wave
-		// here would restate the same two facts within 40px.
+		const host = render(createElement(VoiceStatusStrip, { phase: "recording", seconds: 4, level: 0.5 }));
+		// The transcript is painted at the caret: a second orb, rings or a 13-bar
+		// wave here would restate the same facts within 40px.
 		expect(host.querySelector(".gui-voice-visual")).toBeNull();
 		expect(host.querySelector(".gui-voice-ring")).toBeNull();
 		expect(host.querySelector(".gui-voice-wave")).toBeNull();
@@ -49,33 +48,43 @@ describe("voice status strip", () => {
 		expect(host.querySelector(".gui-voice-partial")).toBeNull();
 	});
 
-	test("transcribing keeps a settled, non-pulsing line for the whole wait", () => {
-		const host = render(createElement(VoiceStatusStrip, { phase: "transcribing" }));
+	test("carries the clock and exactly one meter, both in the strip", () => {
+		const host = render(createElement(VoiceStatusStrip, { phase: "recording", seconds: 4, level: 0.5 }));
+		expect(host.querySelector(".gui-voice-strip-time")?.textContent).toBe("4s");
+		// One meter, scaled by the real RMS.
+		expect(host.querySelectorAll(".gui-voice-meter").length).toBe(1);
+		expect(host.querySelector<HTMLElement>(".gui-voice-meter > i")?.style.width).toBe("50%");
+	});
+
+	test("transcribing keeps the strip for the wait but drops the meter", () => {
+		const host = render(createElement(VoiceStatusStrip, { phase: "transcribing", seconds: 4, level: 0.5 }));
 		const strip = host.querySelector(".gui-voice-strip");
 		expect(strip?.getAttribute("data-phase")).toBe("transcribing");
-		// Transcribing is a wait, not a live capture: the dot stops pulsing.
 		expect(host.querySelector(".gui-voice-dot")).not.toBeNull();
 		expect(host.querySelector(".gui-voice-strip-label")?.textContent).not.toBe("");
+		// Nothing is being captured: a live meter would claim otherwise, and a
+		// running clock would describe a recording that already ended.
+		expect(host.querySelector(".gui-voice-meter")).toBeNull();
+		expect(host.querySelector(".gui-voice-strip-time")).toBeNull();
 	});
 });
 
-describe("voice mic capsule", () => {
-	test("recording carries the clock and the input level inside the control", () => {
-		const host = render(
-			createElement(VoiceButton, { state: "recording", seconds: 7, level: 0.42, onToggle: () => {} }),
-		);
+describe("voice mic button", () => {
+	test("recording is a state icon only — no capsule, clock or meter", () => {
+		const host = render(createElement(VoiceButton, { state: "recording", onToggle: () => {} }));
 		const button = host.querySelector<HTMLButtonElement>("button");
 		expect(button?.className).toContain("gui-composer-ico--dictating");
-		expect(host.querySelector(".gui-voice-seconds")?.textContent).toBe("7s");
-		// The level bar is scoped to the button, so the value cannot drift from
-		// the control it describes.
-		expect(host.querySelector<HTMLElement>(".gui-voice-level")?.style.width).toBe("42%");
-	});
-
-	test("idle carries neither, so the resting composer gains no counters", () => {
-		const host = render(createElement(VoiceButton, { state: "idle", onToggle: () => {} }));
+		expect(button?.dataset.state).toBe("recording");
+		// The clock and the meter live in the dictation strip. An expanding
+		// capsule here was tried, reverted, and must not come back.
 		expect(host.querySelector(".gui-voice-seconds")).toBeNull();
 		expect(host.querySelector(".gui-voice-level")).toBeNull();
+	});
+
+	test("idle carries no state tint", () => {
+		const host = render(createElement(VoiceButton, { state: "idle", onToggle: () => {} }));
+		expect(host.querySelector<HTMLButtonElement>("button")?.className).not.toContain("--dictating");
+		expect(host.querySelector<HTMLButtonElement>("button")?.dataset.state).toBe("idle");
 	});
 
 	test("transcribing shows a spinner instead of a second countdown", () => {

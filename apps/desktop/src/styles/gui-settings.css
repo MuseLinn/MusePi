@@ -6239,7 +6239,15 @@ body.gui-resizing {
 /* Recording: the icon button expands into a capsule (mic + inline seconds),
  * not a 30px square with counters overflowing below it. The live level meter
  * rides the capsule's inner bottom edge — absolutely positioned INSIDE, so
- * nothing spills over neighbouring controls. */
+ * nothing spills over neighbouring controls.
+ *
+ * This capsule belongs to the SETTINGS-PAGE mic test, which has no status
+ * strip of its own; the composer mic deliberately stays a plain 26px icon and
+ * puts the clock and meter in its dictation strip (see gui-composer.css).
+ * The icon does NOT pulse: `gui-mic-pulse` here made the glyph breathe forever
+ * next to a meter that was already moving, which read as a control stuck in
+ * animation rather than one recording. Shape and tint carry the state; the
+ * strip carries the motion. */
 .gui-composer-ico--dictating {
 	position: relative;
 	width: auto;
@@ -6253,7 +6261,12 @@ body.gui-resizing {
 }
 
 .gui-composer-ico--dictating > svg {
-	animation: gui-mic-pulse 1s ease-in-out infinite;
+	animation: none;
+}
+
+/* Composer mic: plain icon, tinted by state, no loop. */
+.gui-composer-ico[data-state="recording"] {
+	color: var(--color-danger);
 }
 
 .gui-voice-seconds {

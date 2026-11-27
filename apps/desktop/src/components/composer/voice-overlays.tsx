@@ -24,7 +24,9 @@ export interface VoiceOverlaysProps {
 export function VoiceOverlays({ dictation, dialog, showHint = false }: VoiceOverlaysProps): ReactNode {
 	return (
 		<>
-			{dictation.phase !== "idle" && <VoiceStatusStrip phase={dictation.phase} />}
+			{dictation.phase !== "idle" && (
+				<VoiceStatusStrip phase={dictation.phase} seconds={dictation.seconds} level={dictation.level} />
+			)}
 			{dictation.error && (
 				<div className="gui-voice-error" role="status" aria-live="polite">
 					<span className="gui-voice-error-dot" aria-hidden />

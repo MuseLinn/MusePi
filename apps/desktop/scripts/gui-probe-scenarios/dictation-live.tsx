@@ -19,7 +19,7 @@ function Live({
 	return createElement(
 		"div",
 		{ className: "gui-composer-frame gui-liquid-glass" },
-		createElement(VoiceStatusStrip, { phase }),
+		createElement(VoiceStatusStrip, { phase, seconds: 6, level }),
 		createElement(ComposerEditor, {
 			value: "",
 			// The composers pass no placeholder while dictating.
@@ -32,7 +32,7 @@ function Live({
 		createElement(
 			"div",
 			{ className: "gui-composer-row" },
-			createElement(VoiceButton, { state: phase, seconds: 6, level, onToggle: () => {} }),
+			createElement(VoiceButton, { state: phase, onToggle: () => {} }),
 		),
 	);
 }
@@ -69,19 +69,22 @@ export default {
 				// Nothing in the strip may duplicate the capsule's clock/level.
 				rings: body.querySelectorAll(".gui-voice-ring").length,
 				bars: body.querySelectorAll(".gui-voice-wave i").length,
-				stripSeconds: body.querySelectorAll(".gui-voice-strip .gui-voice-seconds").length,
+				meters: body.querySelectorAll(".gui-voice-meter").length,
+				stripTime: body.querySelector(".gui-voice-strip-time")?.textContent ?? "",
+				// The button must stay a plain icon: no clock, no meter inside it.
+				buttonSeconds: body.querySelectorAll(".gui-composer-ico--dictating .gui-voice-seconds").length,
+				buttonMeter: body.querySelectorAll(".gui-composer-ico--dictating .gui-voice-meter").length,
 				// Dictating replaces the "what you could type" hint with the act of
 				// speaking; two instructions in one box compete.
 				placeholders: body.querySelectorAll(".musepi-composer-editor__placeholder").length,
 				// The capsule carries both, inside the control they describe.
-				capsuleSeconds: body.querySelector(".gui-composer-ico--dictating .gui-voice-seconds")?.textContent ?? "",
-				capsuleLevel: (body.querySelector<HTMLElement>(".gui-voice-level")?.style.width ?? ""),
+
 			};
 		},
 		expect: {
 			frame: { "box.w": { min: 300 } },
 			// One thin line: the old strip was 36px tall on its own.
-			strip: { display: "flex", "box.h": { max: 24 } },
+			strip: { display: "flex", "box.h": { max: 28 } },
 			// Reads as part of the message column, not as an indented badge.
 			label: { "box.h": { min: 14 } },
 			// The editor's only text is the live transcript — no hint is drawn
@@ -102,7 +105,7 @@ export default {
 			};
 		},
 		expect: {
-			strip: { display: "flex", "box.h": { max: 24 } },
+			strip: { display: "flex", "box.h": { max: 28 } },
 			// The wait has no clock: a counter would claim recording continues.
 			spinner: { "box.w": { min: 8 } },
 		},

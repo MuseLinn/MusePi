@@ -42,30 +42,25 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
 
 /** Voice input toggle (startDictation from ../lib/voice).
  *
- *  Deliberately a compact motion-only control: the 30px capsule has no room
- *  for a second copy of the phase, so it carries the state itself — tint and
- *  mic pulse while recording, spinner while transcribing — plus the two facts
- *  that belong to the CONTROL (how long it has been running, how loud the input
- *  is) as an inline clock and a 2px level bar on its inner bottom edge. The
- *  in-input {@link VoiceStatusStrip} therefore does not repeat them.
+ *  Motion-only, and the motion is a STATE, not a loop: the icon tints while
+ *  recording and turns into a spinner while transcribing — it never pulses.
+ *  A control that breathes forever competes with the level meter beside it and
+ *  makes a resting composer feel busy.
  *
- *  The expanded capsule styling (`.gui-composer-ico--dictating`) already
- *  existed for the settings-page mic test; the composer mic joins it instead of
- *  growing a second visual language for the same act. */
+ *  The clock, the level and the phase all live in {@link VoiceStatusStrip}:
+ *  the same act read in one place. An earlier pass moved the clock and the
+ *  meter INTO this button as an expanding capsule; that was reverted by
+ *  direction, and the reference clients agree — KiroCrew keeps a plain icon
+ *  while its status bar carries the meter, and OpenMausBot's mic is a single
+ *  pulsing-while-recording button with no counters at all. */
 export function VoiceButton({
 	state,
 	disabled,
 	onToggle,
-	seconds = 0,
-	level = 0,
 }: {
 	state: "idle" | "recording" | "transcribing";
 	/** stt.enabled gate (TUI parity): renders inert while speech input is off. */
 	disabled?: boolean;
-	/** Elapsed dictation time, shown inside the recording capsule. */
-	seconds?: number;
-	/** Mic RMS in [0, 1]; scales the capsule's inner level bar. */
-	level?: number;
 	onToggle(): void;
 }): ReactNode {
 	const label =
@@ -74,7 +69,6 @@ export function VoiceButton({
 			: state === "transcribing"
 				? t("settings.voiceTranscribing")
 				: t("settings.voiceInput");
-	const recording = state === "recording";
 	return (
 		<button
 			type="button"
@@ -83,38 +77,44 @@ export function VoiceButton({
 			disabled={disabled}
 			title={label}
 			aria-label={label}
+			data-state={state}
 		>
 			{state === "transcribing" ? (
 				<span className="gui-voice-spinner" />
 			) : (
 				<Icon name="mic" className="h-3.5 w-3.5" />
 			)}
-			{recording && (
-				<>
-					<span className="gui-voice-seconds">{seconds}s</span>
-					<span className="gui-voice-level" style={{ width: `${Math.round(level * 100)}%` }} />
-				</>
-			)}
 		</button>
 	);
 }
 
-/** In-input dictation indicator.
+/** In-input dictation strip.
  *
- *  One line at the caret, not a status bar: a pulse dot for "live", the phase
- *  word, and the Esc-cancel affordance. Everything else moved to where it
- *  belongs once the transcript started landing in the input itself:
+ *  One band across the composer, the way KiroCrew renders it: a live dot, the
+ *  phase word, the elapsed clock and one input-level meter, with Esc-cancel on
+ *  the far side. The band is the single place the act is described, so the mic
+ *  button stays a plain state icon (see {@link VoiceButton}).
  *
- *  - the clock and the input level live INSIDE the mic capsule
- *    ({@link VoiceButton}), which is the control they describe;
- *  - the recognized words are painted in the editor at the caret, so there is
- *    nothing left for a "text will appear here" hint to say.
+ *  Earlier passes here drew the phase twice (a second pulsing mic orb with two
+ *  RMS rings beside a 13-bar RMS wave) and then, in reaction, moved the clock
+ *  and meter into the button as a capsule — a direction that had already been
+ *  tried and reverted. This keeps them in the strip, once each.
  *
- *  What used to be here — a second pulsing mic orb with two RMS rings beside a
- *  13-bar RMS wave — was the same two facts (I am recording / how loud) drawn
- *  twice within 40px. */
-export function VoiceStatusStrip({ phase }: { phase: "recording" | "transcribing" }): ReactNode {
+ *  Transcribing keeps the band (the request is still in flight and Esc still
+ *  cancels) but drops the meter: nothing is being captured any more, and a
+ *  moving meter would claim otherwise. */
+export function VoiceStatusStrip({
+	phase,
+	seconds = 0,
+	level = 0,
+}: {
+	phase: "recording" | "transcribing";
+	seconds?: number;
+	/** Mic RMS in [0, 1] for the meter. */
+	level?: number;
+}): ReactNode {
 	const recording = phase === "recording";
+	const pct = Math.round(Math.min(1, Math.max(0, level)) * 100);
 	return (
 		<div
 			className={`gui-voice-strip${recording ? "" : " gui-voice-strip--transcribing"}`}
@@ -126,6 +126,12 @@ export function VoiceStatusStrip({ phase }: { phase: "recording" | "transcribing
 			<span className="gui-voice-strip-label">
 				{recording ? t("settings.voiceListening") : t("settings.voiceTranscribing")}
 			</span>
+			{recording && <span className="gui-voice-strip-time">{seconds}s</span>}
+			{recording && (
+				<span className="gui-voice-meter" aria-hidden>
+					<i style={{ width: `${pct}%` }} />
+				</span>
+			)}
 			<span className="gui-voice-strip-hint">
 				<kbd>{t("settings.voiceEscKey")}</kbd>
 				<span>{t("settings.cancel")}</span>
