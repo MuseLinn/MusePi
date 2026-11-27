@@ -393,6 +393,7 @@ import { ScheduleService } from "./services/schedule-service";
 import { SecretService } from "./services/secret-service";
 import { SessionInspectionService } from "./services/session-inspection-service";
 import { SessionPresenceService } from "./services/session-presence-service";
+import { SessionProjectionService } from "./services/session-projection-service";
 import { SessionReadStateService } from "./services/session-read-state-service";
 import { SessionService } from "./services/session-service";
 import { SettingsService } from "./services/settings-service";
@@ -987,8 +988,14 @@ export class DaemonServer {
 				authStorage: () => this.#host.authStorage(),
 			}),
 		);
+		// 投影注册表是一个 L2 服务（对齐 dsh 的 ctx.sessionProjections）：它只负责
+		// 驱动与存放，不认识任何具体域。域单元由拥有该状态的服务在自己的 start
+		// 里注册——注册点跟着状态走，因此新增一个域不会改这里，也不会改注册表。
+		const projectionService = new SessionProjectionService(this.#host.projectionRegistry);
+		this.#services.register(projectionService);
 		this.#services.register(
 			new SessionService({
+				registerProjections: definition => projectionService.register(definition),
 				knownSessions: () => this.#host.knownSessions(),
 				getSession: sessionId => this.#host.get(sessionId),
 				snapshot: sessionId => this.#host.snapshot(sessionId),

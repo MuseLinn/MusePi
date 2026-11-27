@@ -296,14 +296,37 @@ export const sessionModeProjectionDefinition: ProjectionDefinition<SessionModePr
 
 /**
  * Per-session projection registry. One instance per daemon host; unit
- * definitions are process-wide by construction (registered at construction).
+ * definitions are contributed by the projection plugin
+ * (`daemon/session-projection-plugin.ts`), which owns the registration list and
+ * reverts it on fiber teardown.
  */
 export class SessionProjectionRegistry {
 	readonly #definitions = new Map<string, ProjectionDefinition<unknown>>();
+	/** Newest install token per key — see {@link register}. */
+	readonly #installs = new Map<string, object>();
 	readonly #sessions = new Map<string, SessionEntryState>();
 
-	register<S>(definition: ProjectionDefinition<S>): void {
+	/** Register one unit. Returns a disposer so a plugin fiber can own the
+	 *  registration: a disabled unit stops folding and drops out of every
+	 *  baseline, and its key disappears from client snapshots.
+	 *
+	 *  Ownership is tracked by an install token, not by the definition object:
+	 *  the same unit mounted twice (a plugin reload) yields two registrations
+	 *  over one shared definition, and the earlier disposer must not withdraw
+	 *  the later install. */
+	register<S>(definition: ProjectionDefinition<S>): () => void {
+		const token = {};
+		this.#installs.set(definition.key, token);
 		this.#definitions.set(definition.key, definition as ProjectionDefinition<unknown>);
+		return () => {
+			if (this.#installs.get(definition.key) !== token) return;
+			this.#installs.delete(definition.key);
+			this.#definitions.delete(definition.key);
+			for (const entry of this.#sessions.values()) {
+				entry.states.delete(definition.key);
+				entry.views.delete(definition.key);
+			}
+		};
 	}
 
 	/** Seed (or reseed) one session from a full snapshot; a live source makes
@@ -315,9 +338,19 @@ export class SessionProjectionRegistry {
 			...(seed.source ? { source: seed.source } : {}),
 		};
 		for (const definition of this.#definitions.values()) {
-			const state = definition.init(seed);
-			entry.states.set(definition.key, state);
-			entry.views.set(definition.key, definition.view(state));
+			// One unit's bad input must not take the others down with it: a
+			// throw here used to abort the whole loop, so every later unit
+			// silently vanished from the baseline. A unit that cannot seed is
+			// simply absent for this session, and the next `applyEvent` gives it
+			// another chance.
+			try {
+				const state = definition.init(seed);
+				entry.states.set(definition.key, state);
+				entry.views.set(definition.key, definition.view(state));
+			} catch {
+				entry.states.delete(definition.key);
+				entry.views.delete(definition.key);
+			}
 		}
 		this.#sessions.set(sessionId, entry);
 	}
@@ -343,24 +376,40 @@ export class SessionProjectionRegistry {
 		if (!entry) return [];
 		const changes: SessionProjectionChange[] = [];
 		for (const [key, definition] of this.#definitions) {
-			const state = entry.states.get(key);
-			let next = definition.apply(state, event);
-			if (definition.sample && entry.source && definition.sampleOn?.has(event.type) === true) {
-				next = definition.sample(next, entry.source);
+			// Same isolation as `seed`: a faulty unit is skipped for this event
+			// instead of aborting the fold for every other unit.
+			try {
+				const state = entry.states.get(key);
+				let next = definition.apply(state, event);
+				if (definition.sample && entry.source && definition.sampleOn?.has(event.type) === true) {
+					next = definition.sample(next, entry.source);
+				}
+				if (next === state) continue;
+				entry.states.set(key, next);
+				const view = definition.view(next);
+				const previous = entry.views.get(key);
+				const equals = definition.viewEquals ?? Object.is;
+				if (equals(previous, view)) continue;
+				entry.views.set(key, view);
+				changes.push({ key, value: view });
+			} catch {
+				// Leave the last good view in place.
 			}
-			if (next === state) continue;
-			entry.states.set(key, next);
-			const view = definition.view(next);
-			const previous = entry.views.get(key);
-			const equals = definition.viewEquals ?? Object.is;
-			if (equals(previous, view)) continue;
-			entry.views.set(key, view);
-			changes.push({ key, value: view });
 		}
 		return changes;
 	}
 
 	clear(sessionId: string): void {
 		this.#sessions.delete(sessionId);
+	}
+
+	/** Registered unit keys, in registration order (diagnostics and tests). */
+	keys(): string[] {
+		return [...this.#definitions.keys()];
+	}
+
+	/** Drop every session's fold state, keeping the registrations. */
+	clearAll(): void {
+		this.#sessions.clear();
 	}
 }

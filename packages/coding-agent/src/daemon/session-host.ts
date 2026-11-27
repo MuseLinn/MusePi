@@ -59,11 +59,9 @@ import { sessionHeaderPreset } from "../session/session-entries";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
 import {
-	contextUsageProjectionDefinition,
 	type ProjectionEvent,
 	type ProjectionSampleSource,
 	SessionProjectionRegistry,
-	sessionModeProjectionDefinition,
 } from "../session/session-projections";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
 import { resolvePromptInput } from "../system-prompt";
@@ -1110,8 +1108,17 @@ export class DaemonSessionHost {
 	readonly #extensionSettings = new Map<string, { setting: ExtensionSetting; extensionPath: string }>();
 	readonly #options: DaemonOptions;
 	readonly #store: ViewStore;
-	/** Host-computed per-session projections (the client reads whole values). */
+	/** Host-computed per-session projections (the client reads whole values).
+	 *  Owned here because the commit path and the snapshot builders read it
+	 *  directly; `SessionProjectionService` wraps this same instance, so the
+	 *  service is the registration/read surface while this stays the storage
+	 *  the hot path touches. */
 	readonly #projections = new SessionProjectionRegistry();
+	/** The registry `SessionProjectionService` drives. Domain services register
+	 *  their units through the service, never through the host. */
+	get projectionRegistry(): SessionProjectionRegistry {
+		return this.#projections;
+	}
 	/** Daemon collab share provider (set by DaemonServer on construction) —
 	 *  lets session.create/activate inject the `collab` tool handle into
 	 *  agent sessions. Absent in host-only tests. */
@@ -1190,8 +1197,11 @@ export class DaemonSessionHost {
 	constructor(options: DaemonOptions = {}) {
 		this.#options = options;
 		this.#store = new ViewStore(viewStorePath(JOURNAL_DIR));
-		this.#projections.register(contextUsageProjectionDefinition);
-		this.#projections.register(sessionModeProjectionDefinition);
+		// Projection units are contributed by the session-projection plugin
+		// (`session-projection-plugin.ts`) through {@link projectionRegistry}:
+		// the registry stays host-owned (it holds per-session fold state), the
+		// registration list belongs to the plugin so adding a domain never
+		// touches this constructor.
 		this.#idleScanner = setInterval(() => this.#scanIdle(), IDLE_SCAN_INTERVAL_MS);
 		this.#idleScanner.unref?.();
 		sweepEmptySessionDirs();
