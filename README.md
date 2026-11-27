@@ -32,7 +32,7 @@ MusePi combines a coding agent, an Electron workbench, a terminal UI, and remote
 
 Download version-matched desktop installers and Android packages from the [releases page](https://github.com/MuseLinn/MusePi/releases). The [MusePi website](https://muselinn.github.io/MusePi/) provides bilingual download guides.
 
-- **Desktop:** macOS `.dmg`, Windows per-user `setup.exe`, Linux `.AppImage` / `.deb`.
+- **Desktop:** macOS `.dmg`, Windows per-user `setup.exe`, Linux `.AppImage` / `.deb`. An AppImage needs `libfuse.so.2` (FUSE 2) to mount. On a system with only FUSE 3, run `APPIMAGE_EXTRACT_AND_RUN=1 ./MusePi-*.AppImage`, or install the `.deb`.
 - **Android:** install `app-debug.apk` and pair with a host on the local network.
 - **HarmonyOS:** the NEXT WebView shell in `apps/harmony` builds with DevEco Studio; no prebuilt package is published yet.
 - **Terminal:** install `musepi` with a script or from source.

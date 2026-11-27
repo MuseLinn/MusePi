@@ -32,7 +32,7 @@ MusePi 集编程智能体、Electron 工作台、终端界面和远程客户端�
 
 从 [Releases 页面](https://github.com/MuseLinn/MusePi/releases)下载与版本匹配的桌面安装包和 Android 软件包。[MusePi 官网](https://muselinn.github.io/MusePi/)提供双语下载指引。
 
-- **桌面端：** macOS `.dmg`、Windows 逐用户 `setup.exe`、Linux `.AppImage` / `.deb`。
+- **桌面端：** macOS `.dmg`、Windows 逐用户 `setup.exe`、Linux `.AppImage` / `.deb`。AppImage 需要 `libfuse.so.2`（FUSE 2）才能挂载。系统只有 FUSE 3 时，用 `APPIMAGE_EXTRACT_AND_RUN=1 ./MusePi-*.AppImage` 启动，或安装 `.deb`。
 - **Android：** 安装 `app-debug.apk`，再与局域网内的主机配对。
 - **鸿蒙：** `apps/harmony` 中的 NEXT WebView 壳用 DevEco Studio 构建，暂未发布预编译安装包。
 - **终端：** 通过脚本或源码安装 `musepi`。

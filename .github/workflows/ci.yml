@@ -81,14 +81,17 @@ permissions:
 jobs:
    # scripts/release.ts pushes the version-bump commit and its `v*` tag
    # atomically (`git push --atomic origin refs/heads/main:refs/heads/main
-   # <sha>:refs/tags/v<version>`), so a release now arrives as a single `push` to
-   # `refs/heads/main` — we no longer trigger on the tag ref at all (see
-   # `on.push`). This one branch-push run is therefore authoritative: it runs the
-   # full build AND, when HEAD carries a release tag, the release/publish jobs.
-   # `release_metadata` resolves that tag once so downstream jobs switch on
-   # `is-release` and address the tag by name — `github.ref` is
-   # `refs/heads/main` here, not the tag. A `workflow_dispatch` from a `v*` tag
-   # ref (or from a tagged main HEAD) is also treated as a release.
+   # <sha>:refs/tags/v<version>`). That arrives as one push to
+   # `refs/heads/main`. This workflow does not also trigger on the tag ref:
+   # the tag push would be a second full run and a second upload. This
+   # branch-push run is authoritative: it runs the full build and, when HEAD
+   # carries a release tag, the release jobs. `release_metadata` resolves
+   # that tag once so downstream jobs switch on `is-release` and address the
+   # tag by name — `github.ref` is `refs/heads/main` here, not the tag.
+   # A `workflow_dispatch` from a `v*` tag ref (or from a tagged main HEAD)
+   # is also a release. Tagging a commit already on main does not push main
+   # again; `.github/workflows/tui-release-recover.yml` dispatches this
+   # workflow on that tag only when the main push did not publish.
    release_metadata:
       name: Resolve release metadata
       # Hosted, not musepi-kata: this ~20 s git-tag probe gates the whole release
@@ -1078,7 +1081,25 @@ jobs:
            if: contains(needs.release_metadata.outputs.release-tag, '-beta.')
            shell: bash
            run: bun scripts/gui-release-channel.ts check-promotion "${{ needs.release_metadata.outputs.release-tag }}" --remote
+         # Desktop publish can create the GitHub release before this job adds
+         # the TUI binaries (a tag pushed after the commit is already on main).
+         # Updating that release must not replace its notes: an empty body
+         # keeps the existing text, and generate_release_notes would append
+         # a second set. A release this job creates still carries the TUI notes.
+         - name: Check whether the GitHub release already exists
+           id: release_exists
+           env:
+              GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              RELEASE_TAG: ${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') && 'channel-beta' || needs.release_metadata.outputs.release-tag }}
+           run: |
+              set -euo pipefail
+              if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                echo "exists=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "exists=false" >> "$GITHUB_OUTPUT"
+              fi
          - name: Create GitHub Release
+           if: steps.release_exists.outputs.exists != 'true'
            uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
            with:
               tag_name: ${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') && 'channel-beta' || needs.release_metadata.outputs.release-tag }}
@@ -1089,6 +1110,17 @@ jobs:
                  SHA256SUMS.txt
               body_path: release-notes.md
               generate_release_notes: true
+         - name: Add TUI assets to the existing GitHub Release
+           if: steps.release_exists.outputs.exists == 'true'
+           uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+           with:
+              tag_name: ${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') && 'channel-beta' || needs.release_metadata.outputs.release-tag }}
+              prerelease: ${{ contains(needs.release_metadata.outputs.release-tag, '-beta.') }}
+              files: |
+                 packages/coding-agent/binaries/musepi-*
+                 packages/browser-relay/dist/musepi-browser-relay-extension.zip
+                 SHA256SUMS.txt
+              generate_release_notes: false
 
    release_github_verify:
       name: Verify published release (macOS)
