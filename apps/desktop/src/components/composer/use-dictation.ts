@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { registerGlobalDictationTarget } from "../../lib/global-dictation-target";
 import type { RpcClient } from "../../lib/rpc";
 import {
 	cancelActiveDictation,
@@ -54,6 +55,7 @@ export function useDictation(opts: {
 	 *  words of a continuous utterance. */
 	editor?: {
 		current: {
+			readonly dom?: HTMLElement;
 			writeDictation(committed: string, hypothesis: string, restart: boolean): void;
 			commitDictation(): void;
 			cancelDictation(): void;
@@ -210,6 +212,12 @@ export function useDictation(opts: {
 		stopRef.current = stop ?? null;
 		if (stop) setPhase("recording");
 	}, [rpc, settle, showError]);
+
+	useEffect(() => {
+		const dom = optsRef.current.editor?.current?.dom;
+		if (!dom) return;
+		return registerGlobalDictationTarget(dom, toggle, () => phaseRef.current !== "idle");
+	}, [toggle, phase]);
 
 	// Esc discards an in-flight dictation at ANY phase — the recording buffer
 	// or the already-submitted transcribe RPC alike (capture phase, so the

@@ -62,6 +62,7 @@ class GlobalDictation {
 		this.log = deps.log ?? (() => {});
 		this.app = deps.app;
 
+		this.dictationTargets = new Map();
 		this.enabled = false;
 		this.accelerator = "";
 		this.settingsTimer = null;
@@ -98,6 +99,7 @@ class GlobalDictation {
 
 	async start() {
 		ipcMain.handle("dictation:action", (_event, payload) => this.action(payload?.type));
+		ipcMain.handle("dictation:target", (event, payload) => this.setDictationTarget(event, payload));
 		ipcMain.handle("dictation:status", () => ({
 			enabled: this.enabled,
 			accelerator: this.accelerator,
@@ -151,8 +153,39 @@ class GlobalDictation {
 		}
 	}
 
+	setDictationTarget(event, payload) {
+		const sender = event.sender;
+		const id = sender.id;
+		const state = { focused: payload?.focused === true, active: payload?.active === true };
+		if (!state.focused && !state.active) {
+			this.dictationTargets.delete(id);
+			return;
+		}
+		if (!this.dictationTargets.has(id)) {
+			sender.once?.("destroyed", () => this.dictationTargets.delete(id));
+		}
+		this.dictationTargets.set(id, state);
+	}
+
+	routeInternalShortcut() {
+		const windows = this.BrowserWindow.getAllWindows();
+		const send = win => {
+			if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return false;
+			win.webContents.send("dictation:toggle");
+			return true;
+		};
+		for (const [id, state] of this.dictationTargets) {
+			if (state.active && send(windows.find(win => win.webContents.id === id))) return true;
+		}
+		const focused = this.BrowserWindow.getFocusedWindow();
+		if (!focused) return false;
+		const state = this.dictationTargets.get(focused.webContents.id);
+		return state?.focused === true && send(focused);
+	}
+
 	async toggle() {
 		if (this.loading || this.finishing || this.downloadKey) return;
+		if (this.routeInternalShortcut()) return;
 		if (this.capture) {
 			this.finishRecording();
 			return;
