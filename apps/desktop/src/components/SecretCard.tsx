@@ -2,6 +2,7 @@ import { t } from "@musepi/client-core";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
+import { useRevealOnHold } from "./use-reveal-on-hold";
 
 /**
  * Secret request contract (tower-pinned for M35; M34 implements the daemon
@@ -116,6 +117,10 @@ export function SecretCard({
 	onSettledRef.current = onSettled;
 	const busyRef = useRef(busy);
 	busyRef.current = busy;
+	// Hold-to-reveal, one per masked field: releasing re-masks, so a value is
+	// never left readable on screen after the reader looked at it.
+	const revealPw = useRevealOnHold(busy);
+	const revealTotp = useRevealOnHold(busy);
 
 	// A fresh request starts clean — never carry a previous value over.
 	useEffect(() => {
@@ -370,12 +375,79 @@ export function SecretCard({
 						</label>
 						<label className="gui-secret-field">
 							<span className="gui-secret-field-label">{t("tools.loginPassword")}</span>
+							<span className="gui-secret-masked">
+								<input
+									ref={maskStyleRef}
+									className="gui-input w-full"
+									type={revealPw.revealed ? "text" : "password"}
+									value={value}
+									placeholder={t("tools.loginPasswordPlaceholder")}
+									autoComplete="off"
+									autoCorrect="off"
+									autoCapitalize="off"
+									spellCheck={false}
+									data-1p-ignore=""
+									data-lpignore="true"
+									data-bwignore="true"
+									disabled={busy}
+									onChange={e => setValue(e.target.value)}
+									onKeyDown={onKeyDown}
+								/>
+								<button
+									type="button"
+									className="gui-secret-reveal"
+									aria-label={t("tools.secretRevealHold")}
+									title={t("tools.secretRevealHold")}
+									aria-pressed={revealPw.revealed}
+									disabled={busy}
+									{...revealPw.handlers}
+								>
+									<Icon name={revealPw.revealed ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
+								</button>
+							</span>
+							<span className={tooShort ? "gui-error" : "gui-secret-field-hint"}>
+								{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
+							</span>
+						</label>
+						<label className="gui-secret-field">
+							<span className="gui-secret-field-label">{t("tools.loginTotp")}</span>
+							<span className="gui-secret-masked">
+								<input
+									className="gui-input w-full"
+									type={revealTotp.revealed ? "text" : "password"}
+									value={loginTotp}
+									placeholder={t("tools.loginTotpPlaceholder")}
+									autoComplete="off"
+									spellCheck={false}
+									disabled={busy}
+									onChange={e => setLoginTotp(e.target.value)}
+								/>
+								<button
+									type="button"
+									className="gui-secret-reveal"
+									aria-label={t("tools.secretRevealHold")}
+									title={t("tools.secretRevealHold")}
+									aria-pressed={revealTotp.revealed}
+									disabled={busy}
+									{...revealTotp.handlers}
+								>
+									<Icon name={revealTotp.revealed ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
+								</button>
+							</span>
+							<span className="gui-secret-field-hint">{t("tools.loginTotpHint")}</span>
+						</label>
+					</>
+				) : null}
+				{isFill && !isLogin ? (
+					<>
+						<span className="gui-secret-masked">
 							<input
 								ref={maskStyleRef}
 								className="gui-input w-full"
-								type="password"
+								type={revealPw.revealed ? "text" : "password"}
 								value={value}
-								placeholder={t("tools.loginPasswordPlaceholder")}
+								placeholder={t("tools.secretValuePlaceholder")}
+								aria-label={t("tools.secretValuePlaceholder")}
 								autoComplete="off"
 								autoCorrect="off"
 								autoCapitalize="off"
@@ -387,46 +459,18 @@ export function SecretCard({
 								onChange={e => setValue(e.target.value)}
 								onKeyDown={onKeyDown}
 							/>
-							<span className={tooShort ? "gui-error" : "gui-secret-field-hint"}>
-								{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
-							</span>
-						</label>
-						<label className="gui-secret-field">
-							<span className="gui-secret-field-label">{t("tools.loginTotp")}</span>
-							<input
-								className="gui-input w-full"
-								type="password"
-								value={loginTotp}
-								placeholder={t("tools.loginTotpPlaceholder")}
-								autoComplete="off"
-								spellCheck={false}
+							<button
+								type="button"
+								className="gui-secret-reveal"
+								aria-label={t("tools.secretRevealHold")}
+								title={t("tools.secretRevealHold")}
+								aria-pressed={revealPw.revealed}
 								disabled={busy}
-								onChange={e => setLoginTotp(e.target.value)}
-							/>
-							<span className="gui-secret-field-hint">{t("tools.loginTotpHint")}</span>
-						</label>
-					</>
-				) : null}
-				{isFill && !isLogin ? (
-					<>
-						<input
-							ref={maskStyleRef}
-							className="gui-input w-full"
-							type="password"
-							value={value}
-							placeholder={t("tools.secretValuePlaceholder")}
-							aria-label={t("tools.secretValuePlaceholder")}
-							autoComplete="off"
-							autoCorrect="off"
-							autoCapitalize="off"
-							spellCheck={false}
-							data-1p-ignore=""
-							data-lpignore="true"
-							data-bwignore="true"
-							disabled={busy}
-							onChange={e => setValue(e.target.value)}
-							onKeyDown={onKeyDown}
-						/>
+								{...revealPw.handlers}
+							>
+								<Icon name={revealPw.revealed ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
+							</button>
+						</span>
 						<p className={tooShort ? "gui-error" : "gui-note"}>
 							{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
 						</p>

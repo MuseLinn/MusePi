@@ -2237,6 +2237,7 @@ export const tools = {
 	"tools.loginForSite": "Site",
 	"tools.secretUseSavedLogin": "Already saved — pick one",
 	"tools.secretPrivateNote": "Stored on this computer, readable only by you; the agent never sees the value.",
+	"tools.secretRevealHold": "Hold to show, release to hide",
 	"tools.secretSave": "Save",
 	"tools.secretUseSaved": "Already saved — pick one",
 	"tools.secretUseThis": "Use this one",

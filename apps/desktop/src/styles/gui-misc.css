@@ -1188,6 +1188,43 @@
 	color: var(--color-text-muted);
 }
 
+/* A masked field and its hold-to-reveal button share one box: the input keeps
+ * its full width, the button sits inset on the trailing edge. */
+.gui-secret-masked {
+	position: relative;
+	display: block;
+}
+.gui-secret-masked .gui-input {
+	padding-right: 30px;
+}
+.gui-secret-reveal {
+	position: absolute;
+	top: 50%;
+	right: 5px;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm, 4px);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	touch-action: none;
+}
+.gui-secret-reveal:hover:not(:disabled),
+.gui-secret-reveal:focus-visible {
+	color: var(--color-text);
+	background: var(--color-surface-sunken, var(--bg-sunken));
+}
+.gui-secret-reveal:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
 /* One labelled field of the login card: label, control, hint. The login form
  * has four of them, so the label carries the identity and the placeholder only
  * shows an example — a placeholder alone disappears the moment typing starts. */

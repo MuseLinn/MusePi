@@ -2170,6 +2170,7 @@ export const tools = {
 	"tools.loginForSite": "登录站点",
 	"tools.secretUseSavedLogin": "已保存的登录，可直接选用",
 	"tools.secretPrivateNote": "保存在本机，仅你可读；智能体看不到这个值。",
+	"tools.secretRevealHold": "按住显示，松开即隐藏",
 	"tools.secretUseSaved": "已保存的，可直接选用",
 	"tools.secretUseThis": "用这个",
 	"tools.secretSave": "保存",
