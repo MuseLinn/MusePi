@@ -29,23 +29,58 @@ export function sharedSurfaceTransitionAllowed(): boolean {
 	return !motionDisabled();
 }
 
+export interface SurfaceClipRect {
+	top: number;
+	right: number;
+	bottom: number;
+	left: number;
+}
+
+export function clipPathForAnchor(anchor: SurfaceClipRect, surface: SurfaceClipRect, radius: number): string {
+	const top = Math.max(0, anchor.top - surface.top);
+	const right = Math.max(0, surface.right - anchor.right);
+	const bottom = Math.max(0, surface.bottom - anchor.bottom);
+	const left = Math.max(0, anchor.left - surface.left);
+	return `inset(${top}px ${right}px ${bottom}px ${left}px round ${radius}px)`;
+}
+
 /**
  * Marker + transition bootstrap shared by every one-take entry point: the
  * class tells the dialog CSS to skip its own entrance while the browser owns
  * the geometry, and it leaves with the transition.
  */
+const transitionClassUsers = new Map<string, number>();
+
+function retainTransitionClasses(classes: readonly string[]): void {
+	for (const name of classes) {
+		transitionClassUsers.set(name, (transitionClassUsers.get(name) ?? 0) + 1);
+		document.documentElement.classList.add(name);
+	}
+}
+
+function releaseTransitionClasses(classes: readonly string[]): void {
+	for (const name of classes) {
+		const users = (transitionClassUsers.get(name) ?? 1) - 1;
+		if (users === 0) {
+			transitionClassUsers.delete(name);
+			document.documentElement.classList.remove(name);
+		} else {
+			transitionClassUsers.set(name, users);
+		}
+	}
+}
+
 function beginTransition(
 	doc: ViewTransitionDocument,
 	update: () => void,
 	classes: readonly string[],
 	onFinished?: () => void,
 ): { finished: Promise<void> } {
-	document.documentElement.classList.add("gui-view-transition");
-	for (const name of classes) document.documentElement.classList.add(name);
+	const classesToRetain = ["gui-view-transition", ...classes];
+	retainTransitionClasses(classesToRetain);
 	const transition = doc.startViewTransition(() => flushSync(update));
 	void transition.finished.finally(() => {
-		document.documentElement.classList.remove("gui-view-transition");
-		for (const name of classes) document.documentElement.classList.remove(name);
+		releaseTransitionClasses(classesToRetain);
 		onFinished?.();
 	});
 	return transition;
@@ -152,6 +187,70 @@ export function morphSurfaceBack(
 	void transition.finished.finally(() => {
 		destination.style.viewTransitionName = previous;
 		if (leaving) leaving.style.viewTransitionName = "";
+	});
+}
+
+export interface ClipMorphOptions extends MorphOptions {
+	direction: "from-anchor" | "to-anchor";
+}
+
+interface ActiveClipMorph {
+	id: number;
+	viewTransitionName: string;
+	anchorClip: string;
+}
+
+const activeClipMorphs = new WeakMap<HTMLElement, ActiveClipMorph>();
+let clipMorphSequence = 0;
+
+/** Clip one named surface from or back to its persistent trigger rectangle. */
+export function morphSurfaceClip(
+	surface: Element | null,
+	anchor: Element | null,
+	name: string,
+	update: () => void,
+	options: ClipMorphOptions,
+): void {
+	const doc = globalThis.document as ViewTransitionDocument | undefined;
+	if (!surface || !anchor || !doc?.startViewTransition || !sharedSurfaceTransitionAllowed()) {
+		update();
+		return;
+	}
+	const surfaceElement = surface as HTMLElement;
+	const anchorElement = anchor as HTMLElement;
+	const root = doc.documentElement as HTMLElement;
+	const previous = activeClipMorphs.get(surfaceElement);
+	const active: ActiveClipMorph = {
+		id: ++clipMorphSequence,
+		viewTransitionName: previous?.viewTransitionName ?? surfaceElement.style.viewTransitionName,
+		anchorClip: previous?.anchorClip ?? root.style.getPropertyValue("--gui-vt-anchor-clip"),
+	};
+	activeClipMorphs.set(surfaceElement, active);
+	const anchorRect = anchorElement.getBoundingClientRect();
+	const radius = Number.parseFloat(getComputedStyle(anchorElement).borderTopLeftRadius) || 0;
+	const publishClip = (): void => {
+		const rect = surfaceElement.getBoundingClientRect();
+		if (rect.width === 0 || rect.height === 0) return;
+		root.style.setProperty("--gui-vt-anchor-clip", clipPathForAnchor(anchorRect, rect, radius));
+	};
+	publishClip();
+	surfaceElement.style.viewTransitionName = name;
+	const directionClass = `gui-vt-clip-${options.direction}`;
+	const transition = beginTransition(
+		doc,
+		() => {
+			update();
+			publishClip();
+		},
+		[...transitionClasses(options, true), directionClass],
+		options.onFinished,
+	);
+	void transition.finished.finally(() => {
+		if (activeClipMorphs.get(surfaceElement) !== active) return;
+		surfaceElement.style.viewTransitionName = active.viewTransitionName;
+		if (active.anchorClip) root.style.setProperty("--gui-vt-anchor-clip", active.anchorClip);
+		else root.style.removeProperty("--gui-vt-anchor-clip");
+		activeClipMorphs.delete(surfaceElement);
 	});
 }
 

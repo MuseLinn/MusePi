@@ -164,6 +164,49 @@
 	min-height: var(--gui-card-gutter);
 }
 
+html.gui-vt-clip-from-anchor .gui-side-keeper > .gui-pane-side,
+html.gui-vt-clip-to-anchor .gui-side-keeper > .gui-pane-side {
+	transition: none !important;
+}
+
+::view-transition-group(gui-sidebar-surface) {
+	animation: none;
+}
+
+html.gui-vt-clip-from-anchor::view-transition-new(gui-sidebar-surface) {
+	animation: gui-sidebar-clip-from-anchor var(--duration-one-take) var(--ease-one-take) both;
+	mix-blend-mode: normal;
+}
+
+html.gui-vt-clip-to-anchor::view-transition-old(gui-sidebar-surface) {
+	animation: gui-sidebar-clip-to-anchor var(--duration-one-take) var(--ease-one-take) both;
+	mix-blend-mode: normal;
+}
+
+html.gui-vt-clip-from-anchor::view-transition-old(gui-sidebar-surface),
+html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
+	animation: none;
+	opacity: 0;
+}
+
+@keyframes gui-sidebar-clip-from-anchor {
+	from {
+		clip-path: var(--gui-vt-anchor-clip);
+	}
+	to {
+		clip-path: inset(0 round var(--radius-lg));
+	}
+}
+
+@keyframes gui-sidebar-clip-to-anchor {
+	from {
+		clip-path: inset(0 round var(--radius-lg));
+	}
+	to {
+		clip-path: var(--gui-vt-anchor-clip);
+	}
+}
+
 /* ── Drawer mode (narrow workspace) ──────────────────────────────────────
  * Narrow windows keep the same mounted sidebar as an overlay drawer. The
  * keeper must leave the flex flow entirely: translating it off-screen while

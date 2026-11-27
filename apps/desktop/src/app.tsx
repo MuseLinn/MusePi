@@ -213,7 +213,7 @@ import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surface
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
-import { withViewTransition } from "./lib/view-transition";
+import { morphSurfaceClip, withViewTransition } from "./lib/view-transition";
 import { createProject, type WorkspaceMutationResult } from "./lib/workspace-projects";
 import {
 	applyScrollbarSkin,
@@ -1147,23 +1147,34 @@ function AppInner(): ReactNode {
 				setNarrowSidebarOpen(open => !open);
 				return;
 			}
-			// Tier two folding in / out is the column's other rect change: the pane's
-			// card collapses to zero while the header's toggle takes its place as the
-			// only remaining affordance (KiroCrew's behaviour — the list morphs into
-			// the button). Wrapping the flip lets the browser pair the pane's old box
-			// with the button's new one instead of one vanishing and the other
-			// appearing. `surfaceOnly` keeps the window's root snapshot out of it.
-			withViewTransition(
+			const anchor = _anchor ?? document.querySelector<HTMLButtonElement>(".gui-sidebar-toggle");
+			const keeper =
+				anchor?.closest<HTMLElement>(".gui-side-keeper") ?? document.querySelector<HTMLElement>(".gui-side-keeper");
+			const panelId = keeper?.dataset.dockedPanel;
+			const surface =
+				panelId === "scheduled"
+					? keeper?.querySelector<HTMLElement>(".gui-scheduled-slot")
+					: panelId === "capability"
+						? keeper?.querySelector<HTMLElement>(".gui-capability-slot")
+						: keeper?.querySelector<HTMLElement>(
+								".gui-pane-side:not(.gui-scheduled-slot):not(.gui-capability-slot)",
+							);
+			morphSurfaceClip(
+				surface ?? null,
+				anchor,
+				"gui-sidebar-surface",
 				() => {
-					setSideCollapsed(collapsed => {
-						localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
-						return !collapsed;
-					});
+					setSideCollapsed(!sideCollapsed);
+					localStorage.setItem("musepi-gui-side", sideCollapsed ? "1" : "0");
 				},
-				{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
+				{
+					direction: sideCollapsed ? "from-anchor" : "to-anchor",
+					surfaceOnly: true,
+					extraClass: "gui-vt-left-col",
+				},
 			);
 		},
-		[dismissPeek],
+		[dismissPeek, sideCollapsed],
 	);
 	/** Hover only previews a collapsed panel; clicking a destination owns the
 	 *  commit, so the destination arrives WITH the panel its interaction lives
@@ -5595,6 +5606,7 @@ function AppInner(): ReactNode {
 						// docked destination, or the panel owned by the hovered
 						// rail button. CSS never guesses from destination flags.
 						data-panel={activePanelId ?? undefined}
+						data-docked-panel={togglePanelId ?? undefined}
 						data-peek={peekEligible ? "true" : undefined}
 						data-peek-open={peekOpen ? "true" : undefined}
 						onPointerEnter={peekEligible ? holdPeek : undefined}
@@ -5613,8 +5625,10 @@ function AppInner(): ReactNode {
 							if (!peekOpen || activePanelId === null) return;
 							const peeked = railDestinations.find(item => item.panelId === activePanelId);
 							if (!peeked) return;
-							if (peeked.active) revealSidePanel();
-							else peeked.onSelect();
+							if (peeked.active) {
+								if (peekAnchorRef.current) dismissPeek();
+								else revealSidePanel();
+							} else peeked.onSelect();
 						}}
 					>
 						{(!pageDestinationActive || secondTierPanelVisible) && (
