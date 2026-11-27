@@ -23,6 +23,22 @@
 /* The approval-mode CHIP shares the `.gui-approval` name with the card for
  * historical reasons; it is a footer control, not an alert, so it keeps its own
  * layout and must not inherit the card's material. */
+/* Approval-mode PILL (approval-mode-button.tsx) — the footer switch. Shares
+ * the `.gui-approval` class for layout only; this is the transparent slot that
+ * must never paint a surface (the chip inside owns the glass). The rule is
+ * explicit rather than relying on `.gui-approval` happening to be bare: it was
+ * deleted once and only the accident kept the chip flush.
+ *
+ * Was: the shared `.gui-approval` rule painted `--color-warning-soft` behind the
+ * chip, so the "borderless, no hairline ring" chip sat inside a visible coloured
+ * capsule anyway — reported 2026-09-20 as 审批胶囊外面还是有一圈颜色. */
+.gui-approval--pill {
+	padding: 0;
+	border-radius: 0;
+	background: transparent;
+	align-items: center;
+}
+
 .gui-approval {
 	display: flex;
 	align-items: center;
