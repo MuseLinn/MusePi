@@ -48,9 +48,14 @@ export type ExtensionKind =
 	| "file";
 
 /**
- * Extension state (active, disabled, or shadowed).
+ * Extension state.
+ *
+ * `discovered` marks an entry this host found but cannot load: another agent's
+ * plugin, reported so a person can see it and hand its source to the agent. It
+ * is never enabled, never disabled, and carries no enable switch — treating it
+ * as `disabled` would imply flipping a switch makes it work.
  */
-export type ExtensionState = "active" | "disabled" | "shadowed";
+export type ExtensionState = "active" | "disabled" | "shadowed" | "discovered";
 
 /**
  * Reason why an extension is disabled.

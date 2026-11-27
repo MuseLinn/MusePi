@@ -21,6 +21,7 @@ import {
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DiagnosticsView } from "./CapabilityCenter";
+import { addTextToChat } from "./composer/add-to-chat";
 import { HeightMorph } from "./HeightMorph";
 import { MarketplaceView } from "./MarketplaceView";
 import {
@@ -52,6 +53,18 @@ function kindLabel(kind: string): string {
 	const key = `ext kind ${kind}`;
 	const zh = t(key as TranslationKey);
 	return zh === key ? kind : zh;
+}
+
+/**
+ * The message a discovered entry hands to the composer.
+ *
+ * It names the plugin and where its source lives rather than describing what to
+ * do with it: the agent reads the directory with its own tools, and pre-writing
+ * a migration plan here would encode assumptions about another agent's plugin
+ * format that this host does not own.
+ */
+function discoveryPrompt(e: ExtensionItem): string {
+	return `Read the plugins declared by ${e.name} at ${e.path} and tell me which ones can be adapted to MusePi.`;
 }
 
 function stateLabel(e: ExtensionItem): string {
@@ -931,6 +944,18 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 										</div>
 										{(selected.config?.length || selected.configErrors?.length || selected.resources) && (
 											<PluginManifestSections key={selected.id} item={selected} rpc={rpc} />
+										)}
+										{selected.state === "discovered" && (
+											<div className="gui-ext-detail-actions">
+												<button
+													type="button"
+													className="gui-btn"
+													onClick={() => addTextToChat(discoveryPrompt(selected))}
+												>
+													<Icon name="ai-agent" className="h-3.5 w-3.5" />
+													{t("tools.discoveredAskAgent")}
+												</button>
+											</div>
 										)}
 										{selected.state === "shadowed" && (
 											<div className="gui-ext-detail-actions">

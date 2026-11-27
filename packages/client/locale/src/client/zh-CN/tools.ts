@@ -530,6 +530,8 @@ export const tools = {
 	"tools.extKindLsp": "语言服务器",
 	"tools.extKindFile": "文件工具与索引",
 	"tools.extShadowed": "被遮蔽",
+	"tools.extDiscovered": "已发现",
+	"tools.discoveredAskAgent": "让 agent 分析适配",
 	"tools.extLoadFailed": "加载失败",
 	"tools.extProviderDisabled": "已停用（来源关闭）",
 	"tools.extItemDisabled": "已停用",

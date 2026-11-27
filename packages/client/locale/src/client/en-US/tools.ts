@@ -549,6 +549,8 @@ export const tools = {
 	"tools.extKindLsp": "LSP",
 	"tools.extKindFile": "File Tools & Index",
 	"tools.extShadowed": "Shadowed",
+	"tools.extDiscovered": "Discovered",
+	"tools.discoveredAskAgent": "Ask the agent to adapt this",
 	"tools.extLoadFailed": "Load failed",
 	"tools.extProviderDisabled": "Disabled (source turned off)",
 	"tools.extItemDisabled": "Disabled",
