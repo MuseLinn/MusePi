@@ -179,6 +179,19 @@ The user's report was not "make the session card prettier" but "why does the pro
 3. **Extract on the second copy, not the fourth.** The two cards had already copied the same six declarations into one file. The recipe (`.gui-hover-card` + its parts) is that extraction, so a third hover card consumes it rather than adding a third copy.
 4. **Counter-rule: convergence never restyles behaviour.** A row gets a hover affordance only when clicking it does something. The project card's directory rows open, the session card's rows are read-only, and that asymmetry is correct and stays — the row grid converged, the hit area did not. Convergence is about finish, never about giving a surface an action it does not have.
 
+## One row shape (a rail that folds keeps its leading edge)
+
+A column that changes width between two states must keep every band on ONE padding chain, or each band joins a different formula and they drift apart. The rail had three (header, rows, footer), each split again into collapsed and wide variants — nine rules reconciling edges by hand, and the mark still sat ~45px right of the destinations.
+
+The fix is the shape KiroCrew uses: **one container inset, one row inset, and rows that only change width.**
+
+1. **Never centre a row in one state and start-align it in another.** Centring computes the glyph's x from the row's width, so widening moves it; start-aligning with a fixed pad keeps the leading edge while the width grows to the right.
+2. **One rule per element, both states.** A second declaration for `:not(.wide)` is the shape of this bug — the two rules then fight and the later one wins invisibly.
+3. **Bands stretch to the container.** A content-sized band is centred by its parent's `align-items`, which silently shifts it by half the container.
+4. **Keep the row HEIGHT constant.** A 2px difference per row accumulates: six destinations move the last one 10px, which reads as the column jumping.
+
+Measured contract: every band's leading glyph sits at the same x in both widths, and that x does not change when the rail folds. `scripts/gui-probe-scenarios/rail-bands.tsx` asserts it per theme.
+
 ## Entrance origin (grow from the trigger, never the centre)
 
 A surface opened by a control grows from the edge or corner touching it. A scale with no `transform-origin` uses the box centre, so the surface inflates out of its own middle, detached from the click.

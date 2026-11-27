@@ -195,7 +195,10 @@
 
 /* Collapsed keeps the same inline inset as the wide rail. 52 - 2*6 = 40, and a
  * 36px row centred in 40 sits at 8 — the exact x it paints at when expanded. */
-.gui-rail:not(.gui-rail--wide) {
+/* One inline inset in BOTH widths (KiroCrew's `px-2` on the rail body). The
+ * collapsed rail is 52px and the wide one 208px; only the rows' width changes,
+ * so no element's x is ever recomputed from a second formula. */
+.gui-rail {
 	padding-inline: 6px;
 }
 
@@ -203,9 +206,21 @@
  * rail may widen, so a fixed-strip host renders the plain empty band instead. */
 .gui-rail-head {
 	flex-shrink: 0;
+	/* Stretch to the rail's full content width. The rail centres its children
+	 * (`align-items: center`), which for a content-sized block means the header
+	 * is centred as a whole — the brand sat ~45px right of every destination
+	 * because the rail centred the BAND instead of aligning its contents. */
+	align-self: stretch;
 	display: flex;
 	align-items: center;
-	padding: 6px;
+	/* A band like the other two: the rail's inset is the only inline padding, and
+	 * the button inside spans the band so its inset is the ROW's inset. */
+	padding: 6px 0 0;
+}
+
+.gui-rail-head > * {
+	flex: 1;
+	min-width: 0;
 }
 
 .gui-rail-brand {
@@ -216,7 +231,9 @@
 	gap: 8px;
 	width: 100%;
 	min-width: 0;
-	padding: 6px;
+	/* The row's own inline pad, so the mark and the destination glyphs share one
+	 * left edge in both widths. */
+	padding: 8px 10px;
 	border: 1px solid transparent;
 	border-radius: var(--radius-md);
 	background: transparent;
@@ -358,42 +375,37 @@
 .gui-rail-group {
 	align-items: stretch;
 	width: 100%;
+	/* No inline padding: the rail's inset is the single horizontal baseline. */
 }
 
-.gui-rail--wide .gui-rail-group > * {
+.gui-rail-group > * {
 	width: 100%;
-}
-
-/* Collapsed, the footer's controls are squares: centre each one inside the
- * stretched group rather than letting `stretch` widen it. */
-.gui-rail:not(.gui-rail--wide) .gui-rail-group > * {
-	align-self: center;
-}
-
-/* Same for the destinations: a stretched column would widen the 36px buttons to
- * fill it, so each takes its own size and centres. */
-.gui-rail:not(.gui-rail--wide) .gui-rail-scroll > * {
-	align-self: center;
 }
 
 /* Footer controls become rows with their leading glyph: the avatar keeps its
  * 26px circle on the left instead of centring, and the instance pill keeps its
  * dot while gaining the room to breathe. Their existing 36×36 rail geometry is
  * scoped to the compact (collapsed) state, so nothing here fights it. */
-.gui-rail--wide .gui-account-btn {
+.gui-account-btn {
 	justify-content: flex-start;
 	width: 100%;
-	height: 34px;
-	padding: 0 6px;
+	height: 36px;
+	/* The destinations' pad, in both widths: the avatar starts where a glyph
+	 * starts, and widening the rail does not move it. */
+	padding: 0 10px;
 	border-radius: var(--radius-md);
 }
 
-.gui-rail--wide .gui-instance--compact .gui-instance-btn.gui-rail-btn {
+.gui-instance--compact .gui-instance-btn.gui-rail-btn {
 	width: 100%;
-	height: 34px;
+	height: 36px;
 	justify-content: flex-start;
-	padding: 0 8px;
+	padding: 0 10px;
 	gap: 8px;
+	border-radius: var(--radius-md);
+	/* A lone status dot reads as an unread indicator, not a button — the faint
+	 * outline is what makes the entry's affordance clear. */
+	border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
 }
 
 /* Destinations scroll: a pin-heavy rail must not push 设置 / collapse out of
@@ -424,27 +436,19 @@
 /* Rail-hosted instance pill: the full menu travels with it, only the label
  * and chevron are dropped. Beats `.gui-instance-btn` (loaded later from
  * gui-chat.css) on specificity so the button keeps rail geometry. */
-.gui-instance--compact .gui-instance-btn.gui-rail-btn {
-	width: 36px;
-	height: 36px;
-	padding: 0;
-	gap: 0;
-	justify-content: center;
-	flex-shrink: 0;
-	border-radius: var(--radius-md);
-	/* A lone status dot reads as an unread indicator, not a button — give
-	 * the compact instance entry a faint outline so its affordance is clear. */
-	border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
-}
-
 .gui-rail-btn {
 	position: relative;
-	width: 36px;
+	/* A row in both widths, never a centred square: centring computes the glyph's
+	 * x from the width, so widening the rail moves it. Full width with one inset
+	 * (KiroCrew's row shape) keeps the leading edge fixed. */
+	width: 100%;
 	height: 36px;
 	flex-shrink: 0;
 	display: inline-flex;
 	align-items: center;
-	justify-content: center;
+	justify-content: flex-start;
+	gap: 10px;
+	padding: 0 10px;
 	border: 1px solid transparent;
 	border-radius: var(--radius-md);
 	background: transparent;
@@ -483,17 +487,9 @@
  * square and never renders one, so neither state reserves the other's space.
  * The label truncates rather than wrapping: a long translated destination name
  * must not make one row taller than its neighbours. */
-.gui-rail-btn--wide {
-	width: 100%;
-	/* The SAME height as the collapsed square. A 36 → 34 step is invisible on its
-	 * own, but every row below it shifts up by that much, so six destinations
-	 * move the last row 10px: that accumulated shift is the "跳动" on open, not
-	 * any single row changing shape. */
-	height: 36px;
-	justify-content: flex-start;
-	gap: 10px;
-	padding: 0 8px;
-}
+/* Wide adds nothing to the row's geometry — the base row already carries the one
+ * inset both widths share. The modifier exists for hosts that style the widened
+ * state (and for the peek rule that binds to it). */
 
 /* The row's own geometry moves between states. Without this the rail widens over
  * 180ms while every row snaps to its new box in the same frame, which reads as

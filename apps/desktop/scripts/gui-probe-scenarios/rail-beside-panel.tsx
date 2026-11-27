@@ -94,7 +94,9 @@ const scenarios = {
 			// The strip keeps its geometry and becomes a card: same radius ladder
 			// as the pane, and a fill instead of transparent.
 			rail: { "box.w": 52, radius: "16px" },
-			firstButton: { "box.w": 36 },
+			// The row is a row in both widths now (KiroCrew's shape), not a
+			// centred 36px square, so its width is the rail's content box.
+			firstButton: { "box.w": { min: 36 } },
 			pane: { "box.w": PANE_W, radius: "16px" },
 		},
 	},
