@@ -1,0 +1,5 @@
+# Consistency record for gui-slider-spec.md / gui-slider-spec.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-slider-spec
+gui-slider-spec.md: 4319c13dde65c752d443c3e00cdc5f9a8ea106b3
+gui-slider-spec.zh-CN.md: 20ab3f33e0e6eb3f07d33b2df731d9c4ad2646cd

@@ -943,17 +943,9 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **含糊的 issue 先分诊、不臆测**：不少条目开头只是一句话现象（#7 最初报「第一条消息就 429」，实为 Cloud Code Assist 网关把开场的 `<system-conventions>` XML 块判成滥用；上面那条中文吞字也是同一形态）。先记录假设、补齐能区分根因的事实，再动手——没复现就补补丁，正是把回归带进版本的常见方式。
 - **文件编辑器要点**：预览体必须保持子块所依赖的 flex 列布局（`gui-chrome.css` 的 `.gui-filepane-preview-body` → `display:flex; flex-direction:column; flex:1; min-height:0`），否则自动撑高的 textarea 会把保存工具栏顶出面板；保存按钮还必须接 `FilePane.tsx` 里真实的 `saving` 状态，而不是常量 `false`。
 
-## 35. 语音输入第二轮：中文简繁归一、单相位听写状态机、输入框内波形反馈（2026-09-20）
+## 35. 语音输入第二轮
 
-- **Whisper 中文输出繁体——解码后用 OpenCC 归一**（`packages/coding-agent/src/stt/zh-hans.ts` + `asr-worker.ts`）：内置的 `onnx-community/whisper-small` q8 对 `zh` 偏向繁体（其中文训练语料偏台湾），而 transformers.js 与 sherpa-onnx 都没有 decoder prompt 可偏置文字方向，事后转换是唯一可靠修法。`normalizeChineseScript(text, language)` **仅在 language 钉住 `zh*` 时**执行 OpenCC `t→cn`（zh-CN 界面会自动播种 `language:"zh"`；TW/HK 用户用 auto 可保留繁体），懒加载 `opencc-js`（约 1 MB 词典，首次中文转写时才加载），加载失败降级为原文。调用点包住 `asr-worker.ts` 两条引擎路径的 `decodeSegment` 返回（批量与流式共用同一收敛点）。单测：`packages/coding-agent/test/stt-zh-hans.test.ts`（转换、简体/英文/未钉语言透传、空串安全）。
-- **双布尔失步——听写改单相位状态机**（`components/composer/use-dictation.ts`）：旧的两个 composer 各自维护 `dictating` + `transcribing` 两个布尔，点停止时两个 flag 同时清掉、而 transcribe RPC 这时才开始——整个转录等待期渲染成 idle（「按钮的反馈先结束、文字才凭空出现」）。`useDictation` 建模单相位 `idle → recording → transcribing → idle`；recording 中 toggle 乐观进入 transcribing，而 transcribing 中再 toggle 会真正调 `cancelActiveDictation()`——修掉旧代码「只清 UI、在途转录结果照样落进输入框」的泄漏。Esc 在任意非 idle 相位取消（document 捕获阶段），卸载同样取消，`optsRef` latest-ref 模式让回调始终读到最新 props 而不重建会话。`Composer.tsx` 与 `WelcomeComposer.tsx` 消费同一 hook（重复的 flag 逻辑已删除）。
-- **麦克风按钮只承动效，文案移进输入框**（`composer/action-buttons.tsx`）：`VoiceStatusStrip` 位于 textarea 上方，使用 30px 液态玻璃状态图标、明确阶段、录音计时和弹性临时文本区。录音态显示 13 根真实 RMS 驱动的波形，转写态改为品牌色处理环并移除波形；Esc 键帽保留取消提示。容器宽度不足时依次隐藏辅助波形和取消文字；减少动态效果时停止波形过渡与处理环旋转，保留静态等价信息。样式在 `gui-composer.css`，反馈经 `role="status"` / `aria-live="polite"` 播报。
-- **流式与机主门控共用 daemon 前端**（`lib/voice.ts`、`voice/frontend/*`、`stt/stt-controller.ts`）：桌面 PCM 块经 `voice.frontendStream*` 进入前端；`partial` 只更新预览，接受或灰区分段才插入文本。任一灰区分段都强制审阅并禁止自动提交，拒绝的音频不会进入 ASR。`strict` 只接受已确认语音；`off` 保持原 ASR 与提交触发行为。ASR 回调按分段 id 绑定，待推理队列最多四段，取消后迟到事件失效。TUI 在 `off` 下沿用原 ASR 流，其余模式共用前端。`LiveStreamingSession` 最多保留十分钟原始 PCM16；Silero 只给出样本区间：静音 700 ms 结束一句，句内停顿 160 ms 且已说满一秒只触发短语预览，30 秒强制结束一句。每句定稿都从原始音频带前置余量和尾部截取，不足一秒补静音；预览去掉句尾标点，节流从推理结束时计时。停止时只解码最后一句，再连接各句定稿，不再有整会话重解或 60 秒回退。
-- **一个全局会话，内部与外部两个视图**（`electron/global-dictation.cjs`、`components/dictation-hud.tsx`、`lib/global-dictation-target.ts`、`natives/dictation.rs`）：全局快捷键路由到 MusePi 焦点窗口中实际持有 DOM 焦点的输入框；内部会话一旦开始，即使焦点切走也保留所有权。其他应用使用不抢焦点的 HUD，以最多三行显示各句定稿加当前预览；只有 `voice.frontendStreamStop` 返回的最终文本会交给 `DesktopSession.typeText`。`dictation.globalTrigger` 选择 `toggle`（默认）或 Windows 上的 `hold`。hold 监听器只观察配置的快捷键，忽略注入事件并原样传递所有按键，只上报 press/release；先松开修饰键也会结束。安装失败会报告不可用并保留可用的 toggle 回退，dispose 同时关闭 hook 线程与 daemon 流会话。
-- **前端性能与降噪回退**：每段只取前三秒计算机主嵌入，完整音频仍交给 ASR。可选 DPDFNet 仅在估计峰值/噪声底比值低于 6 时运行，高信噪比语音保持原样，避免清晰语音被降噪损伤。真实 win32/x64 验收（18 个逻辑 CPU）记录前端 RTF 0.118、尾部 P95 488ms、干净语音相对 CER/WER 均为 0、旁人自动提交为 0；日志不含转写或声纹向量。
-- **声纹录入与本地模型生命周期**：`voice.speaker*` RPC 在当前 agent 目录只保存归一化向量与阈值，不保存原始录入音频。四段有效录入加独立验证后原子提交档案，取消或失败保留旧档案。渲染端录入弹窗建模 `idle / preparing / recording / processing / accepted / error / complete`，通过 `data-state` 发布状态；单段通过态保留 360ms，计时器会清理。失败只重试当前段，完成后恢复完成主操作。`stt.modelDelete` 与 `tts.modelDelete` 拒绝非法键和下载中的删除，先停止所属 worker，再只删除注册表解析出的缓存目录。设置页使用精确的 `Speech` 分组，缓存行提供确认删除，且当前页面不会立即自动重新下载。
-- **默认 ASR 工厂保留调用接收者**：`voice/frontend/client.ts` 必须以方法形式调用 `sttClient.startStream(...)`。抽离方法会丢失客户端实例，使输入框开始听写时私有 worker 初始化失败。
-- **MeloTTS 下载完整注册清单**：`ensureSherpaTtsFiles` 包含 `spec.ruleFsts` 声明的规则 FST，而非只下载模型和词典。`tts.modelDownload` 返回 `false` 时透传 worker 与下载诊断；仅在没有诊断时使用通用失败消息。
+daemon 语音前端统一持有流式断句、说话人闸门与定稿句文本；桌面全局听写在同一会话上增加内部与外部呈现。完整生命周期与验证记录见 [语音输入 ADR](adr/2026-09-20-voice-input-round-two.md)。
 
 ## 36. 画板：点击 chip 编辑的是 A0，而不是 A1 的粘贴副本（2026-09-20）
 
@@ -1252,60 +1244,7 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
 
 ## 50a. 会话投影：host 计算的读模型
 
-**契约**：需要日志派生状态的界面（上下文占用、花费、计数）读取 host 计算的投影，
-既不轮询 RPC，也不在客户端折叠域事件。
-
-- **单元**（`packages/coding-agent/src/session/session-projections.ts`）：`key`、
-  `init(seed)`、纯函数 `apply(state, event)`、`view(state)`、可选 `viewEquals`，
-  以及由 `sampleOn` 门槛控制的可选 `sample(state, source)`。无关事件必须返回同一
-  state 引用。
-- **谁负责注册**（2026-11-27）：注册表是一个 L2 **服务**
-  （`daemon/services/session-projection-service.ts`，key `sessionProjections`），
-  命名对齐 dsh 的 `ctx.sessionProjections`：负责驱动与存放，不认识任何具体域。
-  每个域服务在自己的 `start` 里注册它拥有的单元，注册表直接从宿主 Context 上读——
-  与 dsh 的 `static inject` 同一语义：`goals` 与 `planMode` 各自贡献
-  `sessionMode`，`session-tree` 贡献 `contextUsage`。依赖解析不到时直接抛错，
-  挂载失败，绝不让服务在缺读模型贡献的状态下跑起来。
-- **返回的是句柄，不是 disposer**（2026-11-27）：`register` 返回 dsh 的
-  `ProjectionHandle`——`stateOf(sessionId)`、`viewOf(sessionId)`、`dispose()`。
-  `stateOf` 正是让域不必在单元旁边再存一份自己声明的事实的机制；撤销后的单元什么
-  都不返回，因此停用的域读起来是「缺席」而不是「过期」。goal 与 plan 模式现在和
-  TUI 一样写进日志（每次切换 `appendModeChange`），并由 `restoreModeFromJournal`
-  在恢复时折叠回来——因为这两个开关只存在于 live AgentSession 上，新恢复的会话两者
-  都是关闭的。恢复的每个值都当作不可信输入：没有路径的 plan 保持关闭（提案流程无法
-  完成），写到一半的 goal 记录什么都不恢复。
-- **隔离**（2026-11-27）：`seed` 与 `applyEvent` 都按单元捕获异常。此前一个单元抛错
-  会中断整个循环，于是它之后的每个单元都从基线里静默消失——一个不完整的
-  `SessionStats` 就足以让模式徽标全部消失。无法播种的单元在该会话里缺席，下一次
-  `applyEvent` 会再给它一次机会。
-- **驱动**：`SessionProjectionRegistry.applyEvent` 对每个已提交 wire 事件把全部单元
-  折叠一次；只有 view 变化才产出 change。`sampleOn` 是边界集合（`turn_end`、
-  `agent_end`、`auto_compaction_end`、`session_leaf_moved`、`model_changed`），
-  单元只在这些边界读取实时锚定统计，绝不在流式 tick 上采样。
-- **载体**：baseline（`SessionProjectionSnapshot`）随 `session.resume` /
-  `session.subscribe` 下发；之后每个变化走 `kind:"projection"` 流信封，携带整值
-  （`{ changes: [{ key, value }] }`）。
-- **客户端**：`GuiSessionStore` 在 `GuiSessionState.projections` 保存
-  `ReadonlyMap<string, unknown>`；`useSessionProjection(store, key)` 是按键读取器，
-  `undefined` 表示该 key 尚未落地。
-- **取代关系**：`contextUsage` 现在走推送；更宽的 `/context` 字段（阈值、
-  snapcompact、breakdown）仍是用户显式打开时的一次性 RPC。
-- **没有 journal 记录的状态也走这条缝**（2026-11-27）：goal 与 plan 开关只存在于
-  live `AgentSession` 上——`session.setGoal` / `session.setPlan` 写入时不产生任何
-  wire 事件——所以「折叠已提交事件」的单元永远看不到它们。`sessionMode` 单元的
-  `apply` 因此是空的，全部工作在 `sample` 里完成，由 daemon 私有的
-  `session_mode_changed` 边界触发（与 `model_changed` 同一形状）。RPC handler 写完后
-  调用 `DaemonSessionHost.publishSessionModeProjection`，所以变化与被调用方拿到应答
-  在同一 tick 内推送——包括由 TUI 或另一台设备翻动的开关，而此前客户端只能靠轮询
-  `session.modes` 才知道。`init` 从实时源播种，新打开的界面在 baseline 里就是真实
-  开关状态，而不是等到下次写入前一直显示「无目标、无计划」。goal 关闭时投影为
-  `null` 而非一条 disabled 记录，因为徽标以 `goal === null` 判型。
-
-**验证**：`packages/coding-agent/test/session-projections.test.ts`（折叠、重试替换、
-边界采样）、`packages/coding-agent/test/daemon/session-mode-projection.test.ts`
-（模式写入即推送、无关事件保持安静、同值不重复推送）、
-`apps/desktop/test/session-projection-store.test.tsx`（resume 播种、推送变更、按键
-重渲染）。
+`SessionProjectionService` 统一持有投影注册、隔离与发布；goal、plan 和上下文用量各自注册单元，并在没有 journal 事件的写入后主动发布。完整归属与投递契约见 [会话投影 ADR](adr/2026-11-27-session-projections.md)。
 
 ## 51. HTML 卡片答案回读（2026-10-18）
 
@@ -1447,7 +1386,7 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 - **HTML 卡片标注与宽表**:`widgets/html.tsx` 复用 `annotationOverlayLabels()`，会话内 HTML 卡片与浏览器页面走同一套结构化标注 panel；表格加宽按内容 hash 写入 `musepi-gui-wide-tables`，重新挂载后恢复，超过 200 条裁剪。
 - **MCP OAuth 服务**:`McpOAuthService` 提供 `mcp.oauth.start/status/cancel`，复用 `MCPOAuthFlow`（回调服务器/PKCE/DCR）、`analyzeAuthError`/`discoverOAuthEndpoints` 与 `mcpOAuthCredentialId`；成功后把 credential 写入 `modelRegistry.authStorage`，`reloadMcpConnectors()` 先 `authStorage.reload()` 再 reconcile，多个 workspace 的 manager 才能看到新 grant。只支持浏览器回调，不提供手工 code 输入；5 分钟未回调按错误结束。
 - **MCP 授权卡片**:工具调用收到 MCP 的 `401` 挑战后停在 `MCPManager.reconnectServer`。按 workspace 共享的 manager 通过 auth handler 向 `McpOAuthService` 要一条流程，并只把 `mcp-auth-request`（服务器、flow、授权 URL）推给发起会话——session id 来自工具上下文，同 workspace 的其他标签页拿不到这个 URL。`mcp-auth-request-end` 携带 `success | error | cancelled`。`ChatView` 在输入框上方的 pending 槽位渲染 `McpAuthCard`，位置与审批、ask、密钥卡同属容器决定，卡片本身没有 placement 参数。点授权用系统浏览器打开 URL，grant 落在 daemon 回调上；成功后用新凭证重连并重试那次被暂停的调用，取消走 `mcp.oauth.cancel`，停止本轮会中止流程并清掉卡片。会话 snapshot 带 `pendingMcpAuth`，重连后卡片能恢复。
-- **子代理对话改成推送，不再轮询（2026-11-27）**：子代理面板原先每 1.2 秒按字节游标读一次子会话的 JSONL（`agents.transcript`），因为只有 progress 与 lifecycle 两种帧会送到 GUI——执行器其实一直在 `TASK_SUBAGENT_EVENT_CHANNEL` 上发出每一帧 assistant 文本、思考块和工具卡，只是到了 daemon 就没有再往下走。现在这条通道以 `agent-event`（`{ agentId, event }`）转发，`SessionScopedEventBus` 会给它打上归属会话，所以一个会话的子代理帧不会漏进另一个会话的流；信封刻意带 `seq: 0`：这些帧不是父会话的 journal 记录，真给它一个 seq 会推进客户端水位，或者引发 catchup/resync 风暴（`global-event` 这个 kind 存在的同一个 P0-1 理由）。`apps/desktop/src/lib/agent-transcripts.ts` 为每个被观察的 agent 维护一个 `MaterializedView`——和主转录同一套投影，因此不需要第二份解析器——由两个不会重复的来源喂入：`fromSnapshot` 恢复历史并原样保留 id，实时帧则以同样的 `role:timestamp` / `toolResult:<id>` 键做 upsert。只有已挂载的视图会保留 agent id，所以一个会话即使 spawn 很多子代理，也不会堆积没人读的投影。剩下的历史读取是一次性播种（带次数上限的重试，刚 spawn 的子代理可能还没有文件），不是轮询。
+- **子代理对话改成推送，不再轮询**：子代理面板原先每 1.2 秒按字节游标读一次子会话的 JSONL（`agents.transcript`），因为只有 progress 与 lifecycle 两种帧会送到 GUI——执行器其实一直在 `TASK_SUBAGENT_EVENT_CHANNEL` 上发出每一帧 assistant 文本、思考块和工具卡，只是到了 daemon 就没有再往下走。现在这条通道以 `agent-event`（`{ agentId, event }`）转发，`SessionScopedEventBus` 会给它打上归属会话，所以一个会话的子代理帧不会漏进另一个会话的流；信封刻意带 `seq: 0`：这些帧不是父会话的 journal 记录，真给它一个 seq 会推进客户端水位，或者引发 catchup/resync 风暴（`global-event` 这个 kind 存在的同一个 P0-1 理由）。`apps/desktop/src/lib/agent-transcripts.ts` 为每个被观察的 agent 维护一个 `MaterializedView`——和主转录同一套投影，因此不需要第二份解析器——由两个不会重复的来源喂入：`fromSnapshot` 恢复历史并原样保留 id，实时帧则以同样的 `role:timestamp` / `toolResult:<id>` 键做 upsert。只有已挂载的视图会保留 agent id，所以一个会话即使 spawn 很多子代理，也不会堆积没人读的投影。剩下的历史读取是一次性播种（带次数上限的重试，刚 spawn 的子代理可能还没有文件），不是轮询。
 - **子代理会话身份（`session.agents` / `agents.transcript`）**：子代理 transcript 有三个 id——文件名（`agents.*` RPC 寻址的 agent id）、`session` 头里的 id（`session.list` 行与 GUI 打开的会话 id）、`session_init.agent`（子代理定义名）。右栏名册改由父会话产物目录的磁盘行（`knownSessions` 的 subagent 行）派生，注册表只补实时 status/activity：一次性子代理跑完即 unregister，纯注册表口径会在用户回头看的时候刚好变空。行上带真实的子会话 id，主名是实例标签（`displayName`），agent 定义名放在 `agentName` 里当类型标签——定义名绝不作为标题，因为同一类型的多个 spawn 共用它。同时过滤 advisor 行以及被打开成主会话的 `Main-*` ref。`session_init` 携带整段 systemPrompt、`agent` 是最后一个字段（生产环境常 >100 KB），因此 agent 名走一次有界、按路径缓存的读取（`session/subagent-agent-name.ts`），而不是列表前缀；`agents.transcript` 在注册表没有 ref 时回退到 `<parentBase>/<agentId>.jsonl`（再按 header id 兜底），已结束子代理的转录因此仍可读。侧栏子会话行标注 agent 名，`agentCount` 按磁盘父子关系统计整份列表——`sessionId` 定向读取的父会话行仍报出子代理数而不是 0（顾问行不计入；`apps/desktop/test/session-list-scope.test.ts`）。
 
 ## 会话导入：身份、标题与工作区都取自源记录（2026-11-18）

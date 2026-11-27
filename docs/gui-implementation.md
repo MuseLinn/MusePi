@@ -948,17 +948,9 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 - **Ambiguous issue reports are triaged, not guessed**: several entries arrive as a one-line symptom (#7 came in as "429 on the first message" and turned out to be Cloud Code Assist flagging the opening `<system-conventions>` XML block as abuse; the open item above has the same shape). Record the hypothesis, ask for the discriminating facts, then fix — patching an unreproduced symptom is how regressions get shipped.
 - **File editor details**: the preview body must stay the flex column its children were written for (`gui-chrome.css` `.gui-filepane-preview-body` → `display:flex; flex-direction:column; flex:1; min-height:0`), otherwise the autosizing textarea grows to content height and pushes the save footer off-pane; the footer's save button also needs the real `saving` state from `FilePane.tsx` rather than a constant `false`.
 
-## 35. Voice input round two: zh script normalization, single-phase dictation state, in-input waveform feedback (2026-09-20)
+## 35. Voice input round two
 
-- **Whisper-zh outputs Traditional Chinese — normalize with OpenCC after decode** (`packages/coding-agent/src/stt/zh-hans.ts` + `asr-worker.ts`): the bundled `onnx-community/whisper-small` q8 skews Traditional for `zh` (its zh training corpus leans TW) and neither transformers.js nor sherpa-onnx exposes a decoder prompt to bias script direction, so post-decode conversion is the only reliable fix. `normalizeChineseScript(text, language)` runs OpenCC `t→cn` **only when the language is pinned to a `zh*` code** (the zh-CN UI seeds `language:"zh"` automatically; TW/HK users on `auto` keep Traditional), lazy-imports `opencc-js` (~1 MB dictionary, loaded on first zh transcript) and degrades to the original text on load failure. The call wraps BOTH engine paths' `decodeSegment` return in `asr-worker.ts` (batch and streaming share the convergence point). Unit tests: `packages/coding-agent/test/stt-zh-hans.test.ts` (conversion, passthrough for Simplified/English/unpinned-language, empty-string safety).
-- **Two booleans desynced — dictation is a single phase now** (`components/composer/use-dictation.ts`): the old composers kept `dictating` + `transcribing` and the stop click cleared BOTH while the transcribe RPC was only starting, so the whole transcription wait rendered as idle ("the button's feedback ends before any text appears"). `useDictation` models one `idle → recording → transcribing → idle` phase; `toggle` from recording enters transcribing optimistically, and toggling DURING transcribing calls `cancelActiveDictation()` — fixing the old leak where dismissing the UI still let the in-flight result land in the input. Esc cancels from any non-idle phase (document capture), unmount cancels too, and an `optsRef` latest-ref pattern keeps callbacks reading fresh props without rebuilding the session. Both `Composer.tsx` and `WelcomeComposer.tsx` consume the same hook (the duplicated flag logic is gone).
-- **The mic capsule keeps motion only; the copy moved into the input** (`composer/action-buttons.tsx`): `VoiceStatusStrip` renders above the textarea as a 30px liquid-glass state icon, explicit phase, recording timer, and flexible live-text region. Recording shows 13 RMS-driven bars; transcription switches to an accent processing ring and removes the wave. An Esc keycap retains the cancel hint. Narrow containers hide the auxiliary wave and then the cancel label; reduced motion stops wave transitions and ring rotation while preserving static equivalents. Styles live in `gui-composer.css`, and feedback is announced via `role="status"` / `aria-live="polite"`.
-- **Streaming and speaker gating share the daemon frontend** (`lib/voice.ts`, `voice/frontend/*`, `stt/stt-controller.ts`): desktop PCM chunks flow through `voice.frontendStream*`; partial events update only the preview, and accepted or uncertain segments insert text. Any uncertain segment forces review and blocks auto-submit, while rejected audio never reaches ASR. `strict` accepts only confirmed speech; `off` keeps the existing ASR/submit-trigger behavior. Stream sessions bind ASR callbacks by segment id, cap pending inference at four, and invalidate late events on cancellation. TUI uses the original ASR stream in `off` and the shared frontend otherwise. `LiveStreamingSession` retains up to ten minutes of raw PCM16. Silero only emits sample ranges: 700 ms of silence ends a sentence, a 160 ms pause after at least one second triggers a display-only phrase preview, and 30 seconds force-ends a sentence. Each final decode slices raw audio with pre-roll/tail and pads clips under one second; previews drop terminal punctuation and are throttled from decode completion. Stop decodes only the trailing sentence and then joins finalized sentence texts, with no whole-session re-decode or 60-second fallback.
-- **One global session has internal and external views** (`electron/global-dictation.cjs`, `components/dictation-hud.tsx`, `lib/global-dictation-target.ts`, `natives/dictation.rs`): the global accelerator routes to the DOM-focused composer in the focused MusePi window, and an active internal session retains ownership after focus moves. Other applications use the non-focusable HUD, which shows finalized sentences plus the active partial in a bounded three-line transcript; only `voice.frontendStreamStop` final text reaches `DesktopSession.typeText`. `dictation.globalTrigger` selects `toggle` (default) or `hold` on Windows. The hold monitor observes only the configured chord, ignores injected events, passes every key through, and emits only press/release; modifier-first release also finishes. Installation failure reports unavailable and leaves a working toggle fallback, while dispose closes both the hook thread and daemon stream.
-- **Frontend performance and enhancement fallback**: speaker embeddings use at most the first three seconds of each segment while ASR retains the complete audio. Optional DPDFNet runs only when the estimated peak/noise-floor ratio is below 6, so high-SNR speech bypasses enhancement instead of being degraded. The real win32/x64 acceptance run (18 logical CPUs) measured frontend RTF 0.118, tail P95 488 ms, clean relative CER/WER 0, and zero non-target auto-submits; no transcript or embedding was logged.
-- **Enrollment and local model lifecycle**: `voice.speaker*` RPCs persist only normalized embeddings and thresholds under the current agent directory, never raw enrollment audio. Four accepted clips plus independent verification commit a profile atomically; cancel/failure preserves the previous profile. The renderer enrollment dialog models `idle / preparing / recording / processing / accepted / error / complete`, publishes the state through `data-state`, and keeps a 360 ms acceptance phase whose timer is cleaned up. Only the current clip is retried; completion restores the primary Done action. `stt.modelDelete` and `tts.modelDelete` reject unknown keys and active downloads, stop the owning worker, then remove only the registry-resolved cache directory. The settings page uses the exact `Speech` group, and cached rows expose confirmed deletion without an immediate automatic refetch.
-- **The default ASR factory retains its receiver**: `voice/frontend/client.ts` must call `sttClient.startStream(...)` as a method. Extracting the method loses the client instance and makes its private worker initialization fail when the composer starts dictation.
-- **MeloTTS downloads its complete registry manifest**: `ensureSherpaTtsFiles` includes the rule FSTs declared by `spec.ruleFsts`, not only the model and dictionary files. `tts.modelDownload` propagates worker and download diagnostics when it returns `false`; replace the error with the generic failure message only when no diagnostic exists.
+The daemon voice frontend owns streaming segmentation, speaker gating and final sentence text; desktop global dictation adds internal and external presentations over that same session. The complete lifecycle and verification record lives in [the voice input ADR](adr/2026-09-20-voice-input-round-two.md).
 
 ## 36. Sketch board: reopening a chip edits A0, not a pasted copy of A1 (2026-09-20)
 
@@ -1353,71 +1345,7 @@ emit per batch, zero for foreign frames), `test/use-store-selector.test.tsx`
 
 ## 50a. Session projections: host-computed read models
 
-**Contract:** a surface that needs log-derived session state (context occupancy,
-spend, counts) reads a host-computed projection — it never polls an RPC and never
-folds domain events itself.
-
-- **Unit** (`packages/coding-agent/src/session/session-projections.ts`): a `key`,
-  `init(seed)`, pure `apply(state, event)`, `view(state)`, optional `viewEquals`,
-  and an optional `sample(state, source)` gated by `sampleOn`. Unrelated events
-  must return the same state reference.
-- **Who registers** (2026-11-27): the registry is an L2 **service**
-  (`daemon/services/session-projection-service.ts`, key `sessionProjections`),
-  named after dsh's `ctx.sessionProjections`. It owns driving and storage and
-  names no domain. Each domain service registers the unit it owns, from its own
-  `start`, reading the registry straight off the host context the way dsh's
-  `static inject` works: `goals` and `planMode` both contribute `sessionMode`,
-  `session-tree` contributes `contextUsage`. An unresolvable dependency throws,
-  so the mount fails instead of the service running without its read-model
-  contribution.
-- **A handle, not a disposer** (2026-11-27): `register` returns dsh's
-  `ProjectionHandle` — `stateOf(sessionId)`, `viewOf(sessionId)`, `dispose()`.
-  `stateOf` is what stops a domain from keeping a second copy of the facts it
-  declared; a withdrawn unit serves nothing, so a disabled domain reads as
-  absent rather than stale. Goal and plan mode are recorded in the journal like
-  the TUI does (`appendModeChange` on every switch) and folded back on resume by
-  `restoreModeFromJournal`, because the switches live only on the live
-  AgentSession and a fresh resume starts with both off. Every restored value is
-  treated as untrusted: plan without a path stays off (the proposal flow could
-  never complete) and a half-written goal record restores nothing.
-- **Isolation** (2026-11-27): `seed` and `applyEvent` catch per unit. A throw
-  inside one unit used to abort the whole loop, so every later unit silently
-  vanished from the baseline — a partial `SessionStats` object was enough to
-  lose the mode badges entirely. A unit that cannot seed is absent for that
-  session and the next `applyEvent` gives it another chance.
-- **Drive**: `SessionProjectionRegistry.applyEvent` folds every unit once per
-  committed wire event; only a changed view yields a change. `sampleOn` is the
-  boundary set (`turn_end`, `agent_end`, `auto_compaction_end`,
-  `session_leaf_moved`, `model_changed`) where the unit may read live anchored
-  stats — never per streaming tick.
-- **Carrier**: a baseline (`SessionProjectionSnapshot`) rides `session.resume` /
-  `session.subscribe`; every later change travels as a `kind:"projection"`
-  stream envelope with whole values (`{ changes: [{ key, value }] }`).
-- **Client**: `GuiSessionStore` keeps `projections: ReadonlyMap<string, unknown>`
-  in `GuiSessionState`; `useSessionProjection(store, key)` is the key-addressed
-  reader. `undefined` means the key has not landed.
-- **What it replaces**: `contextUsage` is now pushed; the wide `/context` facets
-  (threshold, snapcompact, breakdown) stay a one-off user-initiated RPC.
-- **State with no journal record still rides the seam** (2026-11-27): goal and
-  plan switches live only on the live `AgentSession` — `session.setGoal` /
-  `session.setPlan` write them with no wire event — so a unit that folds
-  committed events would never see them. The `sessionMode` unit therefore has an
-  empty `apply` and does all its work in `sample`, gated on a daemon-only
-  `session_mode_changed` boundary (the same shape as `model_changed`). The RPC
-  handlers call `DaemonSessionHost.publishSessionModeProjection` after writing,
-  so the change is pushed in the same tick that answered the caller — including
-  a switch flipped by the TUI or another device, which a client previously could
-  only learn by polling `session.modes`. `init` seeds from the live source so a
-  freshly opened surface shows the real switches in its baseline instead of
-  "no goal, no plan" until the next write. Goal off projects as `null`, not as a
-  disabled record, because the badge keys off `goal === null`.
-
-**Verification:** `packages/coding-agent/test/session-projections.test.ts`
-(fold, retry replacement, boundary sample),
-`packages/coding-agent/test/daemon/session-mode-projection.test.ts` (mode write
-publishes, unrelated events stay quiet, unchanged sample publishes nothing),
-`apps/desktop/test/session-projection-store.test.tsx` (resume seed, pushed
-change, keyed re-render).
+`SessionProjectionService` owns projection registration, isolation and publication. Goal, plan and context-usage domains register their own units and publish after writes that have no journal event. The detailed ownership and delivery contract lives in [the session projections ADR](adr/2026-11-27-session-projections.md).
 
 ## 51. HTML card answer readback (2026-10-18)
 
@@ -1572,7 +1500,7 @@ For the current display-context transport, FilePane quote producer, session subt
 - **HTML card annotations and wide tables**: `widgets/html.tsx` reuses `annotationOverlayLabels()`, so HTML cards and browser pages share one structured annotation panel. Wide-table preferences persist by content hash in `musepi-gui-wide-tables`, restored on remount and capped at 200 entries.
 - **MCP OAuth service**: `McpOAuthService` exposes `mcp.oauth.start/status/cancel` and reuses `MCPOAuthFlow` (callback server, PKCE, DCR), `analyzeAuthError`/`discoverOAuthEndpoints`, and `mcpOAuthCredentialId`. On success the credential lands in `modelRegistry.authStorage`, and `reloadMcpConnectors()` calls `authStorage.reload()` before reconciling so managers for other workspaces see the new grant. Only the browser callback is supported — no manual code entry — and a five-minute miss ends in an explicit error.
 - **MCP authorization card**: a tool call that receives an MCP `401` challenge parks in `MCPManager.reconnectServer`. The shared per-workspace manager's auth handler asks `McpOAuthService` for a flow and pushes `mcp-auth-request` (server, flow, authorization URL) to the requesting session only — the handler reads the session id from the tool context, so sibling tabs never receive the URL. `mcp-auth-request-end` carries `success | error | cancelled`. `ChatView` renders `McpAuthCard` in the same pending-interaction slot as approval/ask/secret; placement belongs to the container and the card has no placement prop. Authorizing opens the URL in the OS browser and the grant lands on the daemon callback; success reconnects with the fresh credential and retries the parked call, cancel calls `mcp.oauth.cancel`, and stopping the turn aborts the flow and clears the card. The session snapshot carries `pendingMcpAuth`, so a reconnect restores it.
-- **Subagent conversations are pushed, not polled (2026-11-27)**: the subagent panel used to read its child's JSONL on a 1.2s timer (`agents.transcript` with a byte cursor) because only progress and lifecycle frames reached the GUI — the executor's `TASK_SUBAGENT_EVENT_CHANNEL`, which carries every assistant frame, thinking block and tool card, stopped at the daemon. The channel is now forwarded as `agent-event` (`{ agentId, event }`), `SessionScopedEventBus` stamps it with the owning session so one session's subagent cannot leak into another's stream, and the envelope carries `seq: 0` deliberately: those frames are not the parent's journal records, and a real seq would move the client's watermark or trigger catchup/resync storms (the same P0-1 hazard the `global-event` kind exists to avoid). `apps/desktop/src/lib/agent-transcripts.ts` keeps one `MaterializedView` per watched agent — the same projection the main transcript uses, so there is no second parser — fed by two sources that cannot double up: `fromSnapshot` restores history with its ids kept verbatim, and live frames upsert onto those same `role:timestamp` / `toolResult:<id>` keys. Only a mounted view retains its agent id, so a session spawning many subagents accumulates no projections nobody reads. The remaining history read is a one-shot seed with bounded retries (a just-spawned child may have no file yet), not a poll.
+- **Subagent conversations are pushed, not polled**: the subagent panel used to read its child's JSONL on a 1.2s timer (`agents.transcript` with a byte cursor) because only progress and lifecycle frames reached the GUI — the executor's `TASK_SUBAGENT_EVENT_CHANNEL`, which carries every assistant frame, thinking block and tool card, stopped at the daemon. The channel is now forwarded as `agent-event` (`{ agentId, event }`), `SessionScopedEventBus` stamps it with the owning session so one session's subagent cannot leak into another's stream, and the envelope carries `seq: 0` deliberately: those frames are not the parent's journal records, and a real seq would move the client's watermark or trigger catchup/resync storms (the same P0-1 hazard the `global-event` kind exists to avoid). `apps/desktop/src/lib/agent-transcripts.ts` keeps one `MaterializedView` per watched agent — the same projection the main transcript uses, so there is no second parser — fed by two sources that cannot double up: `fromSnapshot` restores history with its ids kept verbatim, and live frames upsert onto those same `role:timestamp` / `toolResult:<id>` keys. Only a mounted view retains its agent id, so a session spawning many subagents accumulates no projections nobody reads. The remaining history read is a one-shot seed with bounded retries (a just-spawned child may have no file yet), not a poll.
   - EN: see the paragraph above (this entry is authored in English).
 - **Subagent session identity (`session.agents` / `agents.transcript`)**: a child transcript carries three ids — the file name (the agent id every `agents.*` RPC addresses), the `session` header id (the `session.list` row and the id the GUI opens), and `session_init.agent` (the subagent definition). The right-pane roster is now derived from the parent's on-disk product directory (`knownSessions` subagent rows), with the registry only contributing live status/activity: a finished one-shot subagent is unregistered, so a registry-only roster emptied exactly when users went back to look. Rows carry the real child session id, an instance label as `displayName`, and the agent definition as `agentName` — the definition is a type label beside the title, never the title itself, because every spawn of one definition shares it. Advisor rows plus `Main-*` refs of children opened as conversations are filtered out. `session_init` holds the whole system prompt with `agent` as its last field (>100 KB in production), so the name comes from one bounded, path-cached read (`session/subagent-agent-name.ts`) instead of the list prefix; `agents.transcript` falls back to `<parentBase>/<agentId>.jsonl` (plus a header-id match) when the registry has no ref, which is what keeps a finished child's transcript readable. The sidebar badges child rows with the agent name, and `agentCount` counts the disk parent/child relation over the whole listing — a `sessionId`-scoped read still reports a parent's subagent count instead of 0 (advisors never inflate it; `apps/desktop/test/session-list-scope.test.ts`).
 
