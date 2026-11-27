@@ -78,9 +78,9 @@ describe("SessionProjectionService", () => {
 		expect(service.keys()).toEqual(["demo"]);
 	});
 
-	test("a disposer withdraws its unit from the baseline", () => {
+	test("a handle withdraws its unit from the baseline", () => {
 		const service = new SessionProjectionService(new SessionProjectionRegistry());
-		const dispose = service.register({
+		const handle = service.register({
 			key: "demo",
 			init: () => ({ n: 1 }),
 			apply: state => state,
@@ -89,8 +89,39 @@ describe("SessionProjectionService", () => {
 		seed(service);
 		expect(service.snapshot("s1")?.values.demo).toBeDefined();
 
-		dispose();
+		handle.dispose();
 		expect(service.keys()).toEqual([]);
 		expect(service.snapshot("s1")?.values.demo).toBeUndefined();
+	});
+
+	test("the handle reads the state it declared, like dsh's stateOf", () => {
+		// This is what keeps a domain from keeping a second copy: it asks the
+		// unit it contributed instead of caching the same facts beside it.
+		const service = new SessionProjectionService(new SessionProjectionRegistry());
+		const handle = service.register<{ n: number }>({
+			key: "demo",
+			init: () => ({ n: 7 }),
+			apply: state => state,
+			view: state => state,
+		});
+		seed(service);
+
+		expect(handle.stateOf("s1")).toEqual({ n: 7 });
+		expect(handle.viewOf("s1")).toEqual({ n: 7 });
+		expect(handle.stateOf("unknown-session")).toBeUndefined();
+	});
+
+	test("a withdrawn handle stops serving state", () => {
+		const service = new SessionProjectionService(new SessionProjectionRegistry());
+		const handle = service.register<{ n: number }>({
+			key: "demo",
+			init: () => ({ n: 7 }),
+			apply: state => state,
+			view: state => state,
+		});
+		seed(service);
+		handle.dispose();
+		// A disabled domain must look absent, not stale.
+		expect(handle.stateOf("s1")).toBeUndefined();
 	});
 });

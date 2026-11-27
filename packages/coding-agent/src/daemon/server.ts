@@ -1044,7 +1044,6 @@ export class DaemonServer {
 		);
 		this.#services.register(
 			new SessionService({
-				registerProjections: definition => projectionService.register(definition),
 				knownSessions: () => this.#host.knownSessions(),
 				getSession: sessionId => this.#host.get(sessionId),
 				snapshot: sessionId => this.#host.snapshot(sessionId),

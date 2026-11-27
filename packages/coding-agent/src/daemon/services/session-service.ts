@@ -1,5 +1,10 @@
+import type { Context } from "@deepseek-ai/cordis";
 import type { SessionProjectionSnapshot } from "@musepi/pi-wire";
-import { contextUsageProjectionDefinition, type ProjectionDefinition } from "../../session/session-projections";
+import {
+	contextUsageProjectionDefinition,
+	type ProjectionDefinition,
+	type ProjectionHandle,
+} from "../../session/session-projections";
 import type { DaemonService } from "./types";
 
 /** The projection domains this service owns: context occupancy, which is folded
@@ -111,10 +116,6 @@ export interface SessionServiceDeps {
 	/** 已删工作区证据：树的列表投影与 session.list 同一口径（已删工作区的
 	 *  会话不出现在任何列表）。 */
 	deletedWorkspaces?(): Promise<DeletedWorkspaces>;
-	/** 把本服务拥有的会话状态域注册到投影服务上（见文件的「启停」段）。
-	 *  返回 disposer，`stop` 时撤销——dsh 里 goal/plan 各自在自己领域注册，
-	 *  这里同理：注册点跟着拥有状态的代码走，注册表不认识任何具体域。 */
-	registerProjections?<S>(definition: ProjectionDefinition<S>): () => void;
 }
 
 export class SessionService implements DaemonService {
@@ -126,24 +127,25 @@ export class SessionService implements DaemonService {
 	} as const;
 
 	readonly #deps: SessionServiceDeps;
-	readonly #projectionDisposers: (() => void)[] = [];
+	readonly #projections: ProjectionHandle<unknown>[] = [];
 
 	constructor(deps: SessionServiceDeps) {
 		this.#deps = deps;
 	}
 
-	/** Register this service's session-state domains. `stop` withdraws them, so
-	 *  a stopped service leaves no keys in the projection baseline. */
-	start(): void {
-		const register = this.#deps.registerProjections;
-		if (!register) return;
+	/** dsh's `static inject`: resolve the projection service from the host
+	 *  context and register the domain this service owns (context usage).
+	 *  `stop` withdraws it, so a stopped service leaves no key in the baseline. */
+	start(ctx: Context): void {
+		const projections = ctx.sessionProjections;
+		if (!projections) throw new Error("session-tree: sessionProjections service is not mounted");
 		for (const definition of SESSION_STATE_PROJECTIONS) {
-			this.#projectionDisposers.push(register(definition));
+			this.#projections.push(projections.register(definition));
 		}
 	}
 
 	stop(): void {
-		for (const dispose of this.#projectionDisposers.splice(0)) dispose();
+		for (const handle of this.#projections.splice(0)) handle.dispose();
 	}
 
 	/** RPC session.tree：跨会话树（roots 无 parent；label 60 字截断；

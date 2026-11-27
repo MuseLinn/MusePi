@@ -55,6 +55,25 @@ export interface ProjectionDefinition<S> {
 	sample?(state: S, source: ProjectionSampleSource): S;
 }
 
+/**
+ * What a domain gets back from `register` (dsh's `ProjectionHandle`).
+ *
+ * The handle is how a domain READS the state it declared instead of keeping a
+ * second copy: `stateOf` folds that session's committed events through the
+ * unit, `viewOf` returns the client-facing value, and `dispose` unregisters.
+ * Holding a WeakMap beside the unit instead would create a third source of
+ * truth, which is why dsh only ever caches process-local ephemera there.
+ */
+export interface ProjectionHandle<S> {
+	/** The unit's folded state for one session; undefined when the session is
+	 *  unknown to the registry or the fold failed. */
+	stateOf(sessionId: string): S | undefined;
+	/** The unit's client view for one session. */
+	viewOf(sessionId: string): unknown;
+	/** Unregister the unit (withdraws its key from every future baseline). */
+	dispose(): void;
+}
+
 /** Wire events plus the daemon-only facts that have no wire payload of their
  *  own: a `model_changed` route switch, and a `session_mode_changed` goal/plan
  *  write. The unit samples the live value when one arrives. */
@@ -306,26 +325,39 @@ export class SessionProjectionRegistry {
 	readonly #installs = new Map<string, object>();
 	readonly #sessions = new Map<string, SessionEntryState>();
 
-	/** Register one unit. Returns a disposer so a plugin fiber can own the
-	 *  registration: a disabled unit stops folding and drops out of every
-	 *  baseline, and its key disappears from client snapshots.
+	/** Register one unit. Returns a handle so the owning domain can READ the
+	 *  state it declared (dsh's `ProjectionHandle`) and unregister on teardown:
+	 *  a withdrawn unit stops folding, drops out of every baseline, and its key
+	 *  disappears from client snapshots.
 	 *
 	 *  Ownership is tracked by an install token, not by the definition object:
 	 *  the same unit mounted twice (a plugin reload) yields two registrations
-	 *  over one shared definition, and the earlier disposer must not withdraw
-	 *  the later install. */
-	register<S>(definition: ProjectionDefinition<S>): () => void {
+	 *  over one shared definition, and the earlier handle must not withdraw the
+	 *  later install. */
+	register<S>(definition: ProjectionDefinition<S>): ProjectionHandle<S> {
 		const token = {};
 		this.#installs.set(definition.key, token);
 		this.#definitions.set(definition.key, definition as ProjectionDefinition<unknown>);
-		return () => {
-			if (this.#installs.get(definition.key) !== token) return;
-			this.#installs.delete(definition.key);
-			this.#definitions.delete(definition.key);
-			for (const entry of this.#sessions.values()) {
-				entry.states.delete(definition.key);
-				entry.views.delete(definition.key);
-			}
+		return {
+			stateOf: (sessionId: string) => {
+				// Read through the registration token so a withdrawn unit never
+				// serves a value: a disabled domain must look absent, not stale.
+				if (this.#installs.get(definition.key) !== token) return undefined;
+				return this.#sessions.get(sessionId)?.states.get(definition.key) as S | undefined;
+			},
+			viewOf: (sessionId: string) => {
+				if (this.#installs.get(definition.key) !== token) return undefined;
+				return this.#sessions.get(sessionId)?.views.get(definition.key);
+			},
+			dispose: () => {
+				if (this.#installs.get(definition.key) !== token) return;
+				this.#installs.delete(definition.key);
+				this.#definitions.delete(definition.key);
+				for (const entry of this.#sessions.values()) {
+					entry.states.delete(definition.key);
+					entry.views.delete(definition.key);
+				}
+			},
 		};
 	}
 

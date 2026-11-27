@@ -15,7 +15,12 @@
  */
 
 import type { Context } from "@deepseek-ai/cordis";
-import { type ProjectionDefinition, sessionModeProjectionDefinition } from "../../session/session-projections";
+import type { SessionModeProjection } from "@musepi/pi-wire";
+import {
+	type ProjectionDefinition,
+	type ProjectionHandle,
+	sessionModeProjectionDefinition,
+} from "../../session/session-projections";
 import type { DaemonService } from "./types";
 
 /** The slice of a live session goal control touches. */
@@ -72,7 +77,7 @@ export class GoalService implements DaemonService {
 	} as const;
 
 	readonly #deps: GoalServiceDeps;
-	#projectionDispose: (() => void) | null = null;
+	#projection: ProjectionHandle<SessionModeProjection> | null = null;
 
 	constructor(deps: GoalServiceDeps) {
 		this.#deps = deps;
@@ -87,12 +92,14 @@ export class GoalService implements DaemonService {
 		if (!projections) {
 			throw new Error("goals: sessionProjections service is not mounted");
 		}
-		this.#projectionDispose = projections.register(sessionModeProjectionDefinition as ProjectionDefinition<unknown>);
+		this.#projection = projections.register(
+			sessionModeProjectionDefinition as ProjectionDefinition<SessionModeProjection>,
+		);
 	}
 
 	stop(): void {
-		this.#projectionDispose?.();
-		this.#projectionDispose = null;
+		this.#projection?.dispose();
+		this.#projection = null;
 	}
 
 	/** RPC session.setGoal: set/replace the goal with an objective, or close an

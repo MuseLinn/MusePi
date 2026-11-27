@@ -15,8 +15,12 @@
  */
 
 import type { Context } from "@deepseek-ai/cordis";
-import type { ProjectionDefinition } from "../../session/session-projections";
-import { sessionModeProjectionDefinition } from "../../session/session-projections";
+import type { SessionModeProjection } from "@musepi/pi-wire";
+import {
+	type ProjectionDefinition,
+	type ProjectionHandle,
+	sessionModeProjectionDefinition,
+} from "../../session/session-projections";
 import type { DaemonService } from "./types";
 
 /** The plan-mode surface of a live session. */
@@ -106,7 +110,7 @@ export class PlanModeService implements DaemonService {
 	} as const;
 
 	readonly #deps: PlanModeServiceDeps;
-	#projectionDispose: (() => void) | null = null;
+	#projection: ProjectionHandle<SessionModeProjection> | null = null;
 
 	constructor(deps: PlanModeServiceDeps) {
 		this.#deps = deps;
@@ -117,12 +121,14 @@ export class PlanModeService implements DaemonService {
 	start(ctx: Context): void {
 		const projections = ctx.sessionProjections;
 		if (!projections) throw new Error("planMode: sessionProjections service is not mounted");
-		this.#projectionDispose = projections.register(sessionModeProjectionDefinition as ProjectionDefinition<unknown>);
+		this.#projection = projections.register(
+			sessionModeProjectionDefinition as ProjectionDefinition<SessionModeProjection>,
+		);
 	}
 
 	stop(): void {
-		this.#projectionDispose?.();
-		this.#projectionDispose = null;
+		this.#projection?.dispose();
+		this.#projection = null;
 	}
 
 	/** RPC session.setPlan: toggle plan mode and install the proposal handler the

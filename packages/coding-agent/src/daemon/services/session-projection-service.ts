@@ -25,6 +25,7 @@ import type { SessionProjectionChange, SessionProjectionSnapshot } from "@musepi
 import type {
 	ProjectionDefinition,
 	ProjectionEvent,
+	ProjectionHandle,
 	ProjectionSeed,
 	SessionProjectionRegistry,
 } from "../../session/session-projections";
@@ -50,10 +51,11 @@ export class SessionProjectionService implements DaemonService {
 		this.#registry = registry;
 	}
 
-	/** Register one domain unit. The returned disposer withdraws it (the
-	 *  unit's key leaves every baseline), which is what lets a domain service
-	 *  own its registration across a stop/start. */
-	register<S>(definition: ProjectionDefinition<S>): () => void {
+	/** Register one domain unit. The returned handle both reads that domain's
+	 *  per-session state (so a domain never keeps a second copy) and withdraws
+	 *  the unit, which is what lets a domain service own its registration across
+	 *  a stop/start. */
+	register<S>(definition: ProjectionDefinition<S>): ProjectionHandle<S> {
 		return this.#registry.register(definition);
 	}
 
