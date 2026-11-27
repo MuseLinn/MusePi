@@ -359,9 +359,6 @@ export function SettingsView({
 								/>
 							) : (
 								<>
-									{activeSection === "media" && (
-										<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
-									)}
 									{activeSection === "session-memory" && (
 										<SessionMemorySection
 											rpc={rpc}
@@ -446,7 +443,6 @@ import {
 	BrowserSection,
 	GitSection,
 	InteractionSection,
-	MediaSection,
 	SessionMemorySection,
 	VoiceSection,
 } from "./settings-sections";

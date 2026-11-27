@@ -15,11 +15,12 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Reveal } from "../../components/Reveal";
 import { reportRequestFailure } from "../../lib/report-request-failure";
-import type { RpcClient } from "../../lib/rpc";
 import { logoutProvider } from "../../lib/rpc-commands";
+import type { SlotComponentProps } from "../../lib/slot-host";
+import { useProviderCatalog, useProviderEvents } from "../../lib/use-provider-catalog";
 import { Icon } from "../../vendor/oc-icons";
-import { Reveal } from "../Reveal";
 
 interface MediaProviderEntry {
 	id: string;
@@ -260,17 +261,12 @@ function MediaProviderGroup({
 	);
 }
 
-export function MediaSection({
-	rpc,
-	onLogin: login,
-	pendingLogins,
-}: {
-	rpc: RpcClient | null;
-	/** Optional OAuth login handler, same as ModelSection's onLogin — when
-	 *  absent, oauth providers point at the providers tab instead. */
-	onLogin?: (providerId: string) => void;
-	pendingLogins?: readonly string[];
-}): ReactNode {
+export default function MediaSettingsPage({ rpc }: SlotComponentProps): ReactNode {
+	// The catalog and the login flows come from the shared hook, so this page owns
+	// no copy of them and the host threads no callbacks in. The daemon's auth
+	// envelopes are subscribed here because the page is mounted on its own.
+	const providerEvent = useProviderEvents(rpc ?? null);
+	const { login, pendingLogins } = useProviderCatalog({ rpc: rpc ?? null, sessionId: null, providerEvent });
 	const [providers, setProviders] = useState<{
 		builtin: MediaProviderEntry[];
 		extension: MediaProviderEntry[];

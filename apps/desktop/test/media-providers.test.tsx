@@ -12,8 +12,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MediaSection } from "../src/components/settings-sections/media";
 import type { RpcClient } from "../src/lib/rpc";
+import MediaSettingsPage from "../src/plugins/ui-settings-media/page";
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -101,6 +101,9 @@ const rpc = {
 		if (method === "media.providers") return PROVIDERS;
 		return {};
 	},
+	// The page subscribes to the daemon's auth envelopes so a login started here
+	// updates its own rows; the stub only needs to accept the subscription.
+	addEventListener: () => () => {},
 } as unknown as RpcClient;
 
 beforeEach(() => {
@@ -122,7 +125,7 @@ async function mount(): Promise<HTMLDivElement> {
 	document.body.appendChild(el);
 	root = createRoot(el);
 	await act(async () => {
-		root?.render(<MediaSection rpc={rpc} onLogin={() => {}} />);
+		root?.render(<MediaSettingsPage rpc={rpc} />);
 	});
 	host = el;
 	return el;

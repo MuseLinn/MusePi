@@ -1,0 +1,13 @@
+{
+	"name": "musepi-ui-settings-media",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned media settings page: image and video providers, their credentials and extension-contributed providers.",
+	"type": "module",
+	"musepi": {
+		"icon": "🎬",
+		"label": "MusePi Media Settings",
+		"description": "Image and video generation providers and their credentials.",
+		"extensions": ["./index.ts"]
+	}
+}

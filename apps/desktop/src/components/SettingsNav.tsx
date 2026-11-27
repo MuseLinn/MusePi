@@ -360,6 +360,7 @@ const PLUGIN_OWNED_SECTIONS: ReadonlySet<string> = new Set([
 	"subagents",
 	"modes",
 	"skills",
+	"media",
 ]);
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The

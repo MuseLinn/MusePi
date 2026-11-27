@@ -11,7 +11,6 @@ export { BrowserSection } from "./settings-sections/browser";
 export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
 export { GitPrefsRow, GitSection } from "./settings-sections/git";
 export { InteractionSection } from "./settings-sections/interaction";
-export { MediaSection } from "./settings-sections/media";
 export { SchemaTabSection } from "./settings-sections/schema";
 export { SessionMemorySection } from "./settings-sections/session-memory";
 export { hitText, NumberStepper } from "./settings-sections/shared";
