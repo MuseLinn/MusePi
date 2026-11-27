@@ -30,6 +30,7 @@ pub mod clipboard;
 pub mod crash_handler;
 pub mod desktop;
 pub mod devicecheck;
+pub mod dictation;
 pub mod diff;
 pub mod fd;
 pub mod file_lock;
