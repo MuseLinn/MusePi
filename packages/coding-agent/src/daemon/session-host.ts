@@ -49,6 +49,7 @@ import type { Skill } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
 import { GoalContinuationController } from "../goals/continuation-controller";
+import { goalFromModeData } from "../goals/state";
 import type { MCPManager, MCPServerConfig } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { initializeExtensions } from "../modes/runtime-init";
@@ -1042,6 +1043,42 @@ export function discoverySettingsFingerprint(settings: Settings): string {
  * SessionStreamEvent envelopes (kind+seq, payload by reference — see
  * @musepi/sdk events).
  */
+/**
+ * Restore goal/plan mode from the session journal.
+ *
+ * The switches live only on the live `AgentSession`, so a resumed session
+ * starts with both off even when the journal records otherwise. Folding the
+ * last `mode_change` entry back onto the session keeps a reload honest — and
+ * matches what the TUI does on its own reconcile.
+ *
+ * Every value is treated as untrusted: session files are user-editable and
+ * survive across versions, so a malformed record degrades to "mode off" rather
+ * than restoring something half-built.
+ */
+export function restoreModeFromJournal(session: AgentSession): void {
+	let context: { mode?: unknown; modeData?: Record<string, unknown> };
+	try {
+		context = session.sessionManager.buildSessionContext();
+	} catch {
+		return;
+	}
+	const mode = typeof context.mode === "string" ? context.mode : "none";
+	if (mode === "plan" || mode === "plan_paused") {
+		const planFilePath = context.modeData?.planFilePath;
+		// A path is required for the proposal/approve flow; without one the mode
+		// could be entered but never completed, so leave it off.
+		if (typeof planFilePath === "string" && planFilePath !== "") {
+			session.setPlanModeState({ enabled: mode === "plan", planFilePath });
+		}
+		return;
+	}
+	if (mode === "goal" || mode === "goal_paused") {
+		const goal = goalFromModeData(context.modeData);
+		if (!goal) return;
+		session.setGoalModeState({ enabled: mode === "goal", mode: "active", goal });
+	}
+}
+
 export class DaemonSessionHost {
 	readonly #sessions = new Map<string, LiveSession>();
 	/** Callback invoked when an extension pushes a notification channel message.
@@ -1794,6 +1831,11 @@ export class DaemonSessionHost {
 		if (manager.getAdditionalDirectories().length > 0) {
 			await result.session.refreshSkills();
 		}
+		// Restore goal/plan mode from the journal before the session goes live:
+		// the switches live on the AgentSession and a fresh resume starts with
+		// them off, so without this a reload silently dropped a mode that was
+		// recorded (the TUI restores them the same way in its own reconcile).
+		restoreModeFromJournal(result.session);
 		const live = await this.#adoptAgentSession(
 			result.session,
 			resumeCwd,
