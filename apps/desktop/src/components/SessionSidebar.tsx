@@ -5,8 +5,6 @@ import {
 	ArchiveRestore as ArchiveRestoreIconData,
 	ChevronsDownUp as ChevronsDownUpIconData,
 	ChevronsUpDown as ChevronsUpDownIconData,
-	PanelLeftClose as PanelLeftCloseIconData,
-	PanelLeftOpen as PanelLeftOpenIconData,
 	Search as SearchIconData,
 	X as XIconData,
 } from "lucide";
@@ -157,8 +155,6 @@ export function SessionSidebar({
 	onOpenSearch,
 	onOpenMiniChat,
 	collapsed,
-	toggleAvailable = true,
-	onToggleCollapsed,
 	width,
 	onDeleteArchived,
 	onDeleteSession,
@@ -222,9 +218,6 @@ export function SessionSidebar({
 	/** Open the app-level command palette (⌘K / sidebar 搜索). */
 	onOpenSearch(): void;
 	collapsed: boolean;
-	/** Destinations without a second-tier panel have nothing to fold. */
-	toggleAvailable?: boolean;
-	onToggleCollapsed?(anchor: HTMLButtonElement): void;
 	/** Permanently delete a session's local data (journal + index) via the
 	 *  daemon; returns success so the UI only drops the archive row on a real
 	 *  deletion (the confirm dialog wording promises data cleanup). */
@@ -1103,1456 +1096,1424 @@ export function SessionSidebar({
 		setGroupEditIdx(index);
 	};
 	return (
-		<>
-			{onToggleCollapsed && toggleAvailable && (
-				<button
-					type="button"
-					className="gui-sidebar-toggle"
-					data-collapsed={collapsed ? "true" : "false"}
-					title={collapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
-					aria-label={collapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
-					aria-expanded={!collapsed}
-					aria-controls="gui-sidebar-list-region"
-					onClick={event => onToggleCollapsed(event.currentTarget)}
-				>
-					<MorphIcon
-						icon={collapsed ? PanelLeftOpenIconData : PanelLeftCloseIconData}
-						size={16}
-						spring="snappy"
-						reducedMotion="user"
-						className="h-4 w-4"
-					/>
-				</button>
-			)}
-			<aside
-				className={`gui-pane-side gui-pane-side--immersive flex h-full flex-shrink-0 flex-col overflow-hidden${collapsed ? " gui-pane-side--collapsed" : ""}`}
-				style={{ width: collapsed ? 0 : (width ?? 256) }}
-			>
-				<div className="flex h-full min-h-0 w-full flex-col">
-					{/* Traffic-light clearance (macOS overlay title bar, y=14). */}
-					<div className="gui-pane-drag flex h-9 flex-shrink-0 items-center justify-end pr-2" />
-					<div className="gui-sidebar-toggle-seat" aria-hidden="true" />
-					{/* Menu: new session is the primary action; others are placeholders. */}
-					<div className="gui-side-menu flex flex-col gap-0.5 px-2.5">
-						<button type="button" className="gui-menu-item" onClick={onNewSession}>
-							<Icon name="add-circle" className="h-4 w-4" />
-							<span>{t("settings.newTask")}</span>
-							<span className="gui-menu-kbd">{shortcutLabel("⌘N")}</span>
-						</button>
-						<button type="button" className="gui-menu-item" onClick={onOpenSearch} title={t("settings.search")}>
-							<Icon name="search" className="h-4 w-4" />
-							<span>{t("settings.search")}</span>
-							<span className="gui-menu-kbd">{shortcutLabel("⌘K")}</span>
-						</button>
-					</div>
-					{/* Group / project tabs: the capsule wraps ONLY the two pills; the
-					 * right cluster carries a collapse/expand-all quick toggle plus the
-					 * contextual and archive actions. mx-5 keeps the capsule flush with
-					 * the menu row's content above (px-2.5 container + 10px item
-					 * padding), and ml-auto on the cluster mirrors the shortcut
-					 * symbols' right edge — both scale with pane width. */}
-					<div className="gui-tabstrip mx-5 mt-3 flex items-center" ref={tabstripRef}>
-						{/* Sliding thumb: the capsule tracks the active tab with one
-						 * translating highlight. Pills size to their labels (locale-
-						 * dependent), so the thumb geometry is measured from the active
-						 * pill instead of assuming equal halves. */}
-						<div
-							className={`gui-tabstrip-capsule${tabsIconOnly ? " gui-tabstrip-capsule--icon" : ""}`}
-							ref={tabCapsuleRef}
-						>
-							<span className="gui-tab-thumb" aria-hidden />
-							{/* Hidden label copy: reports the width the row needs for text,
-							 * so the morph below reacts to the real content, not a guess. */}
-							<div className="gui-tab-measure" aria-hidden ref={tabMeasureRef}>
-								<span className="gui-tab-pill gui-tab-pill--fixed">
-									<Icon name="stack" className="h-3.5 w-3.5" />
-									<span className="gui-tab-pill-label">{t("settings.groups")}</span>
-								</span>
-								<span className="gui-tab-pill gui-tab-pill--fixed">
-									<Icon name="folder" className="h-3.5 w-3.5" />
-									<span className="gui-tab-pill-label">{t("settings.projects")}</span>
-								</span>
-							</div>
-							<button
-								type="button"
-								ref={el => {
-									tabPillRefs.current[0] = el;
-								}}
-								className={`gui-tab-pill gui-tab-pill--fixed${tab === "groups" ? " gui-tab-pill--active" : ""}`}
-								title={t("settings.groups")}
-								aria-label={t("settings.groups")}
-								onClick={() => pickTab("groups")}
-							>
+		<aside
+			className={`gui-pane-side gui-pane-side--immersive flex h-full flex-shrink-0 flex-col overflow-hidden${collapsed ? " gui-pane-side--collapsed" : ""}`}
+			style={{ width: collapsed ? 0 : (width ?? 256) }}
+		>
+			<div className="flex h-full min-h-0 w-full flex-col">
+				{/* Traffic-light clearance (macOS overlay title bar, y=14). */}
+				<div className="gui-pane-drag flex h-9 flex-shrink-0 items-center justify-end pr-2" />
+				<div className="gui-sidebar-toggle-seat" aria-hidden="true" />
+				{/* Menu: new session is the primary action; others are placeholders. */}
+				<div className="gui-side-menu flex flex-col gap-0.5 px-2.5">
+					<button type="button" className="gui-menu-item" onClick={onNewSession}>
+						<Icon name="add-circle" className="h-4 w-4" />
+						<span>{t("settings.newTask")}</span>
+						<span className="gui-menu-kbd">{shortcutLabel("⌘N")}</span>
+					</button>
+					<button type="button" className="gui-menu-item" onClick={onOpenSearch} title={t("settings.search")}>
+						<Icon name="search" className="h-4 w-4" />
+						<span>{t("settings.search")}</span>
+						<span className="gui-menu-kbd">{shortcutLabel("⌘K")}</span>
+					</button>
+				</div>
+				{/* Group / project tabs: the capsule wraps ONLY the two pills; the
+				 * right cluster carries a collapse/expand-all quick toggle plus the
+				 * contextual and archive actions. mx-5 keeps the capsule flush with
+				 * the menu row's content above (px-2.5 container + 10px item
+				 * padding), and ml-auto on the cluster mirrors the shortcut
+				 * symbols' right edge — both scale with pane width. */}
+				<div className="gui-tabstrip mx-5 mt-3 flex items-center" ref={tabstripRef}>
+					{/* Sliding thumb: the capsule tracks the active tab with one
+					 * translating highlight. Pills size to their labels (locale-
+					 * dependent), so the thumb geometry is measured from the active
+					 * pill instead of assuming equal halves. */}
+					<div
+						className={`gui-tabstrip-capsule${tabsIconOnly ? " gui-tabstrip-capsule--icon" : ""}`}
+						ref={tabCapsuleRef}
+					>
+						<span className="gui-tab-thumb" aria-hidden />
+						{/* Hidden label copy: reports the width the row needs for text,
+						 * so the morph below reacts to the real content, not a guess. */}
+						<div className="gui-tab-measure" aria-hidden ref={tabMeasureRef}>
+							<span className="gui-tab-pill gui-tab-pill--fixed">
 								<Icon name="stack" className="h-3.5 w-3.5" />
 								<span className="gui-tab-pill-label">{t("settings.groups")}</span>
-							</button>
-							<button
-								type="button"
-								ref={el => {
-									tabPillRefs.current[1] = el;
-								}}
-								className={`gui-tab-pill gui-tab-pill--fixed${tab === "projects" ? " gui-tab-pill--active" : ""}`}
-								title={t("settings.projects")}
-								aria-label={t("settings.projects")}
-								onClick={() => pickTab("projects")}
-							>
+							</span>
+							<span className="gui-tab-pill gui-tab-pill--fixed">
 								<Icon name="folder" className="h-3.5 w-3.5" />
 								<span className="gui-tab-pill-label">{t("settings.projects")}</span>
-							</button>
+							</span>
 						</div>
-						{/* Right cluster: never shrinks — the capsule flexes instead, so
-						 * the toggle/add/archive buttons stay fully visible at any pane
-						 * width and always sit flush to the strip's right edge. */}
-						<div className="ml-auto flex flex-shrink-0 items-center gap-0.5" ref={tabActionsRef}>
-							{/* Session search toggle: keyboard reachable (Tab → Enter) and
-							 * the ⌘⇧F accelerator (⌘F is the in-chat find bar); `data-search-toggle`
-							 * keeps the box's outside-dismiss from swallowing the closing click. */}
-							<button
-								type="button"
-								className="gui-tab-action"
-								data-search-toggle="true"
-								title={`${t("settings.searchSessions")} (${shortcutLabel("⌘⇧F")})`}
-								aria-label={t("settings.searchSessions")}
-								aria-expanded={searchOpen}
-								onClick={() => {
-									if (searchOpen) closeSearch();
-									else setSearchOpen(true);
-								}}
-							>
-								<MorphIcon
-									icon={searchOpen ? XIconData : SearchIconData}
-									size={14}
-									spring="snappy"
-									reducedMotion="user"
-									className="h-3.5 w-3.5"
-								/>
-							</button>
-							<button
-								type="button"
-								className="gui-tab-action"
-								title={t("general.expandCollapseAll")}
-								aria-label={t("general.expandCollapseAll")}
-								onClick={() => {
-									const collapse =
-										tab === "groups"
-											? groupsAll === null
-												? !hasCollapsedSubtrees()
-												: groupsAll === true
-											: collapsedProjects.length === 0 && !hasCollapsedSubtrees();
-									if (tab === "groups") setGroupsAll(!collapse);
-									else collapseAllProjects(collapse);
-									setAllSubtreesCollapsed(collapse);
-								}}
-							>
-								<MorphIcon
-									icon={anyCollapsed ? ChevronsUpDownIconData : ChevronsDownUpIconData}
-									size={14}
-									spring="snappy"
-									reducedMotion="user"
-									className="h-3.5 w-3.5"
-								/>
-							</button>
-							{tab === "groups" ? (
-								<button
-									type="button"
-									className="gui-tab-action"
-									title={t("settings.newGroup")}
-									aria-label={t("settings.newGroup")}
-									onClick={() =>
-										setGroups(g => [
-											...g,
-											{
-												name: t("settings.newGroup"),
-												sessions: [],
-												color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
-											},
-										])
-									}
-								>
-									<Icon name="add-circle" className="h-3.5 w-3.5" />
-								</button>
-							) : (
-								<button
-									ref={viewMenuAnchorRef}
-									type="button"
-									className="gui-tab-action"
-									title={t("settings.viewSort")}
-									aria-label={t("settings.viewSort")}
-									aria-expanded={viewMenu}
-									onClick={() => setViewMenu(v => !v)}
-								>
-									<Icon name="equalizer-2" className="h-3.5 w-3.5" />
-								</button>
-							)}
-							<button
-								type="button"
-								className={`gui-tab-action${archivedView ? " gui-tab-action--active" : ""}`}
-								title={t("settings.archive")}
-								aria-label={t("settings.archive")}
-								aria-pressed={archivedView}
-								onClick={() => {
-									setArchivedView(v => !v);
-									setViewMenu(false);
-								}}
-							>
-								<MorphIcon
-									icon={archivedView ? ArchiveRestoreIconData : ArchiveIconData}
-									size={14}
-									spring="snappy"
-									reducedMotion="user"
-									className="h-3.5 w-3.5"
-								/>
-							</button>
-						</div>
-					</div>
-					{/* View/sort menu (projects tab). Floating portal
-					 * (not an inline block) so it overlays the tree like the other
-					 * menus. */}
-					{tab === "projects" && (
-						<MenuPopup
-							open={viewMenu}
-							className="gui-view-menu"
-							portal
-							anchor={viewMenuAnchorRef.current}
-							align="right"
-							onOpenChange={setViewMenu}
+						<button
+							type="button"
+							ref={el => {
+								tabPillRefs.current[0] = el;
+							}}
+							className={`gui-tab-pill gui-tab-pill--fixed${tab === "groups" ? " gui-tab-pill--active" : ""}`}
+							title={t("settings.groups")}
+							aria-label={t("settings.groups")}
+							onClick={() => pickTab("groups")}
 						>
-							<div className="px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
-								{t("settings.view")}
-							</div>
+							<Icon name="stack" className="h-3.5 w-3.5" />
+							<span className="gui-tab-pill-label">{t("settings.groups")}</span>
+						</button>
+						<button
+							type="button"
+							ref={el => {
+								tabPillRefs.current[1] = el;
+							}}
+							className={`gui-tab-pill gui-tab-pill--fixed${tab === "projects" ? " gui-tab-pill--active" : ""}`}
+							title={t("settings.projects")}
+							aria-label={t("settings.projects")}
+							onClick={() => pickTab("projects")}
+						>
+							<Icon name="folder" className="h-3.5 w-3.5" />
+							<span className="gui-tab-pill-label">{t("settings.projects")}</span>
+						</button>
+					</div>
+					{/* Right cluster: never shrinks — the capsule flexes instead, so
+					 * the toggle/add/archive buttons stay fully visible at any pane
+					 * width and always sit flush to the strip's right edge. */}
+					<div className="ml-auto flex flex-shrink-0 items-center gap-0.5" ref={tabActionsRef}>
+						{/* Session search toggle: keyboard reachable (Tab → Enter) and
+						 * the ⌘⇧F accelerator (⌘F is the in-chat find bar); `data-search-toggle`
+						 * keeps the box's outside-dismiss from swallowing the closing click. */}
+						<button
+							type="button"
+							className="gui-tab-action"
+							data-search-toggle="true"
+							title={`${t("settings.searchSessions")} (${shortcutLabel("⌘⇧F")})`}
+							aria-label={t("settings.searchSessions")}
+							aria-expanded={searchOpen}
+							onClick={() => {
+								if (searchOpen) closeSearch();
+								else setSearchOpen(true);
+							}}
+						>
+							<MorphIcon
+								icon={searchOpen ? XIconData : SearchIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
+						</button>
+						<button
+							type="button"
+							className="gui-tab-action"
+							title={t("general.expandCollapseAll")}
+							aria-label={t("general.expandCollapseAll")}
+							onClick={() => {
+								const collapse =
+									tab === "groups"
+										? groupsAll === null
+											? !hasCollapsedSubtrees()
+											: groupsAll === true
+										: collapsedProjects.length === 0 && !hasCollapsedSubtrees();
+								if (tab === "groups") setGroupsAll(!collapse);
+								else collapseAllProjects(collapse);
+								setAllSubtreesCollapsed(collapse);
+							}}
+						>
+							<MorphIcon
+								icon={anyCollapsed ? ChevronsUpDownIconData : ChevronsDownUpIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
+						</button>
+						{tab === "groups" ? (
 							<button
 								type="button"
-								className={`gui-view-opt${projView === "project" ? " gui-view-opt--active" : ""}`}
-								onClick={() => {
-									setProjView("project");
-									setViewMenu(false);
-								}}
+								className="gui-tab-action"
+								title={t("settings.newGroup")}
+								aria-label={t("settings.newGroup")}
+								onClick={() =>
+									setGroups(g => [
+										...g,
+										{
+											name: t("settings.newGroup"),
+											sessions: [],
+											color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
+										},
+									])
+								}
 							>
-								<Icon name="folder" className="h-3.5 w-3.5" />
-								<span>{t("settings.byProject")}</span>
-								{projView === "project" && <Icon name="check" className="h-3 w-3 ml-auto" />}
+								<Icon name="add-circle" className="h-3.5 w-3.5" />
 							</button>
+						) : (
 							<button
+								ref={viewMenuAnchorRef}
 								type="button"
-								className={`gui-view-opt${projView === "timeline" ? " gui-view-opt--active" : ""}`}
-								onClick={() => {
-									setProjView("timeline");
-									setViewMenu(false);
-								}}
+								className="gui-tab-action"
+								title={t("settings.viewSort")}
+								aria-label={t("settings.viewSort")}
+								aria-expanded={viewMenu}
+								onClick={() => setViewMenu(v => !v)}
 							>
-								<Icon name="history" className="h-3.5 w-3.5" />
-								<span>{t("settings.timeline")}</span>
-								{projView === "timeline" && <Icon name="check" className="h-3 w-3 ml-auto" />}
+								<Icon name="equalizer-2" className="h-3.5 w-3.5" />
 							</button>
-							<div className="mt-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
-								{t("settings.sortBy")}
-							</div>
-							<button
-								type="button"
-								className={`gui-view-opt${projSort === "updated" ? " gui-view-opt--active" : ""}`}
-								onClick={() => {
-									setProjSort("updated");
-									setViewMenu(false);
-								}}
-							>
-								<Icon name="chat-1" className="h-3.5 w-3.5" />
-								<span>{t("settings.updatedTime")}</span>
-								{projSort === "updated" && <Icon name="check" className="h-3 w-3 ml-auto" />}
-							</button>
-							<button
-								type="button"
-								className={`gui-view-opt${projSort === "created" ? " gui-view-opt--active" : ""}`}
-								onClick={() => {
-									setProjSort("created");
-									setViewMenu(false);
-								}}
-							>
-								<Icon name="history" className="h-3.5 w-3.5" />
-								<span>{t("settings.createdTime")}</span>
-								{projSort === "created" && <Icon name="check" className="h-3 w-3 ml-auto" />}
-							</button>
-						</MenuPopup>
-					)}
-					{/* Sessions list — custom groups in groups tab; project/timeline in
-					 * projects; archived sessions in the archive view. */}
-					<div className="gui-sessions-tab mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
-						<SessionSearchBar
-							open={searchOpen}
-							query={sessionQuery}
-							matchCount={searchMatchCount}
-							inputRef={searchInputRef}
-							onQueryChange={setSessionQuery}
-							onOpenChange={handleSearchOpenChange}
-						/>
-						<div className="flex items-center justify-end px-4 py-1.5">
-							{archivedView && (
-								<button
-									type="button"
-									className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-									onClick={() => setArchivedView(false)}
-									title={t("settings.back")}
-									aria-label={t("settings.back")}
-								>
-									<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
-								</button>
-							)}
-						</div>
-						{/* AI rename runs a model pass (seconds, up to the RPC cap). The
-						 *  target row shows its own spinner; this strip stays as the
-						 *  announced status (aria-live) and keeps the run visible when
-						 *  that row is scrolled out of view or inside a closed group. */}
-						{retitlingId !== null && (
-							<div
-								className="gui-group-label flex items-center gap-1.5 px-3 pb-1 pt-1 text-[var(--color-accent)]"
-								role="status"
-								aria-live="polite"
-							>
-								<Icon name="loader-4" className="h-3.5 w-3.5 flex-shrink-0 animate-spin" />
-								<span className="min-w-0 truncate">
-									{t("general.aiRenamingFor", { name: sessionLabelOf(retitlingId) })}
-								</span>
-							</div>
 						)}
-						{/* A flex column wrapper: the scroller's `flex-1` only bounds its
-						 *  height when its parent is a flex container. As a plain block the
-						 *  list grew to its content height and the pane's overflow-hidden
-						 *  clipped the tail — the list could not scroll at all. */}
-						<div className="gui-scroll-frame flex min-h-0 flex-1 flex-col">
-							<div
-								ref={sessionListRef}
-								/* Keyed by view so a groups↔projects (or archive) switch
-								 * remounts the pane with the fade-in — the swap reads as a
-								 * transition instead of an instant content replacement. */
-								key={archivedView ? "archived" : tab}
-								className="gui-sessions-list gui-tab-pane-in min-h-0 flex-1 overflow-y-auto px-1.5 pb-2"
-								data-top-scroll="false"
-								data-bottom-scroll="false"
-								aria-busy={retitlingId !== null || undefined}
+						<button
+							type="button"
+							className={`gui-tab-action${archivedView ? " gui-tab-action--active" : ""}`}
+							title={t("settings.archive")}
+							aria-label={t("settings.archive")}
+							aria-pressed={archivedView}
+							onClick={() => {
+								setArchivedView(v => !v);
+								setViewMenu(false);
+							}}
+						>
+							<MorphIcon
+								icon={archivedView ? ArchiveRestoreIconData : ArchiveIconData}
+								size={14}
+								spring="snappy"
+								reducedMotion="user"
+								className="h-3.5 w-3.5"
+							/>
+						</button>
+					</div>
+				</div>
+				{/* View/sort menu (projects tab). Floating portal
+				 * (not an inline block) so it overlays the tree like the other
+				 * menus. */}
+				{tab === "projects" && (
+					<MenuPopup
+						open={viewMenu}
+						className="gui-view-menu"
+						portal
+						anchor={viewMenuAnchorRef.current}
+						align="right"
+						onOpenChange={setViewMenu}
+					>
+						<div className="px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
+							{t("settings.view")}
+						</div>
+						<button
+							type="button"
+							className={`gui-view-opt${projView === "project" ? " gui-view-opt--active" : ""}`}
+							onClick={() => {
+								setProjView("project");
+								setViewMenu(false);
+							}}
+						>
+							<Icon name="folder" className="h-3.5 w-3.5" />
+							<span>{t("settings.byProject")}</span>
+							{projView === "project" && <Icon name="check" className="h-3 w-3 ml-auto" />}
+						</button>
+						<button
+							type="button"
+							className={`gui-view-opt${projView === "timeline" ? " gui-view-opt--active" : ""}`}
+							onClick={() => {
+								setProjView("timeline");
+								setViewMenu(false);
+							}}
+						>
+							<Icon name="history" className="h-3.5 w-3.5" />
+							<span>{t("settings.timeline")}</span>
+							{projView === "timeline" && <Icon name="check" className="h-3 w-3 ml-auto" />}
+						</button>
+						<div className="mt-1 px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
+							{t("settings.sortBy")}
+						</div>
+						<button
+							type="button"
+							className={`gui-view-opt${projSort === "updated" ? " gui-view-opt--active" : ""}`}
+							onClick={() => {
+								setProjSort("updated");
+								setViewMenu(false);
+							}}
+						>
+							<Icon name="chat-1" className="h-3.5 w-3.5" />
+							<span>{t("settings.updatedTime")}</span>
+							{projSort === "updated" && <Icon name="check" className="h-3 w-3 ml-auto" />}
+						</button>
+						<button
+							type="button"
+							className={`gui-view-opt${projSort === "created" ? " gui-view-opt--active" : ""}`}
+							onClick={() => {
+								setProjSort("created");
+								setViewMenu(false);
+							}}
+						>
+							<Icon name="history" className="h-3.5 w-3.5" />
+							<span>{t("settings.createdTime")}</span>
+							{projSort === "created" && <Icon name="check" className="h-3 w-3 ml-auto" />}
+						</button>
+					</MenuPopup>
+				)}
+				{/* Sessions list — custom groups in groups tab; project/timeline in
+				 * projects; archived sessions in the archive view. */}
+				<div className="gui-sessions-tab mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
+					<SessionSearchBar
+						open={searchOpen}
+						query={sessionQuery}
+						matchCount={searchMatchCount}
+						inputRef={searchInputRef}
+						onQueryChange={setSessionQuery}
+						onOpenChange={handleSearchOpenChange}
+					/>
+					<div className="flex items-center justify-end px-4 py-1.5">
+						{archivedView && (
+							<button
+								type="button"
+								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+								onClick={() => setArchivedView(false)}
+								title={t("settings.back")}
+								aria-label={t("settings.back")}
 							>
-								{archivedView ? (
-									archived.length === 0 ? (
-										<p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">
-											{t("transcript.noArchivedSessions")}
-										</p>
-									) : (
-										archived.map(a => {
-											const node = nodes.find(n => n.entry.id === a.sessionId);
-											return (
-												<div key={a.sessionId} className="gui-archive-row">
-													<div className="min-w-0 flex-1">
-														<div className="truncate text-[13px]">
-															{node?.entry.label ?? t("transcript.untitledSession")}
-														</div>
-														<div className="flex items-center gap-1 text-[13px] text-[var(--color-text-faint)]">
-															<Icon name="folder-3" className="h-3 w-3 flex-shrink-0" />
-															<span className="min-w-0 flex-1 truncate" title={a.cwd || undefined}>
-																{a.cwd
-																	? (archivedLabels.get(a.cwd) ?? pathBaseName(a.cwd))
-																	: t("transcript.noFolder")}
-															</span>
-															<span className="flex-shrink-0">
-																{new Date(a.archivedAt).toLocaleString()}
-															</span>
-														</div>
+								<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
+							</button>
+						)}
+					</div>
+					{/* AI rename runs a model pass (seconds, up to the RPC cap). The
+					 *  target row shows its own spinner; this strip stays as the
+					 *  announced status (aria-live) and keeps the run visible when
+					 *  that row is scrolled out of view or inside a closed group. */}
+					{retitlingId !== null && (
+						<div
+							className="gui-group-label flex items-center gap-1.5 px-3 pb-1 pt-1 text-[var(--color-accent)]"
+							role="status"
+							aria-live="polite"
+						>
+							<Icon name="loader-4" className="h-3.5 w-3.5 flex-shrink-0 animate-spin" />
+							<span className="min-w-0 truncate">
+								{t("general.aiRenamingFor", { name: sessionLabelOf(retitlingId) })}
+							</span>
+						</div>
+					)}
+					{/* A flex column wrapper: the scroller's `flex-1` only bounds its
+					 *  height when its parent is a flex container. As a plain block the
+					 *  list grew to its content height and the pane's overflow-hidden
+					 *  clipped the tail — the list could not scroll at all. */}
+					<div className="gui-scroll-frame flex min-h-0 flex-1 flex-col">
+						<div
+							ref={sessionListRef}
+							/* Keyed by view so a groups↔projects (or archive) switch
+							 * remounts the pane with the fade-in — the swap reads as a
+							 * transition instead of an instant content replacement. */
+							key={archivedView ? "archived" : tab}
+							className="gui-sessions-list gui-tab-pane-in min-h-0 flex-1 overflow-y-auto px-1.5 pb-2"
+							data-top-scroll="false"
+							data-bottom-scroll="false"
+							aria-busy={retitlingId !== null || undefined}
+						>
+							{archivedView ? (
+								archived.length === 0 ? (
+									<p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">
+										{t("transcript.noArchivedSessions")}
+									</p>
+								) : (
+									archived.map(a => {
+										const node = nodes.find(n => n.entry.id === a.sessionId);
+										return (
+											<div key={a.sessionId} className="gui-archive-row">
+												<div className="min-w-0 flex-1">
+													<div className="truncate text-[13px]">
+														{node?.entry.label ?? t("transcript.untitledSession")}
 													</div>
-													<button
-														type="button"
-														className="gui-archive-act"
-														title={t("settings.unarchive")}
-														aria-label={t("settings.unarchive")}
-														onClick={() => unarchiveSession(a.sessionId)}
-													>
-														<Icon name="restart" className="h-3.5 w-3.5" />
-													</button>
-													<button
-														type="button"
-														className="gui-archive-act gui-archive-act--danger"
-														title={t("settings.delete")}
-														aria-label={t("settings.delete")}
-														onClick={() => void deleteArchived(a.sessionId)}
-													>
-														<Icon name="delete-bin" className="h-3.5 w-3.5" />
-													</button>
+													<div className="flex items-center gap-1 text-[13px] text-[var(--color-text-faint)]">
+														<Icon name="folder-3" className="h-3 w-3 flex-shrink-0" />
+														<span className="min-w-0 flex-1 truncate" title={a.cwd || undefined}>
+															{a.cwd
+																? (archivedLabels.get(a.cwd) ?? pathBaseName(a.cwd))
+																: t("transcript.noFolder")}
+														</span>
+														<span className="flex-shrink-0">
+															{new Date(a.archivedAt).toLocaleString()}
+														</span>
+													</div>
 												</div>
-											);
-										})
-									)
-								) : searchActive && searchMatchCount === 0 ? null : tab === "projects" ? (
-									<>
-										{/* Add-project button lives above BOTH view modes (the
-										 * timeline default hid it before — the 项目 tab
-										 * always offers 添加项目 / 远程连接). */}
-										<div className="relative">
+												<button
+													type="button"
+													className="gui-archive-act"
+													title={t("settings.unarchive")}
+													aria-label={t("settings.unarchive")}
+													onClick={() => unarchiveSession(a.sessionId)}
+												>
+													<Icon name="restart" className="h-3.5 w-3.5" />
+												</button>
+												<button
+													type="button"
+													className="gui-archive-act gui-archive-act--danger"
+													title={t("settings.delete")}
+													aria-label={t("settings.delete")}
+													onClick={() => void deleteArchived(a.sessionId)}
+												>
+													<Icon name="delete-bin" className="h-3.5 w-3.5" />
+												</button>
+											</div>
+										);
+									})
+								)
+							) : searchActive && searchMatchCount === 0 ? null : tab === "projects" ? (
+								<>
+									{/* Add-project button lives above BOTH view modes (the
+									 * timeline default hid it before — the 项目 tab
+									 * always offers 添加项目 / 远程连接). */}
+									<div className="relative">
+										<button
+											type="button"
+											className="gui-connect-add"
+											ref={projMenuAnchorRef}
+											onClick={() => setProjMenu(v => !v)}
+										>
+											<Icon name="add-circle" className="h-4 w-4" />
+											<span>{t("settings.addProjectRemote")}</span>
+										</button>
+										<MenuPopup
+											open={projMenu}
+											className="gui-add-project-menu"
+											anchor={projMenuAnchorRef.current}
+											onOpenChange={setProjMenu}
+										>
 											<button
 												type="button"
-												className="gui-connect-add"
-												ref={projMenuAnchorRef}
-												onClick={() => setProjMenu(v => !v)}
+												className="gui-view-opt"
+												onClick={() => {
+													setProjMenu(false);
+													onAddProject?.();
+												}}
 											>
-												<Icon name="add-circle" className="h-4 w-4" />
-												<span>{t("settings.addProjectRemote")}</span>
+												<Icon name="folder-add" className="h-3.5 w-3.5" />
+												<span>{t("settings.addProject")}</span>
 											</button>
-											<MenuPopup
-												open={projMenu}
-												className="gui-add-project-menu"
-												anchor={projMenuAnchorRef.current}
-												onOpenChange={setProjMenu}
+											<button
+												type="button"
+												className="gui-view-opt"
+												onClick={() => {
+													setProjMenu(false);
+													onOpenConnect();
+												}}
 											>
-												<button
-													type="button"
-													className="gui-view-opt"
-													onClick={() => {
-														setProjMenu(false);
-														onAddProject?.();
-													}}
-												>
-													<Icon name="folder-add" className="h-3.5 w-3.5" />
-													<span>{t("settings.addProject")}</span>
-												</button>
-												<button
-													type="button"
-													className="gui-view-opt"
-													onClick={() => {
-														setProjMenu(false);
-														onOpenConnect();
-													}}
-												>
-													<Icon name="server" className="h-3.5 w-3.5" />
-													<span>{t("settings.remoteConnection")}</span>
-												</button>
-												<button
-													type="button"
-													className="gui-view-opt"
-													onClick={() => {
-														setProjMenu(false);
-														onImportSessions?.();
-													}}
-												>
-													<Icon name="download" className="h-3.5 w-3.5" />
-													<span>{t("settings.importSessions")}</span>
-												</button>
-											</MenuPopup>
-										</div>
-										{projectsError && (
-											<p className="gui-error mx-2" role="alert">
-												{projectsError}
-											</p>
-										)}
-										{projView === "timeline" ? (
-											<>
-												{pinnedNodes.length > 0 && (
-													<div className="mb-1.5">
-														<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
-														<SessionList
-															nodes={pinnedNodes}
-															selectedId={selectedId}
-															onSelect={onSelect}
-															onContextMenu={openSessionCtx}
-															pausedIds={pausedIds}
-															workingIds={workingIds}
-															statuses={statuses}
-															manualTags={manualTags}
-															emojis={sessionEmoji}
-															onRenameSession={onRenameSession}
-															searchQuery={sessionQuery}
-															retitlingId={retitlingId}
-														/>
-													</div>
-												)}
-												{cronNodes.length > 0 && cronSection}
-												<GroupedSessionList
-													nodes={regularNodes}
-													selectedId={selectedId}
-													onSelect={onSelect}
-													onContextMenu={openSessionCtx}
-													unread={unread}
-													failed={failed}
-													pausedIds={pausedIds}
-													workingIds={workingIds}
-													statuses={statuses}
-													manualTags={manualTags}
-													emojis={sessionEmoji}
-													onRenameSession={onRenameSession}
-													searchQuery={sessionQuery}
-													retitlingId={retitlingId}
-												/>
-											</>
-										) : (
-											(() => {
-												// Project blocks: registry rows from `workspace.list`,
-												// each a collapsible block. Sessions group by exact cwd;
-												// a project without sessions still shows (empty state)
-												// so a freshly picked 添加项目 appears immediately.
-												const byCwd = new Map<string, SessionListNode[]>();
-												const noFolder: SessionListNode[] = [];
-												for (const n of regularNodes) {
-													const cwd = sessionMeta.get(n.entry.id)?.cwd;
-													if (cwd) {
-														const list = byCwd.get(cwd) ?? [];
-														list.push(n);
-														byCwd.set(cwd, list);
-													} else {
-														noFolder.push(n);
-													}
+												<Icon name="server" className="h-3.5 w-3.5" />
+												<span>{t("settings.remoteConnection")}</span>
+											</button>
+											<button
+												type="button"
+												className="gui-view-opt"
+												onClick={() => {
+													setProjMenu(false);
+													onImportSessions?.();
+												}}
+											>
+												<Icon name="download" className="h-3.5 w-3.5" />
+												<span>{t("settings.importSessions")}</span>
+											</button>
+										</MenuPopup>
+									</div>
+									{projectsError && (
+										<p className="gui-error mx-2" role="alert">
+											{projectsError}
+										</p>
+									)}
+									{projView === "timeline" ? (
+										<>
+											{pinnedNodes.length > 0 && (
+												<div className="mb-1.5">
+													<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
+													<SessionList
+														nodes={pinnedNodes}
+														selectedId={selectedId}
+														onSelect={onSelect}
+														onContextMenu={openSessionCtx}
+														pausedIds={pausedIds}
+														workingIds={workingIds}
+														statuses={statuses}
+														manualTags={manualTags}
+														emojis={sessionEmoji}
+														onRenameSession={onRenameSession}
+														searchQuery={sessionQuery}
+														retitlingId={retitlingId}
+													/>
+												</div>
+											)}
+											{cronNodes.length > 0 && cronSection}
+											<GroupedSessionList
+												nodes={regularNodes}
+												selectedId={selectedId}
+												onSelect={onSelect}
+												onContextMenu={openSessionCtx}
+												unread={unread}
+												failed={failed}
+												pausedIds={pausedIds}
+												workingIds={workingIds}
+												statuses={statuses}
+												manualTags={manualTags}
+												emojis={sessionEmoji}
+												onRenameSession={onRenameSession}
+												searchQuery={sessionQuery}
+												retitlingId={retitlingId}
+											/>
+										</>
+									) : (
+										(() => {
+											// Project blocks: registry rows from `workspace.list`,
+											// each a collapsible block. Sessions group by exact cwd;
+											// a project without sessions still shows (empty state)
+											// so a freshly picked 添加项目 appears immediately.
+											const byCwd = new Map<string, SessionListNode[]>();
+											const noFolder: SessionListNode[] = [];
+											for (const n of regularNodes) {
+												const cwd = sessionMeta.get(n.entry.id)?.cwd;
+												if (cwd) {
+													const list = byCwd.get(cwd) ?? [];
+													list.push(n);
+													byCwd.set(cwd, list);
+												} else {
+													noFolder.push(n);
 												}
-												// Issue #15: identity stays the full path; only the
-												// LABEL widens when two folders share a basename
-												// (`a/demo` vs `b/demo`). A managed project's own name
-												// wins unless two projects share it.
-												const labels = projectLabels(orderedProjects.map(project => project.root));
-												const nameCounts = new Map<string, number>();
-												for (const project of orderedProjects) {
-													nameCounts.set(project.name, (nameCounts.get(project.name) ?? 0) + 1);
-												}
-												return (
-													<>
-														{pinnedNodes.length > 0 && (
-															<div className="mb-1.5">
-																<div className="gui-group-label px-2 pb-1 pt-2.5">
-																	{t("settings.pinned")}
-																</div>
-																<SessionList
-																	nodes={pinnedNodes}
-																	selectedId={selectedId}
-																	onSelect={onSelect}
-																	onContextMenu={openSessionCtx}
-																	pausedIds={pausedIds}
-																	workingIds={workingIds}
-																	statuses={statuses}
-																	manualTags={manualTags}
-																	emojis={sessionEmoji}
-																	onRenameSession={onRenameSession}
-																	searchQuery={sessionQuery}
-																	retitlingId={retitlingId}
-																/>
+											}
+											// Issue #15: identity stays the full path; only the
+											// LABEL widens when two folders share a basename
+											// (`a/demo` vs `b/demo`). A managed project's own name
+											// wins unless two projects share it.
+											const labels = projectLabels(orderedProjects.map(project => project.root));
+											const nameCounts = new Map<string, number>();
+											for (const project of orderedProjects) {
+												nameCounts.set(project.name, (nameCounts.get(project.name) ?? 0) + 1);
+											}
+											return (
+												<>
+													{pinnedNodes.length > 0 && (
+														<div className="mb-1.5">
+															<div className="gui-group-label px-2 pb-1 pt-2.5">
+																{t("settings.pinned")}
 															</div>
-														)}
-														{cronNodes.length > 0 && cronSection}
-														{orderedProjects.map(project => {
-															const path = project.root;
-															const list = byCwd.get(path) ?? [];
-															const isCollapsed = collapsedProjects.includes(path);
-															const label =
-																(nameCounts.get(project.name) ?? 0) > 1
-																	? (labels.get(path) ?? pathBaseName(path))
-																	: project.name;
-															return (
+															<SessionList
+																nodes={pinnedNodes}
+																selectedId={selectedId}
+																onSelect={onSelect}
+																onContextMenu={openSessionCtx}
+																pausedIds={pausedIds}
+																workingIds={workingIds}
+																statuses={statuses}
+																manualTags={manualTags}
+																emojis={sessionEmoji}
+																onRenameSession={onRenameSession}
+																searchQuery={sessionQuery}
+																retitlingId={retitlingId}
+															/>
+														</div>
+													)}
+													{cronNodes.length > 0 && cronSection}
+													{orderedProjects.map(project => {
+														const path = project.root;
+														const list = byCwd.get(path) ?? [];
+														const isCollapsed = collapsedProjects.includes(path);
+														const label =
+															(nameCounts.get(project.name) ?? 0) > 1
+																? (labels.get(path) ?? pathBaseName(path))
+																: project.name;
+														return (
+															<div
+																key={path}
+																className="mb-1.5"
+																onDragOver={e => {
+																	e.preventDefault();
+																	e.dataTransfer.dropEffect = "move";
+																}}
+																onDrop={e => {
+																	e.preventDefault();
+																	const data = e.dataTransfer.getData("text/plain");
+																	if (!data.startsWith("project:")) return;
+																	const from = data.slice(8);
+																	if (from === path) return;
+																	setProjectOrder(() => {
+																		const next = orderedProjects.map(project => project.root);
+																		const fi = next.indexOf(from);
+																		const ti = next.indexOf(path);
+																		if (fi < 0 || ti < 0) return next;
+																		const [moved] = next.splice(fi, 1);
+																		next.splice(ti, 0, moved!);
+																		return next;
+																	});
+																}}
+															>
 																<div
-																	key={path}
-																	className="mb-1.5"
-																	onDragOver={e => {
-																		e.preventDefault();
-																		e.dataTransfer.dropEffect = "move";
+																	className={`gui-project-block${
+																		projInsert?.path === path
+																			? ` gui-drop-line${projInsert.edge === "after" ? " gui-drop-line--after" : ""}`
+																			: ""
+																	}`}
+																	onMouseEnter={e => showProjectCard(path, e.currentTarget)}
+																	onMouseLeave={hideProjectCardSoon}
+																	onFocus={e => {
+																		// 键盘焦点落在可见控件上才展开(与 `:focus-visible` 同一判据);
+																		// 鼠标点击留下的焦点不展开,否则卡片会一直挂在屏幕上。
+																		if (!(e.target as HTMLElement).matches(":focus-visible")) return;
+																		showProjectCard(path, e.currentTarget);
 																	}}
-																	onDrop={e => {
+																	onBlur={e => {
+																		// 焦点仍在块内(移到另一个控件)时不收;移进卡片也不收。
+																		const next = e.relatedTarget as Node | null;
+																		if (e.currentTarget.contains(next)) return;
+																		if (
+																			next instanceof Element &&
+																			next.closest(".gui-project-hover-card")
+																		)
+																			return;
+																		hideProjectCardSoon();
+																	}}
+																	onKeyDown={e => {
+																		// 卡片 portal 在 body 末尾,原生 Tab 顺序从块内最后一个控件会跳到
+																		// 文档后续内容,永远进不了卡片。在最后那一站显式交棒。
+																		if (e.key !== "Tab" || e.shiftKey) return;
+																		if (projectCard?.path !== path) return;
+																		if (e.target !== lastFocusable(e.currentTarget)) return;
 																		e.preventDefault();
-																		const data = e.dataTransfer.getData("text/plain");
-																		if (!data.startsWith("project:")) return;
-																		const from = data.slice(8);
-																		if (from === path) return;
-																		setProjectOrder(() => {
-																			const next = orderedProjects.map(project => project.root);
-																			const fi = next.indexOf(from);
-																			const ti = next.indexOf(path);
-																			if (fi < 0 || ti < 0) return next;
-																			const [moved] = next.splice(fi, 1);
-																			next.splice(ti, 0, moved!);
-																			return next;
-																		});
+																		focusIntoProjectCard();
 																	}}
 																>
-																	<div
-																		className={`gui-project-block${
-																			projInsert?.path === path
-																				? ` gui-drop-line${projInsert.edge === "after" ? " gui-drop-line--after" : ""}`
-																				: ""
-																		}`}
-																		onMouseEnter={e => showProjectCard(path, e.currentTarget)}
-																		onMouseLeave={hideProjectCardSoon}
-																		onFocus={e => {
-																			// 键盘焦点落在可见控件上才展开(与 `:focus-visible` 同一判据);
-																			// 鼠标点击留下的焦点不展开,否则卡片会一直挂在屏幕上。
-																			if (!(e.target as HTMLElement).matches(":focus-visible"))
-																				return;
-																			showProjectCard(path, e.currentTarget);
+																	<button
+																		type="button"
+																		className="gui-project-head"
+																		title={path}
+																		aria-expanded={!isCollapsed}
+																		draggable
+																		onDragStart={e => {
+																			e.dataTransfer.setData("text/plain", `project:${path}`);
+																			e.dataTransfer.effectAllowed = "move";
 																		}}
-																		onBlur={e => {
-																			// 焦点仍在块内(移到另一个控件)时不收;移进卡片也不收。
-																			const next = e.relatedTarget as Node | null;
-																			if (e.currentTarget.contains(next)) return;
-																			if (
-																				next instanceof Element &&
-																				next.closest(".gui-project-hover-card")
-																			)
-																				return;
-																			hideProjectCardSoon();
-																		}}
-																		onKeyDown={e => {
-																			// 卡片 portal 在 body 末尾,原生 Tab 顺序从块内最后一个控件会跳到
-																			// 文档后续内容,永远进不了卡片。在最后那一站显式交棒。
-																			if (e.key !== "Tab" || e.shiftKey) return;
-																			if (projectCard?.path !== path) return;
-																			if (e.target !== lastFocusable(e.currentTarget)) return;
+																		onDragEnd={() => setProjInsert(null)}
+																		/** Head-level insert positioning (M2.8): hovering the
+																		 * head's top/bottom half shows the shared drop line and
+																		 * drops insert there; the block body keeps swap-on-drop. */
+																		onDragOver={e => {
+																			if (!e.dataTransfer.types.includes("text/plain")) return;
 																			e.preventDefault();
-																			focusIntoProjectCard();
+																			e.stopPropagation();
+																			e.dataTransfer.dropEffect = "move";
+																			const r = e.currentTarget.getBoundingClientRect();
+																			setProjInsert({
+																				path,
+																				edge: e.clientY < r.top + r.height / 2 ? "before" : "after",
+																			});
+																		}}
+																		onDragLeave={() =>
+																			setProjInsert(cur => (cur?.path === path ? null : cur))
+																		}
+																		onDrop={e => {
+																			e.preventDefault();
+																			e.stopPropagation();
+																			const data = e.dataTransfer.getData("text/plain");
+																			const r = e.currentTarget.getBoundingClientRect();
+																			const edge =
+																				e.clientY < r.top + r.height / 2
+																					? ("before" as const)
+																					: ("after" as const);
+																			setProjInsert(null);
+																			if (!data.startsWith("project:")) return;
+																			const from = data.slice(8);
+																			if (from === path) return;
+																			setProjectOrder(() => {
+																				const next = orderedProjects
+																					.map(project => project.root)
+																					.filter(root => root !== from);
+																				let ti = next.indexOf(path);
+																				if (ti < 0)
+																					return orderedProjects.map(project => project.root);
+																				if (edge === "after") ti += 1;
+																				next.splice(ti, 0, from);
+																				return next;
+																			});
+																		}}
+																		onClick={() => toggleProject(path)}
+																		onContextMenu={e => {
+																			// Project blocks carry the same right-click
+																			// menu as group blocks (remove project lives here, not as
+																			// a lone side button).
+																			e.preventDefault();
+																			setProjectCtx({
+																				path,
+																				x: e.clientX,
+																				y: e.clientY,
+																			});
 																		}}
 																	>
-																		<button
-																			type="button"
-																			className="gui-project-head"
-																			title={path}
-																			aria-expanded={!isCollapsed}
-																			draggable
-																			onDragStart={e => {
-																				e.dataTransfer.setData("text/plain", `project:${path}`);
-																				e.dataTransfer.effectAllowed = "move";
-																			}}
-																			onDragEnd={() => setProjInsert(null)}
-																			/** Head-level insert positioning (M2.8): hovering the
-																			 * head's top/bottom half shows the shared drop line and
-																			 * drops insert there; the block body keeps swap-on-drop. */
-																			onDragOver={e => {
-																				if (!e.dataTransfer.types.includes("text/plain")) return;
-																				e.preventDefault();
-																				e.stopPropagation();
-																				e.dataTransfer.dropEffect = "move";
-																				const r = e.currentTarget.getBoundingClientRect();
-																				setProjInsert({
-																					path,
-																					edge:
-																						e.clientY < r.top + r.height / 2 ? "before" : "after",
-																				});
-																			}}
-																			onDragLeave={() =>
-																				setProjInsert(cur => (cur?.path === path ? null : cur))
-																			}
-																			onDrop={e => {
-																				e.preventDefault();
-																				e.stopPropagation();
-																				const data = e.dataTransfer.getData("text/plain");
-																				const r = e.currentTarget.getBoundingClientRect();
-																				const edge =
-																					e.clientY < r.top + r.height / 2
-																						? ("before" as const)
-																						: ("after" as const);
-																				setProjInsert(null);
-																				if (!data.startsWith("project:")) return;
-																				const from = data.slice(8);
-																				if (from === path) return;
-																				setProjectOrder(() => {
-																					const next = orderedProjects
-																						.map(project => project.root)
-																						.filter(root => root !== from);
-																					let ti = next.indexOf(path);
-																					if (ti < 0)
-																						return orderedProjects.map(project => project.root);
-																					if (edge === "after") ti += 1;
-																					next.splice(ti, 0, from);
-																					return next;
-																				});
-																			}}
-																			onClick={() => toggleProject(path)}
-																			onContextMenu={e => {
-																				// Project blocks carry the same right-click
-																				// menu as group blocks (remove project lives here, not as
-																				// a lone side button).
-																				e.preventDefault();
-																				setProjectCtx({
-																					path,
-																					x: e.clientX,
-																					y: e.clientY,
-																				});
-																			}}
-																		>
-																			<Icon name="folder" className="h-3 w-3" />
-																			<span className="min-w-0 flex-1 truncate">{label}</span>
-																			{project.kind === "implicit" && (
-																				<span
-																					className="flex-shrink-0 text-[10px] text-[var(--color-text-faint)]"
-																					title={t("settings.implicitProjectHint")}
-																				>
-																					{t("settings.implicitProject")}
-																				</span>
-																			)}
-																			<span className="gui-project-count">{list.length}</span>
-																			<Icon
-																				name="arrow-down-s"
-																				className={`gui-project-chevron${isCollapsed ? " gui-project-chevron--closed" : ""}`}
-																			/>
-																		</button>
-																		<span className="gui-project-actions">
-																			{project?.kind === "implicit" ? (
-																				<button
-																					type="button"
-																					className="gui-project-action"
-																					title={t("settings.promoteProject")}
-																					aria-label={t("settings.promoteProject")}
-																					disabled={!rpc}
-																					onClick={e => {
-																						e.stopPropagation();
-																						promoteProject(path);
-																					}}
-																				>
-																					<Icon name="folder-add" className="h-3 w-3" />
-																				</button>
-																			) : (
-																				<button
-																					type="button"
-																					className="gui-project-action"
-																					title={t("projectDialog.editTitle")}
-																					aria-label={t("projectDialog.editTitle")}
-																					disabled={!rpc}
-																					onClick={e => {
-																						e.stopPropagation();
-																						openProjectEditor(path);
-																					}}
-																				>
-																					<Icon name="pencil" className="h-3 w-3" />
-																				</button>
-																			)}
+																		<Icon name="folder" className="h-3 w-3" />
+																		<span className="min-w-0 flex-1 truncate">{label}</span>
+																		{project.kind === "implicit" && (
+																			<span
+																				className="flex-shrink-0 text-[10px] text-[var(--color-text-faint)]"
+																				title={t("settings.implicitProjectHint")}
+																			>
+																				{t("settings.implicitProject")}
+																			</span>
+																		)}
+																		<span className="gui-project-count">{list.length}</span>
+																		<Icon
+																			name="arrow-down-s"
+																			className={`gui-project-chevron${isCollapsed ? " gui-project-chevron--closed" : ""}`}
+																		/>
+																	</button>
+																	<span className="gui-project-actions">
+																		{project?.kind === "implicit" ? (
 																			<button
 																				type="button"
 																				className="gui-project-action"
-																				title={t("tools.more")}
-																				aria-label={t("tools.more")}
-																				aria-haspopup="menu"
+																				title={t("settings.promoteProject")}
+																				aria-label={t("settings.promoteProject")}
+																				disabled={!rpc}
 																				onClick={e => {
 																					e.stopPropagation();
-																					const rect = e.currentTarget.getBoundingClientRect();
-																					setProjectCtx({
-																						path,
-																						x: rect.left,
-																						y: rect.bottom + 4,
-																					});
+																					promoteProject(path);
 																				}}
 																			>
-																				<Icon name="more" className="h-3 w-3" />
+																				<Icon name="folder-add" className="h-3 w-3" />
 																			</button>
+																		) : (
 																			<button
 																				type="button"
-																				className="gui-project-action gui-project-action--new"
-																				title={t("settings.newSession")}
-																				aria-label={t("settings.newSession")}
-																				disabled={!onNewSessionInProject}
+																				className="gui-project-action"
+																				title={t("projectDialog.editTitle")}
+																				aria-label={t("projectDialog.editTitle")}
+																				disabled={!rpc}
 																				onClick={e => {
 																					e.stopPropagation();
-																					onNewSessionInProject?.(path);
+																					openProjectEditor(path);
 																				}}
 																			>
-																				<Icon name="add" className="h-3 w-3" />
+																				<Icon name="pencil" className="h-3 w-3" />
 																			</button>
-																		</span>
-																		{projectCard?.path === path && (
-																			<ProjectHoverCard
-																				name={label}
-																				directories={[
-																					{ path, primary: true },
-																					...project.additionalDirs.map(root => ({
-																						path: root,
-																						primary: false,
-																					})),
-																				]}
-																				sessionCount={list.length}
-																				labelOf={pathBaseName}
-																				onOpenDirectory={openFolder}
-																				openLabel={openFolderLabel()}
-																				anchor={projectCard}
-																				cardRef={element => {
-																					projectCardEl.current = element;
-																				}}
-																				onPointerEnter={() => {
-																					if (projectCardTimer.current !== null)
-																						window.clearTimeout(projectCardTimer.current);
-																					projectCardTimer.current = null;
-																				}}
-																				onPointerLeave={hideProjectCardSoon}
-																				onRequestReturnFocus={returnFocusToProjectBlock}
-																			/>
 																		)}
-																	</div>
-																	<ProjectCollapse collapsed={isCollapsed}>
-																		{list.length === 0 ? (
-																			<p className="gui-project-empty">{t("settings.noSessions")}</p>
-																		) : (
-																			<SessionList
-																				nodes={list}
-																				selectedId={selectedId}
-																				onSelect={onSelect}
-																				onContextMenu={openSessionCtx}
-																				unread={unread}
-																				failed={failed}
-																				pausedIds={pausedIds}
-																				workingIds={workingIds}
-																				statuses={statuses}
-																				manualTags={manualTags}
-																				emojis={sessionEmoji}
-																				onRenameSession={onRenameSession}
-																				searchQuery={sessionQuery}
-																				retitlingId={retitlingId}
-																			/>
-																		)}
-																	</ProjectCollapse>
-																</div>
-															);
-														})}
-														{noFolder.length > 0 && (
-															<div className="mb-1.5">
-																<div className="gui-group-label flex items-center gap-1 px-2 pb-1 pt-2.5">
-																	<Icon name="folder" className="h-3 w-3" />
-																	<span className="min-w-0 flex-1 truncate">
-																		{t("transcript.noFolder")}
+																		<button
+																			type="button"
+																			className="gui-project-action"
+																			title={t("tools.more")}
+																			aria-label={t("tools.more")}
+																			aria-haspopup="menu"
+																			onClick={e => {
+																				e.stopPropagation();
+																				const rect = e.currentTarget.getBoundingClientRect();
+																				setProjectCtx({ path, x: rect.left, y: rect.bottom + 4 });
+																			}}
+																		>
+																			<Icon name="more" className="h-3 w-3" />
+																		</button>
+																		<button
+																			type="button"
+																			className="gui-project-action gui-project-action--new"
+																			title={t("settings.newSession")}
+																			aria-label={t("settings.newSession")}
+																			disabled={!onNewSessionInProject}
+																			onClick={e => {
+																				e.stopPropagation();
+																				onNewSessionInProject?.(path);
+																			}}
+																		>
+																			<Icon name="add" className="h-3 w-3" />
+																		</button>
 																	</span>
-																	<span className="text-[12px] text-[var(--color-text-faint)]">
-																		{noFolder.length}
-																	</span>
+																	{projectCard?.path === path && (
+																		<ProjectHoverCard
+																			name={label}
+																			directories={[
+																				{ path, primary: true },
+																				...project.additionalDirs.map(root => ({
+																					path: root,
+																					primary: false,
+																				})),
+																			]}
+																			sessionCount={list.length}
+																			labelOf={pathBaseName}
+																			onOpenDirectory={openFolder}
+																			openLabel={openFolderLabel()}
+																			anchor={projectCard}
+																			cardRef={element => {
+																				projectCardEl.current = element;
+																			}}
+																			onPointerEnter={() => {
+																				if (projectCardTimer.current !== null)
+																					window.clearTimeout(projectCardTimer.current);
+																				projectCardTimer.current = null;
+																			}}
+																			onPointerLeave={hideProjectCardSoon}
+																			onRequestReturnFocus={returnFocusToProjectBlock}
+																		/>
+																	)}
 																</div>
-																<SessionList
-																	nodes={noFolder}
-																	selectedId={selectedId}
-																	onSelect={onSelect}
-																	onContextMenu={openSessionCtx}
-																	unread={unread}
-																	failed={failed}
-																	pausedIds={pausedIds}
-																	workingIds={workingIds}
-																	statuses={statuses}
-																	manualTags={manualTags}
-																	emojis={sessionEmoji}
-																	onRenameSession={onRenameSession}
-																	searchQuery={sessionQuery}
-																	retitlingId={retitlingId}
-																/>
+																<ProjectCollapse collapsed={isCollapsed}>
+																	{list.length === 0 ? (
+																		<p className="gui-project-empty">{t("settings.noSessions")}</p>
+																	) : (
+																		<SessionList
+																			nodes={list}
+																			selectedId={selectedId}
+																			onSelect={onSelect}
+																			onContextMenu={openSessionCtx}
+																			unread={unread}
+																			failed={failed}
+																			pausedIds={pausedIds}
+																			workingIds={workingIds}
+																			statuses={statuses}
+																			manualTags={manualTags}
+																			emojis={sessionEmoji}
+																			onRenameSession={onRenameSession}
+																			searchQuery={sessionQuery}
+																			retitlingId={retitlingId}
+																		/>
+																	)}
+																</ProjectCollapse>
 															</div>
-														)}
-													</>
-												);
-											})()
-										)}
-									</>
-								) : (
-									<>
-										{/* Pinned sessions show in the groups tab too, above custom groups. */}
-										{pinnedNodes.length > 0 && (
-											<div className="mb-1.5">
-												<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
-												<SessionList
-													nodes={pinnedNodes}
-													selectedId={selectedId}
-													onSelect={onSelect}
-													onContextMenu={openSessionCtx}
-													pausedIds={pausedIds}
-													workingIds={workingIds}
-													statuses={statuses}
-													manualTags={manualTags}
-													emojis={sessionEmoji}
-													onRenameSession={onRenameSession}
-													searchQuery={sessionQuery}
-													retitlingId={retitlingId}
-												/>
-											</div>
-										)}
-										{/* The groups tab lists sessions too — custom
-										 * groups on top, then the time-grouped session tree. */}
-										<CustomGroups
-											groups={groups}
-											allOverride={groupsAll}
-											onOverrideClear={() => setGroupsAll(null)}
-											// Pinned sessions leave their groups (mutually exclusive): the
-											// pinned section above owns them while pinned.
-											nodes={searchedNodes.filter(n => !pinned.includes(n.entry.id))}
-											selectedId={selectedId}
-											onSelect={onSelect}
-											onSessionContextMenu={openSessionCtx}
-											onAddGroup={() =>
-												setGroups(g => [
-													...g,
-													{
-														name: t("settings.newGroup"),
-														sessions: [],
-														color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
-													},
-												])
-											}
-											onNewSession={onNewSession}
-											onDropSession={(i, id) =>
-												setGroups(gs =>
-													gs.map((g, gi) =>
-														gi !== i
-															? g
-															: {
-																	...g,
-																	sessions: g.sessions.includes(id) ? g.sessions : [...g.sessions, id],
-																},
-													),
-												)
-											}
-											onContextMenu={(i, x, y) => setGroupCtx({ index: i, x, y })}
-											onReorder={(from, to) =>
-												setGroups(gs => {
-													const next = [...gs];
-													const [moved] = next.splice(from, 1);
-													next.splice(to, 0, moved);
-													return next;
-												})
-											}
-											editIndex={groupEditIdx}
-											onEditStart={setGroupEditIdx}
-											onRename={(i, name) =>
-												setGroups(gs => gs.map((g, gi) => (gi === i ? { ...g, name } : g)))
-											}
-											onReorderMember={(gi, sessionId, to) =>
-												setGroups(gs =>
-													gs.map((g, i) => {
-														if (i !== gi) return g;
-														const from = g.sessions.indexOf(sessionId);
-														if (from < 0) return g;
-														const next = [...g.sessions];
-														next.splice(from, 1);
-														next.splice(to, 0, sessionId);
-														return { ...g, sessions: next };
-													}),
-												)
-											}
-											unread={unread}
-											failed={failed}
-											pausedIds={pausedIds}
-											workingIds={workingIds}
-											statuses={statuses}
-											manualTags={manualTags}
-											emojis={sessionEmoji}
-											onRenameSession={onRenameSession}
-											searchQuery={sessionQuery}
-											retitlingId={retitlingId}
-										/>
-										{cronNodes.length > 0 && cronSection}
-										<GroupedSessionList
-											nodes={regularNodes}
-											selectedId={selectedId}
-											onSelect={onSelect}
-											onContextMenu={openSessionCtx}
-											unread={unread}
-											failed={failed}
-											pausedIds={pausedIds}
-											workingIds={workingIds}
-											statuses={statuses}
-											manualTags={manualTags}
-											emojis={sessionEmoji}
-											onRenameSession={onRenameSession}
-											searchQuery={sessionQuery}
-											retitlingId={retitlingId}
-										/>
-									</>
-								)}
-							</div>
-							<ScrollEdgeBlur edge="top" />
-							<ScrollEdgeBlur edge="end" />
-						</div>
-					</div>
-					{gettingStarted}
-					{/* User footer: instance info (connection state, latency, host
-					 * switcher) on the left; the account entry (Settings, shortcuts,
-					 * share, hosts, disconnect) on the right. `showFooter` lets a host
-					 * move these entries into a permanent rail instead of losing them
-					 * when this panel folds. */}
-					{showFooter && (
-						<div className="gui-sidebar-footer flex items-center justify-between gap-1.5 border-t border-[var(--border)] px-3 py-2">
-							<InstanceButton
-								rpc={rpc ?? null}
-								connected={connected}
-								daemonUrl={daemonUrl}
-								hosts={hosts}
-								onSwitchHost={onSwitchHost}
-								onAddTarget={onAddTarget}
-								onRemoveHost={onRemoveHost}
-								onReconnect={onReconnect}
-								onDisconnect={onDisconnect}
-								onOpenWorkspace={onOpenWorkspace}
-								onOpenManager={onOpenInstanceManager}
-								onOpenDisclaimer={onOpenRemoteDisclaimer}
-							/>
-							{/* The account control, not a settings gear: the same user
-							 * picture the rail carries, so a host that renders this
-							 * footer gets one settings entry (in the menu) and never a
-							 * second gear. */}
-							<UserAccountButton
-								rpc={rpc ?? null}
-								cwd={sessionMeta.get(selectedId ?? "")?.cwd ?? ""}
-								connected={connected}
-								onOpenSettings={onOpenSettings}
-								onOpenShortcuts={onOpenShortcuts}
-								onDisconnect={onDisconnect}
-								compact={false}
-							/>
-						</div>
-					)}
-				</div>
-				{/* Session right-click menu: archive, copy id. */}
-				<ContextMenu
-					open={sessionCtx !== null}
-					x={sessionCtx?.x ?? 0}
-					y={sessionCtx?.y ?? 0}
-					onClose={() => setSessionCtx(null)}
-					items={
-						sessionCtx
-							? [
-									{
-										label: pinned.includes(sessionCtx.id) ? t("settings.unpinTask") : t("settings.pinTask"),
-										icon: "pushpin",
-										onSelect: () =>
-											persistPinned(
-												pinned.includes(sessionCtx.id)
-													? pinned.filter(x => x !== sessionCtx.id)
-													: [sessionCtx.id, ...pinned],
-											),
-									},
-									{
-										label: t("settings.setSessionEmoji"),
-										icon: "emotion-happy",
-										onSelect: () => {
-											setEmojiDraft(sessionEmoji.get(sessionCtx.id) ?? "");
-											setEmojiTarget(sessionCtx.id);
-											setSessionCtx(null);
-										},
-									},
-									{
-										label: t("general.reloadSession"),
-										icon: "refresh",
-										disabled: !onReloadSession,
-										onSelect: () => onReloadSession?.(sessionCtx.id),
-									},
-									{
-										label: t("settings.renameTask"),
-										icon: "pencil",
-										onSelect: () => void renameSession(sessionCtx.id),
-									},
-									// AI rename (daemon session.retitle: title from the first
-									// user message, same pipeline as auto-title). Gated on the
-									// prop so hosts without it keep the old menu shape. The row
-									// carries the busy state until the call settles, so cleanup
-									// lives in `finally` — a host callback that throws
-									// synchronously must not wedge `retitlingId`.
-									...(onRetitleSession
-										? [
+														);
+													})}
+													{noFolder.length > 0 && (
+														<div className="mb-1.5">
+															<div className="gui-group-label flex items-center gap-1 px-2 pb-1 pt-2.5">
+																<Icon name="folder" className="h-3 w-3" />
+																<span className="min-w-0 flex-1 truncate">
+																	{t("transcript.noFolder")}
+																</span>
+																<span className="text-[12px] text-[var(--color-text-faint)]">
+																	{noFolder.length}
+																</span>
+															</div>
+															<SessionList
+																nodes={noFolder}
+																selectedId={selectedId}
+																onSelect={onSelect}
+																onContextMenu={openSessionCtx}
+																unread={unread}
+																failed={failed}
+																pausedIds={pausedIds}
+																workingIds={workingIds}
+																statuses={statuses}
+																manualTags={manualTags}
+																emojis={sessionEmoji}
+																onRenameSession={onRenameSession}
+																searchQuery={sessionQuery}
+																retitlingId={retitlingId}
+															/>
+														</div>
+													)}
+												</>
+											);
+										})()
+									)}
+								</>
+							) : (
+								<>
+									{/* Pinned sessions show in the groups tab too, above custom groups. */}
+									{pinnedNodes.length > 0 && (
+										<div className="mb-1.5">
+											<div className="gui-group-label px-2 pb-1 pt-2.5">{t("settings.pinned")}</div>
+											<SessionList
+												nodes={pinnedNodes}
+												selectedId={selectedId}
+												onSelect={onSelect}
+												onContextMenu={openSessionCtx}
+												pausedIds={pausedIds}
+												workingIds={workingIds}
+												statuses={statuses}
+												manualTags={manualTags}
+												emojis={sessionEmoji}
+												onRenameSession={onRenameSession}
+												searchQuery={sessionQuery}
+												retitlingId={retitlingId}
+											/>
+										</div>
+									)}
+									{/* The groups tab lists sessions too — custom
+									 * groups on top, then the time-grouped session tree. */}
+									<CustomGroups
+										groups={groups}
+										allOverride={groupsAll}
+										onOverrideClear={() => setGroupsAll(null)}
+										// Pinned sessions leave their groups (mutually exclusive): the
+										// pinned section above owns them while pinned.
+										nodes={searchedNodes.filter(n => !pinned.includes(n.entry.id))}
+										selectedId={selectedId}
+										onSelect={onSelect}
+										onSessionContextMenu={openSessionCtx}
+										onAddGroup={() =>
+											setGroups(g => [
+												...g,
 												{
-													label:
-														retitlingId === sessionCtx.id
-															? t("general.aiRenaming")
-															: t("general.aiRename"),
-													icon: "ai-generate-2",
-													disabled: retitlingId !== null,
-													onSelect: () => {
-														const id = sessionCtx.id;
-														const run = onRetitleSession;
-														setRetitlingId(id);
-														void (async () => {
-															try {
-																const result = await run(id);
-																if (!result.ok)
-																	pushActionToast({
-																		kind: "error",
-																		message: retitleFailureMessage(result.reason),
-																	});
-															} catch {
+													name: t("settings.newGroup"),
+													sessions: [],
+													color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
+												},
+											])
+										}
+										onNewSession={onNewSession}
+										onDropSession={(i, id) =>
+											setGroups(gs =>
+												gs.map((g, gi) =>
+													gi !== i
+														? g
+														: {
+																...g,
+																sessions: g.sessions.includes(id) ? g.sessions : [...g.sessions, id],
+															},
+												),
+											)
+										}
+										onContextMenu={(i, x, y) => setGroupCtx({ index: i, x, y })}
+										onReorder={(from, to) =>
+											setGroups(gs => {
+												const next = [...gs];
+												const [moved] = next.splice(from, 1);
+												next.splice(to, 0, moved);
+												return next;
+											})
+										}
+										editIndex={groupEditIdx}
+										onEditStart={setGroupEditIdx}
+										onRename={(i, name) =>
+											setGroups(gs => gs.map((g, gi) => (gi === i ? { ...g, name } : g)))
+										}
+										onReorderMember={(gi, sessionId, to) =>
+											setGroups(gs =>
+												gs.map((g, i) => {
+													if (i !== gi) return g;
+													const from = g.sessions.indexOf(sessionId);
+													if (from < 0) return g;
+													const next = [...g.sessions];
+													next.splice(from, 1);
+													next.splice(to, 0, sessionId);
+													return { ...g, sessions: next };
+												}),
+											)
+										}
+										unread={unread}
+										failed={failed}
+										pausedIds={pausedIds}
+										workingIds={workingIds}
+										statuses={statuses}
+										manualTags={manualTags}
+										emojis={sessionEmoji}
+										onRenameSession={onRenameSession}
+										searchQuery={sessionQuery}
+										retitlingId={retitlingId}
+									/>
+									{cronNodes.length > 0 && cronSection}
+									<GroupedSessionList
+										nodes={regularNodes}
+										selectedId={selectedId}
+										onSelect={onSelect}
+										onContextMenu={openSessionCtx}
+										unread={unread}
+										failed={failed}
+										pausedIds={pausedIds}
+										workingIds={workingIds}
+										statuses={statuses}
+										manualTags={manualTags}
+										emojis={sessionEmoji}
+										onRenameSession={onRenameSession}
+										searchQuery={sessionQuery}
+										retitlingId={retitlingId}
+									/>
+								</>
+							)}
+						</div>
+						<ScrollEdgeBlur edge="top" />
+						<ScrollEdgeBlur edge="end" />
+					</div>
+				</div>
+				{gettingStarted}
+				{/* User footer: instance info (connection state, latency, host
+				 * switcher) on the left; the account entry (Settings, shortcuts,
+				 * share, hosts, disconnect) on the right. `showFooter` lets a host
+				 * move these entries into a permanent rail instead of losing them
+				 * when this panel folds. */}
+				{showFooter && (
+					<div className="gui-sidebar-footer flex items-center justify-between gap-1.5 border-t border-[var(--border)] px-3 py-2">
+						<InstanceButton
+							rpc={rpc ?? null}
+							connected={connected}
+							daemonUrl={daemonUrl}
+							hosts={hosts}
+							onSwitchHost={onSwitchHost}
+							onAddTarget={onAddTarget}
+							onRemoveHost={onRemoveHost}
+							onReconnect={onReconnect}
+							onDisconnect={onDisconnect}
+							onOpenWorkspace={onOpenWorkspace}
+							onOpenManager={onOpenInstanceManager}
+							onOpenDisclaimer={onOpenRemoteDisclaimer}
+						/>
+						{/* The account control, not a settings gear: the same user
+						 * picture the rail carries, so a host that renders this
+						 * footer gets one settings entry (in the menu) and never a
+						 * second gear. */}
+						<UserAccountButton
+							rpc={rpc ?? null}
+							cwd={sessionMeta.get(selectedId ?? "")?.cwd ?? ""}
+							connected={connected}
+							onOpenSettings={onOpenSettings}
+							onOpenShortcuts={onOpenShortcuts}
+							onDisconnect={onDisconnect}
+							compact={false}
+						/>
+					</div>
+				)}
+			</div>
+			{/* Session right-click menu: archive, copy id. */}
+			<ContextMenu
+				open={sessionCtx !== null}
+				x={sessionCtx?.x ?? 0}
+				y={sessionCtx?.y ?? 0}
+				onClose={() => setSessionCtx(null)}
+				items={
+					sessionCtx
+						? [
+								{
+									label: pinned.includes(sessionCtx.id) ? t("settings.unpinTask") : t("settings.pinTask"),
+									icon: "pushpin",
+									onSelect: () =>
+										persistPinned(
+											pinned.includes(sessionCtx.id)
+												? pinned.filter(x => x !== sessionCtx.id)
+												: [sessionCtx.id, ...pinned],
+										),
+								},
+								{
+									label: t("settings.setSessionEmoji"),
+									icon: "emotion-happy",
+									onSelect: () => {
+										setEmojiDraft(sessionEmoji.get(sessionCtx.id) ?? "");
+										setEmojiTarget(sessionCtx.id);
+										setSessionCtx(null);
+									},
+								},
+								{
+									label: t("general.reloadSession"),
+									icon: "refresh",
+									disabled: !onReloadSession,
+									onSelect: () => onReloadSession?.(sessionCtx.id),
+								},
+								{
+									label: t("settings.renameTask"),
+									icon: "pencil",
+									onSelect: () => void renameSession(sessionCtx.id),
+								},
+								// AI rename (daemon session.retitle: title from the first
+								// user message, same pipeline as auto-title). Gated on the
+								// prop so hosts without it keep the old menu shape. The row
+								// carries the busy state until the call settles, so cleanup
+								// lives in `finally` — a host callback that throws
+								// synchronously must not wedge `retitlingId`.
+								...(onRetitleSession
+									? [
+											{
+												label:
+													retitlingId === sessionCtx.id ? t("general.aiRenaming") : t("general.aiRename"),
+												icon: "ai-generate-2",
+												disabled: retitlingId !== null,
+												onSelect: () => {
+													const id = sessionCtx.id;
+													const run = onRetitleSession;
+													setRetitlingId(id);
+													void (async () => {
+														try {
+															const result = await run(id);
+															if (!result.ok)
 																pushActionToast({
 																	kind: "error",
-																	message: retitleFailureMessage("failed"),
+																	message: retitleFailureMessage(result.reason),
 																});
-															} finally {
-																setRetitlingId(current => (current === id ? null : current));
-															}
-														})();
-													},
-												},
-											]
-										: []),
-									{
-										// Open this session beside the active chat. The
-										// chat surface owns the panel tabs, so the row
-										// hands the request over as a window event — the
-										// same bridge pattern as the selection ask.
-										label: t("general.openToSide"),
-										icon: "layout-right",
-										onSelect: () => {
-											const id = sessionCtx.id;
-											const node = sessionNodeOf(id);
-											const advisor = node?.entry.advisor === true;
-											const rawEntryLabel = node?.entry.label ?? "";
-											window.dispatchEvent(
-												new CustomEvent("musepi-gui-open-session-side", {
-													detail: {
-														sessionId: id,
-														label:
-															advisor && !rawEntryLabel.trim()
-																? t("general.advisorSession")
-																: sessionLabelOf(id),
-														readOnly: advisor,
-													},
-												}),
-											);
-											setSessionCtx(null);
-										},
-									},
-									{
-										// Right-click: any session row (parent or
-										// subagent) can be popped out into the mini chat
-										// window; non-Electron hosts fall back to opening
-										// it in place (handled by the app callback).
-										label: t("general.openMiniChat"),
-										icon: "chat-1",
-										onSelect: () => onOpenMiniChat?.(sessionCtx.id),
-									},
-									{
-										label: t("settings.archiveTask"),
-										icon: "archive",
-										// cwd rides along so the archive row can show the folder.
-										// Archiving is a local list edit, so the undo is a
-										// synchronous reverse — no confirm dialog, no RPC.
-										onSelect: () => {
-											archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd);
-											pushActionToast({
-												kind: "success",
-												message: t("general.sessionArchived"),
-												dedupeKey: `session:archive:${sessionCtx.id}`,
-												actionLabel: t("general.undo"),
-												onAction: () => unarchiveSession(sessionCtx.id),
-											});
-										},
-									},
-									{
-										label: unread?.has(sessionCtx.id) ? t("settings.markRead") : t("settings.markUnread"),
-										icon: "chat-1",
-										onSelect: () => onToggleUnread?.(sessionCtx.id),
-									},
-									{ divider: true },
-									// Status tag (#完成/#中断/#错误…): manually tag a session
-									// so unfinished history reads at a glance even without
-									// grouping. The tag overrides the derived lifecycle
-									// status on the row's left square; 清除标记 restores it.
-									...(
-										[
-											{ tag: "complete", dot: "ok", label: t("settings.tagComplete") },
-											{
-												tag: "interrupted",
-												dot: "warning",
-												label: t("settings.tagInterrupted"),
-											},
-											{ tag: "error", dot: "danger", label: t("settings.tagError") },
-											{ tag: "aborted", dot: "muted", label: t("settings.tagAborted") },
-											{ tag: "pending", dot: "accent", label: t("settings.tagPending") },
-										] as const
-									).map(({ tag, dot, label }) => ({
-										label: `#${label}`,
-										icon: "circle" as const,
-										color: dot,
-										onSelect: () => setSessionTag(sessionCtx.id, tag),
-									})),
-									{
-										label: t("settings.clearTag"),
-										icon: "palette",
-										disabled: !manualTags.has(sessionCtx.id),
-										onSelect: () => setSessionTag(sessionCtx.id, null),
-									},
-									{ divider: true },
-									{
-										label: t("settings.copyPath"),
-										icon: "folder",
-										disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
-										onSelect: () => {
-											const cwd = sessionMeta.get(sessionCtx.id)?.cwd;
-											if (cwd) void navigator.clipboard?.writeText(cwd).catch(() => {});
-										},
-									},
-									// 文件面板根目录：一个会话可挂多个工作目录，文件面板
-									// 一次只浏览一个；这里选择的是「下次打开文件面板时用哪
-									// 个根」，选择按 session id 隔离，切会话不会串。
-									...(() => {
-										if (!sessionDirs || !rpc) return [];
-										const roots = sessionDirs.map(directory => directory.path);
-										const cwd = sessionMeta.get(sessionCtx.id)?.cwd ?? roots[0] ?? "";
-										if (!cwd) return [];
-										const selected = resolveWorkspaceRoot(
-											cwd,
-											roots,
-											fileRootSelection.get(rootSelectionKey(sessionCtx.id, cwd)),
-										);
-										return [
-											{ divider: true },
-											...(roots.length > 1
-												? roots.map(path => ({
-														label: pathBaseName(path),
-														description: directoriesEqual(path, cwd)
-															? t("settings.primaryDirectory")
-															: path,
-														icon: directoriesEqual(path, selected) ? "check" : "folder",
-														onSelect: () => {
-															fileRootSelection.set(rootSelectionKey(sessionCtx.id, cwd), path);
+														} catch {
 															pushActionToast({
-																kind: "success",
-																message: t("general.fileRootSelected", { path }),
+																kind: "error",
+																message: retitleFailureMessage("failed"),
 															});
-														},
-													}))
-												: []),
-											{
-												label: t("settings.addWorkingDirectory"),
-												icon: "folder-add",
-												onSelect: () => void addWorkingDirectory(sessionCtx.id),
+														} finally {
+															setRetitlingId(current => (current === id ? null : current));
+														}
+													})();
+												},
 											},
-											...(isRemoteMirrorCwd(cwd)
-												? []
-												: [
-														{
-															label: t("settings.addWorkingDirectoryRemember"),
-															description: t("settings.addWorkingDirectoryRememberHint"),
-															icon: "folder-add" as const,
-															onSelect: () => void addWorkingDirectory(sessionCtx.id, true),
-														},
-													]),
-											...sessionDirs
-												.filter(directory => !directory.primary)
-												.map(directory => ({
-													label: `${t("settings.removeDirectory")}: ${pathBaseName(directory.path)}`,
-													description: directory.path,
-													icon: "delete-bin",
-													danger: true,
-													onSelect: () => void removeWorkingDirectory(sessionCtx.id, directory.path),
-												})),
-										];
-									})(),
-									{
-										label: t("transcript.copySessionId"),
-										icon: "clipboard",
-										onSelect: () => {
-											void navigator.clipboard?.writeText(sessionCtx.id).catch(() => {});
+										]
+									: []),
+								{
+									// Open this session beside the active chat. The
+									// chat surface owns the panel tabs, so the row
+									// hands the request over as a window event — the
+									// same bridge pattern as the selection ask.
+									label: t("general.openToSide"),
+									icon: "layout-right",
+									onSelect: () => {
+										const id = sessionCtx.id;
+										const node = sessionNodeOf(id);
+										const advisor = node?.entry.advisor === true;
+										const rawEntryLabel = node?.entry.label ?? "";
+										window.dispatchEvent(
+											new CustomEvent("musepi-gui-open-session-side", {
+												detail: {
+													sessionId: id,
+													label:
+														advisor && !rawEntryLabel.trim()
+															? t("general.advisorSession")
+															: sessionLabelOf(id),
+													readOnly: advisor,
+												},
+											}),
+										);
+										setSessionCtx(null);
+									},
+								},
+								{
+									// Right-click: any session row (parent or
+									// subagent) can be popped out into the mini chat
+									// window; non-Electron hosts fall back to opening
+									// it in place (handled by the app callback).
+									label: t("general.openMiniChat"),
+									icon: "chat-1",
+									onSelect: () => onOpenMiniChat?.(sessionCtx.id),
+								},
+								{
+									label: t("settings.archiveTask"),
+									icon: "archive",
+									// cwd rides along so the archive row can show the folder.
+									// Archiving is a local list edit, so the undo is a
+									// synchronous reverse — no confirm dialog, no RPC.
+									onSelect: () => {
+										archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd);
+										pushActionToast({
+											kind: "success",
+											message: t("general.sessionArchived"),
+											dedupeKey: `session:archive:${sessionCtx.id}`,
+											actionLabel: t("general.undo"),
+											onAction: () => unarchiveSession(sessionCtx.id),
+										});
+									},
+								},
+								{
+									label: unread?.has(sessionCtx.id) ? t("settings.markRead") : t("settings.markUnread"),
+									icon: "chat-1",
+									onSelect: () => onToggleUnread?.(sessionCtx.id),
+								},
+								{ divider: true },
+								// Status tag (#完成/#中断/#错误…): manually tag a session
+								// so unfinished history reads at a glance even without
+								// grouping. The tag overrides the derived lifecycle
+								// status on the row's left square; 清除标记 restores it.
+								...(
+									[
+										{ tag: "complete", dot: "ok", label: t("settings.tagComplete") },
+										{
+											tag: "interrupted",
+											dot: "warning",
+											label: t("settings.tagInterrupted"),
 										},
-									},
-									{ divider: true },
-									{
-										label: openFolderLabel(),
-										icon: "folder-open",
-										disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
-										onSelect: () => openInFinder(sessionCtx.id),
-									},
-									// Export transcript (read-only session.snapshot RPC,
-									// same Markdown builder as the top-bar menu). Gated on
-									// the prop like delete.
-									...(onExportSession
-										? [
-												{
-													label: t("general.exportMarkdown"),
-													icon: "download",
-													onSelect: () => {
-														const id = sessionCtx.id;
-														void onExportSession(id, sessionLabelOf(id)).then(ok => {
-															if (!ok)
-																pushActionToast({ kind: "error", message: t("general.exportFailed") });
-														});
-													},
-												},
-											]
-										: []),
-									// Permanent delete (daemon session.delete + centralized
-									// confirm in app.deleteSession, same as the top-bar menu).
-									// Gated on the prop so hosts without deletion keep the
-									// old menu shape.
-									...(onDeleteSession
-										? [
-												{ divider: true },
-												{
-													label: t("general.deleteSession"),
-													icon: "delete-bin",
-													danger: true,
-													onSelect: () => {
-														void onDeleteSession(sessionCtx.id);
-													},
-												},
-											]
-										: []),
-								]
-							: []
-					}
-				/>
-				{/* Group right-click menu: rename / delete. */}
-				<ContextMenu
-					open={groupCtx !== null}
-					x={groupCtx?.x ?? 0}
-					y={groupCtx?.y ?? 0}
-					onClose={() => setGroupCtx(null)}
-					items={
-						groupCtx
-							? [
-									{
-										label: t("transcript.renameGroup"),
-										icon: "pencil",
-										onSelect: () => renameGroup(groupCtx.index),
-									},
-									{ divider: true },
-									...GROUP_COLORS.map(color => ({
-										label: t("settings.groupColorWithColor", { color: color }),
-										icon: "circle" as const,
-										onSelect: () =>
-											setGroups(gs => gs.map((g, i) => (i === groupCtx.index ? { ...g, color } : g))),
-										color,
-									})),
-									{ divider: true },
-									{
-										label: t("transcript.deleteGroup"),
-										icon: "delete-bin",
-										danger: true,
-										onSelect: () => setGroups(gs => gs.filter((_, i) => i !== groupCtx.index)),
-									},
-								]
-							: []
-					}
-				/>
-				{/* Project block right-click menu: same frosted-glass ContextMenu
-				 * component as the group menu — open folder, copy path, rename,
-				 * working directories, remove project. An implicit row (session
-				 * history backfill) is read-only until it is promoted to managed. */}
-				<ContextMenu
-					open={projectCtx !== null}
-					x={projectCtx?.x ?? 0}
-					y={projectCtx?.y ?? 0}
-					onClose={() => setProjectCtx(null)}
-					items={(() => {
-						if (!projectCtx) return [];
-						const project = projectOf(projectCtx.path);
-						const reveal = {
-							label: openFolderLabel(),
-							icon: "folder-open",
-							onSelect: () => openFolder(projectCtx.path),
-						};
-						const copyPath = {
-							label: t("settings.copyPath"),
-							icon: "clipboard",
-							onSelect: () => {
-								void navigator.clipboard?.writeText(projectCtx.path).catch(() => {});
-							},
-						};
-						if (!project || project.kind === "implicit") {
-							return [
-								reveal,
-								copyPath,
+										{ tag: "error", dot: "danger", label: t("settings.tagError") },
+										{ tag: "aborted", dot: "muted", label: t("settings.tagAborted") },
+										{ tag: "pending", dot: "accent", label: t("settings.tagPending") },
+									] as const
+								).map(({ tag, dot, label }) => ({
+									label: `#${label}`,
+									icon: "circle" as const,
+									color: dot,
+									onSelect: () => setSessionTag(sessionCtx.id, tag),
+								})),
+								{
+									label: t("settings.clearTag"),
+									icon: "palette",
+									disabled: !manualTags.has(sessionCtx.id),
+									onSelect: () => setSessionTag(sessionCtx.id, null),
+								},
 								{ divider: true },
 								{
-									label: t("settings.promoteProject"),
-									description: t("settings.promoteProjectHint"),
-									icon: "folder-add",
-									disabled: !rpc,
-									onSelect: () => promoteProject(projectCtx.path),
+									label: t("settings.copyPath"),
+									icon: "folder",
+									disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
+									onSelect: () => {
+										const cwd = sessionMeta.get(sessionCtx.id)?.cwd;
+										if (cwd) void navigator.clipboard?.writeText(cwd).catch(() => {});
+									},
 								},
-							];
-						}
+								// 文件面板根目录：一个会话可挂多个工作目录，文件面板
+								// 一次只浏览一个；这里选择的是「下次打开文件面板时用哪
+								// 个根」，选择按 session id 隔离，切会话不会串。
+								...(() => {
+									if (!sessionDirs || !rpc) return [];
+									const roots = sessionDirs.map(directory => directory.path);
+									const cwd = sessionMeta.get(sessionCtx.id)?.cwd ?? roots[0] ?? "";
+									if (!cwd) return [];
+									const selected = resolveWorkspaceRoot(
+										cwd,
+										roots,
+										fileRootSelection.get(rootSelectionKey(sessionCtx.id, cwd)),
+									);
+									return [
+										{ divider: true },
+										...(roots.length > 1
+											? roots.map(path => ({
+													label: pathBaseName(path),
+													description: directoriesEqual(path, cwd) ? t("settings.primaryDirectory") : path,
+													icon: directoriesEqual(path, selected) ? "check" : "folder",
+													onSelect: () => {
+														fileRootSelection.set(rootSelectionKey(sessionCtx.id, cwd), path);
+														pushActionToast({
+															kind: "success",
+															message: t("general.fileRootSelected", { path }),
+														});
+													},
+												}))
+											: []),
+										{
+											label: t("settings.addWorkingDirectory"),
+											icon: "folder-add",
+											onSelect: () => void addWorkingDirectory(sessionCtx.id),
+										},
+										...(isRemoteMirrorCwd(cwd)
+											? []
+											: [
+													{
+														label: t("settings.addWorkingDirectoryRemember"),
+														description: t("settings.addWorkingDirectoryRememberHint"),
+														icon: "folder-add" as const,
+														onSelect: () => void addWorkingDirectory(sessionCtx.id, true),
+													},
+												]),
+										...sessionDirs
+											.filter(directory => !directory.primary)
+											.map(directory => ({
+												label: `${t("settings.removeDirectory")}: ${pathBaseName(directory.path)}`,
+												description: directory.path,
+												icon: "delete-bin",
+												danger: true,
+												onSelect: () => void removeWorkingDirectory(sessionCtx.id, directory.path),
+											})),
+									];
+								})(),
+								{
+									label: t("transcript.copySessionId"),
+									icon: "clipboard",
+									onSelect: () => {
+										void navigator.clipboard?.writeText(sessionCtx.id).catch(() => {});
+									},
+								},
+								{ divider: true },
+								{
+									label: openFolderLabel(),
+									icon: "folder-open",
+									disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
+									onSelect: () => openInFinder(sessionCtx.id),
+								},
+								// Export transcript (read-only session.snapshot RPC,
+								// same Markdown builder as the top-bar menu). Gated on
+								// the prop like delete.
+								...(onExportSession
+									? [
+											{
+												label: t("general.exportMarkdown"),
+												icon: "download",
+												onSelect: () => {
+													const id = sessionCtx.id;
+													void onExportSession(id, sessionLabelOf(id)).then(ok => {
+														if (!ok)
+															pushActionToast({ kind: "error", message: t("general.exportFailed") });
+													});
+												},
+											},
+										]
+									: []),
+								// Permanent delete (daemon session.delete + centralized
+								// confirm in app.deleteSession, same as the top-bar menu).
+								// Gated on the prop so hosts without deletion keep the
+								// old menu shape.
+								...(onDeleteSession
+									? [
+											{ divider: true },
+											{
+												label: t("general.deleteSession"),
+												icon: "delete-bin",
+												danger: true,
+												onSelect: () => {
+													void onDeleteSession(sessionCtx.id);
+												},
+											},
+										]
+									: []),
+							]
+						: []
+				}
+			/>
+			{/* Group right-click menu: rename / delete. */}
+			<ContextMenu
+				open={groupCtx !== null}
+				x={groupCtx?.x ?? 0}
+				y={groupCtx?.y ?? 0}
+				onClose={() => setGroupCtx(null)}
+				items={
+					groupCtx
+						? [
+								{
+									label: t("transcript.renameGroup"),
+									icon: "pencil",
+									onSelect: () => renameGroup(groupCtx.index),
+								},
+								{ divider: true },
+								...GROUP_COLORS.map(color => ({
+									label: t("settings.groupColorWithColor", { color: color }),
+									icon: "circle" as const,
+									onSelect: () =>
+										setGroups(gs => gs.map((g, i) => (i === groupCtx.index ? { ...g, color } : g))),
+									color,
+								})),
+								{ divider: true },
+								{
+									label: t("transcript.deleteGroup"),
+									icon: "delete-bin",
+									danger: true,
+									onSelect: () => setGroups(gs => gs.filter((_, i) => i !== groupCtx.index)),
+								},
+							]
+						: []
+				}
+			/>
+			{/* Project block right-click menu: same frosted-glass ContextMenu
+			 * component as the group menu — open folder, copy path, rename,
+			 * working directories, remove project. An implicit row (session
+			 * history backfill) is read-only until it is promoted to managed. */}
+			<ContextMenu
+				open={projectCtx !== null}
+				x={projectCtx?.x ?? 0}
+				y={projectCtx?.y ?? 0}
+				onClose={() => setProjectCtx(null)}
+				items={(() => {
+					if (!projectCtx) return [];
+					const project = projectOf(projectCtx.path);
+					const reveal = {
+						label: openFolderLabel(),
+						icon: "folder-open",
+						onSelect: () => openFolder(projectCtx.path),
+					};
+					const copyPath = {
+						label: t("settings.copyPath"),
+						icon: "clipboard",
+						onSelect: () => {
+							void navigator.clipboard?.writeText(projectCtx.path).catch(() => {});
+						},
+					};
+					if (!project || project.kind === "implicit") {
 						return [
 							reveal,
 							copyPath,
 							{ divider: true },
 							{
-								label: t("projectDialog.editTitle"),
-								description: t("settings.manageDirectoriesHint"),
-								icon: "pencil",
+								label: t("settings.promoteProject"),
+								description: t("settings.promoteProjectHint"),
+								icon: "folder-add",
 								disabled: !rpc,
-								onSelect: () => {
-									setProjectCtx(null);
-									openProjectEditor(projectCtx.path);
-								},
-							},
-							{ divider: true },
-							{
-								label: t("general.removeProject"),
-								icon: "delete-bin",
-								danger: true,
-								disabled: !rpc,
-								onSelect: () => removeProject(projectCtx.path),
+								onSelect: () => promoteProject(projectCtx.path),
 							},
 						];
-					})()}
-				/>
-				{/* Session emoji: a compact palette plus a free-text field so a
-				 * custom glyph is still possible. Stored locally like tags/pins. */}
-				<DialogFrame
-					open={emojiTarget !== null}
-					onClose={() => setEmojiTarget(null)}
-					label={t("settings.sessionEmoji")}
-					className="gui-emoji-dialog"
-				>
-					<div className="flex flex-col gap-3">
-						<div className="gui-new-project-field">
-							<div className="gui-new-project-label">{t("settings.sessionEmoji")}</div>
-							<input
-								className="gui-input w-full"
-								value={emojiDraft}
-								maxLength={16}
-								autoFocus
-								placeholder="😀"
-								onChange={event => setEmojiDraft(event.target.value)}
-								onKeyDown={event => {
-									if (event.key === "Enter" && emojiTarget) {
-										setSessionEmoji(emojiTarget, emojiDraft);
-										setEmojiTarget(null);
-									}
-								}}
-							/>
-							<p className="m-0 text-[11px] text-[var(--color-text-faint)]">{t("settings.sessionEmojiHint")}</p>
-						</div>
-						<div className="gui-emoji-grid">
-							{SESSION_EMOJI_PALETTE.map(emoji => (
-								<button
-									key={emoji}
-									type="button"
-									className={`gui-emoji-chip${emojiDraft === emoji ? " gui-emoji-chip--active" : ""}`}
-									onClick={() => setEmojiDraft(emoji)}
-								>
-									{emoji}
-								</button>
-							))}
-						</div>
-						<div className="flex items-center justify-between gap-2">
+					}
+					return [
+						reveal,
+						copyPath,
+						{ divider: true },
+						{
+							label: t("projectDialog.editTitle"),
+							description: t("settings.manageDirectoriesHint"),
+							icon: "pencil",
+							disabled: !rpc,
+							onSelect: () => {
+								setProjectCtx(null);
+								openProjectEditor(projectCtx.path);
+							},
+						},
+						{ divider: true },
+						{
+							label: t("general.removeProject"),
+							icon: "delete-bin",
+							danger: true,
+							disabled: !rpc,
+							onSelect: () => removeProject(projectCtx.path),
+						},
+					];
+				})()}
+			/>
+			{/* Session emoji: a compact palette plus a free-text field so a
+			 * custom glyph is still possible. Stored locally like tags/pins. */}
+			<DialogFrame
+				open={emojiTarget !== null}
+				onClose={() => setEmojiTarget(null)}
+				label={t("settings.sessionEmoji")}
+				className="gui-emoji-dialog"
+			>
+				<div className="flex flex-col gap-3">
+					<div className="gui-new-project-field">
+						<div className="gui-new-project-label">{t("settings.sessionEmoji")}</div>
+						<input
+							className="gui-input w-full"
+							value={emojiDraft}
+							maxLength={16}
+							autoFocus
+							placeholder="😀"
+							onChange={event => setEmojiDraft(event.target.value)}
+							onKeyDown={event => {
+								if (event.key === "Enter" && emojiTarget) {
+									setSessionEmoji(emojiTarget, emojiDraft);
+									setEmojiTarget(null);
+								}
+							}}
+						/>
+						<p className="m-0 text-[11px] text-[var(--color-text-faint)]">{t("settings.sessionEmojiHint")}</p>
+					</div>
+					<div className="gui-emoji-grid">
+						{SESSION_EMOJI_PALETTE.map(emoji => (
+							<button
+								key={emoji}
+								type="button"
+								className={`gui-emoji-chip${emojiDraft === emoji ? " gui-emoji-chip--active" : ""}`}
+								onClick={() => setEmojiDraft(emoji)}
+							>
+								{emoji}
+							</button>
+						))}
+					</div>
+					<div className="flex items-center justify-between gap-2">
+						<button
+							type="button"
+							className="gui-btn"
+							onClick={() => {
+								if (emojiTarget) setSessionEmoji(emojiTarget, null);
+								setEmojiTarget(null);
+							}}
+						>
+							{t("settings.clearEmoji")}
+						</button>
+						<div className="flex items-center gap-2">
+							<button type="button" className="gui-btn" onClick={() => setEmojiTarget(null)}>
+								{t("settings.cancel")}
+							</button>
 							<button
 								type="button"
-								className="gui-btn"
+								className="gui-btn gui-btn-primary"
 								onClick={() => {
-									if (emojiTarget) setSessionEmoji(emojiTarget, null);
+									if (emojiTarget) setSessionEmoji(emojiTarget, emojiDraft);
 									setEmojiTarget(null);
 								}}
 							>
-								{t("settings.clearEmoji")}
+								{t("general.save")}
 							</button>
-							<div className="flex items-center gap-2">
-								<button type="button" className="gui-btn" onClick={() => setEmojiTarget(null)}>
-									{t("settings.cancel")}
-								</button>
-								<button
-									type="button"
-									className="gui-btn gui-btn-primary"
-									onClick={() => {
-										if (emojiTarget) setSessionEmoji(emojiTarget, emojiDraft);
-										setEmojiTarget(null);
-									}}
-								>
-									{t("general.save")}
-								</button>
-							</div>
 						</div>
 					</div>
-				</DialogFrame>
-				{/* One project modal for name + source folders. Create and edit share
-				 * the same body so the sidebar, project header and file pane cannot
-				 * drift into separate editing surfaces. */}
-				<ProjectDialog
-					open={projectDialog !== null}
-					mode={projectDialog?.mode ?? "edit"}
-					target={projectDialog?.target ?? null}
-					rpc={rpc ?? null}
-					onClose={() => setProjectDialog(null)}
-					onSaved={applyProjectResult}
-				/>
-				{/* Session hover card — one instance for the whole sidebar; rows
-				 *  report through the module bus (SessionHoverCard.tsx), the card
-				 *  portals to document.body so the sidebar's glass/transform
-				 *  ancestors can't hijack its fixed positioning. */}
-				<SessionHoverCard meta={sessionMeta} modeCatalog={modeCatalog} />
-			</aside>
-		</>
+				</div>
+			</DialogFrame>
+			{/* One project modal for name + source folders. Create and edit share
+			 * the same body so the sidebar, project header and file pane cannot
+			 * drift into separate editing surfaces. */}
+			<ProjectDialog
+				open={projectDialog !== null}
+				mode={projectDialog?.mode ?? "edit"}
+				target={projectDialog?.target ?? null}
+				rpc={rpc ?? null}
+				onClose={() => setProjectDialog(null)}
+				onSaved={applyProjectResult}
+			/>
+			{/* Session hover card — one instance for the whole sidebar; rows
+			 *  report through the module bus (SessionHoverCard.tsx), the card
+			 *  portals to document.body so the sidebar's glass/transform
+			 *  ancestors can't hijack its fixed positioning. */}
+			<SessionHoverCard meta={sessionMeta} modeCatalog={modeCatalog} />
+		</aside>
 	);
 }

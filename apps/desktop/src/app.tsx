@@ -75,6 +75,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
+import { SidebarToggleButton } from "./components/SidebarToggleButton";
 import { SplitterGrip } from "./components/SplitterGrip";
 import { type BootPhase, StartupSplash, useBootStatus, useSplashHold } from "./components/StartupSplash";
 import { useSessionInfoCardVisibility } from "./components/session-info-card";
@@ -5562,6 +5563,9 @@ function AppInner(): ReactNode {
 							else peeked.onSelect();
 						}}
 					>
+						{(!pageDestinationActive || secondTierPanelVisible) && (
+							<SidebarToggleButton collapsed={sideCollapsed} onToggle={toggleSidebar} />
+						)}
 						<SessionSidebar
 							nodes={tree}
 							sessionMeta={sessionMeta}
@@ -5592,8 +5596,6 @@ function AppInner(): ReactNode {
 							onImportSessions={() => setImportOpen(true)}
 							modeCatalog={welcomeModes}
 							collapsed={peekOpen || narrowSidebarOpen ? false : sideCollapsed}
-							toggleAvailable={!pageDestinationActive || secondTierPanelVisible}
-							onToggleCollapsed={toggleSidebar}
 							width={sideWidth}
 							onDeleteArchived={deleteSession}
 							onDeleteSession={deleteSession}
