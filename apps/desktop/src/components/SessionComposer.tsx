@@ -584,7 +584,7 @@ export function SessionComposer({
 		setTodoOpen,
 		appendText,
 		setAppendText,
-	} = useModes(rpc, sessionId);
+	} = useModes(rpc, sessionId, entries ?? []);
 	// ── Design-session style select（M3.7b §3 生效链路）──────────────────
 	// session.modes.agentPreset === "design" gates the row; the pick writes via
 	// session.setDesignSystem RPC (null = 跟随既有/清除) and the initial

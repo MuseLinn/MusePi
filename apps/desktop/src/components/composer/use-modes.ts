@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import type { SessionEntry } from "@musepi/pi-wire";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
+import { todoPhasesFromEntries } from "./todo-from-transcript";
 import type { TodoPhaseView } from "./todo-panel";
+
+/** Reconciliation cadence for what the transcript cannot express (goal/plan
+ *  mode, session preset). The todo list no longer depends on it. */
+const MODES_RECONCILE_MS = 30_000;
 
 /** session.modes wire shape (TUI /goal /plan parity). */
 export interface ComposerModes {
@@ -13,16 +19,24 @@ export interface ComposerModes {
 }
 
 /**
- * Goal / plan mode + todo progress (TUI /goal /plan parity): polls
- * session.modes every 3s (visibility-gated), arms goal mode (one tap with
- * no live goal arms goal mode — the NEXT SENT MESSAGE becomes the
- * objective), and routes todo mutations through session.todo. `setModes`
- * is returned so the composer's send path can apply a goal created from
- * the sent message.
+ * Goal / plan mode + todo progress (TUI /goal /plan parity).
+ *
+ * The TODO LIST is derived from the transcript (`todoPhasesFromEntries`),
+ * not polled: entries are pushed, so the panel follows the agent as it works
+ * instead of up to 3s behind. `session.modes` is still read, but now only for
+ * what the transcript cannot express — goal/plan mode, the session preset and
+ * the compaction flag — and on a reconciliation interval rather than as the
+ * source of every tick.
+ *
+ * It also arms goal mode (one tap with no live goal makes the NEXT SENT
+ * MESSAGE the objective) and routes todo mutations through session.todo.
+ * `setModes` is returned so the composer's send path can apply a goal created
+ * from the sent message.
  */
 export function useModes(
 	rpc: RpcClient | null,
 	sessionId: string,
+	entries: readonly SessionEntry[] = [],
 ): {
 	modes: ComposerModes | null;
 	setModes(next: ComposerModes | null | ((prev: ComposerModes | null) => ComposerModes | null)): void;
@@ -56,14 +70,16 @@ export function useModes(
 	}, [rpc, sessionId]);
 	useEffect(() => {
 		refreshModes();
-		let id = setInterval(refreshModes, 3000);
-		// The poll is pure UI freshness — never run it while the tab is
-		// hidden (background CPU + daemon RPCs for nothing).
+		// Reconciliation only: the todo list comes from the transcript and
+		// local goal/plan/todo mutations merge their own RPC response, so this
+		// catches a goal or preset changed elsewhere (the TUI, a `/goal` in a
+		// terminal). Never runs while the tab is hidden.
+		let id = setInterval(refreshModes, MODES_RECONCILE_MS);
 		const onVis = (): void => {
 			clearInterval(id);
 			if (document.visibilityState === "visible") {
 				refreshModes();
-				id = setInterval(refreshModes, 3000);
+				id = setInterval(refreshModes, MODES_RECONCILE_MS);
 			}
 		};
 		document.addEventListener("visibilitychange", onVis);
@@ -99,7 +115,10 @@ export function useModes(
 			.then(res => setModes(res as typeof modes))
 			.catch(() => {});
 	};
-	const todo = modes?.todo ?? [];
+	// The transcript is the live source: the agent's own `todo` results and the
+	// panel's `user_todo_edit` rows both land there as pushed entries.
+	const derivedTodo = useMemo(() => todoPhasesFromEntries(entries), [entries]);
+	const todo = entries.length > 0 ? derivedTodo : (modes?.todo ?? []);
 	const todoTotal = todo.reduce((n, p) => n + p.total, 0);
 	const todoDone = todo.reduce((n, p) => n + p.done, 0);
 	// Todo mutations (TUI /todo parity): the panel is read-only without
