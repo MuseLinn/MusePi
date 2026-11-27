@@ -5399,11 +5399,6 @@ function AppInner(): ReactNode {
 				onOpenManager={requestRemoteAccess}
 				onOpenDisclaimer={viewRemoteDisclaimer}
 			/>
-			{/* One community line closes the rail: the GitHub mark, then star and
-			 * issues on the same row. They live here rather than in the account
-			 * menu because they are what a person reaches for when something is
-			 * wrong or worth supporting. */}
-			<RailCommunityLinks expanded={railExpanded} />
 		</>
 	);
 
@@ -5450,6 +5445,9 @@ function AppInner(): ReactNode {
 						onTogglePanel={toggleSidebar}
 						onPeekPanel={peekEligible ? openPeek : undefined}
 						onPeekEnd={peekEligible ? closePeek : undefined}
+						// Closes the rail, below the account: the GitHub mark, then
+						// star and issues on one line.
+						community={<RailCommunityLinks expanded={railExpanded} />}
 						expanded={railExpanded}
 						onToggleExpanded={toggleRailExpanded}
 					/>

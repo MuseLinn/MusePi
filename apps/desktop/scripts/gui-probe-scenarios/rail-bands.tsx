@@ -38,9 +38,9 @@ const rail = (expanded: boolean): ReactNode => (
 				onReconnect={() => {}}
 				onDisconnect={() => {}}
 			/>
-			<RailCommunityLinks expanded={expanded} />
 			</>
 		}
+		community={<RailCommunityLinks expanded={expanded} />}
 		account={
 			<UserAccountButton
 				rpc={null}
@@ -68,11 +68,22 @@ function bandEdges(body: ParentNode) {
 		if (!node) return null;
 		return round(node.getBoundingClientRect().left - railBox.left);
 	};
+	/** CENTRE x, which is what "aligned on the column axis" means. A left edge
+	 *  differs by half the element's width, so it cannot compare a 36px mark with
+	 *  an 18px glyph. */
+	const centre = (selector: string): number | null => {
+		const node = body.querySelector<HTMLElement>(selector);
+		if (!node) return null;
+		const r = node.getBoundingClientRect();
+		return round(r.left + r.width / 2 - railBox.left);
+	};
 	return {
 		railLeft: round(railBox.left),
 		railWidth: round(railBox.width),
 		// The brand mark inside the header button.
-		headerGlyph: edge(".gui-rail-brand-mark"),
+		headerGlyph: centre(".gui-rail-brand-mark"),
+		headerCentre: centre(".gui-rail-brand-mark"),
+		rowCentre: centre(".gui-rail-btn .gui-rail-icon"),
 		headerButton: edge(".gui-rail-brand"),
 		// A destination's glyph.
 		rowButton: edge(".gui-rail-btn"),
@@ -103,6 +114,20 @@ function bandEdges(body: ParentNode) {
 				radius: cs.borderTopLeftRadius,
 				shadow: cs.boxShadow !== "none",
 				transition: cs.transitionProperty,
+			};
+		})(),
+		headComputed: (() => {
+			const n = body.querySelector<HTMLElement>(".gui-rail-head");
+			if (!n) return null;
+			const cs = getComputedStyle(n);
+			const b = body.querySelector<HTMLElement>(".gui-rail-brand");
+			const bs = b ? getComputedStyle(b) : null;
+			return {
+				headJustify: cs.justifyContent,
+				headPadL: cs.paddingLeft,
+				brandW: bs?.width,
+				brandPadL: bs?.paddingLeft,
+				brandJustify: bs?.justifyContent,
 			};
 		})(),
 		railPad: (() => {

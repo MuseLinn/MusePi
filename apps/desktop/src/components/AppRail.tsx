@@ -359,6 +359,7 @@ export function AppRail({
 	onTogglePanel,
 	onPeekPanel,
 	onPeekEnd,
+	community,
 	expanded = false,
 	onToggleExpanded,
 }: {
@@ -390,6 +391,9 @@ export function AppRail({
 	/** Present only where the rail may widen; its absence keeps the rail a
 	 *  fixed icon strip (the settings preview renders it that way). */
 	onToggleExpanded?(): void;
+	/** The community line. Rendered AFTER the account so it closes the rail,
+	 *  whatever order the host passes its other footer controls in. */
+	community?: ReactNode;
 }): ReactNode {
 	// The 48px top band is EMPTY by design: the window's own fold/unfold
 	// control lives in the titlebar cluster at the panel's top edge. Rendering
@@ -459,6 +463,7 @@ export function AppRail({
 			<div className="gui-rail-group">
 				{footerActions}
 				{account}
+				{community}
 			</div>
 		</nav>
 	);
