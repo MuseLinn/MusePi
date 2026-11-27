@@ -16,6 +16,7 @@ interface ComparisonResult extends ComparisonInput {
 	whole: string;
 	streamed: string;
 	redecoded: string;
+	stopMs: number;
 	streamedCer: number;
 	redecodedCer: number;
 	streamedContentCer: number;
@@ -50,8 +51,11 @@ async function compare(item: ComparisonInput, root: string, modelKey: SttModelKe
 	});
 	for (let offset = 0; offset < samples.length; offset += 1_600) {
 		stream.pushAudio(samples.slice(offset, Math.min(samples.length, offset + 1_600)));
+		if (process.env.STT_COMPARE_REALTIME === "1") await Bun.sleep(100);
 	}
+	const stopStartedAt = performance.now();
 	const redecoded = await stream.stop();
+	const stopMs = performance.now() - stopStartedAt;
 	const streamed = joinSegmentTexts(segments);
 	return {
 		...item,
@@ -59,6 +63,7 @@ async function compare(item: ComparisonInput, root: string, modelKey: SttModelKe
 		whole,
 		streamed,
 		redecoded,
+		stopMs,
 		streamedCer: cer(whole, streamed),
 		redecodedCer: cer(whole, redecoded),
 		streamedContentCer: cer(whole, streamed, true),

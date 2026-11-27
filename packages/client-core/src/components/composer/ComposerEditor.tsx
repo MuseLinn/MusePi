@@ -437,8 +437,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 					// animation. Here a growing phrase extends its own tail, so the
 					// per-character effect plays for the new glyphs and nothing else.
 					const previous = dictationFieldRange(view);
-					const { from: dictatedAt, to: dictatedTo, ins: block } = next;
-					void dictatedTo;
+					const { ins: block } = next;
 					// The live document's region spans the previous block — or, on the
 					// first write, the start caret and any replaced selection. Either
 					// can be stale: the document may have been replaced wholesale while
@@ -457,15 +456,29 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						view.dispatch({ effects: setDictationRangeEffect.of(null) });
 						return;
 					}
-					if (doc !== next.value) {
+					// The block starts AFTER the lead separator, but the first write lands
+					// at the bare caret, so it must carry that separator itself. Without
+					// it the document lost the space while the tracked range still
+					// assumed it, sitting one character to the right of the real words:
+					// the next write then kept the first character and wrote the phrase
+					// again after it ("测" + "测试…") whenever the draft already had text.
+					const lead = previous
+						? ""
+						: next.value.slice(
+								region.start <= region.origin.length ? Math.max(0, region.start) : region.origin.length,
+								next.from,
+							);
+					const insert = `${lead}${block}`;
+					const current = doc.slice(replaceFrom, replaceTo);
+					if (current !== insert) {
 						view.dispatch({
-							changes: { from: replaceFrom, to: replaceTo, insert: block },
-							selection: { anchor: replaceFrom + block.length },
+							changes: { from: replaceFrom, to: replaceTo, insert },
+							selection: { anchor: replaceFrom + insert.length },
 							annotations: dictationWriteAnnotation.of(true),
 						});
 					}
-					const from = Math.min(dictatedAt, view.state.doc.length);
-					const to = Math.min(dictatedAt + block.length, view.state.doc.length);
+					const from = Math.min(replaceFrom + lead.length, view.state.doc.length);
+					const to = Math.min(from + block.length, view.state.doc.length);
 					view.dispatch({ effects: setDictationRangeEffect.of({ from, to }) });
 					setDocEmpty(view.state.doc.length === 0);
 					view.requestMeasure();

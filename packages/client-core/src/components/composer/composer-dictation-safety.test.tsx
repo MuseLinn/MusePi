@@ -66,7 +66,7 @@ it("stops writing once the region no longer matches the document", () => {
 	const { editor } = harness("abc");
 	act(() => editor().setSelectionRange(3));
 	act(() => editor().writeDictation("", "one", true));
-	expect(editor().value).toBe("abcone");
+	expect(editor().value).toBe("abc one");
 	// Simulate an out-of-band value write (draft restore, session switch) that
 	// the editor never saw as an edit of its own region.
 	act(() => editor().replaceRange(0, editor().value.length, "replaced"));
@@ -105,6 +105,16 @@ it("retires the provisional paint when the dictation finishes", () => {
 	// text would look like a guess forever and re-arm as a splice target.
 	expect(host.querySelector(".musepi-composer-editor__preview")).toBeNull();
 	expect(editor().value).toBe("hello spoken words");
+});
+
+it("replaces growing previews with finalized sentences without duplication", () => {
+	const { editor } = harness("草稿 ");
+	act(() => editor().setSelectionRange(editor().value.length));
+	act(() => editor().writeDictation("", "第一句", true));
+	act(() => editor().writeDictation("第一句。", "第二", false));
+	act(() => editor().writeDictation("第一句。第二句。", "", false));
+	act(() => editor().commitDictation());
+	expect(editor().value).toBe("草稿 第一句。第二句。");
 });
 
 /** Reported: "连续点击输入了几次突然出现这种情况" — repeated start/stop cycles

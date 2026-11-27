@@ -70,7 +70,7 @@ describe("voice frontend streaming", () => {
 		// see raw frames — it receives the finished run plus volatile previews.
 		const stream = start(client, "prefer");
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
-		stream.pushAudio(new Float32Array(11_200));
+		stream.pushAudio(new Float32Array(12_000));
 		await stream.stop();
 		expect(utterances).toBe(1);
 		expect(previews).toBeGreaterThan(0);
@@ -141,7 +141,7 @@ describe("voice frontend streaming", () => {
 		});
 		const stream = start(client, "prefer");
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
-		stream.pushAudio(new Float32Array(11_200));
+		stream.pushAudio(new Float32Array(12_000));
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
 		const { results } = await stream.stop();
 		expect(results.map(result => result.text)).toEqual(["first", "second"]);
@@ -212,7 +212,7 @@ describe("voice frontend streaming", () => {
 		const stream = start(client, "prefer");
 		for (let index = 0; index < 5; index++) {
 			stream.pushAudio(new Float32Array(16_000).fill(0.1));
-			stream.pushAudio(new Float32Array(11_200));
+			stream.pushAudio(new Float32Array(12_000));
 		}
 		await expect(stream.stop()).rejects.toThrow("busy");
 		client.close();
