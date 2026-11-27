@@ -188,6 +188,77 @@ function dataOf(record: Record<string, unknown>): Record<string, unknown> {
 	return isRecord(record.data) ? record.data : {};
 }
 
+/**
+ * A record's surface operation: `'append'`, or a replacement range.
+ *
+ * A v4 `surfaceOp: { op: 'replace', startSeq, endSeq }` states that this record
+ * takes the place of everything the surface held from `startSeq` through
+ * `endSeq`. Runtime-context injection and compaction both write it, so a reader
+ * that appends unconditionally keeps the content that was replaced and then
+ * also keeps what replaced it.
+ */
+function surfaceOpOf(record: Record<string, unknown>): SurfaceOp | undefined {
+	const raw = record.surfaceOp ?? dataOf(record).surfaceOp;
+	if (raw === "append") return { op: "append" };
+	if (!isRecord(raw)) return undefined;
+	if (raw.op !== "replace") return undefined;
+	const startSeq = raw.startSeq;
+	const endSeq = raw.endSeq;
+	if (typeof startSeq !== "number" || typeof endSeq !== "number") return undefined;
+	return { op: "replace", startSeq, endSeq };
+}
+
+/** One record's surface operation, as this reader needs it. */
+type SurfaceOp =
+	| { readonly op: "append" }
+	| { readonly op: "replace"; readonly startSeq: number; readonly endSeq: number };
+
+/** One message with the seq of the record that contributed it. */
+export interface SurfaceNode {
+	readonly seq: number;
+	readonly message: UserMessage | AssistantMessage | ToolResultMessage;
+}
+
+/** Test hook: the fold without a filesystem, so its ordering rule is pinnable. */
+export function applySurfaceOpsForTest(
+	records: readonly Record<string, unknown>[],
+	nodes: readonly SurfaceNode[],
+): SurfaceNode[] {
+	return applySurfaceOps(records, nodes);
+}
+
+/**
+ * Fold recorded messages into the order the model actually saw.
+ *
+ * A replacement drops every node whose seq falls in its range and keeps the
+ * replacing message wherever the range began, so a compacted region reads as its
+ * summary rather than as the summary followed by the text it summarizes. A
+ * range that names no recorded node (an unreadable or truncated record) is
+ * ignored rather than guessed at: dropping nothing is the recoverable failure,
+ * and the alternative drops content the range never identified.
+ */
+function applySurfaceOps(records: readonly Record<string, unknown>[], nodes: readonly SurfaceNode[]): SurfaceNode[] {
+	const replacements: { at: number; startSeq: number; endSeq: number }[] = [];
+	for (const record of records) {
+		const op = surfaceOpOf(record);
+		if (op?.op !== "replace") continue;
+		const seq = record.seq;
+		if (typeof seq !== "number") continue;
+		replacements.push({ at: seq, startSeq: op.startSeq, endSeq: op.endSeq });
+	}
+	if (replacements.length === 0) return [...nodes];
+
+	// Retired nodes are identified by seq, not by position, so a range still
+	// applies when an unreadable record removed its neighbours from the surface.
+	const retired = new Set<number>();
+	for (const { startSeq, endSeq } of replacements) {
+		for (const node of nodes) {
+			if (node.seq >= startSeq && node.seq <= endSeq) retired.add(node.seq);
+		}
+	}
+	return nodes.filter(node => !retired.has(node.seq));
+}
+
 function eventTimeMs(record: Record<string, unknown>): number | undefined {
 	return finiteMs(record.time);
 }
@@ -480,21 +551,27 @@ export class DshSessionStore implements ForeignSessionStore {
 		const manager = SessionManager.inMemory(header?.cwd ?? info.cwd);
 		const usedIds = new Set<string>();
 		const toolNames = new Map<string, string>();
-		let parentId: string | null = null;
 		let synthetic = 0;
 		let fallbackTime = info.created.getTime();
 
-		/** Append one converted message and make it the current leaf. */
-		const append = (converted: ConvertedMessage): void => {
+		/**
+		 * Messages in surface order, with the seq that produced each one.
+		 *
+		 * The order is decided after reading every record, because a later
+		 * `surfaceOp: replace` retires messages an earlier record contributed.
+		 * Appending as we read would leave both the retired and the replacing
+		 * message in the transcript.
+		 */
+		const surface: { seq: number; message: UserMessage | AssistantMessage | ToolResultMessage }[] = [];
+
+		/** Record one converted message at its source seq. */
+		const push = (record: Record<string, unknown>, converted: ConvertedMessage): void => {
 			const message = converted.user ?? converted.assistant ?? converted.toolResult;
 			if (!message) return;
 			for (const call of converted.calls) toolNames.set(call.id, call.name);
 			fallbackTime = Math.max(fallbackTime + 1, message.timestamp);
-			const timestamp = new Date(message.timestamp).toISOString();
-			const id = uniqueEntryId(`dsh-${synthetic++}`, usedIds);
-			const entry: SessionMessageEntry = { type: "message", id, parentId, timestamp, message };
-			manager.ingestReplicatedEntry(entry);
-			parentId = id;
+			const seq = typeof record.seq === "number" ? record.seq : -1;
+			surface.push({ seq, message });
 		};
 
 		for (const record of records) {
@@ -505,14 +582,23 @@ export class DshSessionStore implements ForeignSessionStore {
 				if (callId && name && !toolNames.has(callId)) toolNames.set(callId, name);
 			} else if (record.type === "assistant/message") {
 				const converted = convertAssistant(record, fallbackTime);
-				if (converted) append(converted);
+				if (converted) push(record, converted);
 			} else if (record.type === "tool/result") {
 				const converted = convertToolResult(record, fallbackTime, toolNames);
-				if (converted) append(converted);
+				if (converted) push(record, converted);
 			} else if (isUserPrompt(record)) {
 				const converted = convertUser(record, fallbackTime);
-				if (converted) append(converted);
+				if (converted) push(record, converted);
 			}
+		}
+
+		let parentId: string | null = null;
+		for (const entry of applySurfaceOps(records, surface)) {
+			const id = uniqueEntryId(`dsh-${synthetic++}`, usedIds);
+			const timestamp = new Date(entry.message.timestamp).toISOString();
+			const message: SessionMessageEntry = { type: "message", id, parentId, timestamp, message: entry.message };
+			manager.ingestReplicatedEntry(message);
+			parentId = id;
 		}
 
 		const title = titleOf(records) ?? info.title;
