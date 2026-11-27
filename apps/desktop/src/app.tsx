@@ -5490,30 +5490,6 @@ function AppInner(): ReactNode {
 						expanded={railExpanded}
 						onToggleExpanded={toggleRailExpanded}
 					/>
-					{/* The side resizer must not float while the settings shell
-					 * hides the sidebar — otherwise a stray handle line rides the
-					 * settings nav slot (its left comes from the sidebar width). */}
-					{!sideCollapsed && !shell.sideKeeperHidden && (
-						<div
-							className="gui-resize-x gui-resize-x--side"
-							role="separator"
-							aria-orientation="vertical"
-							aria-label={t("settings.resizeSidebar")}
-							tabIndex={0}
-							onMouseDown={e => {
-								e.preventDefault();
-								startResize(e.clientX, sideWidth, SIDE_WIDTH_MIN, SIDE_WIDTH_MAX);
-							}}
-							onKeyDown={e => {
-								if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-								e.preventDefault();
-								nudgeSideWidth(e.key === "ArrowLeft" ? -1 : 1, e.shiftKey);
-							}}
-							onDoubleClick={() => writeSideWidth(SIDE_WIDTH_DEFAULT)}
-						>
-							<SplitterGrip />
-						</div>
-					)}
 					{narrowSidebarOpen && (
 						<button
 							type="button"
@@ -5561,6 +5537,32 @@ function AppInner(): ReactNode {
 							else peeked.onSelect();
 						}}
 					>
+						{/* The side resizer lives INSIDE the keeper, so it is positioned
+						 * against the panel card's own right edge (`left: 100%` + half
+						 * the gap) instead of re-deriving that edge from rail/side/gutter
+						 * tokens, and it hides together with the keeper (settings) and
+						 * fades together with the active pane (page switch, peek). */}
+						{!sideCollapsed && !shell.sideKeeperHidden && (
+							<div
+								className="gui-resize-x gui-resize-x--side"
+								role="separator"
+								aria-orientation="vertical"
+								aria-label={t("settings.resizeSidebar")}
+								tabIndex={0}
+								onMouseDown={e => {
+									e.preventDefault();
+									startResize(e.clientX, sideWidth, SIDE_WIDTH_MIN, SIDE_WIDTH_MAX);
+								}}
+								onKeyDown={e => {
+									if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+									e.preventDefault();
+									nudgeSideWidth(e.key === "ArrowLeft" ? -1 : 1, e.shiftKey);
+								}}
+								onDoubleClick={() => writeSideWidth(SIDE_WIDTH_DEFAULT)}
+							>
+								<SplitterGrip />
+							</div>
+						)}
 						<SessionSidebar
 							nodes={tree}
 							sessionMeta={sessionMeta}

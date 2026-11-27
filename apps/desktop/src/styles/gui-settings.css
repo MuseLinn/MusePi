@@ -5031,30 +5031,47 @@
  * insets itself by header + two gutters at the top and two at the bottom,
  * so a workspace-relative 50% rode ~24px above the seam. */
 .gui-resize-x--side {
-	/* The seam is the GAP between two cards, not the edge of either.
+	/* The seam is the GAP between the panel card and the chat card.
 	 *
-	 * Geometry: the pane sits at rail + its own left margin + its width, and drops
-	 * its right margin; the chat card carries a FULL gutter on its left. So the
-	 * gap is exactly one gutter, and its midpoint is `rail + gutter + side +
-	 * gutter/2`. The band is 12px wide with its pill centred by `translate(-50%)`,
-	 * so its left edge is that midpoint minus 6.
-	 *
-	 * Earlier versions anchored to the pane's edge (pill sat ON the divider, read
-	 * as "inside the panel") and then to a hand-tuned constant, which drifted as
-	 * soon as the rail became a card. This is the measured formula.
-	 */
-	/* Measured: with the base sum at `rail + gutter + side + gutter/2` the band's
-	 * left edge lands 16px left of the pill's target, so the constant is +10
-	 * (16 minus the band's own 6px half-width). A derived constant, not a guess:
-	 * the base sum is the pane's right edge plus half the gap, and the band is
-	 * centred on it by `translate(-50%)` inside its 12px box. */
-	left: calc(
-		var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) + var(--gui-side-w) +
-			var(--gui-card-gutter) / 2 + 10px
-	);
+	 * The band is a child of `.gui-side-keeper`, whose right edge IS the panel
+	 * card's right edge (the docked pane keeps its left gutter and drops its
+	 * right one, see gui-side-panel.css), and the chat card adds one gutter on
+	 * its left. So the gap's midpoint is `100% + gutter / 2` of the keeper — no
+	 * rail width, no side width, no constant. The earlier shell-level formula
+	 * re-derived that edge from tokens and needed a "+10px" fudge, which is
+	 * exactly what kept it off-centre. */
+	left: calc(100% + var(--gui-card-gutter) / 2);
+	transform: translateX(-50%);
 	width: 12px;
-	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	/* Same vertical box as the docked pane card (its margins). */
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
 	bottom: calc(var(--gui-card-gutter) * 2);
+	/* Hidden unless a pane is actually docked: switching to a page without a
+	 * panel (or into hover-peek) fades the pane out, and the grip follows on
+	 * the pane's own 160ms timing instead of lingering over an empty seam. */
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity 160ms ease-out,
+		visibility 0s linear 160ms;
+}
+
+.gui-side-keeper:not([data-peek="true"])[data-panel="home"] > .gui-resize-x--side,
+.gui-side-keeper:not([data-peek="true"])[data-panel="scheduled"] > .gui-resize-x--side,
+.gui-side-keeper:not([data-peek="true"])[data-panel="capability"] > .gui-resize-x--side {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+	transition:
+		opacity 160ms ease-out,
+		visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-resize-x--side {
+		transition: none;
+	}
 }
 
 body.gui-resizing {

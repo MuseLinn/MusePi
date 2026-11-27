@@ -730,7 +730,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ### 两级壳层接线（2026-11-08）
 
-`ScheduledTasksPanel` 与 `CapabilitySidePanel` 由 `app.tsx` 挂在 `.gui-side-keeper` 内、与 `SessionSidebar` 并列。三个面板始终挂载，keeper 上的 `data-panel` 经 `gui-side-panel.css` 选中生效的那一个（**绝不切 `display`**，否则 220ms 折叠会丢），三者状态都不丢失。`computeSettingsShellState` 接收 `scheduledPanelActive` 与 `capabilityPanelActive`，任一目的地激活的整个期间（含 150ms 离场帧）保持 keeper 可见；设置仍隐藏 keeper 并挂出 `.gui-settings-nav-slot`。rail 的折叠控件、`GuiHeader.panelAvailable` 与侧栏拖拽把手把两个二级面板与首页会话列表同等对待，看板 / PR 仍是单列表面。
+`ScheduledTasksPanel` 与 `CapabilitySidePanel` 由 `app.tsx` 挂在 `.gui-side-keeper` 内、与 `SessionSidebar` 并列。三个面板始终挂载，keeper 上的 `data-panel` 经 `gui-side-panel.css` 选中生效的那一个（**绝不切 `display`**，否则 220ms 折叠会丢），三者状态都不丢失。`computeSettingsShellState` 接收 `scheduledPanelActive` 与 `capabilityPanelActive`，任一目的地激活的整个期间（含 150ms 离场帧）保持 keeper 可见；设置仍隐藏 keeper 并挂出 `.gui-settings-nav-slot`。rail 的折叠控件、`GuiHeader.panelAvailable` 与侧栏拖拽把手把两个二级面板与首页会话列表同等对待，看板 / PR 仍是单列表面。缩放握柄是 keeper 的子节点，以 `100% + gutter / 2` 居中于卡片接缝，垂直盒跟随面板，并只在面板停靠时显示；它的 `role="separator"` 通过共享所有者样式退出窗口拖拽区。
 
 页面与面板是两个独立 React 子树：`lib/scheduled-task-nav.ts` 把一份 `TaskNavSnapshot`（id/name/enabled/cwd/lastStatus 及 selectedId/view/busy）经 `useSyncExternalStore` 从 `ScheduledTasksPage` 送到面板，面板再用一条 `TaskNavAction` 通道（`select` / `new`）回传。所有 `cron.*` 变更与完整 `CronTask`、运行历史仍归页面所有；页面卸载时 `clearTaskNav()` 防止下次进入闪出旧行。`ScheduledTasksPage` 只渲染详情一列——页面内部的工作区列在空态会消失，也不是 rail 的面板槽。`test/scheduled-panel.test.tsx` 同时挂载两个子树，验证真实桥接链路。
 

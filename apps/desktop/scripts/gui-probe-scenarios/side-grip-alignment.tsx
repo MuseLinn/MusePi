@@ -1,13 +1,9 @@
 /**
  * Where the side grip sits versus the seam it is supposed to run along.
  *
- * The grip's `left` is a formula over `--gui-rail-w + --gui-side-w + gutters`.
- * The rail became a CARD (it carries its own inline margins) after that formula
- * was written, so the band is anchored to a rail edge that no longer exists —
- * the pill floats inside the panel instead of sitting on the seam.
- *
- * This measures the pane's real right edge and the grip's centre, which is the
- * only pair that answers "is the handle on the divider".
+ * The grip is a child of the panel keeper and centres itself in the card gap.
+ * This measures the pane's real right edge, the chat's left edge and the grip's
+ * centre, which is the only triple that answers "is the handle on the divider".
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { GuiScenario } from "../gui-probe-helpers";
@@ -37,10 +33,10 @@ const shell = (railExpanded = false, sideWidth = 256, wideRail = false): ReactNo
 			className="gui-side-keeper"
 			data-panel="home"
 		>
+			<div className="gui-resize-x gui-resize-x--side" role="separator" aria-orientation="vertical">
+				<span className="gui-split-grip" />
+			</div>
 			<aside className="gui-pane-side" style={{ width: sideWidth }} />
-		</div>
-		<div className="gui-resize-x gui-resize-x--side" role="separator" aria-orientation="vertical">
-			<span className="gui-split-grip" />
 		</div>
 		<div className="gui-chat-col flex min-w-0 flex-1 flex-col">
 			<div className="gui-chat-column" style={{ flex: 1 }} />
@@ -62,6 +58,7 @@ function geometry(body: ParentNode, railExpanded: boolean) {
 	const chat = body.querySelector<HTMLElement>(".gui-chat-column");
 	const cb = chat?.getBoundingClientRect();
 	const chatLeft = cb ? round(cb.left - rb.left) : null;
+	const gapMid = cb ? round((pb.right - rb.left + (cb.left - rb.left)) / 2) : null;
 	return {
 		railExpanded,
 		panelRight: round(pb.right - rb.left),
@@ -69,12 +66,12 @@ function geometry(body: ParentNode, railExpanded: boolean) {
 		// The seam the reader perceives: the MIDDLE of the gap between the two
 		// cards. Anchoring to either edge reads as "inside the panel" or "inside
 		// the chat", which is the reported misplacement.
-		gapMid: cb ? round((pb.right - rb.left + (cb.left - rb.left)) / 2) : null,
+		gapMid,
 		// Where the seam actually is: the pane's right edge.
 		gripCentre: round(gb.left + gb.width / 2 - rb.left),
 		pillCentre: round(lb.left + lb.width / 2 - rb.left),
 		// The number that must be ~0 for the handle to look attached.
-		offsetFromSeam: round(gb.left + gb.width / 2 - rb.left - (pb.right - rb.left)),
+		offsetFromSeam: gapMid === null ? null : round(gb.left + gb.width / 2 - rb.left - gapMid),
 		// The hint line: present as a pseudo-element, transparent at rest.
 		bandLeft: round(gb.left - rb.left),
 		bandW: round(gb.width),
@@ -86,6 +83,16 @@ function geometry(body: ParentNode, railExpanded: boolean) {
 	};
 }
 
+function measuredGeometry(body: ParentNode, railExpanded: boolean) {
+	const value = geometry(body, railExpanded);
+	if (!value) throw new Error("side grip geometry is incomplete");
+	if (value.offsetFromSeam === null || Math.abs(value.offsetFromSeam) > 1) {
+		throw new Error(`side grip is off the card seam by ${value.offsetFromSeam}px`);
+	}
+	if (Math.abs(value.gripCentre - value.pillCentre) > 1) throw new Error("grip pill is not centred in its band");
+	return value;
+}
+
 const scenarios = {
 	"grip-on-seam": {
 		capture: ".gui-main",
@@ -93,7 +100,7 @@ const scenarios = {
 			await mount(shell(false), root);
 		},
 		async measure(body: ParentNode) {
-			return { geometry: geometry(body, false) };
+			return { geometry: measuredGeometry(body, false) };
 		},
 	},
 	/** The hint must be VISIBLE while the band is active — the state the reader
@@ -125,7 +132,7 @@ const scenarios = {
 			await mount(node, root);
 		},
 		async measure(body: ParentNode) {
-			return { geometry: geometry(body, false) };
+			return { geometry: measuredGeometry(body, false) };
 		},
 	},
 	"grip-on-seam-wide-rail": {
@@ -135,7 +142,7 @@ const scenarios = {
 			await mount(node, root);
 		},
 		async measure(body: ParentNode) {
-			return { geometry: geometry(body, true) };
+			return { geometry: measuredGeometry(body, true) };
 		},
 	},
 	/** The reported case: with a WIDE rail and the token NOT republished, the band
@@ -147,7 +154,7 @@ const scenarios = {
 			await mount(node, root);
 		},
 		async measure(body: ParentNode) {
-			return { geometry: geometry(body, true) };
+			return { geometry: measuredGeometry(body, true) };
 		},
 	},
 } satisfies Record<string, GuiScenario>;
