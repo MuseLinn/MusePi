@@ -12,6 +12,7 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import type { ConnectionTarget } from "../lib/connection/targets";
 import { isElectron, openPathInFileManager, pickDirectory } from "../lib/electron";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { pathBaseName, projectLabel, projectLabels } from "../lib/project-label";
@@ -40,7 +41,6 @@ import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { DialogFrame } from "./DialogFrame";
 import { GroupedSessionList } from "./GroupedSessionList";
-import type { ConnectionTarget } from "../lib/connection/targets";
 import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
 import { ProjectDialog, type ProjectDialogTarget } from "./ProjectDialog";
@@ -188,8 +188,8 @@ export function SessionSidebar({
 			paused?: boolean;
 			working?: boolean;
 			status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
-			/** 会话预设 id — 悬浮卡的模式行(app 侧 SessionMetaRow 的子集)。 */
-			modeId?: string;
+			/** 会话预设 id — 悬浮卡的预设行(app 侧 SessionMetaRow 的子集)。 */
+			agentPreset?: string;
 			/** 子代理数（session.list agentCount）—— >0 的会话行出现展开 chevron。 */
 			agentCount?: number;
 		}

@@ -16,7 +16,7 @@ import { Icon } from "../vendor/oc-icons";
  * 数据分两半,由 bus 消息 + meta map 拼合:
  * - 行侧(SessionRow)只上报它手里有的展示字段(id/label/分叉来源/时间戳)
  *   和锚点矩形 — 不给 SessionRow 加任何 props,保住 memo 契约;
- * - 侧栏(sessionMeta map)持有 cwd/modeId,卡片渲染时按 id 现查。
+ * - 侧栏(sessionMeta map)持有 cwd/agentPreset,卡片渲染时按 id 现查。
  *
  * 卡片本体 portal 到 document.body:侧栏链路上有 backdrop-filter/transform,
  * fixed 定位会被最近的含 transform 祖先劫持,portal 出去才稳。
