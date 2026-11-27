@@ -14,7 +14,6 @@ export interface VoiceOverlaysProps {
 		phase: "idle" | "recording" | "transcribing";
 		seconds: number;
 		level: number;
-		partialText: string;
 		error: string | null;
 	};
 	/** The voice setup dialog's node, when the host mounts one. */
@@ -26,12 +25,7 @@ export function VoiceOverlays({ dictation, dialog, showHint = false }: VoiceOver
 	return (
 		<>
 			{dictation.phase !== "idle" && (
-				<VoiceStatusStrip
-					phase={dictation.phase}
-					seconds={dictation.seconds}
-					level={dictation.level}
-					partialText={dictation.partialText}
-				/>
+				<VoiceStatusStrip phase={dictation.phase} seconds={dictation.seconds} level={dictation.level} />
 			)}
 			{dictation.error && (
 				<div className="gui-voice-error" role="status" aria-live="polite">

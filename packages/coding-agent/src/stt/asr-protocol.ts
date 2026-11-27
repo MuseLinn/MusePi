@@ -25,12 +25,18 @@ export type SttWorkerInbound =
 	| { type: "transcribe"; id: string; modelKey: SttModelKey; audio: Float32Array; language?: string }
 	| { type: "download"; id: string; modelKey: SttModelKey }
 	// ── Live streaming session ──
-	// `stream_start` warms the model and opens a session; `stream_audio` feeds
-	// 16 kHz mono float frames as they arrive from the recorder; `stream_stop`
-	// flushes the trailing speech segment and ends the session; `stream_cancel`
-	// tears it down without a final flush. All carry the same `id`.
+	// `stream_start` warms the model and opens a session. Audio enters in one of
+	// three forms: raw `stream_audio` frames that this worker segments itself;
+	// `stream_utterance` audio the caller already delimited (decoded once and
+	// committed, never re-segmented); and `stream_preview` audio for the
+	// still-growing run, which yields a volatile `partial` and is never
+	// committed. Previews coalesce, so a newer one replaces an undecoded older.
+	// `stream_stop` flushes the trailing speech segment and ends the session;
+	// `stream_cancel` tears it down without a final flush. All carry the same `id`.
 	| { type: "stream_start"; id: string; modelKey: SttModelKey; language?: string }
 	| { type: "stream_audio"; id: string; audio: Float32Array }
+	| { type: "stream_utterance"; id: string; audio: Float32Array }
+	| { type: "stream_preview"; id: string; audio: Float32Array }
 	| { type: "stream_stop"; id: string }
 	| { type: "stream_cancel"; id: string };
 

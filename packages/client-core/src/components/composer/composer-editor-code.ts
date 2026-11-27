@@ -49,6 +49,65 @@ class ReferenceChipWidget extends WidgetType {
 	}
 }
 
+/** The volatile speech-to-text preview: the words the recognizer currently
+ *  believes, shown at the caret but NOT part of the document.
+ *
+ *  It must stay outside `value`: a preview is a guess that gets replaced on
+ *  every decode, so writing it into the document would leak a half sentence
+ *  into the send path, the draft store and the undo history. The widget paints
+ *  it as a trailing ghost instead and `ignoreEvent()`s everything, so it never
+ *  takes the caret away from the real text.
+ */
+class PreviewTailWidget extends WidgetType {
+	constructor(readonly text: string) {
+		super();
+	}
+
+	override eq(other: PreviewTailWidget): boolean {
+		return other.text === this.text;
+	}
+
+	override toDOM(): HTMLElement {
+		const tail = document.createElement("span");
+		tail.className = "musepi-composer-editor__preview";
+		tail.textContent = this.text;
+		tail.setAttribute("aria-hidden", "true");
+		return tail;
+	}
+
+	override ignoreEvent(): boolean {
+		return true;
+	}
+}
+
+/** The preview string the widget paints; a change repaints in place. */
+export const setPreview = StateEffect.define<string>();
+/** Preview text painted at the caret (empty = nothing painted). */
+export const previewField = StateField.define<{ text: string; pos: number }>({
+	create: () => ({ text: "", pos: 0 }),
+	update(value, transaction) {
+		// A document edit makes the previous guess meaningless: committing a
+		// segment or typing over it both invalidate the in-flight preview.
+		if (transaction.docChanged) return { text: "", pos: 0 };
+		for (const effect of transaction.effects) {
+			if (effect.is(setPreview)) {
+				return { text: effect.value, pos: transaction.state.selection.main.head };
+			}
+		}
+		// Follow the caret: dictation lands where the user is, so a ghost left at
+		// an older offset would look like it belongs to a different sentence.
+		if (transaction.selection !== undefined) {
+			return { text: value.text, pos: transaction.state.selection.main.head };
+		}
+		return value;
+	},
+	provide: field =>
+		EditorView.decorations.from(field, ({ text, pos }) => {
+			if (text.length === 0) return Decoration.none;
+			return Decoration.set([Decoration.widget({ widget: new PreviewTailWidget(text), side: 1 }).range(pos)]);
+		}),
+});
+
 /** Marks the transaction that writes a changed `value` prop into the editor. */
 export const valuePropWrite = Annotation.define<true>();
 /** Repaint mention decorations when the staged chip list changes. */

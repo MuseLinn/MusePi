@@ -6,7 +6,7 @@ GlobalRegistrator.register();
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { marksField } from "./composer-editor-code";
+import { marksField, previewField, setPreview } from "./composer-editor-code";
 import type { EditorMark } from "./composer-editor-types";
 
 afterAll(() => {
@@ -18,6 +18,22 @@ afterEach(() => {
 	view?.destroy();
 	view = null;
 });
+
+/** Mount an editor whose preview is already painted. */
+function mountTail(doc: string, preview: string): EditorView {
+	const parent = document.createElement("div");
+	document.body.appendChild(parent);
+	view = new EditorView({
+		state: EditorState.create({ doc, extensions: [previewField] }),
+		parent,
+	});
+	view.dispatch({ effects: setPreview.of(preview) });
+	return view;
+}
+
+function tail(v: EditorView): string {
+	return v.dom.querySelector(".musepi-composer-editor__preview")?.textContent ?? "";
+}
 
 function mount(doc: string, marks: readonly EditorMark[]): EditorView {
 	const parent = document.createElement("div");
@@ -74,5 +90,37 @@ describe("marksField — reference chips", () => {
 		// The sigil is hidden, the label painted.
 		expect(v.dom.textContent).toContain("图片1");
 		expect(v.dom.querySelector(".gui-ta-hl-mention")).not.toBeNull();
+	});
+});
+
+describe("previewField — volatile dictation preview", () => {
+	it("paints the preview without writing it into the document", () => {
+		const v = mountTail("note: ", "hel");
+		expect(v.state.doc.toString()).toBe("note: ");
+		expect(v.dom.querySelector(".musepi-composer-editor__preview")?.textContent).toBe("hel");
+	});
+
+	it("replaces the preview in place instead of appending", () => {
+		const v = mountTail("", "hel");
+		expect(tail(v)).toBe("hel");
+		v.dispatch({ effects: setPreview.of("hello wor") });
+		expect(tail(v)).toBe("hello wor");
+		// One widget, not a growing pile of guesses.
+		expect(v.dom.querySelectorAll(".musepi-composer-editor__preview").length).toBe(1);
+	});
+
+	it("drops the preview when the document changes", () => {
+		const v = mountTail("", "guess");
+		expect(tail(v)).toBe("guess");
+		// Committing the segment (an external value write) must retire the guess.
+		v.dispatch({ changes: { from: 0, to: 0, insert: "committed" } });
+		expect(tail(v)).toBe("");
+		expect(v.state.doc.toString()).toBe("committed");
+	});
+
+	it("clears the preview on an explicit empty effect", () => {
+		const v = mountTail("", "guess");
+		v.dispatch({ effects: setPreview.of("") });
+		expect(tail(v)).toBe("");
 	});
 });

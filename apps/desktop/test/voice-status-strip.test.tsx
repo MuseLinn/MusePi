@@ -22,35 +22,34 @@ function harness() {
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	mounted.push({ host, root });
-	const render = (phase: "recording" | "transcribing", partialText = "") => {
-		act(() => root.render(createElement(VoiceStatusStrip, { phase, seconds: 3, level: 0.75, partialText })));
+	const render = (phase: "recording" | "transcribing") => {
+		act(() => root.render(createElement(VoiceStatusStrip, { phase, seconds: 3, level: 0.75 })));
 	};
 	return { host, render };
 }
 
 describe("voice status strip", () => {
-	test("recording and transcribing expose distinct feedback without losing the live preview", () => {
+	test("recording and transcribing expose distinct feedback", () => {
 		const { host, render } = harness();
-		render("recording", "hello");
+		render("recording");
 		expect(host.querySelector(".gui-voice-strip")?.getAttribute("data-phase")).toBe("recording");
 		expect(host.querySelectorAll(".gui-voice-wave i").length).toBe(13);
-		expect(host.querySelector(".gui-voice-partial")?.textContent).toBe("hello");
 		expect(host.textContent).toContain("3s");
 
-		render("transcribing", "hello");
+		render("transcribing");
 		expect(host.querySelector(".gui-voice-strip")?.getAttribute("data-phase")).toBe("transcribing");
 		expect(host.querySelector(".gui-voice-spinner")).not.toBeNull();
 		expect(host.querySelector(".gui-voice-wave")).toBeNull();
-		expect(host.querySelector(".gui-voice-partial")?.textContent).toBe("hello");
 		expect(host.textContent).not.toContain("3s");
 		expect(host.querySelector(".gui-voice-strip-hint kbd")?.textContent).toBe("Esc");
 	});
 
-	test("an empty preview still explains the current phase", () => {
+	test("carries the phase copy only — the transcript itself is painted in the composer", () => {
 		const { host, render } = harness();
 		render("recording");
-		expect(host.querySelector(".gui-voice-partial")?.textContent).not.toBe("");
+		const copy = host.querySelector(".gui-voice-partial")?.textContent ?? "";
+		expect(copy).not.toBe("");
 		render("transcribing");
-		expect(host.querySelector(".gui-voice-partial")?.textContent).not.toBe("");
+		expect(host.querySelector(".gui-voice-partial")?.textContent ?? "").not.toBe("");
 	});
 });

@@ -68,7 +68,9 @@ function fakeAsr(options?: {
 	onSegment?: (text: string, index: number) => void;
 }): SttStreamHandle {
 	return {
-		pushAudio: () => options?.onPartial?.("hel"),
+		pushAudio: () => {},
+		pushUtterance: () => {},
+		pushPreview: () => options?.onPartial?.("hel"),
 		stop: async () => {
 			options?.onSegment?.("hello", 0);
 			return "hello";

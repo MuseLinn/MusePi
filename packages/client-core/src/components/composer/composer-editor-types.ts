@@ -57,6 +57,9 @@ export interface ComposerEditorHandle {
 	replaceRange(from: number, to: number, text: string): void;
 	/** Re-measure after a value or layout change (CodeMirror owns heights). */
 	autosize(): void;
+	/** Show the volatile speech preview at the caret. It is painted, never
+	 *  inserted: `value` stays exactly what the send path would send. */
+	setPreview(text: string): void;
 	setFocused(focused: boolean): void;
 }
 

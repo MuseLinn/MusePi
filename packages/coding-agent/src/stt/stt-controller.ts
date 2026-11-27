@@ -10,6 +10,10 @@ import { evaluateSubmitTrigger } from "./submit-trigger";
 
 export type SttState = "idle" | "recording" | "transcribing";
 
+/** What this controller needs from a stream: it only ever feeds raw audio,
+ *  because both backends (the ASR worker and the voice frontend) segment it. */
+type DictationStream = Pick<SttStreamHandle, "pushAudio" | "stop" | "cancel">;
+
 interface ToggleOptions {
 	showWarning(msg: string): void;
 	showStatus(msg: string): void;
@@ -44,7 +48,7 @@ export class STTController {
 	readonly #createCapture: CaptureFactory;
 
 	// Live streaming capture.
-	#stream: SttStreamHandle | null = null;
+	#stream: DictationStream | null = null;
 	#streamRecorder: CaptureHandle | null = null;
 	#streamEditor: Editor | null = null;
 	#streamCommitted = false;
@@ -206,7 +210,7 @@ export class STTController {
 		};
 		const speakerMode = (settings.get("stt.speakerMode") as SpeakerMode | undefined) ?? "off";
 		const enhanceAudio = settings.get("stt.enhanceAudio") === true;
-		let stream: SttStreamHandle;
+		let stream: DictationStream;
 		if (speakerMode === "off" && !enhanceAudio) {
 			stream = sttClient.startStream(modelKey, {
 				language: language || undefined,

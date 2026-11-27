@@ -50,6 +50,8 @@ describe("STTController speaker modes", () => {
 		vi.spyOn(downloader, "downloadSttModel").mockResolvedValue();
 		vi.spyOn(asrClient.sttClient, "startStream").mockReturnValue({
 			pushAudio: vi.fn(),
+		pushUtterance: vi.fn(),
+		pushPreview: vi.fn(),
 			stop: vi.fn().mockResolvedValue(""),
 			cancel: vi.fn(),
 		});
@@ -82,6 +84,8 @@ describe("STTController speaker modes", () => {
 		settings.set("stt.speakerMode", "off");
 		const startStream = vi.spyOn(asrClient.sttClient, "startStream").mockReturnValue({
 			pushAudio: vi.fn(),
+		pushUtterance: vi.fn(),
+		pushPreview: vi.fn(),
 			stop: vi.fn().mockResolvedValue("hello world"),
 			cancel: vi.fn(),
 		});

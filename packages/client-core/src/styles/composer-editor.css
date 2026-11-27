@@ -5,6 +5,17 @@
  * paint classes come from the caller's marks, so this file stays generic.
  */
 
+/* Volatile speech-to-text preview: the recognizer's current guess, painted at
+ * the caret and NOT part of the document. It reads as a continuation of what
+ * the user is saying — same metrics as the text it trails — but sits muted so
+ * it never looks like committed text (and never gets sent). */
+.musepi-composer-editor__preview {
+	color: var(--color-text-muted, var(--fg-muted));
+	opacity: 0.72;
+	white-space: pre-wrap;
+	pointer-events: none;
+}
+
 .musepi-composer-editor {
 	position: relative;
 	display: flex;

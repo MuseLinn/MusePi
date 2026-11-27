@@ -6,9 +6,11 @@ import {
 	interceptKeymap,
 	mapPosition,
 	marksField,
+	previewField,
 	referenceAtomicRanges,
 	refreshMarks,
 	selectionOf,
+	setPreview,
 	valuePropWrite,
 } from "./composer-editor-code";
 import { ComposerMentionPop, type MentionPop } from "./composer-editor-pop";
@@ -145,6 +147,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						interceptKeymap(event => handlersRef.current.onKeyDown?.(event) ?? false),
 						keymap.of([...standardKeymap, ...historyKeymap]),
 						marksField(marksRef),
+						previewField,
 						referenceAtomicRanges(marksRef),
 						EditorView.updateListener.of(update => {
 							const handlers = handlersRef.current;
@@ -366,6 +369,13 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						changes: { from, to, insert: text },
 						selection: { anchor: from + text.length },
 					});
+				},
+				setPreview(text) {
+					const view = viewRef.current;
+					if (!view) return;
+					if (view.state.field(previewField).text === text) return;
+					view.dispatch({ effects: setPreview.of(text) });
+					view.requestMeasure();
 				},
 				autosize() {
 					const view = viewRef.current;

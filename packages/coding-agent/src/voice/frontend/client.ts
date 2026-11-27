@@ -28,6 +28,11 @@ interface PendingRequest {
 	reject(error: Error): void;
 }
 
+/** Placeholder audio for results whose bytes the caller does not consume: the
+ *  worker's own segments already travelled through it, and a preview's audio is
+ *  superseded by the next one. */
+const EMPTY_AUDIO = new Float32Array(0);
+
 type AsrStreamFactory = typeof sttClient.startStream;
 
 export class VoiceFrontendClient {
@@ -55,28 +60,64 @@ export class VoiceFrontendClient {
 	}
 
 	startStream(options: VoiceFrontendStreamOptions): VoiceFrontendStreamHandle {
+		// Speaker verification and enhancement both need the audio of a FINALIZED
+		// run, so a gated session runs its own endpointer and can only show a
+		// preview for the run it is still collecting. Ungated sessions skip that:
+		// a second endpointer would re-segment audio the worker already owns and
+		// hold every commit until `stream_stop`.
+		const gated = options.speakerMode !== "off" || options.enhanceAudio;
 		const endpointer = new StreamEndpointer();
 		const results: FrontendStreamResult[] = [];
+		/** Gated only: ASR segment index -> the frontend result it decodes. */
 		const asrSegments: FrontendStreamResult[] = [];
 		let cancelled = false;
-		let current: FrontendStreamResult | null = null;
 		let queue = Promise.resolve();
 		let pending = 0;
 		let failure: Error | null = null;
+		let lastSegmentId = 0;
+
+		// A preview belongs to the run still being spoken, so it carries the id
+		// the next commit will take. Emitting it before any segment exists is the
+		// whole point: the first words must appear while the user is still talking.
+		const emitPartial = (text: string, audio: Float32Array): void => {
+			if (cancelled) return;
+			options.onPartial?.({
+				audio,
+				state: "accept",
+				score: null,
+				enhanced: false,
+				segmentId: lastSegmentId,
+				text,
+			});
+		};
+
 		const asr = this.#asrStreamFactory(options.modelKey, {
 			language: options.language,
-			onPartial: text => {
-				if (cancelled || !current) return;
-				current.text = text;
-				options.onPartial?.(current);
-			},
+			onPartial: text => emitPartial(text, EMPTY_AUDIO),
 			onSegment: (text, index) => {
-				const target = asrSegments[index];
-				if (cancelled || !target) return;
-				target.text = text;
-				options.onSegment?.(target);
+				if (cancelled) return;
+				if (gated) {
+					const target = asrSegments[index];
+					if (!target) return;
+					target.text = text;
+					options.onSegment?.(target);
+					return;
+				}
+				// Ungated: the worker owns segmentation, so the index is the id.
+				const result: FrontendStreamResult = {
+					audio: EMPTY_AUDIO,
+					state: "accept",
+					score: null,
+					enhanced: false,
+					segmentId: index,
+					text,
+				};
+				results.push(result);
+				lastSegmentId = index;
+				options.onSegment?.(result);
 			},
 		});
+
 		const processEvent = (event: EndpointerEvent): Promise<void> => {
 			if (event.kind !== "segment" || cancelled) return queue;
 			if (pending >= 4) {
@@ -99,11 +140,12 @@ export class VoiceFrontendClient {
 						acceptThreshold: options.acceptThreshold,
 						rejectThreshold: options.rejectThreshold,
 					});
-					current = { ...processed, segmentId: results.length, text: "" };
-					results.push(current);
-					if (current.state !== "reject") {
-						asrSegments.push(current);
-						asr.pushAudio(current.audio);
+					const result = { ...processed, segmentId: results.length, text: "" };
+					results.push(result);
+					lastSegmentId = result.segmentId;
+					if (result.state !== "reject") {
+						asrSegments.push(result);
+						asr.pushUtterance(result.audio);
 					}
 				})
 				.finally(() => {
@@ -114,16 +156,24 @@ export class VoiceFrontendClient {
 		};
 		return {
 			pushAudio: samples => {
-				for (const event of endpointer.push(samples)) void processEvent(event);
+				if (!gated) {
+					asr.pushAudio(samples);
+					return;
+				}
+				for (const event of endpointer.push(samples)) {
+					if (event.kind === "partial") asr.pushPreview(event.audio);
+					else void processEvent(event);
+				}
 			},
 			stop: async () => {
 				if (failure) throw failure;
-				for (const event of endpointer.flush()) await processEvent(event);
-				await queue;
+				if (gated) {
+					for (const event of endpointer.flush()) await processEvent(event);
+					await queue;
+					if (failure) throw failure;
+				}
+				await asr.stop();
 				if (failure) throw failure;
-				const finalText = await asr.stop();
-				const last = asrSegments.at(-1);
-				if (last && !last.text) last.text = finalText;
 				return results;
 			},
 			cancel: () => {

@@ -51,6 +51,7 @@ export function useCompletion({
 	extraRoots,
 	setText,
 	atMaxDepth,
+	editorRef,
 }: {
 	rpc: RpcClient | null;
 	cwd?: string;
@@ -61,6 +62,9 @@ export function useCompletion({
 	setText(value: string): void;
 	/** Depth cap for "@" rows; omitted = every scanned depth (session parity). */
 	atMaxDepth?: number;
+	/** A ref owned by the host, so another controller (dictation) can drive the
+	 *  same editor. Omitted = this hook owns one. */
+	editorRef?: { current: ComposerEditorHandle | null };
 }): {
 	taRef: { current: ComposerEditorHandle | null };
 	// Slash-command completion (TUI parity): typing "/" lists the daemon's
@@ -88,7 +92,8 @@ export function useCompletion({
 	onAtInput(value: string): void;
 	insertAt(candidate: AtCandidate | string): void;
 } {
-	const taRef = useRef<ComposerEditorHandle | null>(null);
+	const ownedRef = useRef<ComposerEditorHandle | null>(null);
+	const taRef = editorRef ?? ownedRef;
 	// Slash-command completion (TUI parity): typing "/" lists the daemon's
 	// builtin registry; Enter/click inserts the command token.
 	const [slashOpen, setSlashOpen] = useState(false);

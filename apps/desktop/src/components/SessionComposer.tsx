@@ -1056,6 +1056,7 @@ export function SessionComposer({
 		rpc,
 		sttSubmitTrigger,
 		enabled: sttEnabled,
+		editor: taRef,
 		onSubmit: onSend,
 		onInsert: transcript => {
 			setText(prev => (prev ? `${prev} ${transcript}` : transcript));

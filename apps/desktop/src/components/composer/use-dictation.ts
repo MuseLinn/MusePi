@@ -36,8 +36,6 @@ export interface DictationController {
 	seconds: number;
 	/** Mic RMS level (0..1); live during the recording phase only. */
 	level: number;
-	/** Volatile ASR preview; only finalized segments enter the draft. */
-	partialText: string;
 	/** Last dictation failure (friendly copy); auto-dismisses after 6 s. */
 	error: string | null;
 	toggle(): void;
@@ -50,6 +48,9 @@ export function useDictation(opts: {
 	/** stt.enabled daemon gate (TUI parity): false blocks starting a NEW
 	 *  dictation; in-flight phases still settle/cancel normally. */
 	enabled?: boolean;
+	/** The composer editor, so the volatile preview can be painted where the
+	 *  words will actually land instead of in a separate status row. */
+	editor?: { current: { setPreview(text: string): void } | null };
 	/** Transcript matched the submit trigger — auto-send path (sliced). */
 	onSubmit(text: string): void;
 	/** Transcript for the draft box (submit trigger not matched). */
@@ -72,7 +73,6 @@ export function useDictation(opts: {
 	}, [phase]);
 	const [seconds, setSeconds] = useState(0);
 	const [level, setLevel] = useState(0);
-	const [partialText, setPartialText] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const errorTimer = useRef<number | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
@@ -87,7 +87,9 @@ export function useDictation(opts: {
 	// may report both onError and an error onState for the same failure).
 	const settle = useCallback((): void => {
 		stopRef.current = null;
-		setPartialText("");
+		// Any exit path must retire the painted preview too, or a cancelled or
+		// failed dictation leaves a ghost sentence sitting in the composer.
+		optsRef.current.editor?.current?.setPreview("");
 		setPhase("idle");
 	}, []);
 
@@ -110,16 +112,18 @@ export function useDictation(opts: {
 		}
 		setSeconds(0);
 		setLevel(0);
-		setPartialText("");
 		let streamed = false;
 		const stop = startDictationOpts({
 			rpc,
 			deviceId: getVoiceInputDevice() ?? undefined,
 			streaming: true,
-			onPartial: setPartialText,
+			onPartial: text => {
+				// The words land in the composer while they are still being said.
+				optsRef.current.editor?.current?.setPreview(text);
+			},
 			onSegment: text => {
 				streamed = true;
-				setPartialText("");
+				optsRef.current.editor?.current?.setPreview("");
 				optsRef.current.onInsert(text);
 			},
 			onReview: transcript => {
@@ -168,6 +172,7 @@ export function useDictation(opts: {
 			e.stopPropagation();
 			cancelActiveDictation();
 			stopRef.current = null;
+			optsRef.current.editor?.current?.setPreview("");
 			setPhase("idle");
 		};
 		window.addEventListener("keydown", onKey, true);
@@ -190,5 +195,5 @@ export function useDictation(opts: {
 		setError(null);
 	}, []);
 
-	return { phase, seconds, level, partialText, error, toggle, dismissError };
+	return { phase, seconds, level, error, toggle, dismissError };
 }

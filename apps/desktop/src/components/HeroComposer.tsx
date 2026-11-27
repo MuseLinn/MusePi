@@ -1,4 +1,4 @@
-import { BlurText, composerPlaceholder, t } from "@musepi/client-core";
+import { BlurText, type ComposerEditorHandle, composerPlaceholder, t } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
 import {
 	composeDisplayContextPrompt,
@@ -272,6 +272,9 @@ export function HeroComposer({
 	attachmentsApi?: ReturnType<typeof useAttachments>;
 }): ReactNode {
 	const pet = useCompanionArt();
+	// Declared at the top so dictation (which paints the live transcript into
+	// the editor) and the completion hook share one handle.
+	const taRef = useRef<ComposerEditorHandle | null>(null);
 	const [text, setText] = useState(initialDraft ?? "");
 	// Report every change up to the entry so a mode flip keeps the draft.
 	useEffect(() => {
@@ -485,6 +488,7 @@ export function HeroComposer({
 		rpc,
 		sttSubmitTrigger,
 		enabled: sttEnabled,
+		editor: taRef,
 		onSubmit: text => {
 			// Welcome parity: the auto-send path trims before firing (a
 			// transcript that is only a "submit" tail sends nothing).
@@ -767,7 +771,6 @@ export function HeroComposer({
 		};
 	}, [rpc, project]);
 	const {
-		taRef,
 		slashOpen,
 		setSlashOpen,
 		slashIdx,
@@ -792,6 +795,7 @@ export function HeroComposer({
 		// reaches any depth.
 		atMaxDepth: 2,
 		setText,
+		editorRef: taRef,
 	});
 	const [projOpen, setProjOpen] = useState(false);
 	const [presetOpen, setPresetOpen] = useState(false);

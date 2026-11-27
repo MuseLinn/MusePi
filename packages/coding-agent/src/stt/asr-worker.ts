@@ -567,10 +567,7 @@ async function pumpSession(session: StreamingSession, transport: SttTransport): 
 	}
 }
 
-function handleStreamMessage(
-	transport: SttTransport,
-	message: Extract<SttWorkerInbound, { type: "stream_start" | "stream_audio" | "stream_stop" | "stream_cancel" }>,
-): void {
+function handleStreamMessage(transport: SttTransport, message: SttWorkerInbound): void {
 	if (message.type === "stream_start") {
 		startStreamingSession(transport, message);
 		return;
@@ -580,6 +577,17 @@ function handleStreamMessage(
 	switch (message.type) {
 		case "stream_audio":
 			ingestStreamEvents(session, session.endpointer.push(message.audio));
+			void pumpSession(session, transport);
+			return;
+		case "stream_utterance":
+			// Already delimited by the caller: decode once, commit as a segment.
+			session.pendingPartial = null;
+			session.segmentQueue.push(message.audio);
+			void pumpSession(session, transport);
+			return;
+		case "stream_preview":
+			// Coalesce: only the newest still-growing run is worth decoding.
+			session.pendingPartial = message.audio;
 			void pumpSession(session, transport);
 			return;
 		case "stream_stop":

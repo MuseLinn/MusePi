@@ -192,6 +192,8 @@ describe("STTController submit trigger integration", () => {
 		settings.set("stt.submitTrigger", trigger);
 		vi.spyOn(asrClient.sttClient, "startStream").mockReturnValue({
 			pushAudio: vi.fn(),
+		pushUtterance: vi.fn(),
+		pushPreview: vi.fn(),
 			stop: vi.fn().mockResolvedValue(transcript),
 			cancel: vi.fn(),
 		});

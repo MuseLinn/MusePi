@@ -87,12 +87,10 @@ export function VoiceStatusStrip({
 	phase,
 	seconds,
 	level,
-	partialText = "",
 }: {
 	phase: "recording" | "transcribing";
 	seconds: number;
 	level: number;
-	partialText?: string;
 }): ReactNode {
 	const recording = phase === "recording";
 	return (
@@ -121,8 +119,8 @@ export function VoiceStatusStrip({
 					))}
 				</span>
 			)}
-			<span className={`gui-voice-partial${partialText ? " gui-voice-partial--visible" : ""}`}>
-				{partialText || t(recording ? "settings.voiceListeningHint" : "settings.voiceTranscribingHint")}
+			<span className="gui-voice-partial">
+				{t(recording ? "settings.voiceListeningHint" : "settings.voiceTranscribingHint")}
 			</span>
 			<span className="gui-voice-strip-hint">
 				<kbd>{t("settings.voiceEscKey")}</kbd>
