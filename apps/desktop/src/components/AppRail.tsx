@@ -186,6 +186,7 @@ export function UserAccountButton({
 	onOpenRemoteAccess,
 	onDisconnect,
 	compact = true,
+	instanceMenu,
 }: {
 	rpc: RpcClient | null;
 	/** Workspace the git identity is resolved from (the picture's source). */
@@ -200,6 +201,8 @@ export function UserAccountButton({
 	onDisconnect(): void;
 	/** Rail geometry (36px square) vs the sidebar footer's inline control. */
 	compact?: boolean;
+	/** The instance section, rendered inside this menu. */
+	instanceMenu?: ReactNode;
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
@@ -218,11 +221,16 @@ export function UserAccountButton({
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
-				<UserAvatar rpc={rpc} cwd={cwd} />
+				{/* The face and its status dot share one fixed-size box, so the dot
+				 * stays put relative to the picture in both rail widths. Anchored to
+				 * the BUTTON it moved with the button's width instead. */}
+				<span className="gui-account-face">
+					<UserAvatar rpc={rpc} cwd={cwd} />
+					<span className={`gui-account-dot${connected ? " gui-account-dot--on" : ""}`} aria-hidden="true" />
+				</span>
 				{/* The wide rail names every row; this one had no text at all, so it
 				 * read as an anonymous avatar while its neighbours were labelled. */}
 				<span className="gui-rail-label gui-account-label">{label}</span>
-				<span className={`gui-account-dot${connected ? " gui-account-dot--on" : ""}`} aria-hidden="true" />
 			</button>
 			<MenuPopup
 				open={open}
@@ -235,6 +243,11 @@ export function UserAccountButton({
 					<div className="gui-account-name">{user?.name || t("general.user")}</div>
 					{user?.email ? <div className="gui-account-mail">{user.email}</div> : null}
 				</div>
+				{/* The instance entry folded in here: host switching, version, latency
+				 * and the connection manager were a second trigger sitting directly
+				 * above this one, and two adjacent popovers listing the same hosts is
+				 * the duplication this menu exists to avoid. */}
+				{instanceMenu}
 				<button
 					type="button"
 					className="gui-menu-item"

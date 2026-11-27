@@ -24,22 +24,6 @@ const rail = (expanded: boolean): ReactNode => (
 		onTogglePanel={() => {}}
 		expanded={expanded}
 		onToggleExpanded={() => {}}
-		footerActions={
-			<>
-			<InstanceButton
-				compact
-				rpc={null}
-				connected
-				daemonUrl="http://localhost:1"
-				hosts={[]}
-				onSwitchHost={() => {}}
-				onAddTarget={() => {}}
-				onRemoveHost={() => {}}
-				onReconnect={() => {}}
-				onDisconnect={() => {}}
-			/>
-			</>
-		}
 		community={<RailCommunityLinks expanded={expanded} />}
 		account={
 			<UserAccountButton
@@ -48,6 +32,23 @@ const rail = (expanded: boolean): ReactNode => (
 				connected
 				onOpenSettings={() => {}}
 				onDisconnect={() => {}}
+				instanceMenu={
+					<InstanceButton
+						embedded
+						rpc={null}
+						connected
+						daemonUrl="http://localhost:1"
+						hosts={[]}
+						onSwitchHost={() => {}}
+						onAddTarget={() => {}}
+						onRemoveHost={() => {}}
+						onReconnect={() => {}}
+						onDisconnect={() => {}}
+						onOpenWorkspace={() => {}}
+						onOpenManager={() => {}}
+						onOpenDisclaimer={() => {}}
+					/>
+				}
 			/>
 		}
 	/>
@@ -91,6 +92,8 @@ function bandEdges(body: ParentNode) {
 		// Footer controls.
 		instanceGlyph: edge(".gui-instance-btn .gui-rail-icon, .gui-instance-btn > *"),
 		accountGlyph: edge(".gui-account-btn .gui-user-avatar"),
+		accountCentre: centre(".gui-account-face"),
+		dotCentre: centre(".gui-account-dot"),
 		accountInner: edge(".gui-account-btn"),
 		instanceInner: edge(".gui-instance-btn"),
 		// Computed padding shows WHICH rule won, which the edge alone cannot say.

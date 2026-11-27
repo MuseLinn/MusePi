@@ -5375,32 +5375,33 @@ function AppInner(): ReactNode {
 			onOpenShortcuts={() => setShortcutsOpen(true)}
 			onOpenRemoteAccess={() => openRemoteAccess("workspace")}
 			onDisconnect={disconnect}
+			// Instance status, host switching and the manager live INSIDE this
+			// menu now: they were a second trigger directly above the avatar, and
+			// two adjacent popovers listing the same hosts is exactly the
+			// duplication this menu exists to remove.
+			instanceMenu={
+				<InstanceButton
+					embedded
+					rpc={rpc ?? null}
+					connected={status === "open"}
+					daemonUrl={url}
+					hosts={hosts}
+					onSwitchHost={switchHost}
+					onAddTarget={addTarget}
+					onRemoveHost={removeHost}
+					onReconnect={() => void boot()}
+					onDisconnect={disconnect}
+					onOpenWorkspace={handleOpenRemoteWorkspace}
+					onOpenManager={requestRemoteAccess}
+					onOpenDisclaimer={viewRemoteDisclaimer}
+				/>
+			}
 		/>
 	);
-	/** The old sidebar footer lived INSIDE the collapsible panel, so folding
-	 *  it or switching to a page destination hid the instance menu, shortcuts
-	 *  and remote control. The rail is the only permanent chrome — keep one
-	 *  copy of the instance status there (ChatGPT's account/more rail footer
-	 *  parity); the rest moved into the account menu above. */
-	const railFooter = (
-		<>
-			<InstanceButton
-				compact
-				rpc={rpc ?? null}
-				connected={status === "open"}
-				daemonUrl={url}
-				hosts={hosts}
-				onSwitchHost={switchHost}
-				onAddTarget={addTarget}
-				onRemoveHost={removeHost}
-				onReconnect={() => void boot()}
-				onDisconnect={disconnect}
-				onOpenWorkspace={handleOpenRemoteWorkspace}
-				onOpenManager={requestRemoteAccess}
-				onOpenDisclaimer={viewRemoteDisclaimer}
-			/>
-		</>
-	);
+	/** The rail's footer keeps no trigger of its own: the instance entry moved
+	 *  into the account menu, leaving the account row as the one permanent
+	 *  control and the community line below it. */
+	const railFooter = null;
 
 	return (
 		<div className="gui-shell" style={{ "--gui-side-w": `${sideWidth}px` } as CSSProperties}>

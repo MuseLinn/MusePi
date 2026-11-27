@@ -259,12 +259,11 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	/* Two sizes, driven by the rail's state — NOT by hover. KiroCrew's header
-	 * does the same: the mark is 36px when folded and 28px when open, because a
-	 * folded rail is an icon column and the mark has to match the destination
-	 * glyphs beside it, while an open rail already has the label speaking. */
-	width: 28px;
-	height: 28px;
+	/* Two sizes, driven by the rail's state — NOT by hover. Folded it sits small
+	 * in the icon column; open it grows to take the identity role the header now
+	 * has room for. The transition is what makes the fold read as one move. */
+	width: 22px;
+	height: 22px;
 	flex-shrink: 0;
 	transition:
 		width 200ms cubic-bezier(0.2, 0, 0, 1),
@@ -278,16 +277,25 @@
 	 * art is a soft gradient with no outline, so on the dark card its bottom
 	 * third dissolved and the mark read as drifting. */
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-text) 18%, transparent);
-	/* The state change is the motion. A hover scale competed with it: pointing
-	 * at the header grew the mark while folding it also changed its size, so the
-	 * same gesture had two meanings. */
+	/* Scale is the STATE's signal; hover belongs to the art inside, so the two
+	 * gestures never compete — the box changes size on fold, the mark tilts on
+	 * hover. */
 }
 
-/* Collapsed: the mark takes the width of a destination's glyph box so it reads
- * as the first icon of the column rather than a smaller badge above it. */
-.gui-rail:not(.gui-rail--wide) .gui-rail-brand-mark {
-	width: 36px;
-	height: 36px;
+.gui-rail-brand-mark > * {
+	transition: transform 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gui-rail-brand:hover .gui-rail-brand-mark > *,
+.gui-rail-brand:focus-visible .gui-rail-brand-mark > * {
+	transform: rotate(-8deg);
+}
+
+/* Open: the mark carries the identity, so it takes the size the header's own
+ * line can hold. */
+.gui-rail--wide .gui-rail-brand-mark {
+	width: 28px;
+	height: 28px;
 }
 
 /* Folded, the header centres like every other icon row. Left-aligned with the
@@ -427,6 +435,18 @@
 	 * starts, and widening the rail does not move it. */
 	padding: 0 10px;
 	border-radius: var(--radius-md);
+}
+
+/* Folded, the avatar centres like every other icon in the column. Left as a
+ * full-width row with the wide rail's 10px pad, a 26px circle sat left of the
+ * column axis — the footer was the only band that never got the folded state. */
+/* Folded, the face keeps the same leading edge it has when open — the row is a
+ * row in both widths, exactly like the destinations. Centring a 36px tile put the
+ * face 6px left of where it sits when the rail is open, so the avatar (and the
+ * dot riding on it) stepped sideways on every fold. */
+.gui-rail:not(.gui-rail--wide) .gui-account-btn {
+	width: auto;
+	align-self: center;
 }
 
 .gui-instance--compact .gui-instance-btn.gui-rail-btn {
@@ -659,8 +679,23 @@
 	margin-inline-end: auto;
 }
 
+/* The face box: one fixed-size, relatively positioned holder for the picture and
+ * its status dot. Both are anchored here, so neither moves when the rail widens
+ * — the dot used to be inset from the BUTTON's edge, which walked it across the
+ * picture as the button grew. */
+.gui-account-face {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+}
+
 .gui-account-btn .gui-account-dot {
-	inset-inline-end: 12px;
+	inset-inline-end: -2px;
+	bottom: -2px;
 }
 
 @keyframes gui-rail-label-in {
