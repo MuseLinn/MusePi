@@ -1,7 +1,7 @@
 /**
  * Profile composition — a named profile that lists the bundles it stacks.
  *
- * DSH's profile is the unit of assembly (`docs/architecture.md`):
+ * DSH's profile is the unit of assembly (docs/architecture.md) <!-- doc-reference-example: cites upstream dsh, not this repo -->:
  * "A profile is a named composition stored in the Harness home. It lists the
  * bundles it stacks, holds any out-of-tree plugins it installs, and keeps the
  * user's own cordis.patch.yml." Its `package.json` carries `dsh.profile.bundles`
