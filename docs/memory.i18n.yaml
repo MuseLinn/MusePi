@@ -1,5 +1,5 @@
 # Consistency record for memory.md / memory.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/memory
-memory.md: 561bce793e7df87185f44cd3d7cc113acd73f405
-memory.zh-CN.md: fdf7259dd180f616907b4f050889211b8c48ac3c
+memory.md: da535ee7b07b434805bbac7cade1f65b51464b38
+memory.zh-CN.md: 30837983ab82d08b38766f186938865cb18920b4
