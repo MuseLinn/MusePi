@@ -80,6 +80,19 @@ function envVarName(name: string): string {
 }
 
 /**
+ * A page served over plain HTTP off this machine sends the value in clear.
+ *
+ * Loopback is exempt: a local host does not cross a network. Desktop builds run
+ * on `file:`/`app:` origins and never match this, so the warning only appears
+ * where it can actually be true.
+ */
+function isInsecurePage(): boolean {
+	if (typeof location === "undefined") return false;
+	if (location.protocol !== "http:") return false;
+	return !/^(localhost|127(?:\.\d{1,3}){3}|\[::1\])$/.test(location.hostname);
+}
+
+/**
  * Secret request card, hosted beside the ask/approval cards above the
  * composer. Two shapes:
  * - fill: masked value input, scope note, save/cancel.
@@ -121,6 +134,9 @@ export function SecretCard({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [settled, setSettled] = useState<SecretAction | null>(null);
+	// An `allow` card can turn into a fill card: the reader may replace the saved
+	// value instead of only permitting it. Nothing is sent until they save.
+	const [replacing, setReplacing] = useState(false);
 	// onSettled identity changes every parent render; bind once via ref so
 	// the linger timer never fires a stale callback.
 	const onSettledRef = useRef(onSettled);
@@ -164,7 +180,9 @@ export function SecretCard({
 		}
 		if (action === "save") {
 			answer.value = value;
-			answer.scope = scope;
+			// Replacing only changes the value: the entry keeps the scope the
+			// reader granted it, which this card never asked them about.
+			if (!replacing) answer.scope = scope;
 			if (request.kind === "login") {
 				answer.login = {
 					site: loginSite.trim(),
@@ -245,15 +263,19 @@ export function SecretCard({
 	// A login is a fill card: it collects fields rather than confirming an
 	// existing entry. Without this the whole login branch fell through to the
 	// `allow` card, which even named an environment variable it has no use for.
-	const isFill = request.kind === "fill" || isLogin;
+	const isFill = request.kind === "fill" || isLogin || replacing;
+	const insecurePage = isInsecurePage();
 	const envVar = envVarName(request.name);
+	// The scope buttons name the scope; a sentence repeating the choice they just
+	// made adds a line without adding a fact. Only the facts the buttons cannot
+	// carry — where the value lives, what allowing extends — get a note.
 	const scopeNote = !isFill
 		? t("tools.secretAllowWorkspace")
-		: isLogin
-			? t("tools.loginScopeNote")
-			: scope === "all"
-				? t(request.delivery === "file" ? "tools.secretScopeAllFile" : "tools.secretScopeAll")
-				: t(request.delivery === "file" ? "tools.secretScopeFileNote" : "tools.secretScopeWorkspaceNote");
+		: replacing
+			? t("tools.secretReplaceScopeNote")
+			: isLogin
+				? t("tools.loginScopeNote")
+				: null;
 	const tooShort = value.length > 0 && value.length < MIN_SECRET_VALUE_LENGTH;
 	const canSave = !tooShort && value.length >= MIN_SECRET_VALUE_LENGTH && !busy;
 
@@ -280,17 +302,21 @@ export function SecretCard({
 				style={CARD_STYLE}
 				role="group"
 				aria-label={
-					isFill
-						? t(request.kind === "login" ? "tools.loginTitle" : "tools.secretTitle")
-						: t("tools.secretAllowTitle")
+					replacing
+						? t("tools.secretReplaceTitle")
+						: isFill
+							? t(request.kind === "login" ? "tools.loginTitle" : "tools.secretTitle")
+							: t("tools.secretAllowTitle")
 				}
 			>
 				<div className="gui-ask-card-head">
 					<Icon name="key" className="h-3.5 w-3.5 flex-none opacity-70" />
 					<span className="gui-ask-card-title">
-						{isFill
-							? t(request.kind === "login" ? "tools.loginTitle" : "tools.secretTitle")
-							: t("tools.secretAllowTitle")}
+						{replacing
+							? t("tools.secretReplaceTitle")
+							: isFill
+								? t(request.kind === "login" ? "tools.loginTitle" : "tools.secretTitle")
+								: t("tools.secretAllowTitle")}
 					</span>
 					<button
 						type="button"
@@ -305,13 +331,12 @@ export function SecretCard({
 				</div>
 				{/* The name is the model's request, not a user choice, so it is a
 				 *  readout rather than an editable field. Without it the user cannot
-				 *  tell which credential is being asked for. */}
+				 *  tell which credential is being asked for. A login names the entry
+				 *  it will be saved as; the site lives in the form below, so putting
+				 *  it here too would show one value twice. */}
 				<div className="gui-secret-identity">
-					<span className="gui-secret-identity-label">
-						{isLogin ? t("tools.loginForSite") : t("tools.secretNameLabel")}
-					</span>
-					<span className="gui-secret-name-chip">{isLogin ? (request.site ?? request.name) : request.name}</span>
-					{isLogin ? <span className="gui-secret-identity-as">as {request.name}</span> : null}
+					<span className="gui-secret-identity-label">{t("tools.secretNameLabel")}</span>
+					<span className="gui-secret-name-chip">{request.name}</span>
 				</div>
 				<p className="gui-note">{request.purpose}</p>
 				{alternatives.length > 0 && !picked ? (
@@ -361,8 +386,7 @@ export function SecretCard({
 								disabled={busy}
 								onChange={e => setLoginSite(e.target.value)}
 							/>
-							<span className="gui-secret-field-hint">{t("tools.loginSiteHint")}</span>
-						</label>
+							<span className="gui-secret-field-hint">{t("tools.loginSiteHint")}</span>						</label>
 						<label className="gui-secret-check">
 							<input
 								type="checkbox"
@@ -415,9 +439,13 @@ export function SecretCard({
 									<Icon name={revealPw.revealed ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
 								</button>
 							</span>
-							<span className={tooShort ? "gui-error" : "gui-secret-field-hint"}>
-								{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
-							</span>
+							{/* Only when the typed value is short: a permanent "at least N
+							 *  characters" hint is a rule stated before it applies. */}
+							{tooShort ? (
+								<span className="gui-error">
+									{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
+								</span>
+							) : null}
 						</label>
 						<label className="gui-secret-field">
 							<span className="gui-secret-field-label">{t("tools.loginTotp")}</span>
@@ -482,19 +510,21 @@ export function SecretCard({
 								<Icon name={revealPw.revealed ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
 							</button>
 						</span>
-						<p className={tooShort ? "gui-error" : "gui-note"}>
-							{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
-						</p>
 						<p className="gui-note">
 							{request.delivery === "file"
 								? t("tools.secretFileReachNote")
 								: t("tools.secretHiddenNote", { env: envVar })}
+							{tooShort ? (
+								<span className="gui-error"> {t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}</span>
+							) : null}
 						</p>
 					</>
-				) : isLogin ? null : (
-					<p className="gui-note">{t("tools.secretAlreadySaved", { env: envVar })}</p>
+				) : isLogin || replacing ? null : (
+					<p className="gui-note">{t("tools.secretAlreadySaved")}</p>
 				)}
-				{isFill ? (
+				{/* Replacing changes the value only, so it offers no scope pick:
+				 *  the entry keeps the grant it already has. */}
+				{isFill && !replacing ? (
 					<>
 						<span className="gui-secret-scope-label">
 							{isLogin ? t("tools.loginScope") : t("tools.secretScope")}
@@ -527,16 +557,37 @@ export function SecretCard({
 						</div>
 					</>
 				) : null}
-				<p className="gui-secret-private-note">
-					<Icon name="lock" className="h-3 w-3 flex-none opacity-60" />
-					<span>{scopeNote}</span>
-				</p>
+				{scopeNote ? (
+					<p className="gui-secret-private-note">
+						<Icon name="lock" className="h-3 w-3 flex-none opacity-60" />
+						<span>{scopeNote}</span>
+					</p>
+				) : null}
+				{isFill && insecurePage ? (
+					<p className="gui-secret-insecure" role="note">
+						<Icon name="alert" className="h-3 w-3 flex-none" />
+						<span>{t("tools.secretInsecureWarn")}</span>
+					</p>
+				) : null}
 				{error ? (
 					<p className="gui-error" role="alert">
 						{error}
 					</p>
 				) : null}
 				<div className="gui-ask-summary-actions">
+					{/* Replacing is the third answer to the same request, so it sits
+					 *  with the other two rather than on a row of its own — the
+					 *  reference card puts it in exactly this place. */}
+					{!isFill ? (
+						<button
+							type="button"
+							className="gui-btn gui-secret-replace"
+							disabled={busy}
+							onClick={() => setReplacing(true)}
+						>
+							{t("tools.secretReplaceValue")}
+						</button>
+					) : null}
 					<button type="button" className="gui-btn" disabled={busy} onClick={cancel}>
 						{t("settings.cancel")}
 					</button>
