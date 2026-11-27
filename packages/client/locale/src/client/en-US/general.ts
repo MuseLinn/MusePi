@@ -1559,6 +1559,7 @@ export const general = {
 	"pr bulk partial failure": "{failed} of {total} failed",
 	"rail star short": "Star",
 	"rail issues short": "Issues",
+	"rail sessions": "Sessions",
 	"rail star repo": "Star on GitHub",
 	"rail open issues": "Report an issue",
 	"pr checks": "CI checks",

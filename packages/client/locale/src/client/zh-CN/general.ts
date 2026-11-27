@@ -1536,6 +1536,7 @@ export const general = {
 	"pr bulk partial failure": "{total} 项中有 {failed} 项失败",
 	"rail star short": "加星",
 	"rail issues short": "反馈",
+	"rail sessions": "会话",
 	"rail star repo": "加星支持",
 	"rail open issues": "问题反馈",
 	"pr checks": "CI 检查",

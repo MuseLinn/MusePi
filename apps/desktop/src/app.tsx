@@ -23,6 +23,17 @@ import { PET_ACTIVITY_EVENT, PET_CHANGED_EVENT } from "./lib/companion-events";
 // Loaded for its host-table registration: compiled input-card artifacts bind
 // to `window.MusePiHostModules.composer`.
 import "./components/Composer";
+import {
+	CalendarClock,
+	GitPullRequest,
+	House as HouseIcon,
+	HousePlus,
+	LayoutDashboard,
+	LayoutPanelTop,
+	ListTodo,
+	Sparkles,
+	Star,
+} from "lucide-react";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { AppRail, RailCommunityLinks, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
@@ -5302,8 +5313,10 @@ function AppInner(): ReactNode {
 	const railDestinations: RailItem[] = [
 		{
 			id: "home",
-			label: "general.home",
-			icon: "home",
+			// Named for what it shows: the session list, not a marketing "home".
+			label: "rail sessions",
+			icon: "chat-1",
+			morphIcon: { idle: HouseIcon, current: HousePlus },
 			panelId: "home",
 			active: !pageDestinationActive && !settingsActive,
 			onSelect: () => {
@@ -5316,6 +5329,7 @@ function AppInner(): ReactNode {
 			id: "scheduled",
 			label: "settings.scheduledTasks",
 			icon: "calendar-schedule",
+			morphIcon: { idle: ListTodo, current: CalendarClock },
 			panelId: "scheduled",
 			active: scheduledOpen,
 			/** A scheduled task just finished — the rail dot replaces the old
@@ -5330,6 +5344,7 @@ function AppInner(): ReactNode {
 			id: "board",
 			label: "settings.board",
 			icon: "layout-column",
+			morphIcon: { idle: LayoutDashboard, current: LayoutPanelTop },
 			active: boardOpen,
 			onSelect: () => viewSwapRef.current("board"),
 		},
@@ -5337,6 +5352,7 @@ function AppInner(): ReactNode {
 			id: "prboard",
 			label: "settings.prBoard",
 			icon: "git-pull-request",
+			morphIcon: { idle: GitPullRequest, current: GitPullRequest },
 			active: prBoardOpen,
 			onSelect: () => viewSwapRef.current("prboard"),
 		},
@@ -5348,6 +5364,7 @@ function AppInner(): ReactNode {
 			id: "capability",
 			label: "tools.capabilityCenter",
 			icon: "star",
+			morphIcon: { idle: Star, current: Sparkles },
 			panelId: "capability",
 			active: capabilityOpen,
 			onSelect: () => {

@@ -1,4 +1,5 @@
 import { punkAvatarUri, type TranslationKey, t } from "@musepi/client-core";
+import { type IconInput, MorphIcon } from "morphicons/react";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import type { RpcClient } from "../lib/rpc";
@@ -32,6 +33,11 @@ export interface RailItem {
 	id: string;
 	label: TranslationKey;
 	icon: IconName;
+	/** The pair this destination morphs between: `idle` while another
+	 *  destination is current, `current` when this one is. A rail is read by
+	 *  glyph, so the glyph itself carries the selection — one icon that changes
+	 *  shape, rather than a colour change on a shape that stays the same. */
+	morphIcon?: { idle: IconInput; current: IconInput };
 	/** Destination currently shown (aria-current="page"). */
 	active?: boolean;
 	/** Unread activity dot — independent of `active` (a destination can hold
@@ -72,7 +78,18 @@ function RailButton({
 			onPointerEnter={item.panelId ? () => onPeekPanel?.(item.panelId as string) : undefined}
 			onPointerLeave={item.panelId ? onPeekEnd : undefined}
 		>
-			<Icon name={item.icon} className="gui-rail-icon" />
+			{item.morphIcon ? (
+				<MorphIcon
+					icon={item.active ? item.morphIcon.current : item.morphIcon.idle}
+					size={18}
+					spring="snappy"
+					reducedMotion="user"
+					className="gui-rail-icon"
+					aria-hidden
+				/>
+			) : (
+				<Icon name={item.icon} className="gui-rail-icon" />
+			)}
 			{expanded ? <span className="gui-rail-label">{label}</span> : null}
 			{item.unread ? <span className="gui-rail-dot" aria-hidden="true" /> : null}
 		</button>

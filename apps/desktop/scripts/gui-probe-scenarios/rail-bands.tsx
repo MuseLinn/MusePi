@@ -119,6 +119,37 @@ function bandEdges(body: ParentNode) {
 				transition: cs.transitionProperty,
 			};
 		})(),
+		acctGeom: (() => {
+			const rail = body.querySelector<HTMLElement>(".gui-rail");
+			const b = body.querySelector<HTMLElement>(".gui-account-btn");
+			const f = body.querySelector<HTMLElement>(".gui-account-face");
+			if (!rail || !b || !f) return null;
+			const rb = rail.getBoundingClientRect();
+			const bb = b.getBoundingClientRect();
+			const fb = f.getBoundingClientRect();
+			const cs = getComputedStyle(b);
+			return {
+				btnLeft: Math.round((bb.left - rb.left) * 100) / 100,
+				btnW: Math.round(bb.width),
+				padL: cs.paddingLeft,
+				faceLeft: Math.round((fb.left - rb.left) * 100) / 100,
+				faceW: Math.round(fb.width),
+			};
+		})(),
+		brandGeom: (() => {
+			const b = body.querySelector<HTMLElement>(".gui-rail-brand");
+			const m = body.querySelector<HTMLElement>(".gui-rail-brand-mark");
+			if (!b || !m) return null;
+			const bb = b.getBoundingClientRect(), mb = m.getBoundingClientRect();
+			const cs = getComputedStyle(b);
+			return {
+				brandLeft: Math.round((bb.left - (body.querySelector(".gui-rail") as HTMLElement).getBoundingClientRect().left) * 100) / 100,
+				padL: cs.paddingLeft,
+				borderL: cs.borderLeftWidth,
+				markW: Math.round(mb.width),
+				markCentre: Math.round((mb.left + mb.width / 2 - (body.querySelector(".gui-rail") as HTMLElement).getBoundingClientRect().left) * 100) / 100,
+			};
+		})(),
 		headComputed: (() => {
 			const n = body.querySelector<HTMLElement>(".gui-rail-head");
 			if (!n) return null;

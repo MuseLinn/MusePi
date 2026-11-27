@@ -259,11 +259,12 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	/* Two sizes, driven by the rail's state — NOT by hover. Folded it sits small
-	 * in the icon column; open it grows to take the identity role the header now
-	 * has room for. The transition is what makes the fold read as one move. */
-	width: 22px;
-	height: 22px;
+	/* Two sizes, driven by the rail's state — NOT by hover. Folded it sits inside
+	 * the icon column; open it carries the identity. Both are a step larger than
+	 * the destination glyphs, which is what makes the mark read as the brand
+	 * rather than as one more row. */
+	width: 28px;
+	height: 28px;
 	flex-shrink: 0;
 	transition:
 		width 200ms cubic-bezier(0.2, 0, 0, 1),
@@ -294,35 +295,31 @@
 /* Open: the mark carries the identity, so it takes the size the header's own
  * line can hold. */
 .gui-rail--wide .gui-rail-brand-mark {
-	width: 28px;
-	height: 28px;
+	width: 32px;
+	height: 32px;
 }
 
-/* Folded, the header centres like every other icon row. Left-aligned with the
- * wide rail's 10px pad, a 36px mark sat right of the destination column's centre
- * — the "偏右" report.
- *
- * The button shrinks to the mark's own size and the BAND centres it, which is
- * how a destination row is centred too (`align-self: center` inside a stretched
- * column). Sizing the button to 36px and centring its contents instead leaves it
- * anchored at the band's start, which moves the mark the other way. */
-.gui-rail:not(.gui-rail--wide) .gui-rail-head {
-	justify-content: center;
-	padding-inline: 0;
+/* The mark changes SIZE between widths, so a fixed leading edge cannot hold its
+ * centre — and a column of icons is read by centre. Both widths place the box so
+ * its centre lands on the destination glyphs' axis (row pad + glyph/2), which is
+ * the invariant a fold must preserve: the mark grows and shrinks in place rather
+ * than re-centring on the way in. */
+.gui-rail {
+	/* The column's glyph axis: 10px row pad + half the 18px destination glyph.
+	 * Defined on the rail so the header's mark, the footer's face and the
+	 * destinations can all align to one number. */
+	--rail-glyph-axis: 19px;
 }
 
-.gui-rail:not(.gui-rail--wide) .gui-rail-head .gui-rail-brand {
-	/* Content-sized, so the band's centring lands the mark on the column axis. */
-	width: auto;
-	flex: 0 0 auto;
-	padding: 0;
+.gui-rail:not(.gui-rail--wide) .gui-rail-brand {
 	gap: 0;
-	justify-content: center;
+	padding-inline-start: calc(var(--rail-glyph-axis) - 14px);
 }
 
-/* The collapsed rail is only 52px wide, so the mark takes the slot's full
- * weight there and steps back once the label has room to speak. Both sizes
- * animate together with the rail's width transition. */
+.gui-rail--wide .gui-rail-brand {
+	padding-inline-start: calc(var(--rail-glyph-axis) - 16px);
+}
+
 /* Collapse arrow: out of flow and pinned to the header's trailing edge. In the
  * flex line it would reserve ~16px from the first frame of expanding — while
  * the rail is still narrow — and cram the mark (KiroCrew's documented blink).
@@ -427,26 +424,30 @@
  * 26px circle on the left instead of centring, and the instance pill keeps its
  * dot while gaining the room to breathe. Their existing 36×36 rail geometry is
  * scoped to the compact (collapsed) state, so nothing here fights it. */
-.gui-account-btn {
+/* `.gui-rail-btn` also declares the row pad, and the two selectors have equal
+ * specificity there — so this must name the rail to win, or the footer keeps the
+ * row's 10px pad and its 26px face lands 4px right of the glyph axis. */
+.gui-rail .gui-account-btn {
 	justify-content: flex-start;
 	width: 100%;
 	height: 36px;
-	/* The destinations' pad, in both widths: the avatar starts where a glyph
-	 * starts, and widening the rail does not move it. */
-	padding: 0 10px;
+	padding: 0 10px 0 6px;
 	border-radius: var(--radius-md);
 }
 
 /* Folded, the avatar centres like every other icon in the column. Left as a
  * full-width row with the wide rail's 10px pad, a 26px circle sat left of the
  * column axis — the footer was the only band that never got the folded state. */
-/* Folded, the face keeps the same leading edge it has when open — the row is a
- * row in both widths, exactly like the destinations. Centring a 36px tile put the
- * face 6px left of where it sits when the rail is open, so the avatar (and the
- * dot riding on it) stepped sideways on every fold. */
+/* Folded, the face centres on the column's glyph axis — the same axis the logo
+ * and every destination icon sit on. A 26px face in the row's 10px pad put its
+ * centre at 31 while the glyphs sat at 27: the footer was the one band that
+ * aligned by leading edge instead of by centre (the "偏右" report). */
 .gui-rail:not(.gui-rail--wide) .gui-account-btn {
 	width: auto;
 	align-self: center;
+	padding-inline-end: 0;
+	/* 19px axis - half the 26px face. */
+	padding-inline-start: calc(var(--rail-glyph-axis) - 13px);
 }
 
 .gui-instance--compact .gui-instance-btn.gui-rail-btn {
@@ -662,7 +663,6 @@
  * the label that follows it. */
 .gui-rail--wide .gui-rail-brand {
 	gap: 8px;
-	padding-inline-start: 5px;
 }
 
 /* The narrow rail has no room for a label, so the label elements that live in

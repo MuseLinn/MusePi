@@ -219,16 +219,19 @@
 	}
 }
 
+/* A surface replacing another must not ALSO change size while the outgoing one
+ * fades: the two frames overlap for the length of the swap, so a 0.985 → 1 scale
+ * on the incoming surface read as the whole window flashing — the reported
+ * flicker when a destination was clicked. Blur and opacity carry the transition;
+ * geometry stays put. */
 @keyframes gui-view-blur-in {
 	from {
 		opacity: 0;
 		filter: blur(10px);
-		transform: scale(0.985);
 	}
 	to {
 		opacity: 1;
 		filter: blur(0);
-		transform: scale(1);
 	}
 }
 
