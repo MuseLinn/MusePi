@@ -8,7 +8,7 @@
  * states, which is the fact the eye actually reads as "aligned".
  */
 import type { ReactNode } from "react";
-import { AppRail } from "../../src/components/AppRail";
+import { AppRail, RailCommunityLinks } from "../../src/components/AppRail";
 import { InstanceButton } from "../../src/components/InstanceButton";
 import { UserAccountButton } from "../../src/components/AppRail";
 import type { GuiScenario } from "../gui-probe-helpers";
@@ -25,6 +25,7 @@ const rail = (expanded: boolean): ReactNode => (
 		expanded={expanded}
 		onToggleExpanded={() => {}}
 		footerActions={
+			<>
 			<InstanceButton
 				compact
 				rpc={null}
@@ -37,6 +38,8 @@ const rail = (expanded: boolean): ReactNode => (
 				onReconnect={() => {}}
 				onDisconnect={() => {}}
 			/>
+			<RailCommunityLinks expanded={expanded} />
+			</>
 		}
 		account={
 			<UserAccountButton
@@ -87,6 +90,20 @@ function bandEdges(body: ParentNode) {
 		brandPad: (() => {
 			const n = body.querySelector<HTMLElement>(".gui-rail-brand");
 			return n ? getComputedStyle(n).paddingLeft : null;
+		})(),
+		// The mark: square box, hairline ring, and a hover scale rather than a tilt.
+		markBox: (() => {
+			const n = body.querySelector<HTMLElement>(".gui-rail-brand-mark");
+			if (!n) return null;
+			const r = n.getBoundingClientRect();
+			const cs = getComputedStyle(n);
+			return {
+				w: Math.round(r.width),
+				h: Math.round(r.height),
+				radius: cs.borderTopLeftRadius,
+				shadow: cs.boxShadow !== "none",
+				transition: cs.transitionProperty,
+			};
 		})(),
 		railPad: (() => {
 			const n = body.querySelector<HTMLElement>(".gui-rail");

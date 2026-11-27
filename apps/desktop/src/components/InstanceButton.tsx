@@ -118,7 +118,10 @@ export function InstanceButton({
 				<span
 					className={`h-2 w-2 shrink-0 rounded-full ${connected ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]"}`}
 				/>
-				{!compact && <span>{t("general.local")}</span>}
+				{/* The wide rail names its rows; `compact` no longer implies "icon
+				 * only" — it means "the pill's chrome is the rail's", so the label
+				 * rides along and is hidden by CSS when the rail is narrow. */}
+				<span className="gui-rail-label">{t("general.local")}</span>
 				{!compact && <Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />}
 			</button>
 			<MenuPopup

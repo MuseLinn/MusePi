@@ -255,22 +255,31 @@
 }
 
 .gui-rail-brand-mark {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	width: 24px;
 	height: 24px;
 	flex-shrink: 0;
-	/* The mark tilts on hover — the one piece of motion in the header, and it is
-	 * feedback for pointing at a control rather than a state change. Rotation is
-	 * a transform, so it never affects the header's layout height; the rail's
-	 * own `overflow: clip` and rounded card clip the few pixels that paint past
-	 * the box. */
-	transition: transform 300ms cubic-bezier(0.2, 0, 0, 1);
+	/* The orb's SVG is `width: 100%; height: auto`, so in a 24×24 box it painted
+	 * 24 wide but only ~22 tall and sat off the row's optical centre — the
+	 * "looks shifted" report. The box is square and the art is centred in it. */
+	border-radius: 999px;
+	overflow: hidden;
+	/* A hairline ring gives the gold sphere a defined edge against the card. The
+	 * art is a soft gradient with no outline, so on the dark card its bottom
+	 * third dissolved and the mark read as drifting. */
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-text) 18%, transparent);
+	/* Hover scales the mark, which is feedback for pointing at the control. A
+	 * scale (not a rotate) keeps the round silhouette — a tilted sphere read as
+	 * a wobbling ball rather than a button responding. */
+	transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.gui-rail-brand:hover .gui-rail-brand-mark {
-	transform: rotate(-8deg);
+.gui-rail-brand:hover .gui-rail-brand-mark,
+.gui-rail-brand:focus-visible .gui-rail-brand-mark {
+	transform: scale(1.1);
 }
 
 /* The collapsed rail is only 52px wide, so the mark takes the slot's full
@@ -518,6 +527,107 @@
 	 * appearance reads as a different row. Delay is why it can be seen at all —
 	 * at zero the text appears while the rail is still narrow and gets clipped. */
 	animation: gui-rail-label-in 140ms ease-out 60ms both;
+}
+
+/* ── Community row (one line closing the rail) ─────────────────────────
+ * The GitHub mark, then star and issues separated by a middot — one row, not
+ * two, because both links have the same destination and the pair reads as a
+ * footer note rather than two more destinations (KiroCrew's community row).
+ *
+ * It aligns to the rail's single inset, and the whole line folds by HEIGHT so
+ * the collapse stays continuous: `display: none` would make the row vanish a
+ * frame before the rail has finished narrowing. */
+.gui-rail-community {
+	overflow: hidden;
+	max-height: 0;
+	opacity: 0;
+	transition:
+		max-height 200ms cubic-bezier(0.2, 0, 0, 1),
+		opacity 140ms ease-out;
+}
+
+.gui-rail-community--open {
+	max-height: 40px;
+	opacity: 1;
+}
+
+.gui-rail-community-line {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	margin-top: 4px;
+	padding-top: 8px;
+	border-top: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent);
+	white-space: nowrap;
+}
+
+/* Decorative: it names the group, not either link, and it is what remains
+ * visible in the icon-only rail. */
+.gui-rail-community-mark {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+
+.gui-rail-community-links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0 5px;
+	flex: 1;
+	min-width: 0;
+	font-size: 12px;
+}
+
+.gui-rail-community-link {
+	border-radius: var(--radius-sm);
+	color: var(--color-text-muted);
+	text-decoration: none;
+	transition: color 120ms ease-out;
+}
+
+.gui-rail-community-link:hover {
+	color: var(--color-text);
+}
+
+.gui-rail-community-link:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
+}
+
+.gui-rail-community-sep {
+	flex-shrink: 0;
+	opacity: 0.4;
+}
+
+.gui-motion-off .gui-rail-community {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-rail-community {
+		transition: none;
+	}
+}
+
+/* The narrow rail has no room for a label, so the label elements that live in
+ * shared components (the account and instance rows) are hidden rather than
+ * conditionally unmounted: one component, one markup, two widths. The entrance
+ * animation above belongs to the revealed state and must not run while hidden. */
+.gui-rail:not(.gui-rail--wide) .gui-rail-label {
+	display: none;
+}
+
+/* The account row's dot sits on the avatar's corner, so the label between them
+ * must not push the dot away from it. */
+.gui-account-btn .gui-rail-label {
+	margin-inline-end: auto;
+}
+
+.gui-account-btn .gui-account-dot {
+	inset-inline-end: 12px;
 }
 
 @keyframes gui-rail-label-in {

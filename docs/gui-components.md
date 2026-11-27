@@ -101,7 +101,8 @@ The desktop host re-exports the moved seat constants from `slot-host.tsx` during
 | `.gui-side-panel-row` | Dense list-row geometry (gap, height, radius, hover/`--active`) | Every dense labelled row; add trailing furniture, never re-declare it |
 | `PrChecksList` | A PR's CI, itemised, on demand | `pr-center.tsx`; gh `bucket` decides (`cancel` = failure) |
 | `.gui-rail-btn--wide` | The rail row, expanded | Same button, one state wider: rows transition their own width/height/padding/gap, and `.gui-rail--wide .gui-rail-group` stretches the footer so its controls stay rows instead of centred squares |
-| `BrandOrb` | The MusePi brand mark: champagne-gold sphere, as vector | `components/BrandOrb.tsx`; the rail header and the launch screen. The shipped icon is a 520KB inline raster, so this draws the same artwork in ~17 paths and stays legible at 24-26px |
+| `BrandOrb` + `.gui-rail-brand-mark` | The MusePi sphere; the mark box | `BrandOrb` draws it in ~17 paths. The box is a 24×24 circle with a hairline ring and `overflow: hidden`, because the SVG is `height: auto` and sat off-centre in a non-square box; hover scales it 1.1 |
+| `RailCommunityLinks` | One line closing the rail: GitHub mark, star and issues | `AppRail.tsx`; one row, not two — same destination, reads as a footer note. Folds by `max-height` so the collapse stays continuous, and the mark survives in the icon-only rail |
 
 **Desktop stylesheets have one home: `apps/desktop/src/styles/`.** Every sheet is a `gui-*` family file there; a component that needs one imports it from that directory (`../styles/gui-<name>.css`) and never ships a sibling `.css` of its own. The last holdout, the marketplace detail sheet, moved in from `components/` so the cascade has no section without an owner.
 

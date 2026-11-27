@@ -219,6 +219,9 @@ export function UserAccountButton({
 				onClick={() => setOpen(v => !v)}
 			>
 				<UserAvatar rpc={rpc} cwd={cwd} />
+				{/* The wide rail names every row; this one had no text at all, so it
+				 * read as an anonymous avatar while its neighbours were labelled. */}
+				<span className="gui-rail-label gui-account-label">{label}</span>
 				<span className={`gui-account-dot${connected ? " gui-account-dot--on" : ""}`} aria-hidden="true" />
 			</button>
 			<MenuPopup
@@ -286,6 +289,64 @@ export function UserAccountButton({
 					<span>{t("settings.disconnect")}</span>
 				</button>
 			</MenuPopup>
+		</div>
+	);
+}
+
+/** Where the repository lives. One constant: the rail, the release notices and
+ *  the update dialog all point at the same project. */
+const REPO_URL = "https://github.com/MuseLinn/MusePi";
+
+/**
+ * Community row: one line closing the rail — the GitHub mark, then the star and
+ * issue links separated by a middot (KiroCrew's community row).
+ *
+ * One row, not two: these are the same destination (GitHub) and the pair reads
+ * as a footer line rather than two more destinations. Both links are outbound,
+ * so they are anchors; each carries its own accessible name because "Star" alone
+ * names no target.
+ *
+ * The mark is decorative — it labels the GROUP, not either link — and it is the
+ * one element on this line that stays when the rail folds, because an icon-only
+ * rail still has to show that these links exist. The text folds away by height,
+ * so the collapse stays smooth instead of the line vanishing.
+ */
+export function RailCommunityLinks({ expanded }: { expanded: boolean }): ReactNode {
+	return (
+		<div
+			className={`gui-rail-community${expanded ? " gui-rail-community--open" : ""}`}
+			{...(expanded ? {} : { inert: "" })}
+		>
+			<div className="gui-rail-community-line">
+				<span className="gui-rail-community-mark" aria-hidden="true">
+					<Icon name="github" className="gui-rail-icon" />
+				</span>
+				<span className="gui-rail-community-links">
+					<a
+						href={REPO_URL}
+						target="_blank"
+						rel="noopener noreferrer"
+						title={t("rail star repo")}
+						aria-label={t("rail star repo")}
+						className="gui-rail-community-link"
+					>
+						{t("rail star short")}
+					</a>
+					<span aria-hidden="true" className="gui-rail-community-sep">
+						·
+					</span>
+					<a
+						href={`${REPO_URL}/issues`}
+						target="_blank"
+						rel="noopener noreferrer"
+						title={t("rail open issues")}
+						aria-label={t("rail open issues")}
+						className="gui-rail-community-link"
+					>
+						{t("rail issues short")}
+					</a>
+				</span>
+			</div>
 		</div>
 	);
 }
@@ -368,7 +429,7 @@ export function AppRail({
 						<span className="gui-rail-brand-mark" aria-hidden="true">
 							<BrandOrb />
 						</span>
-						{expanded ? <span className="gui-rail-brand-text">MusePi</span> : null}
+						{expanded ? <span className="gui-rail-brand-text">{t("settings.musepi")}</span> : null}
 						{/* Collapse affordance: an arrow to the edge, not a hide-panel
 						 * glyph, because the rail folds rather than disappears. It
 						 * fades in LAST (see the CSS delay) and sits out of flow, so it

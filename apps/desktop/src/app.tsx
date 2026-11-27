@@ -24,7 +24,7 @@ import { PET_ACTIVITY_EVENT, PET_CHANGED_EVENT } from "./lib/companion-events";
 // to `window.MusePiHostModules.composer`.
 import "./components/Composer";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
-import { AppRail, type RailItem, UserAccountButton } from "./components/AppRail";
+import { AppRail, RailCommunityLinks, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
@@ -1095,12 +1095,15 @@ function AppInner(): ReactNode {
 		// the button). Wrapping the flip lets the browser pair the pane's old box
 		// with the button's new one instead of one vanishing and the other
 		// appearing. `surfaceOnly` keeps the window's root snapshot out of it.
-		withViewTransition(() => {
-			setSideCollapsed(collapsed => {
-				localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
-				return !collapsed;
-			});
-		}, { surfaceOnly: true, extraClass: "gui-vt-left-col" });
+		withViewTransition(
+			() => {
+				setSideCollapsed(collapsed => {
+					localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
+					return !collapsed;
+				});
+			},
+			{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
+		);
 	}, []);
 	/** Hover only previews a collapsed panel; clicking a destination owns the
 	 *  commit, so the destination arrives WITH the panel its interaction lives
@@ -5396,6 +5399,11 @@ function AppInner(): ReactNode {
 				onOpenManager={requestRemoteAccess}
 				onOpenDisclaimer={viewRemoteDisclaimer}
 			/>
+			{/* One community line closes the rail: the GitHub mark, then star and
+			 * issues on the same row. They live here rather than in the account
+			 * menu because they are what a person reaches for when something is
+			 * wrong or worth supporting. */}
+			<RailCommunityLinks expanded={railExpanded} />
 		</>
 	);
 
