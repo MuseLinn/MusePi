@@ -233,14 +233,14 @@ export function morphSurfaceClip(
 		if (rect.width === 0 || rect.height === 0) return;
 		root.style.setProperty("--gui-vt-anchor-clip", clipPathForAnchor(anchorRect, rect, radius));
 	};
-	publishClip();
+	if (options.direction === "to-anchor") publishClip();
 	surfaceElement.style.viewTransitionName = name;
 	const directionClass = `gui-vt-clip-${options.direction}`;
 	const transition = beginTransition(
 		doc,
 		() => {
 			update();
-			publishClip();
+			if (options.direction === "from-anchor") publishClip();
 		},
 		[...transitionClasses(options, true), directionClass],
 		options.onFinished,
