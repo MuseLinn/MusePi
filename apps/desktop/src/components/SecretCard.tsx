@@ -61,9 +61,19 @@ const CARD_STYLE: CSSProperties = { width: "100%", maxWidth: 460, marginLeft: 0 
  *  attribute because CSS declaration objects may drop the vendor property;
  *  the field is also a real password input so engines without it still mask.
  *  Autofill opt-outs below keep password managers from offering it. */
-const maskStyleRef = (el: HTMLInputElement | null): void => {
-	el?.setAttribute("style", "-webkit-text-security: disc");
-};
+/**
+ * Mask the field through `-webkit-text-security` so a browser that does not
+ * honour `type=password`'s masking on a text input still hides it. The caller
+ * passes whether the value should be masked right now: this attribute wins over
+ * `type`, so leaving it set would also hide a revealed value.
+ */
+function maskStyle(masked: boolean): (el: HTMLInputElement | null) => void {
+	return el => {
+		if (!el) return;
+		if (masked) el.setAttribute("style", "-webkit-text-security: disc");
+		else el.removeAttribute("style");
+	};
+}
 
 function envVarName(name: string): string {
 	return `$MUSEPI_SECRET_${name}`;
@@ -377,7 +387,7 @@ export function SecretCard({
 							<span className="gui-secret-field-label">{t("tools.loginPassword")}</span>
 							<span className="gui-secret-masked">
 								<input
-									ref={maskStyleRef}
+									ref={maskStyle(!revealPw.revealed)}
 									className="gui-input w-full"
 									type={revealPw.revealed ? "text" : "password"}
 									value={value}
@@ -413,6 +423,7 @@ export function SecretCard({
 							<span className="gui-secret-field-label">{t("tools.loginTotp")}</span>
 							<span className="gui-secret-masked">
 								<input
+									ref={maskStyle(!revealTotp.revealed)}
 									className="gui-input w-full"
 									type={revealTotp.revealed ? "text" : "password"}
 									value={loginTotp}
@@ -442,7 +453,7 @@ export function SecretCard({
 					<>
 						<span className="gui-secret-masked">
 							<input
-								ref={maskStyleRef}
+								ref={maskStyle(!revealPw.revealed)}
 								className="gui-input w-full"
 								type={revealPw.revealed ? "text" : "password"}
 								value={value}

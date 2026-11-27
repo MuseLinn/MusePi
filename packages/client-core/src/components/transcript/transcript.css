@@ -5660,27 +5660,29 @@ a.tr-tool-search-title:hover {
 .tr-secret-name:disabled {
 	cursor: default;
 }
-/* Hover/focus card: "where did this go, and how do I get there". Anchored to
- * the line, hidden until hover or keyboard focus — the same state set, so a
- * keyboard user reaches the action too. */
+/* Anchored above the line, and never clipped: the transcript scrolls with
+ * `overflow-x: hidden`, which also clips a child that escapes vertically, so an
+ * absolutely positioned tooltip above a mid-list row would be cut off. The card
+ * is therefore a sibling in flow that opens *below* the line on hover or
+ * keyboard focus, pushing later rows down rather than covering them. */
 .tr-secret-line {
 	position: relative;
+	flex-wrap: wrap;
 }
 .tr-secret-hover {
-	position: absolute;
-	left: 8px;
-	bottom: calc(100% + 6px);
-	z-index: 20;
+	order: 99;
+	flex-basis: 100%;
 	display: none;
-	min-width: 200px;
+	margin-top: 6px;
 	padding: 8px;
 	border: 1px solid var(--border, var(--line));
 	border-radius: var(--radius-md);
 	background: var(--color-surface-raised, var(--bg-raised));
-	box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
 }
+/* Hover reveals it; keyboard focus reveals it through :focus-visible, never
+ * :focus-within: clicking the line must not pin a panel open. */
 .tr-secret-line:hover .tr-secret-hover,
-.tr-secret-line:focus-within .tr-secret-hover {
+.tr-secret-line:has(.tr-secret-name:focus-visible) .tr-secret-hover {
 	display: block;
 }
 .tr-secret-hover-head {

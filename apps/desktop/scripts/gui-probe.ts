@@ -85,7 +85,11 @@ function stylesheetText() {
 	for (const file of parts) {
 		if (!existsSync(file)) throw new Error(`missing stylesheet: ${file}`);
 	}
-	return [...parts.map(file => readFileSync(file, "utf8")), gui].join("\n");
+	// The transcript sheet is imported by main.tsx outside gui.css, so a scenario
+	// that renders transcript components needs it appended explicitly.
+	const transcript = join(REPO_ROOT, "packages/client-core/src/components/transcript/transcript.css");
+	const extra = existsSync(transcript) ? readFileSync(transcript, "utf8") : "";
+	return [...parts.map(file => readFileSync(file, "utf8")), gui, extra].join("\n");
 }
 
 /** A Chromium the host already has. Never downloads one. */
