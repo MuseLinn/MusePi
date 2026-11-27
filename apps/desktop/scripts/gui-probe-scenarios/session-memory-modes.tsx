@@ -9,7 +9,7 @@ const shell = (): ReactNode => (
 	<div className="gui-main relative flex min-h-0 flex-1" style={{ width: 1100, height: 700, "--gui-side-w": "300px" } as CSSProperties}>
 		<div className="gui-rail"><div className="gui-rail-top" /></div>
 		<div className="gui-side-keeper" data-panel="home">
-			<SidebarToggleButton collapsed={false} onToggle={() => {}} sessions={[]} onSelectSession={() => {}} onNewSession={() => {}} />
+			<SidebarToggleButton collapsed={false} panelId="home" onToggle={() => {}} sessions={[]} onSelectSession={() => {}} onNewSession={() => {}} />
 			<SessionSidebar
 				nodes={[]}
 				sessionMeta={new Map()}

@@ -89,7 +89,7 @@ scope:
 | `WorkspacePageHeader` | 页面级标题头（图标/标题/描述/动作） | 看板、任务中心、能力中心等页面 |
 | `RightRail` | 右边缘 44px 图标栏 | 右面板的入口；**面板收起时也必须渲染** |
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
-| `SidebarToggleButton` | 常驻左上折叠、小会话菜单与 clip 锚点 | `.gui-side-keeper` 内只挂一个按钮；悬停显示最近会话，绝不显示完整面板 |
+| `SidebarToggleButton` | 常驻左上折叠、随目的地变化的小菜单与 clip 锚点 | `.gui-side-keeper` 内只挂一个按钮；悬停按当前停靠面板显示会话、任务或能力目的地，绝不显示完整面板 |
 | `MemoryModePicker` | 共享 persistent / incognito / temporary 选项与空态 chip | 所有会话记忆模式创建入口复用，不另写文案或隐私规则 |
 | `NotificationCenter` | toast 历史铃铛、未读徽标与浮层 | 桌面头部右侧动作组；历史只读 `notification-history.ts` |
 | `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选。标题行只有一行（「思考强度」+ 当前档位），轨道下方没有任何标签行 |

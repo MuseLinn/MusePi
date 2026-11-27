@@ -2,7 +2,15 @@ import { t } from "@musepi/client-core";
 import { PanelLeftClose as PanelLeftCloseIconData, PanelLeftOpen as PanelLeftOpenIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+	type CapabilityTab,
+	emitCapabilityNavAction,
+	readCapabilityNav,
+	subscribeCapabilityNav,
+} from "../lib/capability-nav";
+import type { SidebarPanelId } from "../lib/rail-peek";
+import { emitTaskNavAction, readTaskNav, subscribeTaskNav } from "../lib/scheduled-task-nav";
 import { Icon } from "../vendor/oc-icons";
 import { MenuPopup } from "./MenuPopup";
 
@@ -13,6 +21,7 @@ export interface SidebarQuickSession {
 
 export function SidebarToggleButton({
 	collapsed,
+	panelId,
 	onToggle,
 	sessions,
 	selectedId,
@@ -20,6 +29,7 @@ export function SidebarToggleButton({
 	onNewSession,
 }: {
 	collapsed: boolean;
+	panelId: SidebarPanelId;
 	onToggle(anchor: HTMLButtonElement): void;
 	sessions: readonly SidebarQuickSession[];
 	selectedId?: string | null;
@@ -97,40 +107,166 @@ export function SidebarToggleButton({
 				align="left"
 				onOpenChange={setOpen}
 			>
-				<section aria-label={t("general.sessions")} onPointerEnter={cancelClose} onPointerLeave={closeSoon}>
-					<header className="gui-session-quick-head">
-						<strong>{t("general.sessions")}</strong>
-						<button
-							type="button"
-							className="gui-session-quick-new"
-							onClick={() => {
-								close();
-								onNewSession();
-							}}
-						>
-							<Icon name="add" className="h-3.5 w-3.5" />
-							{t("settings.newTask")}
-						</button>
-					</header>
-					<div className="gui-session-quick-list">
-						{sessions.slice(0, 6).map(session => (
-							<button
-								type="button"
-								key={session.id}
-								data-session-id={session.id}
-								className="gui-session-quick-row"
-								data-active={session.id === selectedId ? "true" : undefined}
-								onClick={() => {
-									close();
-									onSelectSession(session.id);
-								}}
-							>
-								<span>{session.label}</span>
-							</button>
-						))}
-					</div>
-				</section>
+				{panelId === "home" ? (
+					<SessionQuickMenu
+						sessions={sessions}
+						selectedId={selectedId}
+						onSelectSession={onSelectSession}
+						onNewSession={onNewSession}
+						close={close}
+						cancelClose={cancelClose}
+						closeSoon={closeSoon}
+					/>
+				) : panelId === "scheduled" ? (
+					<ScheduledQuickMenu close={close} cancelClose={cancelClose} closeSoon={closeSoon} />
+				) : (
+					<CapabilityQuickMenu close={close} cancelClose={cancelClose} closeSoon={closeSoon} />
+				)}
 			</MenuPopup>
 		</>
+	);
+}
+
+interface QuickMenuBehavior {
+	close(): void;
+	cancelClose(): void;
+	closeSoon(): void;
+}
+
+function QuickMenuFrame({
+	title,
+	actionLabel,
+	onAction,
+	actionDisabled = false,
+	children,
+	close,
+	cancelClose,
+	closeSoon,
+}: QuickMenuBehavior & {
+	title: string;
+	actionLabel: string;
+	onAction(): void;
+	actionDisabled?: boolean;
+	children: ReactNode;
+}): ReactNode {
+	return (
+		<section aria-label={title} onPointerEnter={cancelClose} onPointerLeave={closeSoon}>
+			<header className="gui-session-quick-head">
+				<strong>{title}</strong>
+				<button
+					type="button"
+					className="gui-session-quick-new"
+					disabled={actionDisabled}
+					onClick={() => {
+						close();
+						onAction();
+					}}
+				>
+					<Icon name="add" className="h-3.5 w-3.5" />
+					{actionLabel}
+				</button>
+			</header>
+			<div className="gui-session-quick-list">{children}</div>
+		</section>
+	);
+}
+
+function SessionQuickMenu({
+	sessions,
+	selectedId,
+	onSelectSession,
+	onNewSession,
+	...behavior
+}: QuickMenuBehavior & {
+	sessions: readonly SidebarQuickSession[];
+	selectedId?: string | null;
+	onSelectSession(id: string): void;
+	onNewSession(): void;
+}): ReactNode {
+	return (
+		<QuickMenuFrame
+			{...behavior}
+			title={t("general.sessions")}
+			actionLabel={t("settings.newTask")}
+			onAction={onNewSession}
+		>
+			{sessions.slice(0, 6).map(session => (
+				<button
+					type="button"
+					key={session.id}
+					data-session-id={session.id}
+					className="gui-session-quick-row"
+					data-active={session.id === selectedId ? "true" : undefined}
+					onClick={() => {
+						behavior.close();
+						onSelectSession(session.id);
+					}}
+				>
+					<span>{session.label}</span>
+				</button>
+			))}
+		</QuickMenuFrame>
+	);
+}
+
+function ScheduledQuickMenu(behavior: QuickMenuBehavior): ReactNode {
+	const nav = useSyncExternalStore(subscribeTaskNav, readTaskNav, readTaskNav);
+	return (
+		<QuickMenuFrame
+			{...behavior}
+			title={t("settings.scheduledTasks")}
+			actionLabel={t("settings.scheduledNew")}
+			actionDisabled={nav.busy}
+			onAction={() => emitTaskNavAction({ type: "new" })}
+		>
+			{nav.tasks.slice(0, 6).map(task => (
+				<button
+					type="button"
+					key={task.id}
+					data-task-id={task.id}
+					className="gui-session-quick-row"
+					data-active={task.id === nav.selectedId ? "true" : undefined}
+					onClick={() => {
+						behavior.close();
+						emitTaskNavAction({ type: "select", id: task.id });
+					}}
+				>
+					<span>{task.name || t("settings.scheduledUntitled")}</span>
+				</button>
+			))}
+		</QuickMenuFrame>
+	);
+}
+
+function CapabilityQuickMenu(behavior: QuickMenuBehavior): ReactNode {
+	const nav = useSyncExternalStore(subscribeCapabilityNav, readCapabilityNav, readCapabilityNav);
+	const entries: { id: CapabilityTab; label: string }[] = [
+		{ id: "skills", label: t("tools.skillsTab") },
+		{ id: "plugins", label: t("settings.plugins") },
+		{ id: "marketplace", label: t("guest.marketplace") },
+	];
+	return (
+		<QuickMenuFrame
+			{...behavior}
+			title={t("tools.capabilityCenter")}
+			actionLabel={t("tools.capabilityPanelAdd")}
+			onAction={() => emitCapabilityNavAction({ type: "add" })}
+		>
+			{entries.map(entry => (
+				<button
+					type="button"
+					key={entry.id}
+					data-capability-tab={entry.id}
+					className="gui-session-quick-row"
+					data-active={entry.id === nav.tab ? "true" : undefined}
+					onClick={() => {
+						behavior.close();
+						emitCapabilityNavAction({ type: "select", tab: entry.id });
+					}}
+				>
+					<span>{entry.label}</span>
+				</button>
+			))}
+		</QuickMenuFrame>
 	);
 }

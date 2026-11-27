@@ -5627,6 +5627,7 @@ function AppInner(): ReactNode {
 						{(!pageDestinationActive || secondTierPanelVisible) && (
 							<SidebarToggleButton
 								collapsed={sideCollapsed}
+								panelId={togglePanelId ?? "home"}
 								onToggle={toggleSidebar}
 								sessions={recentSessions}
 								selectedId={selectedId}
