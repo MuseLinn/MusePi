@@ -987,6 +987,22 @@ function AppInner(): ReactNode {
 	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
+	/** Tier one's own width: the 52px icon strip, or the wide rail with labels.
+	 *  Independent of `sideCollapsed` (tier two) on purpose — KiroCrew's rail and
+	 *  its sessions sidebar fold separately, and a person who wants labels but no
+	 *  session list should not have to choose. */
+	const [railExpanded, setRailExpanded] = useState(() => localStorage.getItem("musepi-gui-rail-wide") === "1");
+	const toggleRailExpanded = useCallback((): void => {
+		withViewTransition(
+			() => {
+				setRailExpanded(wide => {
+					localStorage.setItem("musepi-gui-rail-wide", wide ? "0" : "1");
+					return !wide;
+				});
+			},
+			{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
+		);
+	}, []);
 	/** Hover-peek (2026-11-08): the rail reports the panel owned by the
 	 *  HOVERED destination. Hovering the rail's empty band or a destination
 	 *  without a panel floats nothing; 任务中心 peeks its own task list. The
@@ -1073,22 +1089,48 @@ function AppInner(): ReactNode {
 			setNarrowSidebarOpen(open => !open);
 			return;
 		}
-		setSideCollapsed(collapsed => {
-			localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
-			return !collapsed;
-		});
+		// Tier two folding in / out is the column's other rect change: the pane's
+		// card collapses to zero while the header's toggle takes its place as the
+		// only remaining affordance (KiroCrew's behaviour — the list morphs into
+		// the button). Wrapping the flip lets the browser pair the pane's old box
+		// with the button's new one instead of one vanishing and the other
+		// appearing. `surfaceOnly` keeps the window's root snapshot out of it.
+		withViewTransition(() => {
+			setSideCollapsed(collapsed => {
+				localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
+				return !collapsed;
+			});
+		}, { surfaceOnly: true, extraClass: "gui-vt-left-col" });
 	}, []);
 	/** Hover only previews a collapsed panel; clicking a destination owns the
 	 *  commit, so the destination arrives WITH the panel its interaction lives
 	 *  in instead of dropping the pane as soon as the pointer leaves the rail. */
+	/** Read inside `revealSidePanel` without re-creating it on every collapse:
+	 *  the callback is a dependency of the rail destinations, and those rebuild
+	 *  a lot already. */
+	const sideCollapsedRef = useRef(sideCollapsed);
+	sideCollapsedRef.current = sideCollapsed;
 	const revealSidePanel = useCallback((): void => {
 		if (sidebarDrawerRef.current) {
 			// Narrow layout: the panel IS the drawer — a destination click opens it.
 			setNarrowSidebarOpen(true);
 			return;
 		}
-		setSideCollapsed(false);
-		localStorage.setItem("musepi-gui-side", "1");
+		// Folding → docked is the one transition in this column that changes a
+		// card's RECT: the 52px icon strip becomes (or makes room for) a 256px
+		// panel, while the peek card is already the docked card at the docked x
+		// (measured identical, so morphing that pair would animate nothing). The
+		// browser pairs the two snapshots, so the column widens in one continuous
+		// move instead of the rail staying put while the panel slides in beside it.
+		// `surfaceOnly` keeps the rest of the window from cross-fading.
+		const expanding = sideCollapsedRef.current;
+		withViewTransition(
+			() => {
+				setSideCollapsed(false);
+				localStorage.setItem("musepi-gui-side", "1");
+			},
+			expanding ? { surfaceOnly: true, extraClass: "gui-vt-left-col" } : undefined,
+		);
 	}, []);
 	// Side-rail width drag. (The right panel has its own drag on the normalized
 	// pointer-drag primitive — see ContextPanel.)
@@ -5400,6 +5442,8 @@ function AppInner(): ReactNode {
 						onTogglePanel={toggleSidebar}
 						onPeekPanel={peekEligible ? openPeek : undefined}
 						onPeekEnd={peekEligible ? closePeek : undefined}
+						expanded={railExpanded}
+						onToggleExpanded={toggleRailExpanded}
 					/>
 					{/* The side resizer must not float while the settings shell
 					 * hides the sidebar — otherwise a stray handle line rides the

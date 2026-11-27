@@ -139,6 +139,10 @@
  * The titlebar spacer subtracts it; never hard-code 52px in two places. */
 :root {
 	--gui-rail-w: 52px;
+	/* The wide rail's width. Deliberately separate from `--gui-rail-w`: that one
+	 * is the COLLAPSED strip the chat header spacer subtracts, so widening it
+	 * would shift the header even when the rail is folded. */
+	--gui-rail-w-wide: 208px;
 }
 
 .gui-rail {
@@ -154,10 +158,93 @@
 	 * content (a bottom tooltip/overflow used to add 26px to the page scroll
 	 * height, so focusing the settings gear scrolled the whole UI up). */
 	overflow: clip;
-	/* Transparent over the workspace glass layer (.gui-main): the rail reads
-	 * as the left edge of the same material as the panel beside it. */
-	background: transparent;
+	/* A card, like the pane it precedes: the rail used to be fully transparent
+	 * over the workspace glass, so a 52px strip of empty material sat beside a
+	 * rounded panel and the column read as one card plus leftover space rather
+	 * than two tiers. It now shares the L1 card recipe with `.gui-pane-side`
+	 * (gui-glass.css owns the fill, hairline and lift) and its geometry, so the
+	 * two read as the same surface at two widths. `background` stays unset here
+	 * on purpose: the shared recipe is the single authority for the material.
+	 *
+	 * Margins mirror the pane's own geometry, including its header offset: the
+	 * pane starts one header band below its keeper's top edge, and the rail must
+	 * land on the same line or the two cards read as misaligned (measured 48px
+	 * apart without this). Both cards then share one top and bottom edge. */
+	margin: calc(var(--gui-header-h) + var(--gui-card-gutter)) var(--gui-card-gutter) calc(var(--gui-card-gutter) * 2);
+	border-radius: var(--radius-2xl);
+	/* Tier one has two widths: the 52px icon strip and the wide rail its brand
+	 * header expands to. The width is the only thing that changes — rows keep
+	 * their box and reveal a label — so the transition animates one property and
+	 * the labels never jump (the collapsed rows simply do not render them).
+	 * A duration rather than the pane's spring: a strip widening under a click
+	 * should not overshoot past the chat column. */
+	transition: width 180ms cubic-bezier(0.2, 0, 0, 1);
 	user-select: none;
+}
+
+/* Wide (expanded) rail: labels beside the glyphs. `--gui-rail-w` itself is
+ * unchanged — the wide width is a separate token, because that variable is the
+ * collapsed spacer the chat header subtracts. */
+.gui-rail--wide {
+	width: var(--gui-rail-w-wide);
+	align-items: stretch;
+	padding: 0 6px 8px;
+}
+
+/* Brand header: the mark that toggles the rail's width. Only mounted where the
+ * rail may widen, so a fixed-strip host renders the plain empty band instead. */
+.gui-rail-head {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	padding: 6px;
+}
+
+.gui-rail-brand {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	padding: 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.gui-rail-brand:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
+.gui-rail-brand:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
+}
+
+.gui-rail-brand-mark {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+}
+
+.gui-rail-brand-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--color-text);
 }
 
 /* Top band: keeps the first destination out of the window's titlebar/drag
@@ -165,9 +252,14 @@
  * declared in gui-window-drag.css). Height matches the chat header (`h-12`).
  * It is intentionally EMPTY: the window's single fold/unfold control is the
  * fixed titlebar cluster at `left:68px` (gui-chat.css), which used to collide
- * with a second toggle rendered here. */
+ * with a second toggle rendered here.
+ *
+ * Inside a card this band is no longer free: the rail's own margin already
+ * puts the card below the header line, so the full 48px would double the top
+ * inset and push the first destination off the shared control baseline. It
+ * keeps a grabbable strip (12px) and the destinations align with the pane. */
 .gui-rail-top {
-	height: 48px;
+	height: 12px;
 	width: 100%;
 	flex-shrink: 0;
 	display: flex;
@@ -255,6 +347,41 @@
 .gui-rail-icon {
 	width: 18px;
 	height: 18px;
+	flex-shrink: 0;
+}
+
+/* ── Wide rail rows ────────────────────────────────────────────────────
+ * Same button, one more thing to show. The row becomes a full-width,
+ * start-aligned line and reveals its label; the collapsed row keeps the 36px
+ * square and never renders one, so neither state reserves the other's space.
+ * The label truncates rather than wrapping: a long translated destination name
+ * must not make one row taller than its neighbours. */
+.gui-rail-btn--wide {
+	width: 100%;
+	height: 34px;
+	justify-content: flex-start;
+	gap: 10px;
+	padding: 0 8px;
+}
+
+.gui-rail-label {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	text-align: left;
+}
+
+/* The unread dot stays on the icon's corner in the wide rail too: parked at
+ * the row's trailing edge it would read as a row-level status rather than as
+ * something on the destination glyph. */
+.gui-rail-btn--wide .gui-rail-dot {
+	top: 5px;
+	left: 22px;
+	right: auto;
 }
 
 /* Unread activity is a dot, not a count: a two-digit badge is unreadable in
@@ -3292,4 +3419,68 @@
 }
 .gui-office-preserved-text {
 	white-space: pre-wrap;
+}
+
+/* ── Sidebar reveal (folding → docked) ──────────────────────────────────
+ * `revealSidePanel` wraps the expansion in a same-document view transition.
+ * With `gui-vt-left-col` the window's root snapshot is dropped (the transition
+ * also carries `gui-vt-surface-only`), so the surfaces named here are what the
+ * two
+ * surfaces named here are what the browser paints: the rail card and the pane's
+ * card. Naming them lets the browser move each group from its old box to its
+ * new one on one composited layer, instead of the rail snapping to its new
+ * position while the pane slides in from nothing.
+ *
+ * Each card gets its OWN name. Two elements sharing one name in a single
+ * snapshot makes the browser ignore both (the trap `view-transition.ts`
+ * documents for dialogs), and the rail exists in both snapshots while the pane
+ * exists in only one — so they are named separately and never pair with each
+ * other.
+ *
+ * The pane's content is drawn from the NEW snapshot at its own size
+ * (`object-fit: none`), so a widening column never stretches the text: it
+ * reveals more of it, exactly like the fold's clip. */
+:root.gui-vt-left-col .gui-rail {
+	view-transition-name: gui-rail-card;
+}
+
+:root.gui-vt-left-col .gui-side-keeper > .gui-pane-side {
+	view-transition-name: gui-pane-card;
+}
+
+/* The header toggle is the pane's counterpart on the tier-two fold: the list
+ * morphs INTO this button (KiroCrew 的会话列表折叠收进开合按钮). It is named on
+ * both snapshots — the button is always mounted, so the browser can pair its
+ * box with the pane's whenever the pane appears or leaves. */
+:root.gui-vt-left-col .gui-sidebar-toggle {
+	view-transition-name: gui-side-toggle;
+}
+
+:root.gui-vt-left-col::view-transition-group(gui-rail-card),
+:root.gui-vt-left-col::view-transition-group(gui-pane-card),
+:root.gui-vt-left-col::view-transition-group(gui-side-toggle) {
+	overflow: clip;
+	animation-duration: 240ms;
+	animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root.gui-vt-left-col::view-transition-old(gui-pane-card) {
+	animation: none;
+	opacity: 0;
+}
+
+:root.gui-vt-left-col::view-transition-new(gui-pane-card) {
+	animation: none;
+	width: auto;
+	height: auto;
+	object-fit: none;
+	object-position: top left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root.gui-vt-left-col::view-transition-group(gui-rail-card),
+	:root.gui-vt-left-col::view-transition-group(gui-pane-card),
+	:root.gui-vt-left-col::view-transition-group(gui-side-toggle) {
+		animation: none;
+	}
 }

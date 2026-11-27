@@ -45,10 +45,15 @@ export interface RailItem {
 
 function RailButton({
 	item,
+	expanded,
 	onPeekPanel,
 	onPeekEnd,
 }: {
 	item: RailItem;
+	/** Wide rail: the row shows its label inline (KiroCrew's expanded nav rail).
+	 *  Collapsed keeps the icon-only square with a hover tip, so a 52px strip
+	 *  never reserves label width it cannot show. */
+	expanded: boolean;
 	onPeekPanel?: (panelId: string) => void;
 	onPeekEnd?(): void;
 }): ReactNode {
@@ -56,8 +61,8 @@ function RailButton({
 	return (
 		<button
 			type="button"
-			className={`gui-rail-btn${item.active ? " gui-rail-btn--active" : ""}`}
-			title={label}
+			className={`gui-rail-btn${item.active ? " gui-rail-btn--active" : ""}${expanded ? " gui-rail-btn--wide" : ""}`}
+			title={expanded ? undefined : label}
 			aria-label={label}
 			aria-current={item.active ? "page" : undefined}
 			data-rail-destination={item.id}
@@ -67,6 +72,7 @@ function RailButton({
 			onPointerLeave={item.panelId ? onPeekEnd : undefined}
 		>
 			<Icon name={item.icon} className="gui-rail-icon" />
+			{expanded ? <span className="gui-rail-label">{label}</span> : null}
 			{item.unread ? <span className="gui-rail-dot" aria-hidden="true" /> : null}
 		</button>
 	);
@@ -291,6 +297,8 @@ export function AppRail({
 	onTogglePanel,
 	onPeekPanel,
 	onPeekEnd,
+	expanded = false,
+	onToggleExpanded,
 }: {
 	destinations: readonly RailItem[];
 	/** The persistent user/account entry that replaced the settings
@@ -313,6 +321,13 @@ export function AppRail({
 	 *  task list instead of the 首页 session list. */
 	onPeekPanel?(panelId: string): void;
 	onPeekEnd?(): void;
+	/** Wide rail: rows carry their labels and the brand header appears. The
+	 *  narrow 52px strip is the same rail with labels withheld, so expanding is
+	 *  a width change, not a different component. */
+	expanded?: boolean;
+	/** Present only where the rail may widen; its absence keeps the rail a
+	 *  fixed icon strip (the settings preview renders it that way). */
+	onToggleExpanded?(): void;
 }): ReactNode {
 	// The 48px top band is EMPTY by design: the window's own fold/unfold
 	// control lives in the titlebar cluster at the panel's top edge. Rendering
@@ -325,11 +340,43 @@ export function AppRail({
 		onTogglePanel();
 	};
 	return (
-		<nav className="gui-rail" aria-label={t("general.appRail")} onDoubleClick={onBackgroundDoubleClick}>
-			<div className="gui-rail-top" aria-hidden="true" />
+		<nav
+			className={`gui-rail${expanded ? " gui-rail--wide" : ""}`}
+			aria-label={t("general.appRail")}
+			onDoubleClick={onBackgroundDoubleClick}
+		>
+			{/* Brand header: the mark IS the expand/collapse control, and the
+			 * one persistent click target (KiroCrew's rail header). Unmounted
+			 * where the rail cannot widen, so the settings preview and any
+			 * fixed-strip host keep exactly the old markup. */}
+			{onToggleExpanded ? (
+				<div className="gui-rail-head">
+					<button
+						type="button"
+						className="gui-rail-brand"
+						onClick={onToggleExpanded}
+						title={expanded ? t("transcript.closeSidebar") : t("transcript.openSidebar")}
+						aria-label={expanded ? t("transcript.closeSidebar") : t("transcript.openSidebar")}
+						aria-expanded={expanded}
+					>
+						<span className="gui-rail-brand-mark" aria-hidden="true">
+							<Icon name="layout-left" className="gui-rail-icon" />
+						</span>
+						{expanded ? <span className="gui-rail-brand-text">MusePi</span> : null}
+					</button>
+				</div>
+			) : (
+				<div className="gui-rail-top" aria-hidden="true" />
+			)}
 			<div className="gui-rail-scroll">
 				{destinations.map(item => (
-					<RailButton key={item.id} item={item} onPeekPanel={onPeekPanel} onPeekEnd={onPeekEnd} />
+					<RailButton
+						key={item.id}
+						item={item}
+						expanded={expanded}
+						onPeekPanel={onPeekPanel}
+						onPeekEnd={onPeekEnd}
+					/>
 				))}
 			</div>
 			<div className="gui-rail-group">
