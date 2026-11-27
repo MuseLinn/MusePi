@@ -140,7 +140,7 @@ const scenarios = {
 			);
 			const head = body.querySelector(".gui-rail-head");
 			const brand = body.querySelector(".gui-rail-brand");
-			const mark = body.querySelector<HTMLElement>(".gui-brand-mark");
+			const mark = body.querySelector<SVGElement>(".gui-brand-orb-svg");
 			const arrow = body.querySelector<HTMLElement>(".gui-rail-brand-arrow");
 			return {
 				elements,
@@ -149,8 +149,10 @@ const scenarios = {
 				headWidth: head ? Math.round(head.getBoundingClientRect().width) : null,
 				brandExpanded: brand?.getAttribute("aria-expanded") ?? null,
 				hasTopBand: body.querySelector(".gui-rail-top") !== null,
-				// The product mark, not a generic glyph.
-				markGlyph: mark?.textContent ?? null,
+				// The shipped brand mark is the gold sphere, not a glyph or a
+				// generic panel icon.
+				markIsOrb: mark !== null,
+				markPaths: mark ? mark.querySelectorAll("path, ellipse, rect, polygon").length : 0,
 				markTransition: mark ? getComputedStyle(mark.parentElement as Element).transitionProperty : null,
 				// The arrow must be OUT of flow, or it reserves width and squeezes
 				// the mark while the rail is still narrow.

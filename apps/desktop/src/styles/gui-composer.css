@@ -1820,7 +1820,7 @@ button.gui-stats-pill {
 .gui-splash-orb {
 	position: relative;
 	width: 132px;
-	/* The IP orb mascot (SplashOrb). Two FINITE sequenced animations — a
+	/* The brand orb (BrandOrb). Two FINITE sequenced animations — a
 	 * one-shot settle (scale+deblur+glow bloom, both-fill holds it) then a
 	 * bounded idle (slow float with a breathing glow, 6 iterations ≈ 29s,
 	 * both-fill settles on the base frame). Splash animations MUST be
@@ -1859,7 +1859,7 @@ button.gui-stats-pill {
 	opacity: 1;
 }
 
-.gui-splash-orb-svg {
+.gui-brand-orb-svg {
 	display: block;
 	width: 100%;
 	height: auto;

@@ -6,6 +6,7 @@ import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "
 import { Icon } from "../vendor/oc-icons";
 import type { IconName } from "../vendor/oc-icons/icons";
 import { PunkAvatar } from "./avatar-presets";
+import { BrandOrb } from "./BrandOrb";
 import { MenuPopup } from "./MenuPopup";
 
 /**
@@ -365,7 +366,7 @@ export function AppRail({
 						 * header and error boundary render — one mark, one component —
 						 * and the rail only scales it up for this slot. */}
 						<span className="gui-rail-brand-mark" aria-hidden="true">
-							<span className="gui-brand-mark">π</span>
+							<BrandOrb />
 						</span>
 						{expanded ? <span className="gui-rail-brand-text">MusePi</span> : null}
 						{/* Collapse affordance: an arrow to the edge, not a hide-panel

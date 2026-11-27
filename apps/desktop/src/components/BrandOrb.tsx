@@ -1,6 +1,16 @@
-/** Static launch form of the desktop pet. Shell and accessory paints follow
- * the live `gui-pet-*` palette; the face stays white. Geometry and happy-eye
- * rings match `CompanionArt`, without mounting the interactive mascot engine. */
+/**
+ * The MusePi brand mark: the champagne-gold sphere with headphones, as vector.
+ *
+ * Shipped as the app icon it is a 1024px raster (~520KB) embedded in an SVG,
+ * which cannot be mounted inline per render; this is the same artwork drawn as
+ * ~17 paths in the live `gui-pet-*` palette, so it costs a few KB, scales to the
+ * 24-26px rail header and stays legible (verified at button size: the eyes and
+ * smile survive, the headphone shell reads as a ring rather than noise).
+ *
+ * Also the launch screen's face — one mark, one source, so the rail and the
+ * splash can never drift apart. Geometry and happy-eye rings match
+ * `CompanionArt`, without mounting the interactive mascot engine.
+ */
 import type React from "react";
 
 /** `happy` eye rings from lib/companion-face.ts, 48 measured points each. */
@@ -9,13 +19,13 @@ const FACE_EYES = [
 	"161.90,85.01 166.11,85.33 169.94,87.09 172.90,90.10 174.77,93.89 175.58,98.04 175.47,102.28 174.92,106.48 174.26,110.67 173.50,114.85 172.62,118.99 171.62,123.12 170.51,127.21 169.28,131.27 167.93,135.29 166.43,139.26 164.78,143.17 162.97,147.00 160.97,150.74 158.56,154.22 155.64,157.29 152.33,159.94 148.71,162.15 144.84,163.89 140.78,165.08 136.57,165.54 132.40,164.90 129.02,162.46 128.04,158.41 129.19,154.36 131.11,150.58 132.95,146.76 134.64,142.86 136.19,138.91 137.60,134.92 138.88,130.87 140.03,126.79 141.06,122.68 141.97,118.53 142.77,114.37 143.41,110.17 144.00,105.97 144.83,101.82 146.17,97.80 148.20,94.08 150.87,90.79 154.08,88.03 157.79,86.00",
 ] as const;
 
-export function SplashOrb(): React.JSX.Element {
+export function BrandOrb(): React.JSX.Element {
 	return (
 		<svg
 			viewBox="0 0 269 275"
 			xmlns="http://www.w3.org/2000/svg"
 			focusable="false"
-			className="gui-splash-orb-svg"
+			className="gui-brand-orb-svg"
 			aria-hidden="true"
 		>
 			<defs>
