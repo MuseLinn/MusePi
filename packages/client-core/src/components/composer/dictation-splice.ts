@@ -97,9 +97,11 @@ export function dictationSplice(anchor: DictationAnchor, hypothesis: string): Di
  * showing only its provisional tail.
  */
 export function mergeDictationFinal(committed: string, finalText: string): string {
-	const done = committed.trim();
 	const last = finalText.trim();
 	if (!last) return committed;
-	if (done && last.startsWith(done)) return last;
+	// Segments stream in unseparated while the final joins them with spaces, so
+	// containment is judged on the words alone, not on the whitespace between them.
+	const done = committed.replace(/\s+/g, "");
+	if (done && last.replace(/\s+/g, "").startsWith(done)) return last;
 	return `${committed}${last}`;
 }

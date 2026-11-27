@@ -51,6 +51,15 @@ describe("merging the final answer", () => {
 		expect(mergeDictationFinal("first phrase ", "first phrase second phrase")).toBe("first phrase second phrase");
 	});
 
+	test("takes the whole utterance when only the spacing between segments differs", () => {
+		// Streamed segments are joined without a separator; the final joins them
+		// with spaces. Two segments must still land once, not twice.
+		expect(mergeDictationFinal("你好世界", "你好 世界")).toBe("你好 世界");
+		expect(mergeDictationFinal("first phrase.second phrase.", "first phrase. second phrase.")).toBe(
+			"first phrase. second phrase.",
+		);
+	});
+
 	test("appends the remaining run exactly once", () => {
 		expect(mergeDictationFinal("first phrase ", "second phrase")).toBe("first phrase second phrase");
 	});
