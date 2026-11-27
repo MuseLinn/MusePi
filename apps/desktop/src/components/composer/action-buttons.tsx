@@ -1,7 +1,7 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
 import { ListPlus, SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 import { TextMorph } from "../TextMorph";
@@ -43,18 +43,29 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
 /** Voice input toggle (startDictation from ../lib/voice).
  *
  *  Deliberately a compact motion-only control: the 30px capsule has no room
- *  for copy (user direction), so the seconds clock, the waveform and the
- *  phase text moved into the in-input {@link VoiceStatusStrip} — the button
- *  keeps just the tint + pulse while recording and the spinner while
- *  transcribing. */
+ *  for a second copy of the phase, so it carries the state itself — tint and
+ *  mic pulse while recording, spinner while transcribing — plus the two facts
+ *  that belong to the CONTROL (how long it has been running, how loud the input
+ *  is) as an inline clock and a 2px level bar on its inner bottom edge. The
+ *  in-input {@link VoiceStatusStrip} therefore does not repeat them.
+ *
+ *  The expanded capsule styling (`.gui-composer-ico--dictating`) already
+ *  existed for the settings-page mic test; the composer mic joins it instead of
+ *  growing a second visual language for the same act. */
 export function VoiceButton({
 	state,
 	disabled,
 	onToggle,
+	seconds = 0,
+	level = 0,
 }: {
 	state: "idle" | "recording" | "transcribing";
 	/** stt.enabled gate (TUI parity): renders inert while speech input is off. */
 	disabled?: boolean;
+	/** Elapsed dictation time, shown inside the recording capsule. */
+	seconds?: number;
+	/** Mic RMS in [0, 1]; scales the capsule's inner level bar. */
+	level?: number;
 	onToggle(): void;
 }): ReactNode {
 	const label =
@@ -63,6 +74,7 @@ export function VoiceButton({
 			: state === "transcribing"
 				? t("settings.voiceTranscribing")
 				: t("settings.voiceInput");
+	const recording = state === "recording";
 	return (
 		<button
 			type="button"
@@ -77,50 +89,42 @@ export function VoiceButton({
 			) : (
 				<Icon name="mic" className="h-3.5 w-3.5" />
 			)}
+			{recording && (
+				<>
+					<span className="gui-voice-seconds">{seconds}s</span>
+					<span className="gui-voice-level" style={{ width: `${Math.round(level * 100)}%` }} />
+				</>
+			)}
 		</button>
 	);
 }
 
-const VOICE_WAVE_BARS = Array.from({ length: 13 }, (_, index) => 0.35 + ((index * 7) % 10) / 14);
-
-export function VoiceStatusStrip({
-	phase,
-	seconds,
-	level,
-}: {
-	phase: "recording" | "transcribing";
-	seconds: number;
-	level: number;
-}): ReactNode {
+/** In-input dictation indicator.
+ *
+ *  One line at the caret, not a status bar: a pulse dot for "live", the phase
+ *  word, and the Esc-cancel affordance. Everything else moved to where it
+ *  belongs once the transcript started landing in the input itself:
+ *
+ *  - the clock and the input level live INSIDE the mic capsule
+ *    ({@link VoiceButton}), which is the control they describe;
+ *  - the recognized words are painted in the editor at the caret, so there is
+ *    nothing left for a "text will appear here" hint to say.
+ *
+ *  What used to be here — a second pulsing mic orb with two RMS rings beside a
+ *  13-bar RMS wave — was the same two facts (I am recording / how loud) drawn
+ *  twice within 40px. */
+export function VoiceStatusStrip({ phase }: { phase: "recording" | "transcribing" }): ReactNode {
 	const recording = phase === "recording";
 	return (
 		<div
 			className={`gui-voice-strip${recording ? "" : " gui-voice-strip--transcribing"}`}
 			data-phase={phase}
-			style={{ "--voice-level": `${Math.round(level * 100) / 100}` } as CSSProperties}
 			role="status"
 			aria-live="polite"
 		>
-			<span className="gui-voice-visual" aria-hidden>
-				<i className="gui-voice-ring gui-voice-ring--outer" />
-				<i className="gui-voice-ring gui-voice-ring--inner" />
-				{recording ? <Icon name="mic" className="gui-voice-mic" /> : <span className="gui-voice-spinner" />}
-			</span>
-			<span className="gui-voice-strip-summary">
-				<span className="gui-voice-strip-label">
-					{recording ? t("settings.voiceListening") : t("settings.voiceTranscribing")}
-				</span>
-				{recording && <span className="gui-voice-strip-time">{seconds}s</span>}
-			</span>
-			{recording && (
-				<span className="gui-voice-wave" aria-hidden>
-					{VOICE_WAVE_BARS.map((weight, index) => (
-						<i key={index} style={{ "--voice-bar-scale": Math.min(1, 0.18 + level * weight) } as CSSProperties} />
-					))}
-				</span>
-			)}
-			<span className="gui-voice-partial">
-				{t(recording ? "settings.voiceListeningHint" : "settings.voiceTranscribingHint")}
+			<span className="gui-voice-dot" aria-hidden />
+			<span className="gui-voice-strip-label">
+				{recording ? t("settings.voiceListening") : t("settings.voiceTranscribing")}
 			</span>
 			<span className="gui-voice-strip-hint">
 				<kbd>{t("settings.voiceEscKey")}</kbd>

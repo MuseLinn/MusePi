@@ -2407,11 +2407,13 @@ export function SessionComposer({
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}
-						{/* Compact motion-only mic control; the live waveform, clock
-						 * and phase copy live in the in-input VoiceStatusStrip. */}
+						{/* Mic capsule: it carries the clock and the input level while
+						 * recording; the in-input line carries only the phase. */}
 						<VoiceButton
 							state={dictation.phase}
 							disabled={!sttEnabled}
+							seconds={dictation.seconds}
+							level={dictation.level}
 							onToggle={() => void voiceSetup.onToggle()}
 						/>
 						{/* 三合一 send control:
@@ -2495,15 +2497,20 @@ export function SessionComposer({
 					focused={focused}
 					className="gui-composer-editor gui-composer-editor--session"
 					placeholder={
-						shownSuggestion !== null
+						// While dictating, the composer's job is "speak" — the state line
+						// already says so, and a "what you could type" hint underneath it
+						// is a second instruction competing with the first.
+						dictation.phase !== "idle"
 							? ""
-							: composerPlaceholder({
-									surface: "session",
-									working,
-									attachmentCount: attachments.length,
-									hasConversation: (entries?.length ?? 0) > 0,
-									designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
-								})
+							: shownSuggestion !== null
+								? ""
+								: composerPlaceholder({
+										surface: "session",
+										working,
+										attachmentCount: attachments.length,
+										hasConversation: (entries?.length ?? 0) > 0,
+										designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
+									})
 					}
 					spellCheck={spellcheckEnabled()}
 					composingRef={composingRef}

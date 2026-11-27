@@ -1,0 +1,112 @@
+import { ComposerEditor } from "@musepi/client-core";
+import { createElement, useRef } from "react";
+import { VoiceButton, VoiceStatusStrip } from "../../src/components/composer/action-buttons";
+import { mount, measure } from "../gui-probe-helpers";
+
+/** The composer in its live-dictation shape: status strip + the editor that
+ *  paints the volatile preview. This is the exact composition SessionComposer
+ *  renders (`VoiceOverlays` above `ComposerEditorStack`). */
+function Live({
+	phase,
+	level,
+	transcript = "",
+}: {
+	phase: "recording" | "transcribing";
+	level: number;
+	/** What the recognizer currently believes; painted at the caret. */
+	transcript?: string;
+}) {
+	return createElement(
+		"div",
+		{ className: "gui-composer-frame gui-liquid-glass" },
+		createElement(VoiceStatusStrip, { phase }),
+		createElement(ComposerEditor, {
+			value: "",
+			// The composers pass no placeholder while dictating.
+			placeholder: "",
+			onChange: () => {},
+			ref: (editor: { setPreview(text: string): void } | null) => editor?.setPreview(transcript),
+		}),
+		// Real structure: the state line sits ABOVE the editor and the mic
+		// capsule is part of the toolbar BELOW it, so the two never share a row.
+		createElement(
+			"div",
+			{ className: "gui-composer-row" },
+			createElement(VoiceButton, { state: phase, seconds: 6, level, onToggle: () => {} }),
+		),
+	);
+}
+
+const transcriptText = "请自然说话，识别文字会显示在这里，不需要等我说完";
+
+export default {
+	"dictation-live": {
+		capture: ".gui-composer-frame",
+		async render(root) {
+			await mount(
+				createElement(Live, {
+					phase: "recording",
+					level: 0.62,
+					transcript: transcriptText,
+				}),
+				root,
+			);
+			await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+		},
+		async measure(body) {
+			const frame = body.querySelector<HTMLElement>(".gui-composer-frame");
+			const strip = body.querySelector<HTMLElement>(".gui-voice-strip");
+			if (frame) frame.setAttribute("data-probe-children", String(frame.children.length));
+			return {
+				elements: measure(body, {
+					frame: ".gui-composer-frame",
+					strip: ".gui-voice-strip",
+					label: ".gui-voice-strip-label",
+					editor: ".musepi-composer-editor",
+					capsule: ".gui-composer-ico--dictating",
+				}),
+				stripH: Math.round(strip?.getBoundingClientRect().height ?? 0),
+				// Nothing in the strip may duplicate the capsule's clock/level.
+				rings: body.querySelectorAll(".gui-voice-ring").length,
+				bars: body.querySelectorAll(".gui-voice-wave i").length,
+				stripSeconds: body.querySelectorAll(".gui-voice-strip .gui-voice-seconds").length,
+				// Dictating replaces the "what you could type" hint with the act of
+				// speaking; two instructions in one box compete.
+				placeholders: body.querySelectorAll(".musepi-composer-editor__placeholder").length,
+				// The capsule carries both, inside the control they describe.
+				capsuleSeconds: body.querySelector(".gui-composer-ico--dictating .gui-voice-seconds")?.textContent ?? "",
+				capsuleLevel: (body.querySelector<HTMLElement>(".gui-voice-level")?.style.width ?? ""),
+			};
+		},
+		expect: {
+			frame: { "box.w": { min: 300 } },
+			// One thin line: the old strip was 36px tall on its own.
+			strip: { display: "flex", "box.h": { max: 24 } },
+			// Reads as part of the message column, not as an indented badge.
+			label: { "box.h": { min: 14 } },
+			// The editor's only text is the live transcript — no hint is drawn
+			// alongside it, which is what the old strip's copy used to do.
+			editor: { text: transcriptText },
+		},
+	},
+	"dictation-transcribing": {
+		capture: ".gui-composer-frame",
+		async render(root) {
+			await mount(createElement(Live, { phase: "transcribing", level: 0 }), root);
+			await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+		},
+		async measure(body) {
+			return {
+				elements: measure(body, { strip: ".gui-voice-strip", spinner: ".gui-voice-spinner" }),
+				seconds: body.querySelectorAll(".gui-voice-seconds").length,
+			};
+		},
+		expect: {
+			strip: { display: "flex", "box.h": { max: 24 } },
+			// The wait has no clock: a counter would claim recording continues.
+			spinner: { "box.w": { min: 8 } },
+		},
+	},
+} satisfies Record<string, GuiScenario>;
+
+type GuiScenario = import("../gui-probe-helpers").GuiScenario;

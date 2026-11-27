@@ -1753,11 +1753,13 @@ export function HeroComposer({
 							<>
 								{/* Approval mode — a global setting, so it works session-less. */}
 								<ApprovalModeButton rpc={rpc} />
-								{/* Compact motion-only mic control; the live waveform,
-								 * clock and phase copy live in the in-input strip. */}
+								{/* Mic capsule: it carries the clock and the input level while
+								 * recording; the in-input line carries only the phase. */}
 								<VoiceButton
 									state={dictation.phase}
 									disabled={!sttEnabled}
+									seconds={dictation.seconds}
+									level={dictation.level}
 									onToggle={() => void voiceSetup.onToggle()}
 								/>
 								<button
@@ -1919,18 +1921,22 @@ export function HeroComposer({
 									}
 								}}
 								placeholder={
-									placeholder ??
-									composerPlaceholder({
-										surface: "welcome",
-										working: busy === true,
-										attachmentCount: attachments.length,
-										designPlaceholder:
-											designActive && railState?.placeholder
-												? railState.placeholder
-												: isDesignArmed
-													? t("composer.designEmptyPlaceholder")
-													: null,
-									})
+									// Dictating means "speak": the state line says so, and a
+									// "what you could type" hint under it competes with it.
+									dictation.phase !== "idle"
+										? ""
+										: (placeholder ??
+											composerPlaceholder({
+												surface: "welcome",
+												working: busy === true,
+												attachmentCount: attachments.length,
+												designPlaceholder:
+													designActive && railState?.placeholder
+														? railState.placeholder
+														: isDesignArmed
+															? t("composer.designEmptyPlaceholder")
+															: null,
+											}))
 								}
 								spellCheck={(() => {
 									try {

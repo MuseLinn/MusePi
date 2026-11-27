@@ -342,74 +342,54 @@
 	cursor: default;
 }
 
-/* ── Voice dictation strip (composer children, above the textarea) ──────
- * A quiet status row inside the composer, not a second boxed input. The
- * phase and live transcript carry the meaning; the wave is only a level meter. */
+/* ── Dictation state line (composer children, above the editor) ─────────
+ * One quiet line, not a status bar. The transcript is painted AT THE CARET in
+ * the editor and the clock + input level ride inside the mic capsule, so this
+ * row only has to say which phase we are in and how to leave it.
+ *
+ * What it used to draw — a second pulsing mic orb with two RMS rings beside a
+ * 13-bar RMS wave, plus "recognized text will appear here" — repeated the
+ * capsule's facts within 40px and described a behaviour that no longer exists. */
 .gui-voice-strip {
-	--voice-level: 0;
-	--voice-state-color: var(--color-danger);
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	min-height: 34px;
-	margin: 2px 2px 0;
-	padding: 2px 4px 4px;
+	min-height: 20px;
+	/* Aligns with the editor's text column, not the card edge: the frame pads
+	 * 10px and `.cm-content` adds 2px, so anything else makes this line look
+	 * indented relative to the sentence below it. */
+	margin: 0;
+	padding: 0 2px;
 }
 
-.gui-voice-visual {
-	position: relative;
-	display: grid;
-	place-items: center;
-	width: 30px;
-	height: 30px;
+/* The one motion mark: a calm "live" pulse. It is not a level meter — the
+ * capsule carries the level, and two meters for one input read as noise. */
+.gui-voice-dot {
+	width: 6px;
+	height: 6px;
 	flex: none;
-	border: 0.5px solid color-mix(in oklab, var(--voice-state-color) 24%, transparent);
 	border-radius: 50%;
-	background:
-		radial-gradient(circle at 32% 22%, color-mix(in oklab, #fff 58%, transparent), transparent 46%),
-		color-mix(in oklab, var(--voice-state-color) 12%, var(--color-surface-raised));
-	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, #fff 42%, transparent),
-		0 3px 12px color-mix(in oklab, var(--voice-state-color) 10%, transparent);
-	color: var(--voice-state-color);
+	background: var(--color-danger);
+	box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger) 40%, transparent);
+	animation: gui-voice-dot-pulse 1.6s ease-out infinite;
 }
 
-.gui-voice-mic {
-	position: relative;
-	z-index: 1;
-	width: 14px;
-	height: 14px;
-	filter: drop-shadow(0 1px 2px color-mix(in oklab, var(--voice-state-color) 22%, transparent));
+.gui-voice-strip--transcribing .gui-voice-dot {
+	background: var(--color-accent);
+	animation: none;
+	opacity: 0.5;
 }
 
-.gui-voice-ring {
-	position: absolute;
-	width: 28px;
-	height: 28px;
-	border: 1px solid color-mix(in oklab, var(--voice-state-color) 42%, transparent);
-	border-radius: 50%;
-	transform: scale(calc(0.92 + var(--voice-level) * 0.32));
-	opacity: calc(0.16 + var(--voice-level) * 0.5);
-	transition: transform var(--gui-motion-chip) var(--gui-ease-out), opacity var(--gui-motion-chip) linear;
-}
-
-.gui-voice-ring--outer {
-	width: 36px;
-	height: 36px;
-	box-shadow: 0 0 14px color-mix(in oklab, var(--voice-state-color) calc(var(--voice-level) * 20%), transparent);
-}
-
-.gui-voice-ring--inner {
-	width: 32px;
-	height: 32px;
-}
-
-.gui-voice-strip-summary {
-	display: flex;
-	align-items: baseline;
-	gap: 6px;
-	flex: none;
-	white-space: nowrap;
+@keyframes gui-voice-dot-pulse {
+	0% {
+		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger) 40%, transparent);
+	}
+	70% {
+		box-shadow: 0 0 0 5px color-mix(in oklab, var(--color-danger) 0%, transparent);
+	}
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger) 0%, transparent);
+	}
 }
 
 .gui-voice-strip-label {
@@ -419,52 +399,8 @@
 	line-height: 18px;
 }
 
-.gui-voice-strip-time {
-	color: var(--voice-state-color);
-	font-size: var(--ui-font-size-xs);
-	font-variant-numeric: tabular-nums;
-	line-height: 18px;
-}
-
-.gui-voice-wave {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 2px;
-	width: 52px;
-	height: 20px;
-	flex: none;
-	opacity: calc(0.55 + 0.45 * var(--voice-level));
-}
-
-.gui-voice-wave i {
-	width: 2px;
-	height: 16px;
-	border-radius: 999px;
-	background: var(--voice-state-color);
-	transform: scaleY(var(--voice-bar-scale, 0.18));
-	transform-origin: center;
-	transition: transform 80ms linear;
-}
-
-.gui-voice-partial {
-	flex: 1;
-	min-width: 48px;
-	overflow: hidden;
-	color: var(--color-text-muted);
-	font-size: var(--ui-font-size-sm);
-	line-height: 20px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	opacity: 0.72;
-	transform: translateY(var(--gui-motion-slide-y));
-	transition: transform var(--gui-motion-fade-in) var(--gui-ease-out), opacity var(--gui-motion-fade-in) ease;
-}
-
-.gui-voice-partial--visible {
-	color: var(--color-text-secondary);
-	opacity: 1;
-	transform: translateY(0);
+.gui-voice-strip--transcribing .gui-voice-strip-label {
+	color: var(--color-accent);
 }
 
 .gui-voice-strip-hint {
@@ -495,15 +431,8 @@
 	line-height: 1;
 }
 
-.gui-voice-strip--transcribing {
-	--voice-state-color: var(--color-accent);
-}
-
-.gui-voice-strip--transcribing .gui-voice-ring {
-	transform: none;
-	opacity: 0.2;
-}
-
+/* Transcribing keeps the row visible for the whole wait: the capsule shows a
+ * spinner and the words are still arriving, so the line explains the pause. */
 .gui-voice-strip--transcribing .gui-voice-spinner {
 	width: 15px;
 	height: 15px;
@@ -511,11 +440,8 @@
 	border-top-color: var(--color-accent);
 }
 
-@container (max-width: 480px) {
-	.gui-voice-wave {
-		display: none;
-	}
 
+@container (max-width: 480px) {
 	/* Narrow composer: the approval pill keeps its shield (tap target and
 	 * state colour) but drops the text label, and the two toolbar groups
 	 * tighten instead of colliding. */
@@ -533,31 +459,12 @@
 }
 
 @container (max-width: 340px) {
-	.gui-voice-strip {
-		flex-wrap: wrap;
-		gap: 0 6px;
-	}
-
-	.gui-voice-strip-summary {
-		flex: 1;
-		min-width: 0;
-	}
-
+	/* The line keeps its phase word and the Esc keycap; on a very narrow
+	 * composer the cancel WORD is what goes, never the keycap that teaches it. */
 	.gui-voice-strip-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-
-	.gui-voice-partial {
-		order: 4;
-		flex: 0 0 calc(100% - 36px);
-		min-width: 0;
-		margin-left: 36px;
-		line-height: 18px;
-	}
-
-	.gui-voice-strip-hint {
-		order: 3;
+		white-space: nowrap;
 	}
 
 	.gui-voice-strip-hint > span {
@@ -565,9 +472,7 @@
 	}
 }
 
-.gui-motion-off .gui-voice-ring,
-.gui-motion-off .gui-voice-wave i,
-.gui-motion-off .gui-voice-partial,
+.gui-motion-off .gui-voice-dot,
 .gui-motion-off .gui-voice-spinner {
 	animation: none;
 	transition: none;
@@ -759,9 +664,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.gui-voice-ring,
-	.gui-voice-wave i,
-	.gui-voice-partial,
+	.gui-voice-dot,
 	.gui-voice-spinner,
 	.gui-voice-enroll-orb,
 	.gui-voice-enroll-ring-value,
