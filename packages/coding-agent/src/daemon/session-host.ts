@@ -56,6 +56,7 @@ import { initializeExtensions } from "../modes/runtime-init";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { previewLine, TRUNCATE_LENGTHS } from "../render/render-utils";
 import type { AuthStorage } from "../session/auth-storage";
+import type { SessionMemoryMode } from "../session/memory-mode";
 import { sessionHeaderPreset } from "../session/session-entries";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
@@ -1585,6 +1586,7 @@ export class DaemonSessionHost {
 		autoTitle?: boolean;
 		modelPattern?: string;
 		thinkingLevel?: ConfiguredThinkingLevel;
+		memoryMode?: SessionMemoryMode;
 		/** 会话预设 id:创建时应用(白名单/提示词/settings)。 */
 		agentPreset?: string;
 		/** M3.2 创作面 project metadata(§4 契约):daemon 会话头为权威
@@ -1662,6 +1664,7 @@ export class DaemonSessionHost {
 				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
 				...(params.agentPreset ? { agentPreset: params.agentPreset } : {}),
+				...(params.memoryMode ? { memoryMode: params.memoryMode } : {}),
 			}),
 		);
 		const live = await this.#adoptAgentSession(
@@ -1695,6 +1698,7 @@ export class DaemonSessionHost {
 		// 统一先 upsert 一次;modeId 另需补写会话头(persistHeaderPatch 的
 		// load() 依赖该行已存在)。
 		this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
+		if (params.memoryMode) this.persistHeaderPatch(live.sessionId, { memoryMode: params.memoryMode });
 		if (params.agentPreset) {
 			live.agentPreset = params.agentPreset;
 			this.persistHeaderPatch(live.sessionId, { agentPreset: params.agentPreset });
@@ -2632,6 +2636,7 @@ export class DaemonSessionHost {
 		patch: {
 			model?: string;
 			thinkingLevel?: string;
+			memoryMode?: SessionMemoryMode;
 			/** The session's agent preset; `modeId` is the pre-rename spelling. */
 			agentPreset?: string | null;
 			/** @deprecated Read-only fallback; new writes use `agentPreset`. */

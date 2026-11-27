@@ -2,6 +2,7 @@ import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { ImageContent, MessageAttribution, ServiceTierByFamily, TextContent, Usage } from "@musepi/pi-ai";
 import type { StructuredSubagentSchemaMode } from "../task/types";
 import type { CompactionMethod } from "./compaction-methods";
+import type { SessionMemoryMode } from "./memory-mode";
 
 export const CURRENT_SESSION_VERSION = 3;
 
@@ -55,6 +56,8 @@ export interface SessionHeader {
 	previousSessionFiles?: string[];
 	/** Provider prompt-cache identity inherited by exact-route full forks. */
 	providerPromptCacheKey?: string;
+	/** Long-term memory behavior; chat history remains durable in every mode. */
+	memoryMode?: SessionMemoryMode;
 }
 
 /**
@@ -76,6 +79,7 @@ export interface NewSessionOptions {
 	drop?: boolean;
 	/** Additional workspace directories to seed on the new session. */
 	additionalDirectories?: string[];
+	memoryMode?: SessionMemoryMode;
 }
 
 export interface SessionEntryBase {

@@ -133,6 +133,7 @@ import type { CreationMessage } from "./CreationModeRow";
 import { flushPendingConnectorSelection } from "./composer/connector-panel";
 import { DialogFrame } from "./DialogFrame";
 import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
+import type { SessionMemoryMode } from "./MemoryModePicker";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
@@ -317,6 +318,8 @@ export function ChatView({
 	modes,
 	agentPreset,
 	onModeChange,
+	memoryMode,
+	onMemoryModeChange,
 	/** M3.7a(v2 修订):design 模式内联形态的发送管线 —— 透传给欢迎页 composer。 */
 	onDesignSubmit,
 	defaultModelId,
@@ -400,6 +403,8 @@ export function ChatView({
 	modes?: { id: string; label: string }[] | null;
 	agentPreset?: string | null;
 	onModeChange?(id: string | null): void;
+	memoryMode?: SessionMemoryMode;
+	onMemoryModeChange?(mode: SessionMemoryMode): void;
 	/** M3.7a design 模式内联形态(§2.4):session.create + projectMetadata 管线。 */
 	onDesignSubmit?(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** The DEFAULT-role model (modelRoles.default): the welcome composer's
@@ -3377,6 +3382,8 @@ export function ChatView({
 		modes,
 		agentPreset,
 		onModeChange,
+		memoryMode,
+		onMemoryModeChange,
 		designSubmit: onDesignSubmit,
 		onAddProvider,
 		attachApiRef,

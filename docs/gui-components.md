@@ -91,7 +91,8 @@ The desktop host re-exports the moved seat constants from `slot-host.tsx` during
 | `WorkspacePageHeader` | Page-level title header (icon/title/description/actions) | Board, task center, capability center and similar pages |
 | `RightRail` | The 44px right-edge icon column | The entry point to the right panel; **must render even while the panel is collapsed** |
 | `ContextPanel` | The right panel itself (tabs, split, maximize) | The only container for right-panel content |
-| `SidebarToggleButton` | Persistent panel fold, hover-peek and clip anchor | One mounted button inside `.gui-side-keeper`; never duplicate it between expanded and folded states |
+| `SidebarToggleButton` | Persistent upper-left fold control, quick-session menu and clip anchor | One mounted button inside `.gui-side-keeper`; hover shows recent sessions, never the full pane |
+| `MemoryModePicker` | Shared persistent/incognito/temporary options and welcome chip | Use for every session-memory creation choice; do not fork the labels or privacy rules |
 | `NotificationCenter` | Toast-history bell, unread badge and popover | The desktop header's trailing action group; history comes only from `notification-history.ts` |
 | `LadderSlider` (thinking) | The model's thinking-level slider, with `Auto` and the model ceiling | `components/LadderSlider.tsx`, under the agent tab's model card; a drag commits on release, rungs above the ceiling stay visible but unreachable. Head is one line (`Thinking level` + the current level) and there is no caption row |
 | `LadderSlider` (settings) | Detent ladder for a numeric setting that declares presets | `components/settings-controls/LadderSlider.tsx`; the thumb tracks the pointer freely between detents, while a release and the arrow keys land on declared values. Same track as the thinking ladder, its own head |

@@ -48,7 +48,13 @@ const shell = (collapsed: boolean, wide: boolean, peek = false): ReactNode => (
 				data-peek-open={collapsed && peek ? "true" : undefined}
 				style={{ "--gui-side-w": `${PANE_W}px` } as CSSProperties}
 			>
-				<SidebarToggleButton collapsed={collapsed} onToggle={() => {}} />
+				<SidebarToggleButton
+					collapsed={collapsed}
+					onToggle={() => {}}
+					sessions={[{ id: "demo", label: "Demo session" }]}
+					onSelectSession={() => {}}
+					onNewSession={() => {}}
+				/>
 				<ScheduledTasksPanel width={PANE_W} collapsed={collapsed && !peek} />
 			</div>
 			<div className="gui-chat-col flex min-w-0 flex-1 flex-col">
@@ -103,13 +109,18 @@ const scenarios = {
 			return panelMeasurements(body);
 		},
 	},
-	"pane-peek": {
+	"quick-session-menu": {
 		capture: ".gui-main",
 		async render(root: HTMLElement) {
-			await mount(shell(true, false, true), root);
+			await mount(shell(true, false, false), root);
 		},
 		async measure(body: ParentNode) {
-			return panelMeasurements(body);
+			body.querySelector(".gui-sidebar-toggle")?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+			await sleep(80);
+			return {
+				...panelMeasurements(body),
+				quickMenu: readElement(body.querySelector(".gui-session-quick-menu")),
+			};
 		},
 	},
 	"panel-clip-midframe": {

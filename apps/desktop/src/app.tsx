@@ -56,6 +56,7 @@ import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { InstanceButton } from "./components/InstanceButton";
 import type { McpAuthRequest } from "./components/McpAuthCard";
+import type { SessionMemoryMode } from "./components/MemoryModePicker";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
 import {
@@ -1028,27 +1029,10 @@ function AppInner(): ReactNode {
 	 *  panel id is cleared, so opacity/transform can play a real fade-out. */
 	const [peekHovered, setPeekHovered] = useState(false);
 	const peekTimerRef = useRef<number | null>(null);
-	const peekAnchorRef = useRef<HTMLElement | null>(null);
-	const openPeek = useCallback((panelId: string, anchor?: HTMLElement): void => {
+	const openPeek = useCallback((panelId: string): void => {
 		if (peekTimerRef.current !== null) {
 			clearTimeout(peekTimerRef.current);
 			peekTimerRef.current = null;
-		}
-		peekAnchorRef.current = anchor ?? null;
-		const keeper = document.querySelector<HTMLElement>(".gui-side-keeper");
-		if (keeper && anchor) {
-			const styles = getComputedStyle(anchor);
-			const rect = anchor.getBoundingClientRect();
-			const width = Number.parseFloat(styles.getPropertyValue("--gui-side-w"));
-			const inset = Number.parseFloat(styles.getPropertyValue("--gui-side-panel-inset"));
-			const gutter = Number.parseFloat(styles.getPropertyValue("--gui-card-gutter"));
-			if (Number.isFinite(width) && Number.isFinite(inset)) {
-				keeper.style.setProperty("--gui-peek-left", `${rect.right + inset - width}px`);
-			}
-			if (Number.isFinite(gutter)) keeper.style.setProperty("--gui-peek-top", `${rect.top - gutter}px`);
-		} else {
-			keeper?.style.removeProperty("--gui-peek-left");
-			keeper?.style.removeProperty("--gui-peek-top");
 		}
 		setPeekPanel(panelId);
 		setPeekHovered(true);
@@ -1067,20 +1051,15 @@ function AppInner(): ReactNode {
 		// Fade out immediately; keep the panel id for the 140ms exit so the
 		// pane stays mounted and its CSS transition can finish.
 		setPeekHovered(false);
-		peekTimerRef.current = window.setTimeout(() => {
-			setPeekPanel(null);
-			peekAnchorRef.current = null;
-		}, 140);
+		peekTimerRef.current = window.setTimeout(() => setPeekPanel(null), 140);
 	}, []);
-	const dismissPeek = useCallback((restoreFocus = false): void => {
+	const dismissPeek = useCallback((): void => {
 		if (peekTimerRef.current !== null) {
 			clearTimeout(peekTimerRef.current);
 			peekTimerRef.current = null;
 		}
 		setPeekHovered(false);
 		setPeekPanel(null);
-		if (restoreFocus) peekAnchorRef.current?.focus();
-		peekAnchorRef.current = null;
 	}, []);
 	useEffect(() => {
 		if (peekPanel === null) return;
@@ -1088,7 +1067,7 @@ function AppInner(): ReactNode {
 			if (event.key !== "Escape") return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
-			dismissPeek(true);
+			dismissPeek();
 		};
 		document.addEventListener("keydown", onKeyDown, true);
 		return () => document.removeEventListener("keydown", onKeyDown, true);
@@ -1790,6 +1769,8 @@ function AppInner(): ReactNode {
 	 *  composer UI but the created session still landed on the STALE id
 	 *  (hover card said "work mode", design style chips never appeared). */
 	const welcomeModeIdRef = useRef<string | null>(welcomeModeId);
+	const [welcomeMemoryMode, setWelcomeMemoryMode] = useState<SessionMemoryMode>("persistent");
+	const welcomeMemoryModeRef = useRef<SessionMemoryMode>("persistent");
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
 	// ── M3.2 创作面(design chip 选中 → 欢迎页内联形态,v2 修订)────────────
@@ -3482,6 +3463,7 @@ function AppInner(): ReactNode {
 			cwd?: string | null;
 			planMode?: boolean;
 			goalMode?: string | null;
+			memoryMode?: SessionMemoryMode;
 			/** Explicit agentPreset override (creation flows pass "creator"); falls
 			 * back to the welcome chip selection. */
 			agentPreset?: string | null;
@@ -3518,6 +3500,7 @@ function AppInner(): ReactNode {
 					// Settings → 会话 → 自动生成会话标题: off keeps the session
 					// title generic instead of falling back to the first message.
 					autoTitle: localStorage.getItem("musepi-gui-autotitle") !== "0",
+					memoryMode: opts?.memoryMode ?? welcomeMemoryModeRef.current,
 					// Welcome-composer choices ride INSIDE the create RPC: the
 					// daemon resolves modelPattern + thinkingLevel during initial
 					// session setup, collapsing the old create → setThinkingLevel
@@ -3548,7 +3531,7 @@ function AppInner(): ReactNode {
 				if (opts?.planMode === true) {
 					await client.request("session.setPlan", { sessionId: res.sessionId }).catch(() => {});
 				}
-				if (opts?.goalMode) {
+				if (opts?.goalMode && (opts.memoryMode ?? welcomeMemoryModeRef.current) === "persistent") {
 					await client
 						.request("session.setGoal", {
 							sessionId: res.sessionId,
@@ -3573,14 +3556,22 @@ function AppInner(): ReactNode {
 
 	/** New task = empty composer awaiting the first prompt (TUI-like): the
 	 *  session is only created when the message is sent. */
-	const startNewTask = useCallback((): void => {
-		viewSwapRef.current("chat");
-		storeRef.current?.dispose();
-		storeRef.current = null;
-		setStore(null);
-		setSelectedId(null);
-		selectedIdRef.current = null;
+	const changeWelcomeMemoryMode = useCallback((memoryMode: SessionMemoryMode): void => {
+		welcomeMemoryModeRef.current = memoryMode;
+		setWelcomeMemoryMode(memoryMode);
 	}, []);
+	const startNewTask = useCallback(
+		(memoryMode: SessionMemoryMode = "persistent"): void => {
+			changeWelcomeMemoryMode(memoryMode);
+			viewSwapRef.current("chat");
+			storeRef.current?.dispose();
+			storeRef.current = null;
+			setStore(null);
+			setSelectedId(null);
+			selectedIdRef.current = null;
+		},
+		[changeWelcomeMemoryMode],
+	);
 
 	/** 空态(design 模式页 / 欢迎页)的文件附件:这两处都没有工作区,上传
 	 *  只能发生在会话创建之后 —— 内容地址(blob://)前缀到提示词上再发送
@@ -5317,6 +5308,8 @@ function AppInner(): ReactNode {
 							modes: welcomeModes,
 							agentPreset: welcomeModeId,
 							onModeChange: setWelcomeModeId,
+							memoryMode: welcomeMemoryMode,
+							onMemoryModeChange: changeWelcomeMemoryMode,
 							onDesignSubmit: submitCreationSession,
 							defaultModelId,
 							presetThinkingLevel,
@@ -5601,10 +5594,8 @@ function AppInner(): ReactNode {
 							if (!peekOpen || activePanelId === null) return;
 							const peeked = railDestinations.find(item => item.panelId === activePanelId);
 							if (!peeked) return;
-							if (peeked.active) {
-								if (peekAnchorRef.current) dismissPeek();
-								else revealSidePanel();
-							} else peeked.onSelect();
+							if (peeked.active) revealSidePanel();
+							else peeked.onSelect();
 						}}
 					>
 						{/* The side resizer lives INSIDE the keeper, so it is positioned
@@ -5637,10 +5628,10 @@ function AppInner(): ReactNode {
 							<SidebarToggleButton
 								collapsed={sideCollapsed}
 								onToggle={toggleSidebar}
-								onPeekOpen={
-									peekEligible && togglePanelId ? anchor => openPeek(togglePanelId, anchor) : undefined
-								}
-								onPeekClose={peekEligible ? closePeek : undefined}
+								sessions={recentSessions}
+								selectedId={selectedId}
+								onSelectSession={id => void openSession(id)}
+								onNewSession={startNewTask}
 							/>
 						)}
 						<SessionSidebar
@@ -5832,6 +5823,8 @@ function AppInner(): ReactNode {
 												modes: welcomeModes,
 												agentPreset: welcomeModeId,
 												onModeChange: id => setWelcomeModeId(id),
+												memoryMode: welcomeMemoryMode,
+												onMemoryModeChange: changeWelcomeMemoryMode,
 												onDesignSubmit: submitCreationSession,
 												defaultModelId,
 												presetThinkingLevel,

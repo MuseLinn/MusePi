@@ -1,6 +1,17 @@
 import type { GeneralKey } from "../zh-CN/general.js";
 export const general = {
 	"general.sessions": "Sessions",
+	"general.newSession": "New chat",
+	"general.memoryMode": "Memory mode",
+	"general.chooseMemoryMode": "Choose memory mode",
+	"general.memoryPersistent": "Persistent",
+	"general.memoryPersistentHint": "Use existing memories and learn new ones",
+	"general.memoryIncognito": "Incognito",
+	"general.memoryIncognitoHint": "Use existing memories without learning",
+	"general.memoryTemporary": "Temporary",
+	"general.memoryTemporaryHint": "Do not read or write memories",
+	"general.newIncognitoSession": "New incognito chat",
+	"general.newTemporarySession": "New temporary chat",
 	"general.sessionsSettings": "Set session defaults and retention policy.",
 	"general.autoTitle": "Auto-generate session titles",
 	"general.autoTitleDescription": "Use the first user message as the session title",

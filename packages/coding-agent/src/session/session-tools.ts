@@ -1550,6 +1550,7 @@ export class SessionTools {
 
 	/** Applies one-turn memory prompt injection before an agent run. */
 	async buildSystemPromptForAgentStart(promptText: string, signal?: AbortSignal): Promise<SystemPromptPreparation> {
+		if (this.#host.memoryBackendSession().memoryMode === "temporary") return { systemPrompt: this.#baseSystemPrompt };
 		const backend = await resolveMemoryBackend(this.#host.settings);
 		if (!backend.beforeAgentStartPrompt) return { systemPrompt: this.#baseSystemPrompt };
 

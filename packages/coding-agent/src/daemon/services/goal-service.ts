@@ -34,6 +34,7 @@ export interface GoalLiveSession {
 		setActiveToolsByName(names: string[]): Promise<void>;
 		settings: { get(key: string): unknown };
 		isStreaming: boolean;
+		memoryMode?: "persistent" | "incognito" | "temporary";
 		/** Journal writer: goal mode has to be recorded, or it is lost on the
 		 *  next activate (the TUI already records it this way). */
 		sessionManager: { appendModeChange(mode: string, data?: Record<string, unknown>): string };
@@ -115,6 +116,8 @@ export class GoalService implements DaemonService {
 		const current = agent.getGoalModeState();
 		const objective = typeof p.objective === "string" ? p.objective.trim() : "";
 		if (objective) {
+			if ((agent.memoryMode ?? "persistent") !== "persistent")
+				throw new Error("Goal mode is unavailable in incognito and temporary sessions.");
 			const now = Date.now();
 			agent.setGoalModeState({
 				enabled: true,
@@ -208,6 +211,8 @@ export class GoalService implements DaemonService {
 				return this.#deps.modesOf(g);
 			}
 			case "guided": {
+				if ((g.memoryMode ?? "persistent") !== "persistent")
+					throw new Error("Goal mode is unavailable in incognito and temporary sessions.");
 				// Hidden kickoff that starts a normal conversation in which the
 				// agent interviews the user, then calls the `goal create` tool.
 				// Pre-checks mirror the TUI handler order so both entry points

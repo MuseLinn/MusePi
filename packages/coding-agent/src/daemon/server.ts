@@ -2526,6 +2526,7 @@ export class DaemonServer {
 					modeId?: string;
 					modelPattern?: string;
 					thinkingLevel?: ConfiguredThinkingLevel;
+					memoryMode?: "persistent" | "incognito" | "temporary";
 					projectMetadata?: Record<string, unknown>;
 					additionalDirectories?: unknown;
 				};

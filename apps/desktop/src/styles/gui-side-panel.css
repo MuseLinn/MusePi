@@ -77,17 +77,83 @@
 	pointer-events: auto;
 }
 
-.gui-sidebar-toggle-seat {
-	height: 26px;
+.gui-sidebar-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
 	margin: 0 var(--gui-side-panel-inset) var(--gui-card-gutter);
 	flex-shrink: 0;
+}
+
+.gui-sidebar-toggle-seat {
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+}
+
+.gui-sidebar-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-sidebar-new {
+	display: flex;
+	align-items: center;
+	height: 28px;
+	border: 1px solid var(--color-accent-bd);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	overflow: hidden;
+}
+
+.gui-sidebar-new button {
+	height: 100%;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-sidebar-new button:hover {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-sidebar-new-main {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	font-weight: 600;
+}
+
+.gui-sidebar-new-more {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	border-left: 1px solid var(--color-accent-bd) !important;
+}
+
+.gui-sidebar-new-menu {
+	width: 300px;
+	padding: 4px;
+}
+
+.gui-sidebar-new-memory {
+	padding: 4px 0;
 }
 
 .gui-sidebar-toggle {
 	--panel-nudge: -2px;
 	position: absolute;
 	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
-	left: calc(var(--gui-card-gutter) + var(--gui-side-w) - var(--gui-side-panel-inset) - 26px);
+	left: calc(var(--gui-card-gutter) + var(--gui-side-panel-inset));
 	z-index: 43;
 	display: flex;
 	height: 26px;
@@ -246,7 +312,7 @@ html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
 	/* The docked active-pane selector is more specific; these geometry
 	 * overrides must win or the floating card keeps its in-flow box. */
 	position: fixed !important;
-	top: var(--gui-peek-top, calc(var(--gui-header-h) + var(--gui-card-gutter)));
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
 	bottom: calc(var(--gui-card-gutter) * 2);
 	/* The rail is a card now, so three gutters sit between its right edge and
 	 * the pane's card: the rail's own side margin, the pane's side margin, and
@@ -255,7 +321,7 @@ html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
 	 * grows into (measured 88 vs 96 with the old two-gutter formula). */
 	/* Follows the rail wherever it is: a wide rail must not leave the floating
 	 * card computing from the collapsed strip. */
-	left: var(--gui-peek-left, calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3));
+	left: calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3);
 	z-index: 42;
 	height: auto !important;
 	margin: 0 !important;
@@ -783,4 +849,72 @@ html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
 	.gui-getting-started-chevron {
 		transition: none;
 	}
+}
+
+.gui-session-quick-menu {
+	width: 300px;
+	padding: 0;
+}
+
+.gui-session-quick-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 42px;
+	padding: 0 8px 0 12px;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-session-quick-new {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid var(--color-accent-bd);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.gui-session-quick-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 280px;
+	padding: 4px;
+	overflow-y: auto;
+	overflow-x: clip;
+}
+
+.gui-session-quick-row {
+	display: flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-session-quick-row span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-session-quick-row:hover,
+.gui-session-quick-row[data-active="true"] {
+	background: var(--color-hover);
 }

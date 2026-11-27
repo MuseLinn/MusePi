@@ -1,4 +1,5 @@
 import type { AgentSession } from "../session/agent-session";
+import { sessionMemoryPolicy } from "../session/memory-mode";
 import { resolveMemoryBackend } from "./resolve";
 import {
 	type MemoryBackendId,
@@ -10,6 +11,7 @@ import {
 } from "./types";
 export function createMemoryRuntimeContext(context: MemoryBackendOperationContext): MemoryRuntimeContext {
 	const settings = context.session?.settings;
+	const policy = () => sessionMemoryPolicy(context.session?.memoryMode ?? "persistent");
 	return {
 		async backend() {
 			if (!settings) return "off";
@@ -35,10 +37,15 @@ export function createMemoryRuntimeContext(context: MemoryBackendOperationContex
 						searchable: false,
 						message: "This memory backend does not expose structured status.",
 					};
-			return { ...status, capabilities: memoryBackendCapabilities(backend) };
+			return {
+				...status,
+				writable: status.writable && policy().write,
+				capabilities: memoryBackendCapabilities(backend),
+			};
 		},
 		async search(query: string, options?: MemoryBackendSearchOptions) {
 			if (!settings) return unavailableSearch("off", query, "No active agent session.");
+			if (!policy().read) return unavailableSearch("off", query, "Memory recall is disabled for this session.");
 			const backend = await resolveMemoryBackend(settings);
 			return backend.search
 				? await backend.search(context, query, options)
@@ -46,6 +53,7 @@ export function createMemoryRuntimeContext(context: MemoryBackendOperationContex
 		},
 		async save(input: string | MemoryBackendSaveInput) {
 			if (!settings) return unavailableSave("off", "No active agent session.");
+			if (!policy().write) return unavailableSave("off", "Memory writes are disabled for this session.");
 			const backend = await resolveMemoryBackend(settings);
 			const normalized = typeof input === "string" ? { content: input } : input;
 			return backend.save
@@ -53,17 +61,17 @@ export function createMemoryRuntimeContext(context: MemoryBackendOperationContex
 				: unavailableSave(backend.id, `Memory save is not available for the ${backend.id} backend.`);
 		},
 		async clear() {
-			if (!settings) return;
+			if (!settings || !policy().write) return;
 			const backend = await resolveMemoryBackend(settings);
 			await backend.clear(context.agentDir, context.cwd, context.session);
 		},
 		async enqueue() {
-			if (!settings) return;
+			if (!settings || !policy().write) return;
 			const backend = await resolveMemoryBackend(settings);
 			await backend.enqueue(context.agentDir, context.cwd, context.session);
 		},
 		async view() {
-			if (!settings) return undefined;
+			if (!settings || !policy().read) return undefined;
 			const backend = await resolveMemoryBackend(settings);
 			return backend.buildDeveloperInstructions(context.agentDir, context.cwd, settings, context.session);
 		},

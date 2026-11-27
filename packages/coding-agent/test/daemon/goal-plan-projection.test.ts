@@ -73,11 +73,12 @@ function planService(published: string[]): PlanModeService {
 }
 
 /** A live session that records the journal writes the mode switches make. */
-function liveWith(modeLog: [string, unknown][]) {
+function liveWith(modeLog: [string, unknown][], memoryMode?: "persistent" | "incognito" | "temporary") {
 	let goal: Record<string, unknown> | undefined;
 	let plan: { enabled?: boolean; planFilePath?: string } | undefined;
 	return {
 		agentSession: {
+			memoryMode,
 			getGoalModeState: () => goal as never,
 			setGoalModeState: (state: unknown) => {
 				goal = state as never;
@@ -168,6 +169,24 @@ describe("goal and plan own their projection unit", () => {
 
 		service.setGoal({ sessionId: "s1" });
 		expect(modeLog[1]![0]).toBe("none");
+	});
+
+	test("goal entry is rejected for incognito and temporary sessions", async () => {
+		for (const memoryMode of ["incognito", "temporary"] as const) {
+			const modeLog: [string, unknown][] = [];
+			const live = liveWith(modeLog, memoryMode);
+			const service = new GoalService({
+				get: () => live as never,
+				publishSessionModeProjection: () => {},
+				modesOf: () => ({}),
+				renderGuidedKickoff: () => "",
+				resolveMedia: async () => ({}),
+			});
+
+			expect(() => service.setGoal({ sessionId: "s1", objective: "ship it" })).toThrow(/Goal mode is unavailable/);
+			await expect(service.goal({ sessionId: "s1", op: "guided" })).rejects.toThrow(/Goal mode is unavailable/);
+			expect(modeLog).toHaveLength(0);
+		}
 	});
 
 	test("a plan write records a journal entry", () => {

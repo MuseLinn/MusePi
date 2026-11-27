@@ -15,6 +15,7 @@ import type { StructuredSubagentSchemaMode } from "../task/types";
 import { ArtifactManager } from "./artifacts";
 import { type BlobPutOptions, type BlobPutResult, BlobStore } from "./blob-store";
 import type { CompactionMethod } from "./compaction-methods";
+import { normalizeMemoryMode, type SessionMemoryMode } from "./memory-mode";
 import {
 	type BashExecutionMessage,
 	type CustomMessage,
@@ -1123,6 +1124,7 @@ export class SessionManager {
 			cwd: this.#cwd,
 			parentSession: options?.parentSession,
 			providerPromptCacheKey: options?.providerPromptCacheKey,
+			memoryMode: options?.memoryMode,
 		};
 		const workspace = normalizeSessionWorkspace({
 			cwd: this.#cwd,
@@ -2525,6 +2527,11 @@ export class SessionManager {
 
 	getHeader(): SessionHeader | null {
 		return this.#header;
+	}
+
+	/** Creation-only seed; loaded sessions retain the mode stored in their header. */
+	setMemoryMode(mode: SessionMemoryMode): void {
+		this.#header.memoryMode = normalizeMemoryMode(mode);
 	}
 
 	/** All session entries (excludes header). Returns a shallow copy. */

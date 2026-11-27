@@ -315,6 +315,7 @@ import {
 	LAUNCH_COMPLETION_MESSAGE_TYPE,
 	type LaunchCompletionEntry,
 } from "./launch-completion";
+import { normalizeMemoryMode, type SessionMemoryMode } from "./memory-mode";
 import {
 	type BashExecutionMessage,
 	buildReplanTitleContext,
@@ -1140,6 +1141,10 @@ export class AgentSession {
 		return listPlanFiles({ localProtocolOptions: this.#localProtocolOptions() });
 	}
 
+	get memoryMode(): SessionMemoryMode {
+		return normalizeMemoryMode(this.sessionManager.getHeader()?.memoryMode);
+	}
+
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
@@ -1369,6 +1374,7 @@ export class AgentSession {
 			},
 			refreshBaseSystemPrompt: () => this.#tools.refreshBaseSystemPrompt(),
 			replaceMemoryTools: tools => this.#tools.replaceMemoryTools(tools),
+			memoryMode: () => this.memoryMode,
 		};
 		this.#memory = new SessionMemory(memoryHost, {
 			memoryAgentDir: config.memoryAgentDir,

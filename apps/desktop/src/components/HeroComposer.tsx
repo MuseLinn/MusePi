@@ -99,6 +99,7 @@ import { VoiceOverlays } from "./composer/voice-overlays";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { HeightMorph } from "./HeightMorph";
+import { MemoryModeChip, type SessionMemoryMode } from "./MemoryModePicker";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
@@ -188,6 +189,8 @@ export function HeroComposer({
 	modes,
 	agentPreset,
 	onModeChange,
+	memoryMode = "persistent",
+	onMemoryModeChange,
 	designSubmit,
 	placeholder,
 	attachApiRef,
@@ -256,6 +259,8 @@ export function HeroComposer({
 	modes?: ModeLabelEntry[] | null;
 	agentPreset?: string | null;
 	onModeChange?(id: string | null): void;
+	memoryMode?: SessionMemoryMode;
+	onMemoryModeChange?(mode: SessionMemoryMode): void;
 	/** M3.7a design 模式内联形态(v2 修订,§2.4):mode chip 选中「设计」时
 	 *  类型 chip 排直接渲染在本 composer 上方一行,发送走
 	 *  session.create + projectMetadata 管线;未传则不渲染模式页。 */
@@ -419,6 +424,11 @@ export function HeroComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const [guidedArmed, setGuidedArmed] = useState(false);
+	useEffect(() => {
+		if (memoryMode === "persistent") return;
+		setGoalArmed(false);
+		setGuidedArmed(false);
+	}, [memoryMode]);
 	/** Attach chip clicked → open the same attach menu the paperclip opens
 	 *  (the frame owns no picker of its own; the menu does). */
 	const openAttachMenu = useRef<(() => void) | null>(null);
@@ -1193,11 +1203,11 @@ export function HeroComposer({
 		setBeamOn(false);
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
-		const applyGoal = goalArmed && trimmed.length > 0;
+		const applyGoal = memoryMode === "persistent" && goalArmed && trimmed.length > 0;
 		// Guided goal rides on this first prompt instead of firing the
 		// interview on the menu click: the user writes the objective, sends,
 		// and the interview starts from that message.
-		const applyGuided = guidedArmed && trimmed.length > 0;
+		const applyGuided = memoryMode === "persistent" && guidedArmed && trimmed.length > 0;
 		setGuidedArmed(false);
 		setGoalArmed(false);
 		setPlanArmed(false);
@@ -1567,6 +1577,11 @@ export function HeroComposer({
 						/>
 					</div>
 				) : null}
+				{onMemoryModeChange && (
+					<div className="gui-memory-chip-row">
+						<MemoryModeChip value={memoryMode} onChange={onMemoryModeChange} />
+					</div>
+				)}
 				<form ref={formRef} className="gui-welcome-form relative w-full" onSubmit={submit}>
 					<ComposerFrame
 						className="gui-welcome-input"

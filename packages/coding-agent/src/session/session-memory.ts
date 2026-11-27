@@ -8,6 +8,7 @@ import type { HindsightSessionState } from "../hindsight/state";
 import { resolveMemoryBackend } from "../memory-backend/resolve";
 import type { MemoryBackendStartOptions } from "../memory-backend/types";
 import type { MnemopiSessionState } from "../mnemopi/state";
+import { type SessionMemoryMode, sessionMemoryPolicy } from "./memory-mode";
 
 /** Capabilities borrowed from the owning AgentSession. */
 export interface SessionMemoryHost {
@@ -23,6 +24,7 @@ export interface SessionMemoryHost {
 	setBaseSystemPrompt(prompt: string[]): void;
 	refreshBaseSystemPrompt(): Promise<void>;
 	replaceMemoryTools(tools: AgentTool[]): Promise<void>;
+	memoryMode(): SessionMemoryMode;
 }
 
 /** Owns memory backend transitions and transcript-scoped memory state. */
@@ -159,7 +161,9 @@ export class SessionMemory {
 		const mnemopi = this.#host.takeMnemopiSessionState();
 		if (mnemopi) {
 			try {
-				await mnemopi.dispose({ consolidate: consolidateMnemopi });
+				await mnemopi.dispose({
+					consolidate: consolidateMnemopi && sessionMemoryPolicy(this.#host.memoryMode()).write,
+				});
 			} catch (error) {
 				logger.warn("Memory lifecycle: Mnemopi dispose failed", { error: String(error) });
 			}
@@ -184,15 +188,19 @@ export class SessionMemory {
 		if (this.#host.isDisposed()) return;
 		try {
 			await this.#disposeMemoryBackendState();
-			if (this.#memoryAgentDir && this.#memoryTaskDepth === 0 && !this.#host.isDisposed()) {
+			const policy = sessionMemoryPolicy(this.#host.memoryMode());
+			if (policy.read && this.#memoryAgentDir && this.#memoryTaskDepth === 0 && !this.#host.isDisposed()) {
 				const backend = await resolveMemoryBackend(this.#host.settings);
-				await backend.start({
-					session: this.#host.memoryBackendSession(),
-					settings: this.#host.settings,
-					modelRegistry: this.#host.modelRegistry,
-					agentDir: this.#memoryAgentDir,
-					taskDepth: this.#memoryTaskDepth,
-				});
+				const readExistingFilesOnly = !policy.write && (backend.id === "musemem" || backend.id === "sharpshooter");
+				if (!readExistingFilesOnly) {
+					await backend.start({
+						session: this.#host.memoryBackendSession(),
+						settings: this.#host.settings,
+						modelRegistry: this.#host.modelRegistry,
+						agentDir: this.#memoryAgentDir,
+						taskDepth: this.#memoryTaskDepth,
+					});
+				}
 			}
 			if (this.#host.isDisposed()) return;
 			await this.#refreshMemoryTools();
