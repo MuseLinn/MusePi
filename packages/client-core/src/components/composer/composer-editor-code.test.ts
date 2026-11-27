@@ -123,4 +123,22 @@ describe("previewField — volatile dictation preview", () => {
 		v.dispatch({ effects: setPreview.of("") });
 		expect(tail(v)).toBe("");
 	});
+
+	it("animates only the characters that newly arrive", () => {
+		const v = mountTail("", "hel");
+		// Each grapheme owns a span so its entrance plays once.
+		expect(v.dom.querySelectorAll(".musepi-composer-editor__preview .tr-char").length).toBe(3);
+		v.dispatch({ effects: setPreview.of("hello") });
+		const chars = v.dom.querySelectorAll(".musepi-composer-editor__preview .tr-char");
+		// "hel" keeps its original spans (no replay), only "lo" is appended.
+		expect(chars.length).toBe(5);
+		expect(tail(v)).toBe("hello");
+	});
+
+	it("unwinds the per-char spans when the guess is replaced wholesale", () => {
+		const v = mountTail("", "hello");
+		v.dispatch({ effects: setPreview.of("hel") });
+		expect(tail(v)).toBe("hel");
+		expect(v.dom.querySelectorAll(".musepi-composer-editor__preview .tr-char").length).toBe(3);
+	});
 });

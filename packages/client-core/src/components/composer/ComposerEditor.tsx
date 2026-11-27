@@ -10,7 +10,7 @@ import {
 	referenceAtomicRanges,
 	refreshMarks,
 	selectionOf,
-	setPreview,
+	setPreview as setPreviewEffect,
 	valuePropWrite,
 } from "./composer-editor-code";
 import { ComposerMentionPop, type MentionPop } from "./composer-editor-pop";
@@ -131,6 +131,10 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 		 *  a synchronous parent render/effect must not dispatch again. */
 		const inUpdateRef = useRef(false);
 		const [pop, setPop] = useState<MentionPop | null>(null);
+		/** Whether the dictation preview is currently painted. A preview occupies
+		 *  the caret, so the placeholder must yield to it — the document is still
+		 *  empty, and drawing both puts two sentences in the same box. */
+		const [previewing, setPreviewing] = useState(false);
 
 		useLayoutEffect(() => {
 			const host = hostRef.current;
@@ -156,6 +160,10 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 									transaction => !transaction.docChanged || transaction.annotation(valuePropWrite) === true,
 								);
 								setPop(null);
+								// A document edit retires the preview (previewField clears it),
+								// so the placeholder must be eligible again — otherwise typing
+								// over a cancelled preview leaves an empty box with no hint.
+								setPreviewing(false);
 								if (!programmatic) {
 									inUpdateRef.current = true;
 									try {
@@ -374,8 +382,9 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 					const view = viewRef.current;
 					if (!view) return;
 					if (view.state.field(previewField).text === text) return;
-					view.dispatch({ effects: setPreview.of(text) });
+					view.dispatch({ effects: setPreviewEffect.of(text) });
 					view.requestMeasure();
+					setPreviewing(text.length > 0);
 				},
 				autosize() {
 					const view = viewRef.current;
@@ -420,7 +429,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 				{...(morphId ? { "data-morph-id": morphId } : {})}
 				{...(dataComposerInput ? { "data-composer-input": "" } : {})}
 			>
-				{value.length === 0 && placeholder ? (
+				{value.length === 0 && !previewing && placeholder ? (
 					<span className="musepi-composer-editor__placeholder" aria-hidden>
 						{placeholder}
 					</span>

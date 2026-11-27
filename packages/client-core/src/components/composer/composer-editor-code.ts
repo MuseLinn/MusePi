@@ -8,6 +8,7 @@ import {
 	StateField,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
+import { advanceTail, EMPTY_TAIL, type TailEffect, type TailState } from "@musepi/client-markdown";
 import type { ComposerSelection, EditorMark } from "./composer-editor-types";
 
 /**
@@ -49,6 +50,23 @@ class ReferenceChipWidget extends WidgetType {
 	}
 }
 
+/** Read the dictation effect preset the transcript uses, so the preview speaks
+ *  the same visual language as a streaming reply. Kept in one place: the
+ *  transcript reads the same key, and a second reading here must not invent its
+ *  own default. */
+export function dictationTailEffect(): TailEffect {
+	const fallback: TailEffect = "typewriter";
+	if (typeof localStorage === "undefined") return fallback;
+	try {
+		const value = localStorage.getItem("musepi-gui-chat-effect");
+		return value === "burst" || value === "shimmer" || value === "glitch" || value === "flip" || value === "ink"
+			? value
+			: fallback;
+	} catch {
+		return fallback;
+	}
+}
+
 /** The volatile speech-to-text preview: the words the recognizer currently
  *  believes, shown at the caret but NOT part of the document.
  *
@@ -57,6 +75,12 @@ class ReferenceChipWidget extends WidgetType {
  *  into the send path, the draft store and the undo history. The widget paints
  *  it as a trailing ghost instead and `ignoreEvent()`s everything, so it never
  *  takes the caret away from the real text.
+ *
+ *  Growth is painted through the transcript's own tail effect (`advanceTail`),
+ *  so each newly recognized character enters with the same animation a
+ *  streaming reply uses. The element is STABLE across updates (CodeMirror only
+ *  destroys it when the widget leaves the range), which is what lets the effect
+ *  animate the delta instead of replaying the whole phrase each decode.
  */
 class PreviewTailWidget extends WidgetType {
 	constructor(readonly text: string) {
@@ -70,14 +94,37 @@ class PreviewTailWidget extends WidgetType {
 	override toDOM(): HTMLElement {
 		const tail = document.createElement("span");
 		tail.className = "musepi-composer-editor__preview";
-		tail.textContent = this.text;
 		tail.setAttribute("aria-hidden", "true");
+		this.paint(tail);
 		return tail;
+	}
+
+	override updateDOM(dom: HTMLElement): boolean {
+		this.paint(dom);
+		return true;
 	}
 
 	override ignoreEvent(): boolean {
 		return true;
 	}
+
+	private paint(dom: HTMLElement): void {
+		const effect = dictationTailEffect();
+		dom.dataset.effect = effect;
+		dom.classList.toggle("musepi-composer-editor__preview--shimmer", effect === "shimmer");
+		// CodeMirror reuses the existing element (`updateDOM`) even when the widget
+		// instance is new, and a new instance starts at EMPTY_TAIL while the DOM
+		// still holds the previous phrase. Adopt what the element actually
+		// contains: `advanceTail` then sees the replacement is not a prefix of it
+		// and clears before painting. Resetting to EMPTY_TAIL instead would look
+		// like "everything is new" and append onto the stale text.
+		const painted = dom.textContent ?? "";
+		if (painted !== this.tail.appended) this.tail = { appended: painted };
+		this.tail = advanceTail(dom, this.text, effect, this.tail);
+	}
+
+	/** What this element has been advanced to; re-derived from the DOM in paint. */
+	private tail: TailState = EMPTY_TAIL;
 }
 
 /** The preview string the widget paints; a change repaints in place. */

@@ -8,12 +8,35 @@
 /* Volatile speech-to-text preview: the recognizer's current guess, painted at
  * the caret and NOT part of the document. It reads as a continuation of what
  * the user is saying — same metrics as the text it trails — but sits muted so
- * it never looks like committed text (and never gets sent). */
+ * it never looks like committed text (and never gets sent).
+ *
+ * New characters enter with the transcript's own tail effect (`.tr-char--*`,
+ * driven by advanceTail), so dictation and streaming replies share one motion
+ * language instead of two near-identical animations. Those rules live in
+ * transcript.css; only the preview's colour semantics belong here. */
 .musepi-composer-editor__preview {
 	color: var(--color-text-muted, var(--fg-muted));
 	opacity: 0.72;
 	white-space: pre-wrap;
 	pointer-events: none;
+}
+
+/* Per-char spans inherit the muted ink: the entrance animations only touch
+ * opacity/transform, and a span that set its own colour would read as
+ * committed text mid-phrase. */
+.musepi-composer-editor__preview .tr-char {
+	color: inherit;
+}
+
+/* shimmer is a root-level sweep, not per-character spans. */
+.musepi-composer-editor__preview--shimmer {
+	animation: tr-shimmer 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.musepi-composer-editor__preview--shimmer {
+		animation: none;
+	}
 }
 
 .musepi-composer-editor {
