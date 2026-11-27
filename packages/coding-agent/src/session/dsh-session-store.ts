@@ -26,6 +26,9 @@ import { SessionManager } from "./session-manager";
  * `parentSession` and a positive `delegationDepth`; it counts inside the
  * session that spawned it, not as a session of its own.
  *
+ * The reader understands format v4 and refuses a newer header rather than
+ * reading it as v4; see `SUPPORTED_VERSION`.
+ *
  * Two properties shape the reader. Events are appended in compressed frames,
  * so a live file ends mid-frame and a whole-file decompress fails outright;
  * frames are therefore decoded in order and the torn tail is dropped. And most
@@ -66,6 +69,8 @@ interface DshHeader {
 	createdAt?: number;
 	parentSession?: string;
 	delegationDepth?: number;
+	/** The header's declared format version, when the record carries one. */
+	version?: number;
 }
 
 function readHeader(text: string): DshHeader | undefined {
@@ -84,7 +89,26 @@ function readHeader(text: string): DshHeader | undefined {
 		createdAt: finiteMs(record.createdAt),
 		parentSession: stringField(record, "parentSession"),
 		delegationDepth: finiteMs(record.delegationDepth),
+		version: finiteVersion(record.version),
 	};
+}
+
+/**
+ * The highest format version this reader understands.
+ *
+ * The reader recognizes the event vocabulary and surface semantics of this
+ * version. A later version may add a record whose meaning changes how the rest
+ * of the log is interpreted, and the format's own rule is that such a record
+ * must be refused rather than skipped — so the version is checked before any
+ * record is converted, and an unknown version is reported as unsupported
+ * instead of being read as if it were this one.
+ */
+const SUPPORTED_VERSION = 4;
+
+/** A non-negative integer version, or undefined for one that is not declared. */
+function finiteVersion(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return undefined;
+	return value;
 }
 
 /**
@@ -547,6 +571,15 @@ export class DshSessionStore implements ForeignSessionStore {
 		const header = readHeader(text);
 		const records = recordsOf(text);
 		if (records.length === 0) throw new Error(`Session ${info.id} contains no readable records`);
+		// The header's version decides whether this reader may interpret the log.
+		// A later version may introduce a record that changes how the rest is read,
+		// and silently reading it as this version is how content disappears.
+		const declared = header?.version;
+		if (declared !== undefined && declared > SUPPORTED_VERSION) {
+			throw new Error(
+				`Session ${info.id} uses DSH format v${declared}; this reader understands v${SUPPORTED_VERSION} or earlier`,
+			);
+		}
 
 		const manager = SessionManager.inMemory(header?.cwd ?? info.cwd);
 		const usedIds = new Set<string>();
