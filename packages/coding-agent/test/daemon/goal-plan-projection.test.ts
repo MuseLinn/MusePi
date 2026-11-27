@@ -22,9 +22,10 @@ function stats() {
 	};
 }
 
-/** A host context that resolves the projection service, as cordis does. */
+/** A host context carrying the projection service under its cordis key, the
+ *  same property `ctx.provide(key, service)` installs at mount. */
 function ctxWith(projections: SessionProjectionService | undefined) {
-	return { get: <T>(key: string) => (key === "sessionProjections" ? (projections as T) : undefined) };
+	return { sessionProjections: projections } as never;
 }
 
 function seedMode(projections: SessionProjectionService): void {
@@ -71,6 +72,53 @@ function planService(published: string[]): PlanModeService {
 	});
 }
 
+/** A live session that records the journal writes the mode switches make. */
+function liveWith(modeLog: [string, unknown][]) {
+	let goal: Record<string, unknown> | undefined;
+	let plan: { enabled?: boolean; planFilePath?: string } | undefined;
+	return {
+		agentSession: {
+			getGoalModeState: () => goal as never,
+			setGoalModeState: (state: unknown) => {
+				goal = state as never;
+			},
+			getPlanModeState: () => plan,
+			setPlanModeState: (state: unknown) => {
+				plan = state as never;
+			},
+			setPlanProposalHandler: () => {},
+			markPlanReferenceSent: () => {},
+			getVibeModeState: () => undefined,
+			getEnabledToolNames: () => [],
+			setActiveToolsByName: async () => {},
+			getAvailableModels: () => [],
+			setModelTemporary: async () => {},
+			resetSessionContext: async () => ({}),
+			compact: async () => ({}),
+			setPlanReferencePath: () => {},
+			settings: { get: () => true },
+			isStreaming: false,
+			prompt: async () => ({}),
+			followUp: async () => ({}),
+			goalRuntime: {
+				pauseGoal: async () => ({}),
+				resumeGoal: async () => ({}) as never,
+				dropGoal: async () => ({}),
+				onBudgetMutated: async () => ({}),
+			},
+			sessionManager: {
+				appendModeChange: (mode: string, data?: Record<string, unknown>) => {
+					modeLog.push([mode, data]);
+					return "id";
+				},
+				getCwd: () => "/tmp",
+				getArtifactsDir: () => "/tmp",
+				getSessionId: () => "s1",
+			},
+		},
+	};
+}
+
 describe("goal and plan own their projection unit", () => {
 	test("each service registers the unit it owns on start", () => {
 		const projections = new SessionProjectionService(new SessionProjectionRegistry());
@@ -99,5 +147,55 @@ describe("goal and plan own their projection unit", () => {
 		// the service never runs without contributing its read model.
 		expect(() => goalService([]).start(ctxWith(undefined))).toThrow(/sessionProjections/);
 		expect(() => planService([]).start(ctxWith(undefined))).toThrow(/sessionProjections/);
+	});
+
+	test("a goal write records a journal entry, so a reload keeps it", () => {
+		const modeLog: [string, unknown][] = [];
+		const live = liveWith(modeLog);
+		const service = new GoalService({
+			get: () => live as never,
+			publishSessionModeProjection: () => {},
+			modesOf: () => ({}),
+			renderGuidedKickoff: () => "",
+			resolveMedia: async () => ({}),
+		});
+
+		service.setGoal({ sessionId: "s1", objective: "ship it" });
+		// The TUI has always written this; without it a GUI-driven goal vanished
+		// on the next activate.
+		expect(modeLog).toHaveLength(1);
+		expect(modeLog[0]![0]).toBe("goal");
+
+		service.setGoal({ sessionId: "s1" });
+		expect(modeLog[1]![0]).toBe("none");
+	});
+
+	test("a plan write records a journal entry", () => {
+		const modeLog: [string, unknown][] = [];
+		const live = liveWith(modeLog);
+		const recording = new PlanModeService({
+			get: () => live as never,
+			publishSessionModeProjection: () => {},
+			modesOf: () => ({}),
+			files: {
+				read: async () => null,
+				list: async () => [],
+				write: async () => {},
+				resolveTitle: () => ({ title: "" }),
+				resolveApproved: async () => ({ planFilePath: "", title: "" }),
+			},
+			local: { root: () => "", copy: async () => {}, urlToPath: () => "" },
+			renderApprovedPrompt: () => "",
+			renderCompactNote: () => "",
+			resolveExecutionModel: () => undefined,
+			writeFile: async () => {},
+			readFile: async () => "",
+			mkdir: async () => {},
+			writePlanViaLocal: async () => {},
+		});
+		recording.setPlan({ sessionId: "s1", enabled: true });
+		expect(modeLog[0]![0]).toBe("plan");
+		recording.setPlan({ sessionId: "s1", enabled: false });
+		expect(modeLog[1]![0]).toBe("none");
 	});
 });

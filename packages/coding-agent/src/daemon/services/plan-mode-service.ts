@@ -14,10 +14,10 @@
  *   the AgentSession itself holds; `stop` withdraws the projection unit.
  */
 
+import type { Context } from "@deepseek-ai/cordis";
 import type { ProjectionDefinition } from "../../session/session-projections";
 import { sessionModeProjectionDefinition } from "../../session/session-projections";
-import type { SessionProjectionService } from "./session-projection-service";
-import type { DaemonService, ServiceStartContext } from "./types";
+import type { DaemonService } from "./types";
 
 /** The plan-mode surface of a live session. */
 export interface PlanLiveSession {
@@ -40,6 +40,9 @@ export interface PlanLiveSession {
 			getCwd(): string;
 			getArtifactsDir(): string;
 			getSessionId(): string;
+			/** Journal writer: plan mode has to be recorded, or it is lost on the
+			 *  next activate (the TUI already records it this way). */
+			appendModeChange(mode: string, data?: Record<string, unknown>): string;
 		};
 	};
 }
@@ -111,8 +114,8 @@ export class PlanModeService implements DaemonService {
 
 	/** dsh's `static inject`: register this domain's projection unit from the
 	 *  host context; a missing dependency fails the mount. */
-	start(ctx: ServiceStartContext): void {
-		const projections = ctx.get<SessionProjectionService>("sessionProjections");
+	start(ctx: Context): void {
+		const projections = ctx.sessionProjections;
 		if (!projections) throw new Error("planMode: sessionProjections service is not mounted");
 		this.#projectionDispose = projections.register(sessionModeProjectionDefinition as ProjectionDefinition<unknown>);
 	}
@@ -149,7 +152,12 @@ export class PlanModeService implements DaemonService {
 				});
 				// Promote the reviewed path so a later approve/refine targets the
 				// plan just proposed.
-				if (state.planFilePath !== planFilePath) g.setPlanModeState({ ...state, planFilePath });
+				if (state.planFilePath !== planFilePath) {
+					g.setPlanModeState({ ...state, planFilePath });
+					// Keep the journal in step with the promoted path so a reload
+					// approves the plan the user just reviewed.
+					g.sessionManager.appendModeChange("plan", { planFilePath });
+				}
 				return {
 					content: [
 						{
@@ -160,9 +168,13 @@ export class PlanModeService implements DaemonService {
 					details: { planFilePath, title: resolvedTitle, planExists: true },
 				};
 			});
+			// Record the switch: without the journal entry a reload drops plan
+			// mode silently, which the TUI never did (it always wrote this).
+			g.sessionManager.appendModeChange("plan", { planFilePath: "" });
 		} else {
 			g.setPlanProposalHandler(null);
 			g.setPlanModeState(undefined);
+			g.sessionManager.appendModeChange("none");
 		}
 		this.#deps.publishSessionModeProjection(p.sessionId);
 		return this.#deps.modesOf(g);
@@ -216,6 +228,7 @@ export class PlanModeService implements DaemonService {
 				g.setPlanProposalHandler(null);
 				g.setPlanModeState(undefined);
 				g.markPlanReferenceSent();
+				g.sessionManager.appendModeChange("none");
 				// Approving leaves plan mode: publish before the long execution path
 				// so the badge flips with the click.
 				this.#deps.publishSessionModeProjection(p.sessionId);

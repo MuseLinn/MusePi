@@ -30,6 +30,13 @@ import type {
 } from "../../session/session-projections";
 import type { DaemonService } from "./types";
 
+declare module "@deepseek-ai/cordis" {
+	interface Context {
+		/** The projection registry service (dsh calls this `ctx.sessionProjections`). */
+		sessionProjections: SessionProjectionService;
+	}
+}
+
 export class SessionProjectionService implements DaemonService {
 	readonly key = "sessionProjections";
 

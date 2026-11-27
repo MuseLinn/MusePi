@@ -14,9 +14,9 @@
  *   a disabled service leaves no `sessionMode` key in the baseline.
  */
 
+import type { Context } from "@deepseek-ai/cordis";
 import { type ProjectionDefinition, sessionModeProjectionDefinition } from "../../session/session-projections";
-import type { SessionProjectionService } from "./session-projection-service";
-import type { DaemonService, ServiceStartContext } from "./types";
+import type { DaemonService } from "./types";
 
 /** The slice of a live session goal control touches. */
 export interface GoalLiveSession {
@@ -29,6 +29,9 @@ export interface GoalLiveSession {
 		setActiveToolsByName(names: string[]): Promise<void>;
 		settings: { get(key: string): unknown };
 		isStreaming: boolean;
+		/** Journal writer: goal mode has to be recorded, or it is lost on the
+		 *  next activate (the TUI already records it this way). */
+		sessionManager: { appendModeChange(mode: string, data?: Record<string, unknown>): string };
 		prompt(text: string, options?: Record<string, unknown>): Promise<unknown>;
 		followUp(text: string, images?: unknown, options?: Record<string, unknown>): Promise<unknown>;
 		goalRuntime: {
@@ -79,8 +82,8 @@ export class GoalService implements DaemonService {
 	 *  context and register this domain's unit. A missing dependency throws so
 	 *  the mount fails loudly instead of the service running without its
 	 *  read-model contribution. */
-	start(ctx: ServiceStartContext): void {
-		const projections = ctx.get<SessionProjectionService>("sessionProjections");
+	start(ctx: Context): void {
+		const projections = ctx.sessionProjections;
 		if (!projections) {
 			throw new Error("goals: sessionProjections service is not mounted");
 		}
@@ -118,11 +121,15 @@ export class GoalService implements DaemonService {
 					updatedAt: now,
 				},
 			});
+			// Record the switch: without the journal entry a reload drops goal
+			// mode silently. The TUI has always written this.
+			agent.sessionManager.appendModeChange("goal", { goal: agent.getGoalModeState()?.goal });
 		} else if (current?.enabled) {
 			agent.setGoalModeState(undefined);
+			agent.sessionManager.appendModeChange("none");
 		}
-		// Goal state has no journal record: tell the projection to sample it, or
-		// the badge would wait for a poll that no longer exists.
+		// Goal state has no journal record of its own shape: tell the projection
+		// to sample it, or the badge would wait for a poll that no longer exists.
 		this.#deps.publishSessionModeProjection(p.sessionId);
 		return this.#deps.modesOf(agent);
 	}
@@ -158,6 +165,7 @@ export class GoalService implements DaemonService {
 				if (!g.getGoalModeState()?.enabled) throw new Error("No active goal to pause.");
 				await g.goalRuntime.pauseGoal();
 				await setGoalTools(false);
+				g.sessionManager.appendModeChange("goal_paused", { goal: g.getGoalModeState()?.goal });
 				publish();
 				return this.#deps.modesOf(g);
 			}
@@ -165,6 +173,7 @@ export class GoalService implements DaemonService {
 				const state = await g.goalRuntime.resumeGoal();
 				await setGoalTools(true);
 				g.setGoalModeState(state);
+				g.sessionManager.appendModeChange("goal", { goal: state.goal });
 				publish();
 				return this.#deps.modesOf(g);
 			}
@@ -172,6 +181,7 @@ export class GoalService implements DaemonService {
 				await g.goalRuntime.dropGoal();
 				await setGoalTools(false);
 				g.setGoalModeState(undefined);
+				g.sessionManager.appendModeChange("none");
 				publish();
 				return this.#deps.modesOf(g);
 			}

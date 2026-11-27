@@ -1,6 +1,6 @@
 import { Context, type Fiber, type Plugin } from "@deepseek-ai/cordis";
 import { logger } from "@musepi/pi-utils";
-import type { DaemonService, ServiceStartContext } from "./services/types";
+import type { DaemonService } from "./services/types";
 
 /**
  * daemon 宿主 cordis 组合内核（P2 首刀，ADR 0001「cordis 收编边界与分层纪律」）。
@@ -49,13 +49,10 @@ export class DaemonHostContext {
 		const fiber = this.plugin({
 			name: `daemon-service:${key}`,
 			apply: ctx => {
-				// dsh's `static inject` semantics: the service resolves its own
-				// dependencies from the host context instead of having each one
-				// threaded through the constructor by DaemonServer.
-				const deps: ServiceStartContext = {
-					get: <T>(depKey: string) => ctx.get(depKey, false) as T | undefined,
-				};
-				if (lifecycle === "cordis") void service.start?.(deps);
+				// dsh's `static inject` semantics: the service receives the context
+				// and reads its dependencies straight off it (`ctx.sessionProjections`),
+				// instead of having each one threaded through the constructor.
+				if (lifecycle === "cordis") void service.start?.(ctx);
 				ctx.provide(key, service);
 				if (lifecycle === "cordis") return () => service.stop?.();
 			},
