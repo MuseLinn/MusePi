@@ -1090,6 +1090,104 @@
 	justify-content: center;
 }
 
+/* The requested name, read-only beside the title: the user must know which
+ * credential is being asked for, and it is the model's choice, not theirs. */
+.gui-secret-name-chip {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 11.5px;
+	line-height: 1.3;
+	padding: 1px 6px;
+	border-radius: var(--radius-sm, 4px);
+	border: 1px solid var(--border);
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+/* Reusable entries offered on a card: chips in a row, exactly the reference's
+ * shape. Picking one answers the request, so there is no second confirm. */
+.gui-secret-alts {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+.gui-secret-alt-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.gui-secret-alt-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 100%;
+	padding: 4px 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full, 999px);
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: 12px;
+	line-height: 1.35;
+	cursor: pointer;
+}
+.gui-secret-alt-chip:hover:not(:disabled),
+.gui-secret-alt-chip:focus-visible {
+	border-color: var(--color-accent);
+	background: var(--color-surface-raised);
+}
+.gui-secret-alt-chip:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.gui-secret-alt-name {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-secret-alt-provider {
+	font-size: 11px;
+	color: var(--color-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The requested credential, read-only above the copy: the user must know what
+ * is being asked for, and both halves are the model's choice, not theirs. */
+.gui-secret-identity {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.gui-secret-identity-label {
+	font-size: 11.5px;
+	line-height: 1.3;
+	color: var(--color-text-muted);
+}
+.gui-secret-identity-as {
+	font-size: 11.5px;
+	line-height: 1.3;
+	color: var(--color-text-muted);
+}
+
+/* The privacy note above the actions: one line with a lock, the reference's
+ * shape. It replaces a paragraph that grew to three lines and pushed the
+ * buttons away from the fields they belong to. */
+.gui-secret-private-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px;
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
 /* One labelled field of the login card: label, control, hint. The login form
  * has four of them, so the label carries the identity and the placeholder only
  * shows an example — a placeholder alone disappears the moment typing starts. */

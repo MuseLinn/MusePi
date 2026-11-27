@@ -169,6 +169,17 @@ export interface SecretRequestPayload {
 	delivery: SecretDelivery;
 	/** For `login`: the site the agent is on, so the card can prefill it. */
 	site?: string;
+	/** Saved entries the user may pick instead of typing a new value. */
+	alternatives?: SecretAlternativeView[];
+}
+
+/** One reusable entry a card offers under "Use a saved one". Never a value. */
+export interface SecretAlternativeView {
+	name: string;
+	purpose: string;
+	/** For a login: its site. */
+	site?: string;
+	username?: string;
 }
 
 /** Settlement broadcast so other cards clear after the first answer. */
@@ -187,6 +198,8 @@ export interface SecretAnswerParams {
 	delivery?: SecretDelivery;
 	/** For a login card: the sign-in the form collected. */
 	login?: SecretLoginInput;
+	/** With `allow`: the saved entry the user picked instead of typing a value. */
+	picked?: string;
 	/** Optional when request ids are already unique across live sessions. */
 	sessionId?: string;
 }

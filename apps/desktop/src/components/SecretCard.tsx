@@ -24,6 +24,8 @@ export interface SecretRequest {
 	delivery?: "env" | "file";
 	/** For `login`: the site the agent is on, prefilled in the form. */
 	site?: string;
+	/** Saved entries the user may pick instead of typing a new value. */
+	alternatives?: Array<{ name: string; purpose: string; site?: string; username?: string }>;
 }
 
 type SecretAction = "save" | "allow" | "cancel";
@@ -43,14 +45,13 @@ export interface SecretAnswer {
 		username: string;
 		totp?: string;
 	};
+	/** With `allow`: the saved entry the user picked instead of typing a value. */
+	picked?: string;
 }
 
 /** Values this short are redacted only where they stand alone; the card holds
  *  the store's floor so a saved value is never rejected after the fact. */
 const MIN_SECRET_VALUE_LENGTH = 4;
-
-/** How long the one-line outcome stays before the host drops the request. */
-const SETTLED_LINGER_MS = 2400;
 
 /** Flush-left with the composer column: overrides the ask card's inset. */
 const CARD_STYLE: CSSProperties = { width: "100%", maxWidth: 460, marginLeft: 0 };
@@ -81,6 +82,7 @@ export function SecretCard({
 	request,
 	onAnswer,
 	onSettled,
+	onOpenVault,
 }: {
 	request: SecretRequest;
 	/** Resolves after the daemon accepts the answer; rejects with an Error
@@ -88,6 +90,8 @@ export function SecretCard({
 	onAnswer(answer: SecretAnswer): Promise<void>;
 	/** Called once the outcome line has been shown — the host clears it. */
 	onSettled?(requestId: string): void;
+	/** Open the vault where the saved entry lives. Absent hides the way in. */
+	onOpenVault?(): void;
 }): ReactNode {
 	const [value, setValue] = useState("");
 	const [scope, setScope] = useState<SecretScopeChoice>("all");
@@ -99,6 +103,10 @@ export function SecretCard({
 	// Off by default, like the site-wide match it opts out of: a login fills on
 	// the site's sign-in hosts unless the user names exactly one.
 	const [loginExactHost, setLoginExactHost] = useState(false);
+	// A saved entry the user picked instead of typing a value. Held apart from
+	// the form so picking clears the form rather than filling in the fields.
+	const [picked, setPicked] = useState<string | null>(null);
+	const alternatives = request.alternatives ?? [];
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [settled, setSettled] = useState<SecretAction | null>(null);
@@ -116,23 +124,29 @@ export function SecretCard({
 		setLoginSite(request.site ?? "");
 		setLoginUsername("");
 		setLoginTotp("");
+		setLoginExactHost(false);
+		setPicked(null);
 		setBusy(false);
 		setError("");
 		setSettled(null);
 	}, [request.requestId, request.site]);
 
-	useEffect(() => {
-		if (!settled) return;
-		const timer = window.setTimeout(() => onSettledRef.current?.(request.requestId), SETTLED_LINGER_MS);
-		return () => window.clearTimeout(timer);
-	}, [settled, request.requestId]);
+	// A settled card stays until the user dismisses it: the saved entry is
+	// something to look up later, and a line that vanishes on a timer cannot be
+	// the way back to it. Cancel still clears on its own — nothing was saved.
 
-	const submit = async (action: SecretAction): Promise<void> => {
+	const submit = async (action: SecretAction, pick?: string): Promise<void> => {
 		if (busyRef.current) return;
 		busyRef.current = true;
 		setBusy(true);
 		setError("");
 		const answer: SecretAnswer = { requestId: request.requestId, action };
+		if (action === "allow") {
+			// A pick is the whole answer: the daemon extends that entry's scope and
+			// the tool is told to use it by name, so nothing is copied.
+			const chosen = pick ?? picked;
+			if (chosen) answer.picked = chosen;
+		}
 		if (action === "save") {
 			answer.value = value;
 			answer.scope = scope;
@@ -153,6 +167,9 @@ export function SecretCard({
 			// accepted it — the transcript, stores and logs never see it.
 			setValue("");
 			setSettled(action);
+			// Nothing was saved on a cancel, so its line has no destination to
+			// offer and clears itself.
+			if (action === "cancel") onSettledRef.current?.(request.requestId);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -187,6 +204,23 @@ export function SecretCard({
 						/>
 						<span className="gui-ask-card-title">{line}</span>
 					</div>
+					{/* The card stays until the user acts on it: a saved credential is
+					 *  something to look up later, and a line that vanishes in two
+					 *  seconds cannot be the way back to it. */}
+					{settled !== "cancel" && onOpenVault ? (
+						<div className="gui-ask-summary-actions">
+							<button type="button" className="gui-btn" onClick={() => onOpenVault()}>
+								{t("tools.secretHoverOpen")}
+							</button>
+							<button
+								type="button"
+								className="gui-btn gui-btn-primary"
+								onClick={() => onSettledRef.current?.(request.requestId)}
+							>
+								{t("tools.secretDismiss")}
+							</button>
+						</div>
+					) : null}
 				</div>
 			</div>
 		);
@@ -203,8 +237,8 @@ export function SecretCard({
 		: isLogin
 			? t("tools.loginScopeNote")
 			: scope === "all"
-				? t("tools.secretScopeAll")
-				: t("tools.secretScopeWorkspaceNote");
+				? t(request.delivery === "file" ? "tools.secretScopeAllFile" : "tools.secretScopeAll")
+				: t(request.delivery === "file" ? "tools.secretScopeFileNote" : "tools.secretScopeWorkspaceNote");
 	const tooShort = value.length > 0 && value.length < MIN_SECRET_VALUE_LENGTH;
 	const canSave = !tooShort && value.length >= MIN_SECRET_VALUE_LENGTH && !busy;
 
@@ -254,7 +288,52 @@ export function SecretCard({
 						<Icon name="close" className="h-3 w-3" />
 					</button>
 				</div>
+				{/* The name is the model's request, not a user choice, so it is a
+				 *  readout rather than an editable field. Without it the user cannot
+				 *  tell which credential is being asked for. */}
+				<div className="gui-secret-identity">
+					<span className="gui-secret-identity-label">
+						{isLogin ? t("tools.loginForSite") : t("tools.secretNameLabel")}
+					</span>
+					<span className="gui-secret-name-chip">{isLogin ? (request.site ?? request.name) : request.name}</span>
+					{isLogin ? <span className="gui-secret-identity-as">as {request.name}</span> : null}
+				</div>
 				<p className="gui-note">{request.purpose}</p>
+				{alternatives.length > 0 && !picked ? (
+					<div className="gui-secret-alts">
+						<span className="gui-secret-field-label">
+							{t(isLogin ? "tools.secretUseSavedLogin" : "tools.secretUseSaved")}
+						</span>
+						{/* Chips, not a list: picking one IS the answer, exactly as the
+						 *  reference does it. A selected row plus a second confirm button
+						 *  made the reader take the same decision twice. */}
+						<div className="gui-secret-alt-chips">
+							{alternatives.map(option => (
+								<button
+									key={option.name}
+									type="button"
+									className="gui-secret-alt-chip"
+									disabled={busy}
+									title={
+										option.site
+											? `${option.site}${option.username ? ` · ${option.username}` : ""}`
+											: option.purpose
+									}
+									onClick={() => {
+										setPicked(option.name);
+										// Answer immediately: the daemon extends that entry's
+										// scope and the tool is told to use it by name.
+										void submit("allow", option.name);
+									}}
+								>
+									<Icon name="key" className="h-3 w-3 flex-none opacity-70" />
+									<span className="gui-secret-alt-name">{option.name}</span>
+									{option.site ? <span className="gui-secret-alt-provider">· {option.site}</span> : null}
+								</button>
+							))}
+						</div>
+					</div>
+				) : null}
 				{isLogin ? (
 					<>
 						<label className="gui-secret-field">
@@ -316,6 +395,7 @@ export function SecretCard({
 							<span className="gui-secret-field-label">{t("tools.loginTotp")}</span>
 							<input
 								className="gui-input w-full"
+								type="password"
 								value={loginTotp}
 								placeholder={t("tools.loginTotpPlaceholder")}
 								autoComplete="off"
@@ -350,7 +430,11 @@ export function SecretCard({
 						<p className={tooShort ? "gui-error" : "gui-note"}>
 							{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
 						</p>
-						<p className="gui-note">{t("tools.secretHiddenNote", { env: envVar })}</p>
+						<p className="gui-note">
+							{request.delivery === "file"
+								? t("tools.secretFileReachNote")
+								: t("tools.secretHiddenNote", { env: envVar })}
+						</p>
 					</>
 				) : isLogin ? null : (
 					<p className="gui-note">{t("tools.secretAlreadySaved", { env: envVar })}</p>
@@ -388,10 +472,10 @@ export function SecretCard({
 						</div>
 					</>
 				) : null}
-				<p className="gui-note">{scopeNote}</p>
-				{isFill && !isLogin && request.delivery === "file" ? (
-					<p className="gui-note">{t("tools.secretFileNote")}</p>
-				) : null}
+				<p className="gui-secret-private-note">
+					<Icon name="lock" className="h-3 w-3 flex-none opacity-60" />
+					<span>{scopeNote}</span>
+				</p>
 				{error ? (
 					<p className="gui-error" role="alert">
 						{error}

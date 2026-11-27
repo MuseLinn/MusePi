@@ -5224,6 +5224,7 @@ function AppInner(): ReactNode {
 							onMcpAuthAuthorize: authorizeMcp,
 							onMcpAuthCancel: cancelMcpAuth,
 							onMcpAuthDismiss: dismissMcpAuth,
+							onOpenSettingsSection: openSettings,
 						}}
 					/>
 				</div>
@@ -5718,6 +5719,7 @@ function AppInner(): ReactNode {
 												onMcpAuthAuthorize: authorizeMcp,
 												onMcpAuthCancel: cancelMcpAuth,
 												onMcpAuthDismiss: dismissMcpAuth,
+												onOpenSettingsSection: openSettings,
 											}}
 										/>
 									);

@@ -80,12 +80,25 @@ export class RequestLoginTool implements AgentTool<typeof requestLoginSchema, Re
 			);
 		}
 
+		// Other logins for this site are offered too: a person with two accounts
+		// there can pick the right one on the card instead of retyping it.
+		const alternatives = (await store.loginsForHost(site))
+			.filter(candidate => candidate.name !== name && secretScopeIncludes(candidate.scope, cwd) && candidate.login)
+			.slice(0, 8)
+			.map(candidate => ({
+				name: candidate.name,
+				purpose: candidate.purpose,
+				site: candidate.login?.site,
+				username: candidate.login?.username,
+				reason: "same-site" as const,
+			}));
 		const request: AgentSecretRequest = {
 			name,
 			purpose,
 			kind: "login",
 			site,
 			workspace: cwd,
+			...(alternatives.length > 0 ? { alternatives } : {}),
 		};
 		const answer: AgentSecretAnswer | undefined = await ui.requestSecret(request);
 		if (!answer || answer.action === "cancel") {
@@ -97,6 +110,11 @@ export class RequestLoginTool implements AgentTool<typeof requestLoginSchema, Re
 			})
 				.text(`The user did not save a login for ${site}. Nothing was stored.`)
 				.done();
+		}
+		// A pick identifies an existing login by name; that is the one to fill.
+		if (answer.picked && answer.picked !== "") {
+			const picked = await store.getEntry(answer.picked);
+			return this.#done(answer.picked, picked?.login?.site ?? site, "available");
 		}
 		if (answer.action === "allow") {
 			// The card extended this workspace's access to an existing entry.

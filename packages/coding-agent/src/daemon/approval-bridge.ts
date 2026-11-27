@@ -82,6 +82,7 @@ export function secretRequestPayload(record: PendingSecret): {
 	kind: "fill" | "allow" | "login";
 	delivery: "env" | "file";
 	site?: string;
+	alternatives?: Array<{ name: string; purpose: string; site?: string; username?: string }>;
 } {
 	return {
 		requestId: record.requestId,
@@ -90,6 +91,7 @@ export function secretRequestPayload(record: PendingSecret): {
 		kind: record.kind,
 		delivery: record.delivery,
 		...(record.site ? { site: record.site } : {}),
+		...(record.alternatives?.length ? { alternatives: record.alternatives } : {}),
 	};
 }
 

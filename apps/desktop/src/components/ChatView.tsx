@@ -351,6 +351,7 @@ export function ChatView({
 	onMcpAuthAuthorize,
 	onMcpAuthCancel,
 	onMcpAuthDismiss,
+	onOpenSettingsSection,
 	sessionTitle,
 	sessionInfoOpen = false,
 	onToggleSessionInfo,
@@ -482,6 +483,9 @@ export function ChatView({
 	onMcpAuthAuthorize?(request: McpAuthRequest): void;
 	onMcpAuthCancel?(request: McpAuthRequest): void;
 	onMcpAuthDismiss?(request: McpAuthRequest): void;
+	/** Open a settings section from inside the conversation (a saved
+	 *  credential's way into the vault). Absent hides that action. */
+	onOpenSettingsSection?(section: string): void;
 	/** Session title shown in the floating session info card (app.tsx owns the
 	 *  session label; the card is the collapsed right panel's stand-in). */
 	sessionTitle?: string | null;
@@ -549,6 +553,9 @@ export function ChatView({
 					kind: payload.kind,
 					delivery: payload.delivery === "file" ? "file" : "env",
 					...(typeof payload.site === "string" ? { site: payload.site } : {}),
+					...(Array.isArray(payload.alternatives) && payload.alternatives.length > 0
+						? { alternatives: payload.alternatives }
+						: {}),
 				};
 				// A subscribe replay of a request already on screen keeps one card.
 				setSecretRequests(current =>
@@ -580,6 +587,7 @@ export function ChatView({
 					...(answer.value !== undefined ? { value: answer.value } : {}),
 					...(answer.scope !== undefined ? { scope: answer.scope } : {}),
 					...(answer.login !== undefined ? { login: answer.login } : {}),
+					...(answer.picked !== undefined ? { picked: answer.picked } : {}),
 				});
 			} catch (err) {
 				answeredSecretRequestsRef.current.delete(answer.requestId);
@@ -4314,6 +4322,7 @@ export function ChatView({
 										key={request.requestId}
 										request={request}
 										onAnswer={answerSecret}
+										onOpenVault={onOpenSettingsSection ? () => onOpenSettingsSection("secrets") : undefined}
 										onSettled={requestId => {
 											answeredSecretRequestsRef.current.delete(requestId);
 											setSecretRequests(current => current.filter(item => item.requestId !== requestId));

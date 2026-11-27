@@ -634,6 +634,26 @@ export interface AgentSecretRequest {
 	delivery?: SecretDelivery;
 	/** The asking session's working directory; `allow` extends the scope to it. */
 	workspace?: string;
+	/**
+	 * Entries the user may reuse instead of retyping a value.
+	 *
+	 * Only names and the non-secret half: a card shows what exists so a person
+	 * who already saved this credential can pick it. Picking one resolves the
+	 * request as `allow`, so the tool receives it under its own name and no
+	 * value is ever copied between entries.
+	 */
+	alternatives?: AgentSecretAlternative[];
+}
+
+/** One reusable entry offered on a card. */
+export interface AgentSecretAlternative {
+	name: string;
+	purpose: string;
+	/** For a login: its site, so the picker can show what it is for. */
+	site?: string;
+	username?: string;
+	/** Why it is offered: same value type, or the same site for a login. */
+	reason: "same-site" | "available";
 }
 
 /**
@@ -642,6 +662,14 @@ export interface AgentSecretRequest {
  */
 export interface AgentSecretAnswer {
 	action: "save" | "allow" | "cancel";
+	/**
+	 * The saved entry the user picked instead of typing a value.
+	 *
+	 * Present with `allow`: the tool is then told to use that name, and the
+	 * daemon extends its scope to the asking workspace. No value is copied, so
+	 * the picked entry keeps its own name and its own audit trail.
+	 */
+	picked?: string;
 }
 
 /** Duck-typed extension of the host UI context used by the daemon bridge. */
