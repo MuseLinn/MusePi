@@ -8,7 +8,6 @@ import {
 	StateField,
 } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from "@codemirror/view";
-import { advanceTail, EMPTY_TAIL, type TailEffect, type TailState } from "@musepi/client-markdown";
 import type { ComposerSelection, EditorMark } from "./composer-editor-types";
 
 /**
@@ -47,23 +46,6 @@ class ReferenceChipWidget extends WidgetType {
 
 	override ignoreEvent(): boolean {
 		return false;
-	}
-}
-
-/** Read the dictation effect preset the transcript uses, so the preview speaks
- *  the same visual language as a streaming reply. Kept in one place: the
- *  transcript reads the same key, and a second reading here must not invent its
- *  own default. */
-export function dictationTailEffect(): TailEffect {
-	const fallback: TailEffect = "typewriter";
-	if (typeof localStorage === "undefined") return fallback;
-	try {
-		const value = localStorage.getItem("musepi-gui-chat-effect");
-		return value === "burst" || value === "shimmer" || value === "glitch" || value === "flip" || value === "ink"
-			? value
-			: fallback;
-	} catch {
-		return fallback;
 	}
 }
 

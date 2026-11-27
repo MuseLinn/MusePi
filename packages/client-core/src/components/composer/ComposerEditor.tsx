@@ -138,10 +138,13 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 		 *  a synchronous parent render/effect must not dispatch again. */
 		const inUpdateRef = useRef(false);
 		const [pop, setPop] = useState<MentionPop | null>(null);
+		/** Whether the editor's document is empty, tracked from the VIEW so a
+		 *  dictation write retires the hint before the parent's `value` catches
+		 *  up. */
+		const [docEmpty, setDocEmpty] = useState(value.length === 0);
 		/** Whether the dictation preview is currently painted. A preview occupies
 		 *  the caret, so the placeholder must yield to it — the document is still
 		 *  empty, and drawing both puts two sentences in the same box. */
-		const [previewing, setPreviewing] = useState(false);
 		/** The document and caret frozen when this dictation started. Cleared by
 		 *  the same events that end it (a new start, or a non-dictation edit). */
 		const dictationRef = useRef<{ origin: string; start: number; end: number } | null>(null);
@@ -170,10 +173,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 									transaction => !transaction.docChanged || transaction.annotation(valuePropWrite) === true,
 								);
 								setPop(null);
-								// The placeholder must be eligible again once a dictation's
-								// words are ordinary draft text — otherwise an emptied
-								// composer would carry no hint at all.
-								setPreviewing(false);
+								setDocEmpty(update.state.doc.length === 0);
 								// A user edit elsewhere invalidates the frozen region: the next
 								// dictation write must re-freeze from where things are NOW, or it
 								// would overwrite what they just typed. Our own writes carry the
@@ -467,8 +467,8 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 					const from = Math.min(dictatedAt, view.state.doc.length);
 					const to = Math.min(dictatedAt + block.length, view.state.doc.length);
 					view.dispatch({ effects: setDictationRangeEffect.of({ from, to }) });
+					setDocEmpty(view.state.doc.length === 0);
 					view.requestMeasure();
-					setPreviewing(false);
 				},
 				commitDictation() {
 					const view = viewRef.current;
@@ -494,6 +494,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						});
 					}
 					view.dispatch({ effects: setDictationRangeEffect.of(null) });
+					setDocEmpty(view.state.doc.length === 0);
 					view.requestMeasure();
 				},
 				autosize() {
@@ -530,6 +531,10 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			[],
 		);
 
+		// A dictation write changes the view BEFORE the parent's `value` prop has
+		// round-tripped through onChange, so the hint must follow the document
+		// itself. `docEmpty` is kept in state rather than read off the view: a
+		// render-time read would not re-render when only the view changed.
 		return (
 			<div
 				ref={hostRef}
@@ -539,7 +544,12 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 				{...(morphId ? { "data-morph-id": morphId } : {})}
 				{...(dataComposerInput ? { "data-composer-input": "" } : {})}
 			>
-				{value.length === 0 && !previewing && placeholder ? (
+				{/* Dictation writes REAL text into the document, so a dictated word is
+				 * already enough to retire the hint — there is no separate ghost to
+				 * yield to any more. Read from the live view rather than the `value`
+				 * prop: the prop only catches up after onChange and a parent render,
+				 * and in that gap the hint painted over the words just written. */}
+				{docEmpty && placeholder ? (
 					<span className="musepi-composer-editor__placeholder" aria-hidden>
 						{placeholder}
 					</span>
