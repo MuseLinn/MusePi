@@ -247,15 +247,11 @@ function SecretForm({
 			)}
 			{/* Scope is fixed on this page: `secret.set` accepts "workspace" only from
 			 *  a secret-request card, which is the surface that knows which session
-			 *  asked. Delivery IS editable, because the daemon already accepts it
-			 *  here and the two shapes reach the agent differently: an env var the
-			 *  bash child sees, or a private file whose path it is told. */}
+			 *  asked. It is stated as one sentence rather than a dead control, so
+			 *  the form does not offer a choice it cannot honour. */}
 			<div className="gui-settings-field">
 				<span className="gui-settings-field-label">{t("settings.secretsScope")}</span>
 				<span className="gui-settings-field-hint">{t("settings.secretsScopeAllHint")}</span>
-				<span className="gui-settings-field-control">
-					<span className="gui-secret-readonly">{t("settings.secretsScopeAll")}</span>
-				</span>
 			</div>
 			<div className="gui-settings-field">
 				<span className="gui-settings-field-label">{t("settings.secretsDelivery")}</span>
@@ -765,19 +761,6 @@ export default function SecretsSettingsPage({ rpc }: SlotComponentProps): ReactN
 										? t("settings.secretsProtectionPassphraseMeta")
 										: t("settings.secretsProtectionKeyFileMeta")}
 							</span>
-							{/* The passphrase wraps the connector tokens too, so the card
-							 *  says which way the two stores sit relative to each other
-							 *  instead of letting one look unprotected next to the other. */}
-							{status.connectors && (
-								<span
-									className="gui-secret-protection-meta"
-									data-secret-connectors={status.connectors.protectedBy}
-								>
-									{status.connectors.protectedBy === "passphrase"
-										? t("settings.secretsProtectionConnectors")
-										: t("settings.secretsProtectionConnectorsPlain")}
-								</span>
-							)}
 						</div>
 						{!protection && (
 							<div className="gui-secret-protection-actions">
