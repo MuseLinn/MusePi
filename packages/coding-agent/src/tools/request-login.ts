@@ -61,17 +61,16 @@ export class RequestLoginTool implements AgentTool<typeof requestLoginSchema, Re
 
 		const store = getAgentSecretStore(this.session.settings.getAgentDir());
 		const cwd = this.session.cwd;
-		const existing = await store.getEntry(name);
-		const usable =
-			existing?.kind === "login" &&
-			existing.login?.site === site &&
-			(await store.available(name)) &&
-			secretScopeIncludes(existing.scope, cwd);
 
-		// A saved login for this site that this workspace may use needs no card:
-		// the save was the consent, and filling is not a second use of the value.
-		if (usable) {
-			return this.#done(name, site, "available");
+		// A login that already covers this site and workspace answers without a
+		// card, whatever name it carries: the name the agent picked is a label,
+		// not the identity of the credential. Filling is not a second use of the
+		// value either, so the earlier save stands as consent.
+		for (const candidate of await store.loginsForHost(site)) {
+			if (!secretScopeIncludes(candidate.scope, cwd)) continue;
+			if (await store.available(candidate.name)) {
+				return this.#done(candidate.name, candidate.login?.site ?? site, "available");
+			}
 		}
 
 		const ui = this.session.uiContext as (ExtensionUIContext & AgentSecretUIContext) | undefined;

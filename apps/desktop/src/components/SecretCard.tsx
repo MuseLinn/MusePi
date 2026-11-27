@@ -96,6 +96,9 @@ export function SecretCard({
 	const [loginSite, setLoginSite] = useState(request.site ?? "");
 	const [loginUsername, setLoginUsername] = useState("");
 	const [loginTotp, setLoginTotp] = useState("");
+	// Off by default, like the site-wide match it opts out of: a login fills on
+	// the site's sign-in hosts unless the user names exactly one.
+	const [loginExactHost, setLoginExactHost] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [settled, setSettled] = useState<SecretAction | null>(null);
@@ -137,6 +140,9 @@ export function SecretCard({
 				answer.login = {
 					site: loginSite.trim(),
 					username: loginUsername.trim(),
+					// The checked box narrows matching to the site itself; the host
+					// list is what the store compares against.
+					...(loginExactHost ? { exactHost: true, hosts: [loginSite.trim().toLowerCase()] } : {}),
 					...(loginTotp.trim() ? { totp: loginTotp.trim() } : {}),
 				};
 			}
@@ -186,13 +192,19 @@ export function SecretCard({
 		);
 	}
 
-	const isFill = request.kind === "fill";
+	const isLogin = request.kind === "login";
+	// A login is a fill card: it collects fields rather than confirming an
+	// existing entry. Without this the whole login branch fell through to the
+	// `allow` card, which even named an environment variable it has no use for.
+	const isFill = request.kind === "fill" || isLogin;
 	const envVar = envVarName(request.name);
 	const scopeNote = !isFill
 		? t("tools.secretAllowWorkspace")
-		: scope === "all"
-			? t("tools.secretScopeAll")
-			: t("tools.secretScopeWorkspaceNote");
+		: isLogin
+			? t("tools.loginScopeNote")
+			: scope === "all"
+				? t("tools.secretScopeAll")
+				: t("tools.secretScopeWorkspaceNote");
 	const tooShort = value.length > 0 && value.length < MIN_SECRET_VALUE_LENGTH;
 	const canSave = !tooShort && value.length >= MIN_SECRET_VALUE_LENGTH && !busy;
 
@@ -243,29 +255,79 @@ export function SecretCard({
 					</button>
 				</div>
 				<p className="gui-note">{request.purpose}</p>
-				{isFill && request.kind === "login" ? (
+				{isLogin ? (
 					<>
-						<input
-							className="gui-input w-full"
-							value={loginSite}
-							placeholder={t("tools.loginSitePlaceholder")}
-							aria-label={t("tools.loginSite")}
-							spellCheck={false}
-							disabled={busy}
-							onChange={e => setLoginSite(e.target.value)}
-						/>
-						<input
-							className="gui-input w-full"
-							value={loginUsername}
-							placeholder={t("tools.loginUsernamePlaceholder")}
-							aria-label={t("tools.loginUsername")}
-							autoComplete="off"
-							disabled={busy}
-							onChange={e => setLoginUsername(e.target.value)}
-						/>
+						<label className="gui-secret-field">
+							<span className="gui-secret-field-label">{t("tools.loginSite")}</span>
+							<input
+								className="gui-input w-full"
+								value={loginSite}
+								placeholder={t("tools.loginSitePlaceholder")}
+								spellCheck={false}
+								disabled={busy}
+								onChange={e => setLoginSite(e.target.value)}
+							/>
+							<span className="gui-secret-field-hint">{t("tools.loginSiteHint")}</span>
+						</label>
+						<label className="gui-secret-check">
+							<input
+								type="checkbox"
+								checked={loginExactHost}
+								disabled={busy}
+								onChange={e => setLoginExactHost(e.target.checked)}
+							/>
+							<span>{t("tools.loginExactHost")}</span>
+						</label>
+						<label className="gui-secret-field">
+							<span className="gui-secret-field-label">{t("tools.loginUsername")}</span>
+							<input
+								className="gui-input w-full"
+								value={loginUsername}
+								placeholder={t("tools.loginUsernamePlaceholder")}
+								autoComplete="off"
+								disabled={busy}
+								onChange={e => setLoginUsername(e.target.value)}
+							/>
+						</label>
+						<label className="gui-secret-field">
+							<span className="gui-secret-field-label">{t("tools.loginPassword")}</span>
+							<input
+								ref={maskStyleRef}
+								className="gui-input w-full"
+								type="password"
+								value={value}
+								placeholder={t("tools.loginPasswordPlaceholder")}
+								autoComplete="off"
+								autoCorrect="off"
+								autoCapitalize="off"
+								spellCheck={false}
+								data-1p-ignore=""
+								data-lpignore="true"
+								data-bwignore="true"
+								disabled={busy}
+								onChange={e => setValue(e.target.value)}
+								onKeyDown={onKeyDown}
+							/>
+							<span className={tooShort ? "gui-error" : "gui-secret-field-hint"}>
+								{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
+							</span>
+						</label>
+						<label className="gui-secret-field">
+							<span className="gui-secret-field-label">{t("tools.loginTotp")}</span>
+							<input
+								className="gui-input w-full"
+								value={loginTotp}
+								placeholder={t("tools.loginTotpPlaceholder")}
+								autoComplete="off"
+								spellCheck={false}
+								disabled={busy}
+								onChange={e => setLoginTotp(e.target.value)}
+							/>
+							<span className="gui-secret-field-hint">{t("tools.loginTotpHint")}</span>
+						</label>
 					</>
 				) : null}
-				{isFill ? (
+				{isFill && !isLogin ? (
 					<>
 						<input
 							ref={maskStyleRef}
@@ -288,53 +350,48 @@ export function SecretCard({
 						<p className={tooShort ? "gui-error" : "gui-note"}>
 							{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
 						</p>
-						{request.kind === "login" ? (
-							<>
-								<input
-									className="gui-input w-full"
-									value={loginTotp}
-									placeholder={t("tools.loginTotpPlaceholder")}
-									aria-label={t("tools.loginTotp")}
-									autoComplete="off"
-									spellCheck={false}
-									disabled={busy}
-									onChange={e => setLoginTotp(e.target.value)}
-								/>
-								<p className="gui-note">{t("tools.loginHiddenNote")}</p>
-							</>
-						) : (
-							<p className="gui-note">{t("tools.secretHiddenNote", { env: envVar })}</p>
-						)}
+						<p className="gui-note">{t("tools.secretHiddenNote", { env: envVar })}</p>
 					</>
-				) : (
+				) : isLogin ? null : (
 					<p className="gui-note">{t("tools.secretAlreadySaved", { env: envVar })}</p>
 				)}
 				{isFill ? (
-					<div className="gui-secret-scope" role="radiogroup" aria-label={t("tools.secretScope")}>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={scope === "workspace"}
-							className={`gui-btn${scope === "workspace" ? " gui-btn-primary" : ""}`}
-							disabled={busy}
-							onClick={() => setScope("workspace")}
+					<>
+						<span className="gui-secret-scope-label">
+							{isLogin ? t("tools.loginScope") : t("tools.secretScope")}
+						</span>
+						<div
+							className="gui-secret-scope"
+							role="radiogroup"
+							aria-label={isLogin ? t("tools.loginScope") : t("tools.secretScope")}
 						>
-							{t("tools.secretScopeWorkspace")}
-						</button>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={scope === "all"}
-							className={`gui-btn${scope === "all" ? " gui-btn-primary" : ""}`}
-							disabled={busy}
-							onClick={() => setScope("all")}
-						>
-							{t("tools.secretScopeAllSessions")}
-						</button>
-					</div>
+							<button
+								type="button"
+								role="radio"
+								aria-checked={scope === "workspace"}
+								className={`gui-btn${scope === "workspace" ? " gui-btn-primary" : ""}`}
+								disabled={busy}
+								onClick={() => setScope("workspace")}
+							>
+								{t("tools.secretScopeWorkspace")}
+							</button>
+							<button
+								type="button"
+								role="radio"
+								aria-checked={scope === "all"}
+								className={`gui-btn${scope === "all" ? " gui-btn-primary" : ""}`}
+								disabled={busy}
+								onClick={() => setScope("all")}
+							>
+								{t("tools.secretScopeAllSessions")}
+							</button>
+						</div>
+					</>
 				) : null}
 				<p className="gui-note">{scopeNote}</p>
-				{isFill && request.delivery === "file" ? <p className="gui-note">{t("tools.secretFileNote")}</p> : null}
+				{isFill && !isLogin && request.delivery === "file" ? (
+					<p className="gui-note">{t("tools.secretFileNote")}</p>
+				) : null}
 				{error ? (
 					<p className="gui-error" role="alert">
 						{error}
@@ -351,7 +408,7 @@ export function SecretCard({
 							disabled={!canSave}
 							onClick={() => void submit("save")}
 						>
-							{busy ? t("tools.secretSaving") : t("tools.secretSave")}
+							{busy ? t("tools.secretSaving") : isLogin ? t("tools.loginSave") : t("tools.secretSave")}
 						</button>
 					) : (
 						<button

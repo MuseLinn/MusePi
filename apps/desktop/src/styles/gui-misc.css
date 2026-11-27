@@ -1090,6 +1090,49 @@
 	justify-content: center;
 }
 
+/* One labelled field of the login card: label, control, hint. The login form
+ * has four of them, so the label carries the identity and the placeholder only
+ * shows an example — a placeholder alone disappears the moment typing starts. */
+.gui-secret-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.gui-secret-field-label {
+	font-size: 12.5px;
+	font-weight: 500;
+	line-height: 1.3;
+	color: var(--color-text);
+}
+.gui-secret-field-hint {
+	font-size: 11.5px;
+	line-height: 1.35;
+	color: var(--color-text-muted);
+}
+/* An opt-out that narrows matching, sitting right under the field it modifies:
+ * a checkbox on its own line reads as a separate decision. */
+.gui-secret-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	font-size: 12px;
+	line-height: 1.35;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+.gui-secret-check input {
+	margin: 2px 0 0;
+	flex: none;
+}
+/* The scope pick reads as one labelled row, not a bare pair of buttons. */
+.gui-secret-scope-label {
+	font-size: 12.5px;
+	font-weight: 500;
+	line-height: 1.3;
+	color: var(--color-text);
+	margin-top: 2px;
+}
+
 @keyframes gui-ask-pop-out {
 	from {
 		opacity: 1;
