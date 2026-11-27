@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { $ } from "bun";
@@ -67,6 +68,26 @@ function metadataErrors(source: string): string[] {
 	return errors;
 }
 
+/**
+ * Every declared scope path must resolve from the repository root.
+ *
+ * Metadata presence is ratcheted (older living docs keep their legacy exemption),
+ * but an owning path that no longer exists is always wrong: it makes the document
+ * claim ownership of code that moved or was deleted.
+ */
+function scopePathErrors(source: string, root: string): string[] {
+	const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+	if (!match) return [];
+	const value = parseMetadata(match[1]);
+	if (!value) return [];
+	const errors: string[] = [];
+	for (const entry of value.scope) {
+		const target = entry.startsWith("/") ? entry : join(root, entry);
+		if (!existsSync(target)) errors.push(`scope path does not exist: ${entry}`);
+	}
+	return errors;
+}
+
 async function markdownFiles(directory: string): Promise<string[]> {
 	const files: string[] = [];
 	for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -87,8 +108,9 @@ const PROCESS_RECORD_PREFIXES = ["docs/adr/", "docs/gui-verification/", "docs/re
 for (const file of await markdownFiles(join(root, "docs"))) {
 	const path = relative(root, file).replaceAll("\\", "/");
 	if (PROCESS_RECORD_PREFIXES.some(prefix => path.startsWith(prefix))) continue;
-	if (existingAtHead.has(path) && !REQUIRED_METADATA.has(path)) continue;
 	const source = await Bun.file(file).text();
+	for (const error of scopePathErrors(source, root)) failures.push(`${path}: ${error}`);
+	if (existingAtHead.has(path) && !REQUIRED_METADATA.has(path)) continue;
 	for (const error of metadataErrors(source)) failures.push(`${path}: ${error}`);
 }
 

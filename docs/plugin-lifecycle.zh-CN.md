@@ -4,7 +4,7 @@ title: 插件生命周期与归属
 status: living
 summary: Cordis 插件的注册、消费、状态、依赖、销毁，以及与 native 服务的边界。
 scope:
-  - packages/coding-agent/src/bundled-plugins
+  - packages/coding-agent/src/plugins
   - packages/coding-agent/src/extensibility/plugins/runtime
   - packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts
 lang: zh-CN
@@ -20,7 +20,7 @@ MusePi 插件同时负责注册与消费。一个包如果只出现在扩展中�
 
 | 形态 | 含义与生命周期 |
 | --- | --- |
-| Cordis 插件包 | fiber 拥有注册、服务发布、状态和清理。`src/bundled-plugins` 包含第一方示例。 |
+| Cordis 插件包 | fiber 拥有注册、服务发布、状态和清理。`src/plugins` 包含第一方示例。 |
 | Legacy 扩展 | 通过 `pi.*` 兼容 façade 工作，不具有 Cordis 专属原语；保留 legacy 加载语义，不获得 `pi.effect` 或 `pi.state`。 |
 | Native 配置 provider | 将用户/项目配置读取成能力列表，属于发现流程，不是插件 fiber，没有独立启停生命周期。 |
 | 核心领域服务 | 负责宿主运行必需的会话、模型、持久化、协议等不变量。不要只为扩大插件列表而机械包装。 |

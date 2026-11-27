@@ -4,7 +4,7 @@ title: Plugin lifecycle and ownership
 status: living
 summary: Cordis plugin registration, consumption, state, dependencies, disposal, and the boundary with native services.
 scope:
-  - packages/coding-agent/src/bundled-plugins
+  - packages/coding-agent/src/plugins
   - packages/coding-agent/src/extensibility/plugins/runtime
   - packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts
 ---
@@ -19,7 +19,7 @@ MusePi plugins own both registration and consumption. A package is not fully mig
 
 | Form | Meaning and lifecycle |
 | --- | --- |
-| Cordis plugin package | A mounted fiber owns registrations, published services, state, and cleanup. `src/bundled-plugins` contains first-party examples. |
+| Cordis plugin package | A mounted fiber owns registrations, published services, state, and cleanup. `src/plugins` contains first-party examples. |
 | Legacy extension | Uses the `pi.*` compatibility façade without Cordis-only primitives. It keeps legacy loading semantics and does not receive `pi.effect` or `pi.state`. |
 | Native configuration provider | Reads user/project configuration into a capability list. This is discovery, not a plugin fiber, and has no independent start/stop lifecycle. |
 | Core domain service | Owns session, model, persistence, protocol, or other invariants required for the host to work. Do not wrap it merely to make the plugin list look larger. |

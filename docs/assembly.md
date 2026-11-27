@@ -4,7 +4,7 @@ title: Declarative assembly and boot verification
 status: living
 summary: Product surfaces, managed extensions, selectable seams, and fail-loud assembly validation.
 scope:
-  - musepi.assembly.toml
+  - packages/coding-agent/src/assembly
   - packages/coding-agent/src
 ---
 
@@ -12,7 +12,8 @@ scope:
 
 [English](assembly.md) | [中文](assembly.zh-CN.md)
 
-`musepi.assembly.toml` is the musepi product assembly manifest. It declares:
+`assembly.toml` is the musepi product assembly manifest. It declares:
+
 - **surface** (TUI / daemon / headless) — controls which extensions are loaded
 - **managed extensions** — declared extensions fail **fail-loud** by default, avoiding silent fallback
 - **seams** — explicitly selectable swappable core implementations (terminal provider, compaction method)

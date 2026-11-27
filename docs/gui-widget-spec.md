@@ -39,7 +39,7 @@
 
 | 字段                  | 必填 | 契约                                                                                       |
 | --------------------- | ---- | ------------------------------------------------------------------------------------------ |
-| `type`                | ✅   | 稳定标识。daemon 侧 `WIDGET_TYPES`（插件包 `bundled-plugins/visuals/tool.ts`）与它一一对应 |
+| `type`                | ✅   | 稳定标识。daemon 侧 `WIDGET_TYPES`（`packages/coding-agent/src/board/catalog.ts`，经 `visuals` 插件的 `tool.ts` 以 `widgetTypesWith` 合并后提供）与它一一对应 |
 | `nameKey` / `descKey` | ✅   | i18n key，**不是字面文案**。加 widget 必须同步 en-US 域文件                                |
 | `fields`              | ✅   | 数据字段声明。形状必须与 daemon 侧一致                                                     |
 | `defaults()`          | ✅   | 返回 `Record<string, unknown>`。**必须是函数**，不能是常量 —— 调用方不应拿到可变的共享对象 |
