@@ -76,13 +76,14 @@
 	color: var(--color-text-secondary);
 }
 
-/* The request's own claim about what it will not do. Quietest line on the card:
- * it supports the decision, it is not the decision. */
-.gui-approval-safety {
-	margin: 0;
+/* Where the tool comes from, when it is not this host. Sits on the identity
+ * line as a quiet tag: "MCP server tool" changes what approving means. */
+.gui-approval-origin {
 	font-size: var(--ui-font-size-xs);
-	line-height: 1.5;
 	color: var(--color-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .gui-approval-prompt {

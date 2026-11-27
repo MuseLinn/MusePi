@@ -6,24 +6,22 @@ import { sfxFor } from "../lib/sfx";
 import { BorderBeam } from "../vendor/border-beam";
 
 /**
- * One line of the approval prompt, split by its own label.
+ * The approval prompt, split into what it actually carries.
  *
- * The daemon renders the prompt as labelled lines (`Allow tool: …`,
- * `Reason: …`, the command block). The tool name is shown as the card's
- * identity, so the rest is parsed into a reason line and a body — a single
- * `<pre>` of the whole thing read as one undifferentiated wall.
+ * `formatApprovalPrompt` emits exactly four kinds of line: `Allow tool:` (the
+ * identity, shown as the card's heading), `Origin:` (only for MCP tools),
+ * `Reason:` (a sentence), and the tool's own labelled detail lines (`Command:`,
+ * `File:`, …). There is no safety or args line — inventing labels here would
+ * mean styling text that never arrives.
  */
 interface ApprovalDetail {
+	/** Why the agent is asking, as a sentence. */
 	reason?: string;
-	/** The command or payload about to run — the evidence to judge. */
-	body?: string;
-	/** Bounds the request declares about itself ("no network, no destructive
-	 *  flags"). Kept apart from the command: it is the claim, the command is the
-	 *  act, and mixing them made the safety line read as part of the script. */
-	safety?: string;
+	/** Where the tool comes from, when it is not this host ("MCP server tool"). */
+	origin?: string;
+	/** The tool's own labelled detail lines, kept verbatim in a monospace well. */
+	details?: string;
 }
-
-const LABELLED = /^(Reason|Safety|Command|Args|Note):\s*(.*)$/;
 
 function splitPrompt(prompt: string | undefined): ApprovalDetail {
 	if (!prompt) return {};
@@ -31,21 +29,28 @@ function splitPrompt(prompt: string | undefined): ApprovalDetail {
 		.split("\n")
 		.slice(1)
 		.filter(line => line.trim().length > 0);
-	const reason: string[] = [];
-	const safety: string[] = [];
-	const body: string[] = [];
+	let reason: string | undefined;
+	let origin: string | undefined;
+	const details: string[] = [];
 	for (const line of lines) {
-		const labelled = LABELLED.exec(line);
-		// Reason and Safety read as sentences around the command; everything else
-		// (the command, its output, an indented block) keeps its line breaks.
-		if (labelled && labelled[1] === "Reason") reason.push(labelled[2] ?? "");
-		else if (labelled && labelled[1] === "Safety") safety.push(labelled[2] ?? "");
-		else body.push(line);
+		const reasonMatch = /^Reason:\s*(.*)$/.exec(line);
+		if (reasonMatch) {
+			reason = reasonMatch[1];
+			continue;
+		}
+		const originMatch = /^Origin:\s*(.*)$/.exec(line);
+		if (originMatch) {
+			origin = originMatch[1];
+			continue;
+		}
+		// Detail lines keep their label: `Command:` and `File:` say different
+		// things, and which one a tool emits is its own decision.
+		details.push(line);
 	}
 	return {
-		...(reason.length > 0 ? { reason: reason.join(" ") } : {}),
-		...(safety.length > 0 ? { safety: safety.join(" ") } : {}),
-		...(body.length > 0 ? { body: body.join("\n") } : {}),
+		...(reason ? { reason } : {}),
+		...(origin ? { origin } : {}),
+		...(details.length > 0 ? { details: details.join("\n") } : {}),
 	};
 }
 
@@ -82,7 +87,7 @@ export function ApprovalCard({
 	}, [requestId]);
 	// Note is per-card: a fresh approval starts with an empty field.
 	const [note, setNote] = useState("");
-	const { reason, body, safety } = splitPrompt(prompt);
+	const { reason, origin, details } = splitPrompt(prompt);
 	return (
 		<div className="gui-approval-wrap">
 			<BorderBeam size="pulse-inner" colorVariant="ocean" theme="auto" borderRadius={14}>
@@ -92,11 +97,11 @@ export function ApprovalCard({
 						<div className="gui-approval-id">
 							<span className="gui-approval-title">{t("settings.approvalRequired")}</span>
 							<span className="gui-approval-tool">{tool}</span>
+							{origin && <span className="gui-approval-origin">{origin}</span>}
 						</div>
 					</div>
 					{reason && <p className="gui-approval-reason">{reason}</p>}
-					{body && <pre className="gui-approval-prompt">{body}</pre>}
-					{safety && <p className="gui-approval-safety">{safety}</p>}
+					{details && <pre className="gui-approval-prompt">{details}</pre>}
 					<textarea
 						className="gui-approval-note"
 						value={note}

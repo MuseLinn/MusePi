@@ -16,11 +16,17 @@ import { t } from "@musepi/client-core";
 import { ApprovalCard } from "../../src/components/ApprovalCard";
 import { type GuiScenario, countAll, measure, mount, readElement } from "../gui-probe-helpers";
 
-const CMD_PROMPT = [
-	"Allow tool: bash",
-	"Reason: sync the working tree",
-	"$ git status --short",
-	"Safety: no network, no destructive flags",
+/** Exactly what `formatApprovalPrompt` emits for bash: identity, reason, and the
+ *  tool's own `Command:` detail line. No invented labels — styling text that
+ *  never arrives is how a card ends up designed around fiction. */
+const CMD_PROMPT = ["Allow tool: bash", "Reason: sync the working tree", "Command: git status --short"].join("\n");
+
+/** An MCP tool: the prompt adds `Origin:` because approving crosses a server. */
+const MCP_PROMPT = [
+	"Allow tool: mcpsearch",
+	"Origin: MCP server tool",
+	"Reason: find the issue that reported this",
+	"Command: gh search issues --label bug",
 ].join("\n");
 
 const SELECTORS = {
@@ -29,6 +35,7 @@ const SELECTORS = {
 	tool: ".gui-approval-tool",
 	prompt: ".gui-approval-prompt",
 	note: ".gui-approval-note",
+	origin: ".gui-approval-origin",
 	reason: ".gui-approval-reason",
 	actions: ".gui-approval-actions",
 	approve: ".gui-btn-approve",
@@ -60,14 +67,40 @@ export default {
 			tool: { display: "block", "box.h": { min: 12, max: 32 } },
 			// The command block is a bounded scroll area, not a page-wide wall.
 			prompt: { "box.h": { min: 20, max: 180 } },
-			// The reason reads as a sentence above the evidence; the safety claim
-			// sits under it at the quietest weight instead of inside the code block.
+			// The reason reads as a sentence above the evidence, not as the first
+			// line of the command block.
 			reason: { display: "block", "box.h": { min: 12, max: 40 } },
 			// All three actions stay on one row with a real hit area each.
 			actions: { display: "flex", "box.h": { max: 60 } },
 			approve: { "box.h": { min: 20, max: 40 }, "box.w": { min: 40 } },
 			quiet: { "box.h": { min: 20, max: 40 }, "box.w": { min: 80 } },
 			deny: { "box.h": { min: 20, max: 40 }, "box.w": { min: 40 } },
+		},
+	},
+
+	"approval-card-mcp-origin": {
+		async render(root) {
+			await mount(
+				<ApprovalCard
+					requestId="r3"
+					tool="mcpsearch"
+					prompt={MCP_PROMPT}
+					onDecide={() => {}}
+				/>,
+				root,
+			);
+		},
+		async measure(body) {
+			// `Origin:` is real prompt data, so it has to survive into the card
+			// rather than being flattened into the command well; `measure` reports
+			// it as an element reading, which is what `expect` compares against.
+			return { elements: measure(body, SELECTORS) };
+		},
+		expect: {
+			// The origin tag rides the identity line at the quietest weight.
+			origin: { display: "block", "box.h": { min: 10, max: 28 } },
+			// The detail line keeps its own label — `Command:` says what follows.
+			prompt: { display: "block", "box.h": { min: 14, max: 180 } },
 		},
 	},
 

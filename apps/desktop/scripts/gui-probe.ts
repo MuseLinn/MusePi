@@ -153,22 +153,30 @@ const stage = m => { root.dataset.stage = m; };
 const publish = (key, value) => { root.dataset[key + "Json"] = JSON.stringify(value); };
 stage("start");
 const scenarioName = ${JSON.stringify(scenario)};
-stage("import");
-const mod = await import("./bundle/${bundleName}");
-const scenarios = mod.default ?? mod;
-stage(scenarios ? "registered" : "not-registered");
-const entry = (scenarios?.scenarios ?? scenarios)?.[scenarioName];
-if (!entry) throw new Error("unknown scenario: " + scenarioName);
-stage("render");
-await entry.render(root);
-stage("rendered");
-// Point 2: the app owns data-theme and rewrites it on mount.
-document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)});
-await new Promise(r => setTimeout(r, 250));
-stage("measure");
-publish("result", (await entry.measure?.(document.body)) ?? null);
-publish("expectations", entry.expect ?? null);
-stage("done");
+// A throw anywhere below used to leave the stage at the last phase that ran, so
+// the probe could only report the phase, not the fault. Publishing it keeps the
+// failure self-describing.
+try {
+	stage("import");
+	const mod = await import("./bundle/${bundleName}");
+	const scenarios = mod.default ?? mod;
+	stage(scenarios ? "registered" : "not-registered");
+	const entry = (scenarios?.scenarios ?? scenarios)?.[scenarioName];
+	if (!entry) throw new Error("unknown scenario: " + scenarioName);
+	stage("render");
+	await entry.render(root);
+	stage("rendered");
+	// Point 2: the app owns data-theme and rewrites it on mount.
+	document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)});
+	await new Promise(r => setTimeout(r, 250));
+	stage("measure");
+	publish("result", (await entry.measure?.(document.body)) ?? null);
+	publish("expectations", entry.expect ?? null);
+	stage("done");
+} catch (error) {
+	publish("bootError", String(error && error.stack ? error.stack : error));
+	stage("error");
+}
 `;
 }
 
@@ -362,7 +370,13 @@ try {
 				const staged = await page
 					.evaluate(() => document.getElementById("root")?.dataset.stage ?? "unknown")
 					.catch(() => "unknown");
-				const detail = ` (last stage: ${staged})${errors.length > 0 ? `\n    ${errors.join("\n    ")}` : ""}`;
+				// A scenario that throws used to leave only a stage name behind
+				// ("last stage: render"), which named the phase but not the fault.
+				const bootError = await page
+					.evaluate(() => document.getElementById("root")?.dataset.bootErrorJson ?? "")
+					.catch(() => "");
+				const raised = bootError ? `\n    scenario threw: ${JSON.parse(bootError)}` : "";
+				const detail = ` (last stage: ${staged})${raised}${errors.length > 0 ? `\n    ${errors.join("\n    ")}` : ""}`;
 				throw new Error(`scenario "${scenario}" / ${theme} did not finish measuring${detail}`);
 			}
 			const { measured, expectations } = (await page.evaluate(() => {
