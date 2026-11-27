@@ -7,6 +7,7 @@
  * - format the generic approval prompt body.
  */
 import type { AgentTool, ToolApprovalDecision, ToolTier } from "@musepi/pi-agent-core";
+import { t } from "../i18n";
 
 export type { ToolApproval, ToolApprovalDecision, ToolTier } from "@musepi/pi-agent-core";
 
@@ -256,24 +257,38 @@ export function truncateForPrompt(value: string, maxChars = DEFAULT_PROMPT_TRUNC
  * Format the approval prompt body shown to the user.
  */
 export function formatApprovalPrompt(tool: ApprovalSubject, args: unknown, reason?: string): string {
-	const lines = [`Allow tool: ${tool.name}`];
+	// Labels follow the interface language; the tool name and the detail values do
+	// not. Callers must not parse this string — `purpose: "approval"` is how a host
+	// recognises the dialog, and the tool name travels on the request record.
+	const lines = [`${t("Allow tool")}: ${tool.name}`];
 
 	if (tool.name.startsWith("mcp__") && tool.approval === undefined) {
-		lines.push("Origin: MCP server tool");
+		lines.push(t("Origin: MCP server tool"));
 	}
 
 	if (reason) {
-		lines.push(`Reason: ${reason}`);
+		lines.push(`${t("Reason")}: ${reason}`);
 	}
 
 	const details = tool.formatApprovalDetails?.(args);
-	if (typeof details === "string") {
-		if (details.length > 0) lines.push(details);
-	} else if (Array.isArray(details)) {
-		for (const detail of details) {
-			if (detail.length > 0) lines.push(detail);
-		}
+	for (const detail of typeof details === "string" ? [details] : (details ?? [])) {
+		if (detail.length > 0) lines.push(translateDetailLabel(detail));
 	}
 
 	return lines.join("\n");
+}
+
+/**
+ * Translate a detail line's label, keeping the value as data.
+ *
+ * Tools own their detail lines (`Command:`, `File:`, `Action:`, …) and emit them
+ * in one place each; translating inside every tool would spread the same decision
+ * over a dozen files and let them drift. The prompt is the single surface that
+ * renders these lines to a person, so the label is translated here — the part
+ * after the colon is a tool name, a path or a command and is never touched.
+ */
+function translateDetailLabel(detail: string): string {
+	const colon = detail.indexOf(": ");
+	if (colon <= 0) return t(detail);
+	return `${t(detail.slice(0, colon))}: ${detail.slice(colon + 2)}`;
 }

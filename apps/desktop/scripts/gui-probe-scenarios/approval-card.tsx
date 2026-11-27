@@ -16,17 +16,27 @@ import { t } from "@musepi/client-core";
 import { ApprovalCard } from "../../src/components/ApprovalCard";
 import { type GuiScenario, countAll, measure, mount, readElement } from "../gui-probe-helpers";
 
-/** Exactly what `formatApprovalPrompt` emits for bash: identity, reason, and the
- *  tool's own `Command:` detail line. No invented labels — styling text that
- *  never arrives is how a card ends up designed around fiction. */
-const CMD_PROMPT = ["Allow tool: bash", "Reason: sync the working tree", "Command: git status --short"].join("\n");
+/**
+ * The prompts below are built from the SAME translation keys the daemon uses, so
+ * the fixture cannot drift from the real format in either language. Writing the
+ * English literal once was enough to make the card's localized parser find
+ * nothing — and to make a "safety" line look like part of the format.
+ */
+const label = (key: string): string => t(key as Parameters<typeof t>[0]);
+const promptLine = (head: string, body: string): string => `${head}: ${body}`;
 
-/** An MCP tool: the prompt adds `Origin:` because approving crosses a server. */
+const CMD_PROMPT = [
+	promptLine(label("Allow tool"), "bash"),
+	promptLine(label("Reason"), "sync the working tree"),
+	promptLine("Command", "git status --short"),
+].join("\n");
+
+/** An MCP tool: the prompt adds the origin line because approving crosses a server. */
 const MCP_PROMPT = [
-	"Allow tool: mcpsearch",
-	"Origin: MCP server tool",
-	"Reason: find the issue that reported this",
-	"Command: gh search issues --label bug",
+	promptLine(label("Allow tool"), "mcpsearch"),
+	label("Origin: MCP server tool"),
+	promptLine(label("Reason"), "find the issue that reported this"),
+	promptLine("Command", "gh search issues --label bug"),
 ].join("\n");
 
 const SELECTORS = {

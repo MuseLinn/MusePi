@@ -1,5 +1,27 @@
 export const common = {
 	// ── Common ───────────────────────────────────────────────
+	// The approval dialog's two answers. Keys are the English source text, so the
+	// same dialog reads correctly in either language without a second key set.
+	Approve: "批准",
+	Deny: "拒绝",
+	// Approval prompt labels. The value after each colon is data (a tool name, a
+	// command, a reason) and is never translated.
+	"Allow tool": "允许工具",
+	// Detail-line labels the tools emit (`Command: …`, `File: …`); only the label
+	// is translated, the value after the colon is data.
+	Command: "命令",
+	File: "文件",
+	Action: "操作",
+	Agent: "子智能体",
+	Name: "名称",
+	Task: "任务",
+	Path: "路径",
+	Query: "查询",
+	Tool: "工具",
+	URL: "地址",
+	Server: "服务器",
+	Reason: "原因",
+	"Origin: MCP server tool": "来源：MCP 服务器工具",
 	"common.commonYes": "是",
 	"common.commonNo": "否",
 	"common.commonOn": "开启",

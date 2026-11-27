@@ -65,6 +65,12 @@ export class SettingsService implements DaemonService {
 			settings = this.host.settings();
 		}
 		if (!settings) throw new Error("settings unavailable");
+		// The daemon renders user-facing text of its own (the approval prompt), so
+		// its locale follows the stored interface language from the first read —
+		// otherwise a fresh process would greet a zh-CN user in English.
+		const { setLocale, getLocale } = await import("../../i18n");
+		const stored = settings.get("settings.locale");
+		if (typeof stored === "string" && stored && stored !== getLocale()) setLocale(stored);
 		const keys = p.keys && p.keys.length > 0 ? p.keys : ["modelRoles", "cycleOrder", "knownRoleIds"];
 		const { SETTINGS_SCHEMA, hasUi, isCredential } = await import("../../config/settings-schema");
 		// Extension-contributed settings (registerSetting) are also
@@ -283,6 +289,14 @@ export class SettingsService implements DaemonService {
 			(settings as Settings).set(p.key as Parameters<Settings["set"]>[0], p.value as never);
 		}
 		await settings.flush();
+		// The daemon renders some user-facing text itself (the approval prompt is
+		// one), so it has to follow the interface language the GUI/TUI just wrote —
+		// otherwise a zh-CN user gets an English prompt with a Chinese card.
+		if (p.key === "settings.locale") {
+			const { setLocale } = await import("../../i18n");
+			const next = settings.get("settings.locale");
+			if (typeof next === "string" && next) setLocale(next);
+		}
 		return { ok: true };
 	}
 

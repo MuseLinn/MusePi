@@ -1736,6 +1736,11 @@ export const settings = {
 	"settings.petPanelSessions": "会话",
 	"settings.petPanelNoRecent": "暂无最近会话",
 	"settings.approve": "批准",
+	// Approval-prompt labels, keyed by the daemon's English source text. The client
+	// reads these back to place the labelled lines; the value after each colon is
+	// data (a tool name, a reason) and is never translated.
+	Reason: "原因",
+	"Origin: MCP server tool": "来源：MCP 服务器工具",
 	"settings.approveForSession": "本次会话总是允许",
 	"settings.approveForSessionHint": "之后这个工具的调用不再询问；审批模式本身不变",
 	"settings.cancel2": "取消",

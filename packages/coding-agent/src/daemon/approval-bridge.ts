@@ -67,6 +67,8 @@ export interface PendingSecret {
 	delivery: "env" | "file";
 	/** For `login`: the site the agent is on. */
 	site?: string;
+	/** Entries the user may reuse instead of retyping a value. */
+	alternatives?: Array<{ name: string; purpose: string; site?: string; username?: string }>;
 	/** Asking session's working directory, in the tool's own form. */
 	workspace?: string;
 	resolve(answer: AgentSecretAnswer): void;
@@ -208,7 +210,7 @@ export interface ApprovalBridge {
 	pendingSecrets: Map<string, PendingSecret>;
 	/** Answer a pending secret request. Persistence happens in SecretService
 	 *  before this settlement; the tool only learns which action won. */
-	resolveSecret(requestId: string, action: AgentSecretAnswer["action"]): boolean;
+	resolveSecret(requestId: string, action: AgentSecretAnswer["action"], picked?: string): boolean;
 	/** Active connector requests keyed by requestId. */
 	pendingConnectors: Map<string, PendingConnectorRequest>;
 	/** Answer a pending connector request. The card decides connect-or-decline;
@@ -345,9 +347,12 @@ export function createApprovalBridge(
 		widgetAnswers: true,
 		// The approval gate awaits this exact select; any OTHER select (ask
 		// tool questions, plan pickers) routes to the GUI ask card.
-		async select(title, options) {
+		async select(title, options, dialogOptions) {
 			const labels = options.map(o => (typeof o === "string" ? o : (o.label ?? "")));
-			if (!labels.includes("Approve") || !labels.includes("Deny")) {
+			// The caller states intent; the labels are display text and may be in any
+			// language. Sniffing "Approve"/"Deny" made translating them a breaking
+			// change — a translated approval would have arrived as an ordinary ask.
+			if (dialogOptions?.purpose !== "approval") {
 				const requestId = makeAskId();
 				const { promise, resolve } = Promise.withResolvers<string | undefined>();
 				const record: PendingAsk = {
@@ -496,6 +501,7 @@ export function createApprovalBridge(
 				kind: request.kind,
 				delivery: request.delivery ?? "env",
 				...(request.site ? { site: request.site } : {}),
+				...(request.alternatives?.length ? { alternatives: request.alternatives } : {}),
 				...(request.workspace ? { workspace: request.workspace } : {}),
 				resolve: answer => {
 					if (!pendingSecrets.has(requestId)) return;
@@ -597,11 +603,11 @@ export function createApprovalBridge(
 			return true;
 		},
 		pendingSecrets,
-		resolveSecret(requestId, action) {
+		resolveSecret(requestId, action, picked) {
 			const record = pendingSecrets.get(requestId);
 			if (!record) return false;
 			clearTimer(requestId);
-			record.resolve({ action });
+			record.resolve({ action, ...(picked ? { picked } : {}) });
 			options.onSecretResolved?.(requestId);
 			rememberSecret(requestId);
 			return true;

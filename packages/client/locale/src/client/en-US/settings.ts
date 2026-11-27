@@ -1820,6 +1820,8 @@ export const settings = {
 	"settings.petPanelSessions": "Sessions",
 	"settings.petPanelNoRecent": "No recent sessions",
 	"settings.approve": "Approve",
+	Reason: "Reason",
+	"Origin: MCP server tool": "Origin: MCP server tool",
 	"settings.approveForSession": "Always allow this session",
 	"settings.approveForSessionHint":
 		"This tool stops asking for the rest of the session; the approval mode itself is unchanged",

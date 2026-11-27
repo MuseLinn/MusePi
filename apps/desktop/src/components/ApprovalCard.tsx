@@ -8,11 +8,12 @@ import { BorderBeam } from "../vendor/border-beam";
 /**
  * The approval prompt, split into what it actually carries.
  *
- * `formatApprovalPrompt` emits exactly four kinds of line: `Allow tool:` (the
- * identity, shown as the card's heading), `Origin:` (only for MCP tools),
- * `Reason:` (a sentence), and the tool's own labelled detail lines (`Command:`,
- * `File:`, …). There is no safety or args line — inventing labels here would
- * mean styling text that never arrives.
+ * `formatApprovalPrompt` emits labelled lines in the daemon's interface
+ * language, so the labels are read through `t()` rather than matched as English
+ * text: a translated prompt would otherwise fall through to the raw block. The
+ * tool name is the card's heading and never appears here; the rest is a reason,
+ * an optional origin, and the tool's own detail lines (`Command:`, `File:`, …),
+ * which stay verbatim because their label says what the value is.
  */
 interface ApprovalDetail {
 	/** Why the agent is asking, as a sentence. */
@@ -29,22 +30,21 @@ function splitPrompt(prompt: string | undefined): ApprovalDetail {
 		.split("\n")
 		.slice(1)
 		.filter(line => line.trim().length > 0);
+	const reasonLabel = t("Reason");
+	// The origin line is a whole localized sentence, not a `label: value` pair.
+	const originLine = t("Origin: MCP server tool");
 	let reason: string | undefined;
 	let origin: string | undefined;
 	const details: string[] = [];
 	for (const line of lines) {
-		const reasonMatch = /^Reason:\s*(.*)$/.exec(line);
-		if (reasonMatch) {
-			reason = reasonMatch[1];
+		if (line.startsWith(`${reasonLabel}: `)) {
+			reason = line.slice(reasonLabel.length + 2);
 			continue;
 		}
-		const originMatch = /^Origin:\s*(.*)$/.exec(line);
-		if (originMatch) {
-			origin = originMatch[1];
+		if (line === originLine) {
+			origin = line;
 			continue;
 		}
-		// Detail lines keep their label: `Command:` and `File:` say different
-		// things, and which one a tool emits is its own decision.
 		details.push(line);
 	}
 	return {
