@@ -1,6 +1,8 @@
+#[cfg(windows)]
+use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use napi::{
 	bindgen_prelude::Result,
-	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode, UnknownReturnValue},
+	threadsafe_function::{ThreadsafeFunction, UnknownReturnValue},
 };
 use napi_derive::napi;
 #[cfg(windows)]

@@ -68,6 +68,7 @@ class GlobalDictation {
 		this.trigger = "toggle";
 		this.holdActive = false;
 		this.holdInternalTarget = null;
+		this.toggleFallback = false;
 		this.enabled = false;
 		this.accelerator = "";
 		this.settingsTimer = null;
@@ -140,6 +141,7 @@ class GlobalDictation {
 		this.enabled = enabled;
 		this.accelerator = accelerator;
 		this.trigger = trigger;
+		this.toggleFallback = false;
 		if (!enabled) {
 			this.registered = null;
 			return;
@@ -155,6 +157,7 @@ class GlobalDictation {
 				this.keyMonitor = monitor;
 				this.registered = true;
 			} catch (err) {
+				this.toggleFallback = true;
 				this.registered = false;
 				this.log(`global dictation hold shortcut failed: ${err?.message ?? err}; using toggle fallback`);
 				this.registerToggleShortcut(accelerator);
@@ -338,13 +341,13 @@ class GlobalDictation {
 			});
 		} catch (err) {
 			this.log(`dictation mic/stream failed: ${err?.message ?? err}`);
-			this.clearStream();
+			this.cancelStream();
 			this.fail("globalDictation.micFailed", { sticky: true });
 			return;
 		}
 		this.show({ phase: "recording", level: 0, seconds: 0, partialText: "" });
 		this.recordTimer = setInterval(() => this.pushRecordingState(), 100);
-		if (this.trigger === "hold" && !this.holdActive && generation === this.generation) {
+		if (this.trigger === "hold" && !this.toggleFallback && !this.holdActive && generation === this.generation) {
 			queueMicrotask(() => this.finishRecording());
 		}
 	}
@@ -388,8 +391,7 @@ class GlobalDictation {
 		this.capture = null;
 		const sessionId = this.sessionId;
 		if (this.sampleCount < MIN_SAMPLES || !sessionId) {
-			if (sessionId) void this.request("voice.frontendStreamCancel", { sessionId }).catch(() => {});
-			this.clearStream();
+			this.cancelStream();
 			this.finishing = false;
 			this.show({ phase: "error", message: "globalDictation.tooShort" });
 			this.scheduleHide(1800);
@@ -492,6 +494,12 @@ class GlobalDictation {
 		return appendTranscript(this.finalizedTranscript(), this.streamPartial);
 	}
 
+	cancelStream() {
+		const sessionId = this.sessionId;
+		if (sessionId) void this.request("voice.frontendStreamCancel", { sessionId }).catch(() => {});
+		this.clearStream();
+	}
+
 	clearStream() {
 		this.sessionId = null;
 		this.streamSegments.clear();
@@ -555,10 +563,8 @@ class GlobalDictation {
 	cancel() {
 		if (!this.capture && this.phase === "hidden") return;
 		this.downloadKey = null;
-		const sessionId = this.sessionId;
-		if (sessionId) void this.request("voice.frontendStreamCancel", { sessionId }).catch(() => {});
 		this.generation += 1;
-		this.clearStream();
+		this.cancelStream();
 		this.abortCapture();
 		this.show({ phase: "hidden" });
 		this.hideHud();
@@ -704,6 +710,7 @@ class GlobalDictation {
 	}
 
 	dispose() {
+		this.cancelStream();
 		this.unregisterShortcut();
 		this.unregisterEscape();
 		this.abortCapture();

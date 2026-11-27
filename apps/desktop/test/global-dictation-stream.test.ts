@@ -177,6 +177,9 @@ function triggerHarness(options: TriggerHarnessOptions = {}) {
 					"dictation.globalTrigger": options.trigger ?? "toggle",
 				};
 			}
+			if (method === "stt.modelStatus") return { defaultKey: "sensevoice", models: [{ key: "sensevoice", cached: true }] };
+			if (method === "voice.frontendStreamStart") return { sessionId: "voice-fallback" };
+			if (method === "voice.frontendStreamCancel") return { ok: true };
 			return {};
 		},
 		subscribe: () => {},
@@ -236,11 +239,32 @@ describe("global dictation trigger modes", () => {
 		expect(h.monitors).toHaveLength(0);
 		expect(h.registrations).toHaveLength(1);
 		expect(h.dictation.registered).toBe(false);
-		let starts = 0;
-		h.dictation.begin = async () => {
-			starts += 1;
+		let startedCapture = false;
+		h.dictation.loadNative = async () => ({
+			AudioCapture: class {
+				constructor() {
+					startedCapture = true;
+				}
+				stop(): void {}
+			},
+		});
+		h.dictation.show = (state: Record<string, unknown>) => {
+			h.dictation.phase = state.phase;
 		};
+		h.dictation.hideHud = () => {};
 		await h.registrations[0]!.callback();
-		expect(starts).toBe(1);
+		await Bun.sleep(20);
+		expect(startedCapture).toBe(true);
+		expect(h.dictation.capture === null).toBe(false);
+		h.dictation.cancel();
 	});
+});
+
+
+test("dispose closes the active daemon stream as well as the microphone", async () => {
+	const h = await harness();
+	h.audio(new Float32Array(8_000).fill(0.1));
+	h.dictation.dispose();
+	expect(h.requests.some(request => request.method === "voice.frontendStreamCancel" && request.params.sessionId === "voice-test")).toBe(true);
+	expect(h.dictation.displayTranscript()).toBe("");
 });
