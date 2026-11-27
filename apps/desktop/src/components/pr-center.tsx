@@ -1618,38 +1618,45 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 											<span className={`gui-changes-badge gui-pr-badge--${prVisualState(pr)}`}>
 												{pr.isDraft ? "D" : pr.state === "MERGED" ? "M" : pr.state === "CLOSED" ? "X" : "O"}
 											</span>
-											<span className="min-w-0 flex-1 truncate text-left">
-												<span className="text-[var(--color-text-faint)]">#{pr.number}</span> {pr.title}
-											</span>
-											{rollupCheckState(pr.statusCheckRollup) !== null && (
-												<span
-													className={`gui-pr-check-dot gui-pr-check-dot--${rollupCheckState(pr.statusCheckRollup)}`}
-													role="img"
-													aria-label={t(
-														(rollupCheckState(pr.statusCheckRollup) === "success"
-															? "pr checks passing"
-															: rollupCheckState(pr.statusCheckRollup) === "failure"
-																? "pr checks failing"
-																: "pr checks pending") as TranslationKey,
-													)}
-													title={t(
-														(rollupCheckState(pr.statusCheckRollup) === "success"
-															? "pr checks passing"
-															: rollupCheckState(pr.statusCheckRollup) === "failure"
-																? "pr checks failing"
-																: "pr checks pending") as TranslationKey,
-													)}
-												/>
-											)}
-											{(pr.comments?.length ?? 0) > 0 && (
-												<span className="flex flex-shrink-0 items-center gap-1 text-[10.5px] text-[var(--color-text-faint)]">
-													<Icon name="chat-1" className="h-3 w-3" />
-													{pr.comments?.length ?? 0}
+											{/* Title on its own line, meta on the next: as one flat row the
+											 *  branch name and the diff counts competed for the same
+											 *  space and painted on top of each other at every width. */}
+											<span className="gui-pr-list-copy">
+												<span className="gui-pr-list-title">
+													<span className="text-[var(--color-text-faint)]">#{pr.number}</span> {pr.title}
 												</span>
-											)}
-											<PrDiffStat pr={pr} />
-											<span className="gui-pr-list-branches text-[10.5px] text-[var(--color-text-faint)]">
-												{pr.headRefName} → {pr.baseRefName}
+												<span className="gui-pr-list-meta">
+													{rollupCheckState(pr.statusCheckRollup) !== null && (
+														<span
+															className={`gui-pr-check-dot gui-pr-check-dot--${rollupCheckState(pr.statusCheckRollup)}`}
+															role="img"
+															aria-label={t(
+																(rollupCheckState(pr.statusCheckRollup) === "success"
+																	? "pr checks passing"
+																	: rollupCheckState(pr.statusCheckRollup) === "failure"
+																		? "pr checks failing"
+																		: "pr checks pending") as TranslationKey,
+															)}
+															title={t(
+																(rollupCheckState(pr.statusCheckRollup) === "success"
+																	? "pr checks passing"
+																	: rollupCheckState(pr.statusCheckRollup) === "failure"
+																		? "pr checks failing"
+																		: "pr checks pending") as TranslationKey,
+															)}
+														/>
+													)}
+													{(pr.comments?.length ?? 0) > 0 && (
+														<span className="flex flex-shrink-0 items-center gap-1 text-[10.5px] text-[var(--color-text-faint)]">
+															<Icon name="chat-1" className="h-3 w-3" />
+															{pr.comments?.length ?? 0}
+														</span>
+													)}
+													<PrDiffStat pr={pr} />
+													<span className="gui-pr-list-branches text-[10.5px] text-[var(--color-text-faint)]">
+														{pr.headRefName} → {pr.baseRefName}
+													</span>
+												</span>
 											</span>
 										</button>
 									))}

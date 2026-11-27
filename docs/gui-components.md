@@ -100,6 +100,7 @@ The desktop host re-exports the moved seat constants from `slot-host.tsx` during
 | `MarketplaceDetailDialog` | Plugin detail page (versions, description, skills, footer actions) | `components/MarketplaceDetailDialog.tsx`; its stylesheet is `styles/gui-marketplace-detail.css` |
 | `.gui-side-panel-row` | Dense list-row geometry (gap, height, radius, hover/`--active`) | Every dense labelled row; add trailing furniture, never re-declare it |
 | `PrChecksList` | A PR's CI, itemised, on demand | `pr-center.tsx`; gh `bucket` decides (`cancel` = failure) |
+| `.gui-rail-btn--wide` | The rail row, expanded | Same button, one state wider: rows transition their own width/height/padding/gap, and `.gui-rail--wide .gui-rail-group` stretches the footer so its controls stay rows instead of centred squares |
 
 **Desktop stylesheets have one home: `apps/desktop/src/styles/`.** Every sheet is a `gui-*` family file there; a component that needs one imports it from that directory (`../styles/gui-<name>.css`) and never ships a sibling `.css` of its own. The last holdout, the marketplace detail sheet, moved in from `components/` so the cascade has no section without an owner.
 

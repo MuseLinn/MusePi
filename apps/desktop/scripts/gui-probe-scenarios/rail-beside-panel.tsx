@@ -58,7 +58,7 @@ const column = (collapsed: boolean, pane: ReactNode, railExpanded = false) => (
 	</div>
 );
 
-const SELECTORS = { rail: ".gui-rail", firstButton: ".gui-rail-btn", pane: ".gui-pane-side" };
+const SELECTORS = { rail: ".gui-rail", firstButton: ".gui-rail-btn", btn: ".gui-rail-btn", pane: ".gui-pane-side" };
 
 /** Paint facts the shared vocabulary does not collect, flattened onto the row. */
 function withPaint(root: ParentNode) {
@@ -111,6 +111,23 @@ const scenarios = {
 			rail: { "box.w": 52, radius: "16px" },
 		},
 	},
+	/** The footer's controls must follow the wide rail's row geometry. Left as a
+	 *  36px centred square inside a widened rail, the button reads as a different
+	 *  control rather than the same one with room ("变一个居中图标"). */
+	"wide-rail-footer": {
+		capture: ".gui-rail",
+		async render(root: HTMLElement) {
+			await mount(column(false, <ScheduledTasksPanel width={PANE_W} collapsed={false} />, true), root);
+		},
+		async measure(body: ParentNode) {
+			return {
+				elements: measure(body, {
+					group: ".gui-rail-group",
+					btn: ".gui-rail-btn",
+				}),
+			};
+		},
+	},
 	"wide-rail": {
 		capture: ".gui-main",
 		async render(root: HTMLElement) {
@@ -136,6 +153,7 @@ const scenarios = {
 			// Tier one widens to its own token and renders one label per row; the
 			// empty drag band is replaced by the brand header.
 			rail: { "box.w": 208, radius: "16px" },
+			btn: { "box.w": { min: 150 } },
 		},
 	},
 } satisfies Record<string, GuiScenario>;

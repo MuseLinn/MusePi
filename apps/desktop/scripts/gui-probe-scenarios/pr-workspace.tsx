@@ -46,7 +46,9 @@ const LIST = (
 	<div className="gui-pr-list">
 		{Array.from({ length: 3 }, (_, index) => (
 			<div key={index} className="gui-pr-row-probe" style={{ padding: "8px 10px" }}>
-				<div style={{ fontSize: 13 }}>#{44 + index} DRAFT: replace software icons</div>
+				<div className="gui-pr-list-copy">
+					<span className="gui-pr-list-title">#{44 + index} DRAFT: replace software icons</span>
+					<span className="gui-pr-list-meta">
 				<span className="gui-pr-diff">
 					<span className="gui-pr-diff-bar">
 						{Array.from({ length: 5 }, (_, cell) => (
@@ -59,6 +61,9 @@ const LIST = (
 					<span className="gui-pr-diff-add">+74</span>
 					<span className="gui-pr-diff-del">−954</span>
 				</span>
+						<span className="gui-pr-list-branches">cursor/tui-release-installer → main</span>
+					</span>
+				</div>
 			</div>
 		))}
 	</div>
