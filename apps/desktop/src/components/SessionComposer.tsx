@@ -586,12 +586,12 @@ export function SessionComposer({
 		setAppendText,
 	} = useModes(rpc, sessionId);
 	// ── Design-session style select（M3.7b §3 生效链路）──────────────────
-	// session.modes.modeId === "design" gates the row; the pick writes via
+	// session.modes.agentPreset === "design" gates the row; the pick writes via
 	// session.setDesignSystem RPC (null = 跟随既有/清除) and the initial
 	// value hydrates from the session header's projectMetadata — the
 	// brief-update-sentence path (设计稿 08) is retired: the daemon injects
 	// the resolved system's promptSection on rebuild.
-	const isDesignSession = modes?.modeId === "design";
+	const isDesignSession = modes?.agentPreset === "design";
 	const designSystems = useDesignSystems(rpc);
 	const { designStyle, pickDesignStyle } = useSessionDesignSystem(rpc, sessionId, isDesignSession);
 

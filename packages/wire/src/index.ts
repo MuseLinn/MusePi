@@ -275,9 +275,10 @@ export interface SessionHeader {
 	model?: string;
 	/** User-picked thinking effort for a history session (setThinkingLevel). */
 	thinkingLevel?: string;
-	/** 会话预设(mode)id:`session.setMode` 与创建路径落盘,session.modes
-	 *  读回 —— GUI 用它决定 design 风格 chip 与上下文面板的模式名。 */
-	modeId?: string | null;
+	/** 会话预设 id:`agentPresets.select` 与创建路径落盘,session.modes
+	 *  读回 —— GUI 用它决定 design 风格 chip 与上下文面板的预设名。
+	 *  旧名 `modeId` 仍被读取(改名之前写下的会话头),新写入只用本字段。 */
+	agentPreset?: string | null;
 	/** M3.2 创作面 project metadata(docs/review/0.5.0-m3.1-creation-surface-design.md
 	 *  §4 契约,≤16KiB,daemon 侧校验)。创建路径经 persistHeaderPatch 落入
 	 *  view-store 快照头;shape 校验归 daemon/creation.ts。 */

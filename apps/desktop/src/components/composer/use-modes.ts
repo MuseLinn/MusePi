@@ -9,7 +9,7 @@ export interface ComposerModes {
 	isCompacting: boolean;
 	todo: TodoPhaseView[];
 	/** 会话预设 id（"design" 等）——design 会话的 composer 风格 chips 依赖它判型。 */
-	modeId?: string | null;
+	agentPreset?: string | null;
 }
 
 /**

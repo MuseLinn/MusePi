@@ -362,9 +362,9 @@ interface SessionMetaRow {
 	 *  complete | interrupted | aborted | error | pending. Powers the
 	 *  sidebar's colored status square so unfinished history is visible. */
 	status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
-	/** 会话预设(mode)id（work/chat/creator/design…）— 侧栏悬浮卡的模式行；
-	 *  undefined = 未设预设（守护进程 modeId 为 null 的历史会话）。 */
-	modeId?: string;
+	/** 会话预设 id（work/chat/creator/design…）— 侧栏悬浮卡的预设行；
+	 *  undefined = 未设预设（守护进程该字段为 null 的历史会话）。 */
+	agentPreset?: string;
 	/** 子代理数（session.list agentCount,不含 advisor）。 */
 	agentCount?: number;
 	/** Auxiliary sessions stay in session.list for navigation and inspection,
@@ -406,7 +406,7 @@ function pollRowEquals(old: SessionMetaRow, r: SessionMetaRow & { id: string }):
 		old.timestamp === (r.timestamp ?? old.timestamp) &&
 		old.updatedAt === (r.updatedAt ?? old.updatedAt) &&
 		old.cwd === (r.cwd ?? old.cwd) &&
-		old.modeId === (r.modeId ?? old.modeId) &&
+		old.agentPreset === (r.agentPreset ?? old.agentPreset) &&
 		old.agentCount === (r.agentCount ?? 0) &&
 		old.subagent === (r.subagent === true) &&
 		old.advisor === (r.advisor === true) &&
@@ -1848,7 +1848,7 @@ function AppInner(): ReactNode {
 									timestamp: r.timestamp,
 									updatedAt: r.updatedAt,
 									status: r.status,
-									modeId: r.modeId,
+									agentPreset: r.agentPreset,
 									agentCount: r.agentCount ?? 0,
 									subagent: r.subagent === true,
 									advisor: r.advisor === true,
@@ -1899,7 +1899,7 @@ function AppInner(): ReactNode {
 								timestamp: r.timestamp ?? old?.timestamp,
 								updatedAt: r.updatedAt ?? old?.updatedAt,
 								cwd: r.cwd ?? old?.cwd,
-								modeId: r.modeId ?? old?.modeId,
+								agentPreset: r.agentPreset ?? old?.agentPreset,
 								agentCount: r.agentCount ?? 0,
 								subagent: r.subagent === true,
 								advisor: r.advisor === true,
@@ -3333,9 +3333,9 @@ function AppInner(): ReactNode {
 			cwd?: string | null;
 			planMode?: boolean;
 			goalMode?: string | null;
-			/** Explicit modeId override (creation flows pass "creator"); falls
+			/** Explicit agentPreset override (creation flows pass "creator"); falls
 			 * back to the welcome chip selection. */
-			modeId?: string | null;
+			agentPreset?: string | null;
 			/** M3.2 创作面 project metadata(§4 契约):随 create 一次落盘
 			 * (daemon 会话头权威 + .musepi/project.json 镜像)。 */
 			projectMetadata?: Record<string, unknown>;
@@ -3382,8 +3382,8 @@ function AppInner(): ReactNode {
 					// Welcome 预设 chip 选择 / 创作流覆盖:modeId 随 create 一次应用
 					// (daemon 侧白名单/提示词/settings 覆盖);显式 modeId(创作流
 					// creator)优先,否则用 welcome chip 选择;无选择 = 默认(Standard)。
-					...((opts?.modeId ?? welcomeModeIdRef.current)
-						? { modeId: opts?.modeId ?? welcomeModeIdRef.current }
+					...((opts?.agentPreset ?? welcomeModeIdRef.current)
+						? { agentPreset: opts?.agentPreset ?? welcomeModeIdRef.current }
 						: {}),
 					// 创作面板(M3.2)的 project metadata:形状/16KiB 校验在 daemon
 					// 侧,失败即语义报错走下方 fmtError 横幅。
@@ -3605,7 +3605,7 @@ function AppInner(): ReactNode {
 		async (metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean> => {
 			const id = await createSession({
 				cwd: project,
-				modeId: "design",
+				agentPreset: "design",
 				projectMetadata: metadata,
 				thinkingLevel: message?.thinkingLevel ?? undefined,
 				modelId: message?.modelId ?? undefined,
@@ -3811,9 +3811,9 @@ function AppInner(): ReactNode {
 	 *  away — used by the board and settings-preset 新建输入框, where the
 	 *  agent designs & saves the artifact (board / preset) in a chat. */
 	const createAndSend = useCallback(
-		async (text: string, modeId: string): Promise<void> => {
+		async (text: string, agentPreset: string): Promise<void> => {
 			viewSwapRef.current("chat");
-			const id = await createSession({ cwd: project, modeId });
+			const id = await createSession({ cwd: project, agentPreset });
 			if (id) void sendPrompt(text, undefined, id);
 		},
 		[createSession, sendPrompt, project],

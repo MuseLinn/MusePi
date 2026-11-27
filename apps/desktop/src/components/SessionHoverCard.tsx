@@ -103,7 +103,7 @@ export function SessionHoverCard({
 	meta,
 	modeCatalog,
 }: {
-	meta: Map<string, { cwd?: string; modeId?: string }>;
+	meta: Map<string, { cwd?: string; agentPreset?: string }>;
 	/** modes.list catalog — 命名链尾段：用户创建的预设没有 `mode {id}` 词表
 	 *  键，真名只在 catalog 里（与 ContextPanel 共用 lib/mode-label.ts）。 */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
@@ -185,7 +185,7 @@ export function SessionHoverCard({
 	const cwd = metaRow?.cwd?.trim() || null;
 	const hasBothTimes = Boolean(hover.updatedAt && hover.updatedAt !== hover.timestamp);
 	const forkParent = hover.forked ? hover.parentLabel : null;
-	const modeLabel = resolveModeLabel(metaRow?.modeId, modeCatalog);
+	const modeLabel = resolveModeLabel(metaRow?.agentPreset, modeCatalog);
 	const updatedAt = fullTime(hover.updatedAt ?? hover.timestamp);
 
 	// 贴行右侧;右侧放不下换左侧;垂直方向夹进视口。

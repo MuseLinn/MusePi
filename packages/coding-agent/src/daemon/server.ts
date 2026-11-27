@@ -2465,12 +2465,16 @@ export class DaemonServer {
 					cwd?: string;
 					title?: string;
 					forkOf?: string;
+					/** The session's agent preset (dsh's name for it). */
+					agentPreset?: string;
+					/** @deprecated Pre-rename spelling, still accepted from an older client. */
 					modeId?: string;
 					modelPattern?: string;
 					thinkingLevel?: ConfiguredThinkingLevel;
 					projectMetadata?: Record<string, unknown>;
 					additionalDirectories?: unknown;
 				};
+				p.agentPreset ??= p.modeId;
 				if (p.additionalDirectories !== undefined && !Array.isArray(p.additionalDirectories)) {
 					throw new Error("additionalDirectories must be an array.");
 				}
@@ -2607,8 +2611,8 @@ export class DaemonServer {
 						model: r.model ?? undefined,
 						messageCount: r.messageCount,
 						cwd: r.cwd || undefined,
-						// 会话预设 id（null = 未设预设）：侧栏悬浮卡的模式行。
-						modeId: r.modeId ?? undefined,
+						// 会话预设 id（null = 未设预设）：侧栏悬浮卡的预设行。
+						agentPreset: r.agentPreset ?? undefined,
 						paused: presence.paused,
 						// 子代理数(不含 advisor):>0 时侧栏会话行出现展开 chevron。
 						agentCount: subagentCounts.get(r.sessionId) ?? 0,
@@ -5128,27 +5132,15 @@ export class DaemonServer {
 				return { ok: true, persisted: true };
 			}
 			case "session.setMode": {
-				// Modes v2(§6.2/§7):会话中热切换预设。live 会话走
-				// AgentSession.setMode(忙会话 → deferred,pending 在 agent_end
-				// 补做);成功后把 modeId 写进会话头,历史会话直接持久化。
-				// modeId: null = 清除预设。
-				const p = (params ?? {}) as { sessionId: string; modeId?: string | null };
-				const live = this.#host.get(p.sessionId);
-				if (live) {
-					const result = await live.agentSession.setMode(p.modeId ?? null, { hot: true });
-					if (!result.ok) throw new Error(result.error ?? "mode switch failed");
-					if (!result.deferred && !this.#host.persistHeaderPatch(p.sessionId, { agentPreset: p.modeId ?? null })) {
-						logger.warn("session.setMode: failed to persist modeId to session header", {
-							sessionId: p.sessionId,
-						});
-					}
-					return { ok: true, deferred: result.deferred === true };
-				}
-				// History session: persist — applies when the session is next continued.
-				if (!this.#host.persistHeaderPatch(p.sessionId, { agentPreset: p.modeId ?? null })) {
-					throw new Error(`Unknown session: ${p.sessionId}`);
-				}
-				return { ok: true, persisted: true };
+				// Retired spelling of `agentPresets.select`, kept because an older
+				// client may still call it. Delegating rather than reimplementing is
+				// the point: this case used to carry a second copy of the switch, and
+				// the two drifted (one persisted `modeId`, the other `agentPreset`).
+				const p = (params ?? {}) as { sessionId?: string; modeId?: string | null };
+				return this.#services.get<PresetsService>("presets").selectAgentPreset({
+					sessionId: p.sessionId,
+					agentPreset: p.modeId ?? null,
+				});
 			}
 			case "session.setDesignSystem": {
 				// M3 §3:会话内选中/清除设计体系(GUI 设计体系选择器的写通道)。
@@ -5946,7 +5938,7 @@ export class DaemonServer {
 					this.#host.settings()?.getRaw("computer.enabled") === true;
 				return {
 					...base,
-					modeId: live.modeId ?? null,
+					agentPreset: live.agentPreset ?? null,
 					fastModeEnabled: mc.isFastModeEnabled?.() ?? false,
 					fastModeActive: mc.isFastModeActive?.() ?? false,
 					computerEnabled,

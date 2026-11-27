@@ -856,10 +856,10 @@ export interface LiveSession {
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
 	autoTitle: boolean;
-	/** 会话预设(mode)id:adopt 时取 SDK 会话 header,缺失回落守护进程快照头;
+	/** 会话预设 id:adopt 时取 SDK 会话 header,缺失回落守护进程快照头;
 	 *  创建路径由 createSession 显式补写(SDK 的 create 不写 header)。
-	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板模式名。 */
-	modeId?: string;
+	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板预设名。 */
+	agentPreset?: string;
 	/** Journal tail is the only sequence space. Non-journaled stream kinds
 	 *  (approval/ask, agent progress, title, recap, pause) carry seq 0 and
 	 *  apply in arrival order; clients gate catchup only on kind:"event". */
@@ -1532,8 +1532,8 @@ export class DaemonSessionHost {
 		autoTitle?: boolean;
 		modelPattern?: string;
 		thinkingLevel?: ConfiguredThinkingLevel;
-		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings)。 */
-		modeId?: string;
+		/** 会话预设 id:创建时应用(白名单/提示词/settings)。 */
+		agentPreset?: string;
 		/** M3.2 创作面 project metadata(§4 契约):daemon 会话头为权威
 		 *  (persistHeaderPatch 落 view-store 快照头),并镜像写
 		 *  `<cwd>/.musepi/project.json`。超 16KiB / 缺 version 在此拒绝。 */
@@ -1608,7 +1608,7 @@ export class DaemonSessionHost {
 				...(projectMetadata ? { projectMetadata } : {}),
 				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
-				...(params.modeId ? { agentPreset: params.modeId } : {}),
+				...(params.agentPreset ? { agentPreset: params.agentPreset } : {}),
 			}),
 		);
 		const live = await this.#adoptAgentSession(
@@ -1642,9 +1642,9 @@ export class DaemonSessionHost {
 		// 统一先 upsert 一次;modeId 另需补写会话头(persistHeaderPatch 的
 		// load() 依赖该行已存在)。
 		this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
-		if (params.modeId) {
-			live.modeId = params.modeId;
-			this.persistHeaderPatch(live.sessionId, { agentPreset: params.modeId });
+		if (params.agentPreset) {
+			live.agentPreset = params.agentPreset;
+			this.persistHeaderPatch(live.sessionId, { agentPreset: params.agentPreset });
 		}
 		// M3.2 双写:daemon 会话头(权威,经 view-store 列+快照头保留语义) +
 		// `<cwd>/.musepi/project.json` 镜像(恢复/分享/artifact-scan 关联源)。
@@ -2049,7 +2049,7 @@ export class DaemonSessionHost {
 			// 守护进程快照头 —— SDK 的 create 只 resolve 提示词/settings,
 			// 从不把 modeId 写进 JSONL 头,所以仅读 SDK 头会让空态 chip 选的
 			// design 会话在重启/重激活后丢掉预设(GUI 的 design 风格 chip 不显示)。
-			modeId:
+			agentPreset:
 				sessionHeaderPreset(agentSession.sessionManager?.getHeader()) ??
 				sessionHeaderPreset(persisted?.header as never),
 			// Non-journaled envelope kinds carry seq 0; the journal owns the
@@ -2926,7 +2926,7 @@ export class DaemonSessionHost {
 					todo?: unknown;
 					isStreaming?: boolean;
 					isCompacting?: boolean;
-					modeId?: string;
+					agentPreset?: string;
 					paused?: boolean;
 					pausedAt?: number | null;
 					queuedMessageCount?: number;
@@ -2938,7 +2938,7 @@ export class DaemonSessionHost {
 			snap.state.goalMode = modes.goalMode;
 			snap.state.planMode = modes.planMode;
 			snap.state.todo = modes.todo;
-			snap.state.modeId = live.modeId;
+			snap.state.agentPreset = live.agentPreset;
 			// Compaction state rides along too: the GUI's compaction status
 			// line keys off the live getter (the view has no compaction event).
 			snap.state.isCompacting = modes.isCompacting;
@@ -3308,7 +3308,7 @@ export class DaemonSessionHost {
 				messageCount: h.messageCount,
 				// SDK transcripts never carried a preset header until the
 				// GUI chips landed — no mode to report for these.
-				modeId: null,
+				agentPreset: null,
 				// Nor a connector allowlist (M4 P1): view-store-only state.
 				mcpServers: null,
 				// SDK transcripts record forks under header.parentSession
@@ -3364,7 +3364,7 @@ export class DaemonSessionHost {
 				cwd: h.cwd,
 				model: null,
 				messageCount: h.messageCount,
-				modeId: null,
+				agentPreset: null,
 				mcpServers: null,
 				parentId: derivedParent,
 				projectMetadata: null,
@@ -3416,10 +3416,10 @@ export class DaemonSessionHost {
 			if (!s) continue;
 			const name = s.agentSession.sessionManager.getSessionName();
 			if (name) row.title = name;
-			// Live preset wins: the in-memory modeId is what session.modes
-			// reports, so the sidebar's hover card can never disagree with
-			// the composer chips. The store column covers idle sessions.
-			if (s.modeId) row.modeId = s.modeId;
+			// Live preset wins: the in-memory value is what session.modes reports,
+			// so the sidebar's hover card can never disagree with the composer
+			// chips. The store column covers idle sessions.
+			if (s.agentPreset) row.agentPreset = s.agentPreset;
 		}
 		// Persisted rows win on cursor (authoritative for history); live-only
 		// sessions (pre-first-persist) fall back to the in-memory view.
