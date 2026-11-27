@@ -495,10 +495,6 @@ export function HeroComposer({
 			const trimmed = text.trim();
 			if (trimmed) sendText(trimmed);
 		},
-		onInsert: transcript => {
-			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-			requestAnimationFrame(() => autosize(taRef.current));
-		},
 	});
 	// First-use voice guide (session-composer parity): the welcome mic opens the
 	// download-then-dictate dialog instead of firing a bare transcribe RPC.

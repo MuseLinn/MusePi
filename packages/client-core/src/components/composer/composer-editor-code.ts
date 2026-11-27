@@ -67,91 +67,47 @@ export function dictationTailEffect(): TailEffect {
 	}
 }
 
-/** The volatile speech-to-text preview: the words the recognizer currently
- *  believes, shown at the caret but NOT part of the document.
+/** Marks a document write made by dictation. Declared before the field that
+ *  reads it: `dictationField` keeps its range only across these writes. */
+export const dictationWrite = Annotation.define<true>();
+/** Range the dictation owns right now (committed + provisional). */
+export const setDictationRange = StateEffect.define<{ from: number; to: number } | null>();
+
+/** Decorates the dictated range: it is real document text (so the composer,
+ *  the send path and the draft store all see it), painted muted to read as
+ *  still-provisional. Marking a RANGE rather than inserting a widget is what
+ *  lets the entrance effect animate only the characters that newly arrived —
+ *  a widget rebuilt on every decode replayed the whole phrase.
  *
- *  It must stay outside `value`: a preview is a guess that gets replaced on
- *  every decode, so writing it into the document would leak a half sentence
- *  into the send path, the draft store and the undo history. The widget paints
- *  it as a trailing ghost instead and `ignoreEvent()`s everything, so it never
- *  takes the caret away from the real text.
- *
- *  Growth is painted through the transcript's own tail effect (`advanceTail`),
- *  so each newly recognized character enters with the same animation a
- *  streaming reply uses. The element is STABLE across updates (CodeMirror only
- *  destroys it when the widget leaves the range), which is what lets the effect
- *  animate the delta instead of replaying the whole phrase each decode.
- */
-class PreviewTailWidget extends WidgetType {
-	constructor(readonly text: string) {
-		super();
-	}
-
-	override eq(other: PreviewTailWidget): boolean {
-		return other.text === this.text;
-	}
-
-	override toDOM(): HTMLElement {
-		const tail = document.createElement("span");
-		tail.className = "musepi-composer-editor__preview";
-		tail.setAttribute("aria-hidden", "true");
-		this.paint(tail);
-		return tail;
-	}
-
-	override updateDOM(dom: HTMLElement): boolean {
-		this.paint(dom);
-		return true;
-	}
-
-	override ignoreEvent(): boolean {
-		return true;
-	}
-
-	private paint(dom: HTMLElement): void {
-		const effect = dictationTailEffect();
-		dom.dataset.effect = effect;
-		dom.classList.toggle("musepi-composer-editor__preview--shimmer", effect === "shimmer");
-		// CodeMirror reuses the existing element (`updateDOM`) even when the widget
-		// instance is new, and a new instance starts at EMPTY_TAIL while the DOM
-		// still holds the previous phrase. Adopt what the element actually
-		// contains: `advanceTail` then sees the replacement is not a prefix of it
-		// and clears before painting. Resetting to EMPTY_TAIL instead would look
-		// like "everything is new" and append onto the stale text.
-		const painted = dom.textContent ?? "";
-		if (painted !== this.tail.appended) this.tail = { appended: painted };
-		this.tail = advanceTail(dom, this.text, effect, this.tail);
-	}
-
-	/** What this element has been advanced to; re-derived from the DOM in paint. */
-	private tail: TailState = EMPTY_TAIL;
-}
-
-/** The preview string the widget paints; a change repaints in place. */
-export const setPreview = StateEffect.define<string>();
-/** Preview text painted at the caret (empty = nothing painted). */
-export const previewField = StateField.define<{ text: string; pos: number }>({
-	create: () => ({ text: "", pos: 0 }),
-	update(value, transaction) {
-		// A document edit makes the previous guess meaningless: committing a
-		// segment or typing over it both invalidate the in-flight preview.
-		if (transaction.docChanged) return { text: "", pos: 0 };
+ *  The range is dropped on any edit that is not the dictation's own write, so
+ *  typing inside it turns those words into ordinary draft text. */
+export const dictationField = StateField.define<{ from: number; to: number } | null>({
+	create: () => null,
+	update(range, transaction) {
+		let next = range;
 		for (const effect of transaction.effects) {
-			if (effect.is(setPreview)) {
-				return { text: effect.value, pos: transaction.state.selection.main.head };
+			if (effect.is(setDictationRange)) next = effect.value;
+		}
+		if (transaction.docChanged && next) {
+			// Map the range across our own insertions so a growing phrase keeps
+			// its decoration; a user edit clears it (their words are not a guess).
+			const ours = transaction.annotation(dictationWrite) === true;
+			if (ours) {
+				const from = transaction.changes.mapPos(next.from, -1);
+				const to = transaction.changes.mapPos(next.to, 1);
+				next = { from, to };
+			} else {
+				next = null;
 			}
 		}
-		// Follow the caret: dictation lands where the user is, so a ghost left at
-		// an older offset would look like it belongs to a different sentence.
-		if (transaction.selection !== undefined) {
-			return { text: value.text, pos: transaction.state.selection.main.head };
-		}
-		return value;
+		return next;
 	},
 	provide: field =>
-		EditorView.decorations.from(field, ({ text, pos }) => {
-			if (text.length === 0) return Decoration.none;
-			return Decoration.set([Decoration.widget({ widget: new PreviewTailWidget(text), side: 1 }).range(pos)]);
+		EditorView.decorations.from(field, range => {
+			if (!range || range.to <= range.from) return Decoration.none;
+			return Decoration.set([
+				Decoration.mark({ class: "musepi-composer-editor__preview" }).range(range.from, range.to),
+			]);
 		}),
 });
 

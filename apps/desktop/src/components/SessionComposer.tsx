@@ -1058,10 +1058,6 @@ export function SessionComposer({
 		enabled: sttEnabled,
 		editor: taRef,
 		onSubmit: onSend,
-		onInsert: transcript => {
-			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-			requestAnimationFrame(() => autosize(taRef.current));
-		},
 	});
 	// First-use voice guide (快赢包 A3): mic clicks pass through this gate —
 	// model cached ⇒ straight into dictation; missing ⇒ the liquid-glass setup

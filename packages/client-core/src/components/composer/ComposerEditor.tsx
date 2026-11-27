@@ -3,18 +3,20 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import {
+	dictationField,
+	dictationWrite as dictationWriteAnnotation,
 	interceptKeymap,
 	mapPosition,
 	marksField,
-	previewField,
 	referenceAtomicRanges,
 	refreshMarks,
 	selectionOf,
-	setPreview as setPreviewEffect,
+	setDictationRange as setDictationRangeEffect,
 	valuePropWrite,
 } from "./composer-editor-code";
 import { ComposerMentionPop, type MentionPop } from "./composer-editor-pop";
 import type { ComposerEditorHandle, ComposerSelection, EditorMark, MentionPreview } from "./composer-editor-types";
+import { dictationSplice } from "./dictation-splice";
 
 /**
  * CodeMirror 6 composer editor (openchamber parity).
@@ -61,6 +63,11 @@ export interface ComposerEditorProps {
 }
 
 const editableCompartment = new Compartment();
+
+/** The dictation range currently decorated, if any. */
+function dictationFieldRange(view: EditorView): { from: number; to: number } | null {
+	return view.state.field(dictationField, false) ?? null;
+}
 
 export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorProps>(
 	function ComposerEditor(props, ref) {
@@ -135,6 +142,9 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 		 *  the caret, so the placeholder must yield to it — the document is still
 		 *  empty, and drawing both puts two sentences in the same box. */
 		const [previewing, setPreviewing] = useState(false);
+		/** The document and caret frozen when this dictation started. Cleared by
+		 *  the same events that end it (a new start, or a non-dictation edit). */
+		const dictationRef = useRef<{ origin: string; start: number; end: number } | null>(null);
 
 		useLayoutEffect(() => {
 			const host = hostRef.current;
@@ -151,7 +161,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						interceptKeymap(event => handlersRef.current.onKeyDown?.(event) ?? false),
 						keymap.of([...standardKeymap, ...historyKeymap]),
 						marksField(marksRef),
-						previewField,
+						dictationField,
 						referenceAtomicRanges(marksRef),
 						EditorView.updateListener.of(update => {
 							const handlers = handlersRef.current;
@@ -160,10 +170,20 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 									transaction => !transaction.docChanged || transaction.annotation(valuePropWrite) === true,
 								);
 								setPop(null);
-								// A document edit retires the preview (previewField clears it),
-								// so the placeholder must be eligible again — otherwise typing
-								// over a cancelled preview leaves an empty box with no hint.
+								// The placeholder must be eligible again once a dictation's
+								// words are ordinary draft text — otherwise an emptied
+								// composer would carry no hint at all.
 								setPreviewing(false);
+								// A user edit elsewhere invalidates the frozen region: the next
+								// dictation write must re-freeze from where things are NOW, or it
+								// would overwrite what they just typed. Our own writes carry the
+								// annotation and keep the anchor.
+								const ours = update.transactions.some(
+									transaction => transaction.annotation(dictationWriteAnnotation) === true,
+								);
+								if (!ours) {
+									dictationRef.current = null;
+								}
 								if (!programmatic) {
 									inUpdateRef.current = true;
 									try {
@@ -378,13 +398,75 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 						selection: { anchor: from + text.length },
 					});
 				},
-				setPreview(text) {
+				setPreview() {
+					// Dictation writes real text through `writeDictation`; a ghost value
+					// would double it. Kept for hosts that have no write path at all.
+				},
+				writeDictation(committed, hypothesis, restart) {
 					const view = viewRef.current;
 					if (!view) return;
-					if (view.state.field(previewField).text === text) return;
-					view.dispatch({ effects: setPreviewEffect.of(text) });
+					if (restart) {
+						const selection = view.state.selection.main;
+						dictationRef.current = {
+							origin: view.state.doc.toString(),
+							start: selection.from,
+							end: selection.to,
+						};
+					}
+					const region = dictationRef.current;
+					if (!region) return;
+					const next = dictationSplice(
+						{ text: region.origin, start: region.start, end: region.end, committed },
+						hypothesis,
+					);
+					const doc = view.state.doc.toString();
+					// Write ONLY what the dictation owns. Replacing the whole document
+					// would rebuild the editor's content on every decode, which both
+					// threw the caret around and replayed every character's entrance
+					// animation. Here a growing phrase extends its own tail, so the
+					// per-character effect plays for the new glyphs and nothing else.
+					const previous = dictationFieldRange(view);
+					// The dictated block, lead separator included. The write goes to the
+					// region only — never the whole document — so CodeMirror rebuilds
+					// just that range and the per-character entrance effect animates
+					// the new glyphs instead of replaying the entire draft.
+					const { from: dictatedAt, to: dictatedTo, ins: block } = next;
+					// The live document's region spans the previous block — or, on the
+					// first write, the start caret and any replaced selection.
+					const replaceFrom = previous ? previous.from : region.start;
+					const replaceTo = previous ? previous.to : region.end;
+					if (doc !== next.value) {
+						view.dispatch({
+							changes: { from: replaceFrom, to: replaceTo, insert: block },
+							selection: { anchor: replaceFrom + block.length },
+							annotations: dictationWriteAnnotation.of(true),
+						});
+					}
+					const from = dictatedAt;
+					const to = dictatedAt + block.length;
+					view.dispatch({ effects: setDictationRangeEffect.of({ from, to }) });
 					view.requestMeasure();
-					setPreviewing(text.length > 0);
+					setPreviewing(false);
+				},
+				cancelDictation() {
+					const view = viewRef.current;
+					const region = dictationRef.current;
+					dictationRef.current = null;
+					if (!view) return;
+					// Restore the pre-dictation document exactly, rather than deleting
+					// the decorated range: the write may have added a separating space
+					// on either side, and deleting only the words would leave the seams
+					// ("before after" collapsing into "beforeafter").
+					if (!region) return;
+					const doc = view.state.doc.toString();
+					if (doc !== region.origin) {
+						view.dispatch({
+							changes: { from: 0, to: doc.length, insert: region.origin },
+							selection: { anchor: Math.min(region.start, region.origin.length) },
+						});
+					}
+					view.dispatch({ effects: setDictationRangeEffect.of(null) });
+					view.requestMeasure();
 				},
 				autosize() {
 					const view = viewRef.current;

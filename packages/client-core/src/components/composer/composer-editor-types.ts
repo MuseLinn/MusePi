@@ -58,8 +58,29 @@ export interface ComposerEditorHandle {
 	/** Re-measure after a value or layout change (CodeMirror owns heights). */
 	autosize(): void;
 	/** Show the volatile speech preview at the caret. It is painted, never
-	 *  inserted: `value` stays exactly what the send path would send. */
+	 *  inserted: `value` stays exactly what the send path would send.
+	 *
+	 *  Only for hosts that have no way to write the draft themselves. Dictation
+	 *  uses {@link writeDictation} instead: a preview painted at the caret next
+	 *  to committed text written somewhere else is exactly the two-places bug
+	 *  that scattered words mid-sentence. */
 	setPreview(text: string): void;
+	/** Replace the dictated region with one composed string and put the caret
+	 *  after it.
+	 *
+	 *  `committed` is the finalized text this dictation owns and `hypothesis`
+	 *  the run still being recognized; they are written as one block, so a
+	 *  phrase can never land anywhere but after the previous one. `restart`
+	 *  freezes the current document and caret as the region's origin — pass it
+	 *  on the first write of a dictation (and after the user edited elsewhere),
+	 *  and false for every later repaint so the origin cannot drift.
+	 */
+	writeDictation(committed: string, hypothesis: string, restart: boolean): void;
+	/** Discard everything this dictation wrote and restore the frozen document.
+	 *  Dictation writes into the draft now, so cancelling must take its words
+	 *  back out — an Esc that left a half sentence behind is worse than no
+	 *  preview at all. */
+	cancelDictation(): void;
 	setFocused(focused: boolean): void;
 }
 

@@ -1,31 +1,38 @@
 import { ComposerEditor } from "@musepi/client-core";
-import { createElement, useRef } from "react";
+import { createElement } from "react";
 import { VoiceButton, VoiceStatusStrip } from "../../src/components/composer/action-buttons";
 import { mount, measure } from "../gui-probe-helpers";
 
 /** The composer in its live-dictation shape: status strip + the editor that
  *  paints the volatile preview. This is the exact composition SessionComposer
  *  renders (`VoiceOverlays` above `ComposerEditorStack`). */
+type ProbeEditor = {
+	writeDictation(c: string, h: string, restart: boolean): void;
+	setSelectionRange(start: number): void;
+};
+
 function Live({
 	phase,
 	level,
-	transcript = "",
+	onEditor,
 }: {
 	phase: "recording" | "transcribing";
 	level: number;
-	/** What the recognizer currently believes; painted at the caret. */
-	transcript?: string;
+	/** Hands the mounted editor handle to the scenario. */
+	onEditor?(editor: ProbeEditor): void;
 }) {
 	return createElement(
 		"div",
 		{ className: "gui-composer-frame gui-liquid-glass" },
 		createElement(VoiceStatusStrip, { phase, seconds: 6, level }),
 		createElement(ComposerEditor, {
-			value: "",
+			value: "note:  here",
 			// The composers pass no placeholder while dictating.
 			placeholder: "",
 			onChange: () => {},
-			ref: (editor: { setPreview(text: string): void } | null) => editor?.setPreview(transcript),
+			ref: (editor: ProbeEditor | null) => {
+				if (editor) onEditor?.(editor);
+			},
 		}),
 		// Real structure: the state line sits ABOVE the editor and the mic
 		// capsule is part of the toolbar BELOW it, so the two never share a row.
@@ -37,20 +44,24 @@ function Live({
 	);
 }
 
-const transcriptText = "请自然说话，识别文字会显示在这里，不需要等我说完";
+const transcriptText = "note: 第一句第二句 here";
 
 export default {
 	"dictation-live": {
 		capture: ".gui-composer-frame",
 		async render(root) {
+			let editor: ProbeEditor | null = null;
 			await mount(
-				createElement(Live, {
-					phase: "recording",
-					level: 0.62,
-					transcript: transcriptText,
-				}),
+				createElement(Live, { phase: "recording", level: 0.62, onEditor: value => (editor = value) }),
 				root,
 			);
+			if (!editor) throw new Error("editor did not mount");
+			const handle = editor as ProbeEditor;
+			// Mid-draft dictation, two phrases: the case that used to scatter —
+			// the second phrase must follow the first and the draft's tail survive.
+			handle.setSelectionRange(6);
+			handle.writeDictation("", "第一句", true);
+			handle.writeDictation("第一句", "第二句", false);
 			await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
 		},
 		async measure(body) {
