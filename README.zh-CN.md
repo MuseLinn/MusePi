@@ -69,6 +69,7 @@ bun run musepi
 - **智能体工作区：** 会话历史与分支、使用 `provider/id` 的模型选择、斜杠命令、Shell 命令、文件与会话引用、审批、上下文压缩和任务跟踪。
 - **可编辑文件：** 标签页、非模态文件树、Monaco 编辑、Markdown 编辑、文档与媒体查看、选区引用、Git 变更、问题和拉取请求。
 - **可定制界面：** 主题、强调色、密度、液态玻璃表面、命令面板、可配置快捷键、右侧面板、终端标签页和受管内置浏览器。
+- **语音、隐私与通知：** 输入框内流式听写、Windows 按住说话、会话级普通／隐身／临时记忆模式，以及在当前应用会话内保留 toast 历史的内存通知中心。
 - **桌面伙伴：** 动画桌宠、状态气泡、托盘控制和跨窗口活动更新。
 - **能力中心：** 管理技能、插件和市场软件包。官方模块与外部软件包共用 Cordis 生命周期和组件可用性，不维护第二套软件包开关。
 - **远程访问：** 通过加密链接协作、连接远程 daemon 实例，并使用移动客户端管理会话。
@@ -149,7 +150,7 @@ bun run --cwd=apps/desktop desktop
 
 ## 打包与发布
 
-`gui-release.yml` 在版本标签上构建桌面工件和 Android 软件包，桌面发布包含 OTA 清单。macOS 分发需要遵循 [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md) 中的签名与公证流程。
+`ci.yml` 在发布门禁通过后发布独立终端二进制与 `SHA256SUMS.txt`。`gui-release.yml` 在版本标签上构建桌面工件和 Android 软件包，桌面发布包含 OTA 清单。版本标签指向已经在 `main` 上的提交、但原 main-push 运行没有发布终端产物时，`tui-release-recover.yml` 会补齐这些产物而不替换发布说明。macOS 分发需要遵循 [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md) 中的签名与公证流程。
 
 Windows 安装器先在 WebView2 向导中收集语言与安装选项，检查 MusePi 客户端是否正在运行，再显示真实的 NSIS 文件释放进度和完成页，不会用模拟进度掩盖后台安装。
 

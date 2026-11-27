@@ -69,6 +69,7 @@ Prebuilt binaries carry their own runtime; only a from-source install needs Bun 
 - **Agent workspace:** session history and branching, provider-qualified model selection, slash commands, shell commands, file and session references, approvals, context compaction, and task tracking.
 - **Editable files:** tabs, a non-modal file tree, Monaco-based editing, Markdown editing, document and media viewers, selection references, Git changes, issues, and pull requests.
 - **Customizable shell:** theme, accent, density, liquid-glass surfaces, command palette, configurable shortcuts, right-side surfaces, terminal tabs, and a managed in-app browser.
+- **Voice, privacy, and notifications:** streaming dictation in composers, Windows hold-to-talk, per-session persistent/incognito/temporary memory modes, and an in-memory notification center that keeps toast history for the application session.
 - **Desktop companion:** animated pet, status bubbles, tray controls, and cross-window activity updates.
 - **Capability center:** manage skills, plugins, and marketplace packages. Official modules and external packages use the Cordis lifecycle and shared component availability rather than separate package switches.
 - **Remote access:** collaborate through encrypted links, connect remote daemon instances, and use mobile clients to manage sessions.
@@ -149,7 +150,7 @@ Do not edit `packages/catalog/src/models.json` directly; update its generator an
 
 ## Packaging and releases
 
-`gui-release.yml` builds desktop artifacts and the Android package for version tags. Desktop releases include OTA manifests. macOS distribution requires the signing and notarization process in [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).
+`ci.yml` publishes standalone terminal binaries and `SHA256SUMS.txt` after its release gate. `gui-release.yml` builds desktop artifacts and the Android package for version tags, including OTA manifests. When a version tag points to a commit already on `main` but the original main-push run did not publish terminal assets, `tui-release-recover.yml` adds them without replacing the release notes. macOS distribution requires the signing and notarization process in [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).
 
 The Windows installer collects language and install options in its WebView2 wizard, checks for a running MusePi client, and then shows the real NSIS extraction progress and completion page. It does not hide a background installation behind simulated progress.
 
