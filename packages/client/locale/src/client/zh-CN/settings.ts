@@ -5015,6 +5015,9 @@ export const settings = {
 	"Dictate into the focused application with a global shortcut": "用全局快捷键把语音输入到当前应用",
 	"Global dictation shortcut": "全局听写快捷键",
 	"Electron accelerator that starts and stops global dictation": "启动和结束全局听写的 Electron 快捷键",
+	"Global dictation trigger": "全局听写触发方式",
+	"Press the shortcut twice to start/stop, or hold it while speaking (Windows)":
+		"按两次快捷键开始/停止，或在说话时按住快捷键（Windows）",
 	"Speech-to-Text Submit Trigger": "语音转文字提交触发",
 	"Speaker Verification": "机主声纹验证",
 	"Speech Enhancement": "语音降噪",

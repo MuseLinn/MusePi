@@ -51,6 +51,7 @@ const SHARED_PROMPT: Readonly<Record<string, string>> = {
 	security_scan: "security-scan",
 	connector_catalog: "connector-catalog",
 	request_secret: "request-secret",
+	request_login: "request-login",
 	list_secrets: "list-secrets",
 	web_search: "web-search",
 };

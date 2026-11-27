@@ -3626,10 +3626,9 @@ function AppInner(): ReactNode {
 	 * `workspace.create` both registers the row and resolves `root` on the
 	 * receiving daemon, so a project whose files are on another machine has to
 	 * be created there — sending the request to whichever daemon is connected
-	 * would record a path that daemon cannot see. bitfun resolves a workspace to
-	 * one provider and fails rather than borrowing another; this does the same,
-	 * and the one honest move available here is to connect to the named instance
-	 * first.
+	 * would record a path that daemon cannot see. A workspace belongs to
+	 * one provider and fails rather than borrowing another; the caller must connect
+	 * to the named instance before creating the project there.
 	 */
 	const createProjectOnChosenInstance = useCallback(
 		async (params: {

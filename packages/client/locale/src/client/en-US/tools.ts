@@ -2188,7 +2188,8 @@ export const tools = {
 	"tools.loginTitle": "Sign-in needed",
 	"tools.loginSite": "Sign-in page",
 	"tools.loginSitePlaceholder": "example.com",
-	"tools.loginSiteHint": "The page address with the password box. Any subdomain of that site matches; nothing else does.",
+	"tools.loginSiteHint":
+		"The page address with the password box. Any subdomain of that site matches; nothing else does.",
 	"tools.loginExactHost": "Only this exact address, nowhere else on the site",
 	"tools.loginUsername": "Username or email",
 	"tools.loginUsernamePlaceholder": "you@example.com",
@@ -2196,7 +2197,8 @@ export const tools = {
 	"tools.loginPasswordPlaceholder": "Your password",
 	"tools.loginTotp": "2FA setup key",
 	"tools.loginTotpPlaceholder": "Setup key or otpauth:// link",
-	"tools.loginTotpHint": "The key or otpauth:// address a site shows when you set up an authenticator app. With it, the one-time code is filled too.",
+	"tools.loginTotpHint":
+		"The key or otpauth:// address a site shows when you set up an authenticator app. With it, the one-time code is filled too.",
 	"tools.loginScope": "Who can use it",
 	"tools.loginScopeNote":
 		"Stored encrypted on this computer. The agent fills the page itself and never sees the password or a code.",
@@ -2230,7 +2232,8 @@ export const tools = {
 	"tools.secretRevealHold": "Hold to show, release to hide",
 	"tools.secretReplaceTitle": "Replace the saved value",
 	"tools.secretReplaceValue": "Replace value",
-	"tools.secretReplaceScopeNote": "Only the value changes; the scope stays as it is and the entry stays encrypted here.",
+	"tools.secretReplaceScopeNote":
+		"Only the value changes; the scope stays as it is and the entry stays encrypted here.",
 	"tools.secretInsecureWarn": "This page is not on HTTPS: the value crosses the network unencrypted.",
 	"tools.secretSave": "Save",
 	"tools.secretUseSaved": "Already saved — pick one",

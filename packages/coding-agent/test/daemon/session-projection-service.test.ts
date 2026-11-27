@@ -25,7 +25,6 @@ function seed(service: SessionProjectionService): void {
 		source: {
 			model: () => null,
 			sessionStats: stats as never,
-			sessionMode: () => ({ goal: null, plan: true }),
 		},
 	});
 }

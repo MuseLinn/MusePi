@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { SlotComponentProps } from "../../lib/slot-host";
 
-/** Settings tab: 数据迁移 (Proma MigrationSettings pattern). The daemon's
+/** Settings tab: 数据迁移. The daemon's
  *  agent has file tools, so packing/unpacking runs as a prompted workflow:
  *  copy the archive prompt into any MusePi session on the source machine,
  *  then the restore prompt on the target.

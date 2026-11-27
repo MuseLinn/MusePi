@@ -39,6 +39,7 @@ describe("documentation metadata gate", () => {
 	it("accepts a living document whose title, summary, and owning scope are machine-readable", async () => {
 		const root = await fixture({
 			"docs/example.md": `---\ntitle: Example\nstatus: living\nsummary: Owns the example runtime contract.\nscope:\n  - packages/example\n---\n# Example\n`,
+			"packages/example/index.ts": "",
 		});
 		const result = await check(root);
 		expect(result.output).toBe("");

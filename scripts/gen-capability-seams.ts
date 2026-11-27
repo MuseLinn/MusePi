@@ -179,7 +179,7 @@ function splice(content: string, region: string): string {
 		throw new Error(`expected exactly one BEGIN marker, found more than one`);
 	}
 	const body = content.slice(beginAt + BEGIN.length, endAt);
-	return content.slice(0, beginAt + BEGIN.length) + "\n" + region + "\n" + content.slice(endAt);
+	return `${content.slice(0, beginAt + BEGIN.length)}\n${region}\n${content.slice(endAt)}`;
 }
 
 /** Preserve the document's own prose: the intro and the context-ownership note. */

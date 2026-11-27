@@ -100,7 +100,7 @@ describe("checkChangelogI18n — [Unreleased] line structure", () => {
 	// @guard: revert scripts/check-changelog-i18n.ts:137 | if (enChildren > 999) {
 	// @guard: test flags a title deleted mid-block
 	test("flags a title deleted mid-block, as a second EN child of the entry above", () => {
-		const content = `${HEADER}## [Unreleased]\n\n### 改进\n\n` + "- 甲。\n  - EN: A.\n- 乙。\n  - EN: B.\n";
+		const content = `${HEADER}## [Unreleased]\n\n### 改进\n\n- 甲。\n  - EN: A.\n- 乙。\n  - EN: B.\n`;
 		// Delete 乙's title line; its EN child now sits directly under 甲's child.
 		const mutated = content.replace("- 乙。\n", "");
 		const result = checkChangelogI18n(mutated);

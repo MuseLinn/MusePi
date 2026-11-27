@@ -377,6 +377,8 @@ export class InspectorPanel implements Component {
 			}
 			case "shadowed":
 				return theme.fg("warning", `${theme.status.shadowed} Shadowed${shadowedBy ? ` by ${shadowedBy}` : ""}`);
+			case "discovered":
+				return theme.fg("muted", `${theme.status.discovered} Discovered`);
 		}
 	}
 }

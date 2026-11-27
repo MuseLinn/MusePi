@@ -3,9 +3,8 @@ import type { ConnectionTarget } from "./targets";
 /**
  * Which daemon owns a project created at a given location.
  *
- * bitfun binds a workspace to one provider and lets a request whose provider is
- * unavailable **fail** rather than borrow another. The same rule applies here,
- * because a project is two facts in one row: a directory that exists on one
+ * A workspace belongs to one provider; an unavailable provider makes the
+ * request **fail** rather than borrow another. A project is two facts in one row: a directory that exists on one
  * machine, and a registry entry that lives in one daemon's config. Creating it
  * on whichever daemon happens to be connected writes the entry where the path
  * does not exist, and the failure surfaces later as "the folder is missing".

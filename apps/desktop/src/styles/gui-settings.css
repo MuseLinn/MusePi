@@ -10216,7 +10216,7 @@ body.gui-resizing {
 .gui-at-root {
 	flex: none;
 	padding: 0 4px;
-	border-radius: var(--radius-xs, 4px);
+	border-radius: var(--radius-xs);
 	background: var(--color-surface-sunken);
 	color: var(--color-text-faint);
 	font-size: var(--ui-font-size-xs);

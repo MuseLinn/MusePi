@@ -989,12 +989,12 @@ export class DaemonServer {
 				authStorage: () => this.#host.authStorage(),
 			}),
 		);
-		// 投影注册表是一个 L2 服务（对齐 dsh 的 ctx.sessionProjections）：它只负责
+		// 投影注册表是一个 L2 服务：它只负责
 		// 驱动与存放，不认识任何具体域。域单元由拥有该状态的服务在自己的 start
 		// 里注册——注册点跟着状态走，因此新增一个域不会改这里，也不会改注册表。
 		const projectionService = new SessionProjectionService(this.#host.projectionRegistry);
 		this.#services.register(projectionService);
-		// goal / plan 各自成服务（对齐 dsh 的 `goals` / `planMode`）：它们拥有自己
+		// goal / plan 各自成服务：它们拥有自己
 		// 的会话状态，因此在自己的 start 里向 sessionProjections 注册投影单元——
 		// 注册点跟着状态走，注册表本身不认识任何具体域。
 		this.#services.register(
@@ -1158,7 +1158,7 @@ export class DaemonServer {
 				storePath: path.join(getAgentDir(), "credentials.json"),
 			}),
 		);
-		// 服务检视面（与 dsh 的 inspect catalog 同构）：已挂载服务、它们的
+		// 服务检视面：已挂载服务、它们的
 		// 生命周期权威、各自认领的路由。数据直接从 cordis Context 与注册表
 		// 取，所以不会和真实挂载面漂移——静态生成的清单会。
 		this.#services.register(
@@ -2242,7 +2242,7 @@ export class DaemonServer {
 				return this.#services.get<ResourcesService>("resources").sample();
 			}
 			case "system.quitInspection": {
-				// dsh's desktop `quit-inspection`: answer at quit time so a turn
+				// Answer at quit time so a turn
 				// that started after the shell's last poll still counts.
 				const summary = this.#updateTaskSummary();
 				return { activeTasks: summary.activeTasks, scheduledTasks: summary.scheduledTasks };
@@ -2295,7 +2295,7 @@ export class DaemonServer {
 				return { ok: true, busy };
 			}
 			case "system.services": {
-				// Inspect catalog (dsh parity): which L2 services actually mounted,
+				// Inspect catalog: which L2 services actually mounted,
 				// who owns their start/stop, and the RPC each one answers. Read from
 				// the cordis context and the registry, so it cannot drift from what is
 				// really running — /debug and the model see one set of facts.
@@ -2520,7 +2520,7 @@ export class DaemonServer {
 					cwd?: string;
 					title?: string;
 					forkOf?: string;
-					/** The session's agent preset (dsh's name for it). */
+					/** The session's agent preset. */
 					agentPreset?: string;
 					/** @deprecated Pre-rename spelling, still accepted from an older client. */
 					modeId?: string;
@@ -6600,6 +6600,13 @@ export class DaemonServer {
 					.get<ApprovalService>("approvals")
 					.deny((params ?? {}) as { sessionId: string; requestId: string; note?: string });
 			}
+			case "tool.allowForSession": {
+				return this.#services
+					.get<ApprovalService>("approvals")
+					.allowForSession(
+						(params ?? {}) as { sessionId: string; requestId: string; tool?: string; note?: string },
+					);
+			}
 			case "session.askAnswer": {
 				return this.#services
 					.get<ApprovalService>("approvals")
@@ -6920,7 +6927,7 @@ export async function startDaemon(
 	]);
 	declareCoreSeats(CORE_SEATS);
 
-	// Presets declared by extensions are host-level (dsh): warm the mode registry
+	// Presets declared by extensions are host-level: warm the mode registry
 	// and the session-plugin cache before the first session. Every known
 	// workspace is preloaded, not only the daemon cwd, so a project's extension
 	// presets are listable before its first session. Sequential on purpose: each

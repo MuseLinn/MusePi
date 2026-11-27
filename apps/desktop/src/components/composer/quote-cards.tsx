@@ -11,9 +11,10 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 
-type ContextEntry = { context: DisplayContext; index: number };
+type QuoteContext = Exclude<DisplayContext, { kind: "attachment-ref" }>;
+type ContextEntry = { context: QuoteContext; index: number };
 type ContextGroup = {
-	kind: DisplayContext["kind"];
+	kind: QuoteContext["kind"];
 	label: string;
 	icon: ReactNode;
 	entries: ContextEntry[];
@@ -38,7 +39,7 @@ function QuoteEntry({
 	focusComment: boolean;
 	onPreview(): void;
 	onRemove(): void;
-	onChange(context: DisplayContext): void;
+	onChange(context: QuoteContext): void;
 }): ReactNode {
 	const { context } = entry;
 	const commentRef = useRef<HTMLInputElement | null>(null);
@@ -132,7 +133,7 @@ function QuoteGroupChip({
 	onToggle(): void;
 	onPreview(index: number): void;
 	onRemove(index: number): void;
-	onChange(index: number, context: DisplayContext): void;
+	onChange(index: number, context: QuoteContext): void;
 }): ReactNode {
 	const menu = useFloatingMenu(
 		open,
@@ -186,7 +187,7 @@ export function QuoteCards({
 	onRemove(index: number): void;
 	onChange(index: number, context: DisplayContext): void;
 }): ReactNode {
-	const [openKind, setOpenKind] = useState<DisplayContext["kind"] | null>(null);
+	const [openKind, setOpenKind] = useState<QuoteContext["kind"] | null>(null);
 	const [preview, setPreview] = useState<number | null>(null);
 	const definitions: Array<Pick<ContextGroup, "kind" | "label" | "icon">> = [
 		{ kind: "file-quote", label: t("general.fileReferences"), icon: <FileText size={13} /> },
@@ -205,7 +206,7 @@ export function QuoteCards({
 			setPreview(null);
 		}
 	}, [contexts, openKind]);
-	const toggle = (kind: DisplayContext["kind"]): void => {
+	const toggle = (kind: QuoteContext["kind"]): void => {
 		setOpenKind(current => (current === kind ? null : kind));
 		setPreview(null);
 	};

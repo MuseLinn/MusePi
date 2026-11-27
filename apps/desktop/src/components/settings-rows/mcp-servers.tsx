@@ -121,7 +121,11 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 					const flow = flows[row.name];
 					// OAuth is the only browser flow; a token-auth server keeps its
 					// token in mcp.json, and stdio servers own their credentials.
-					const canLogin = row.transport !== undefined && row.transport !== "stdio" && row.auth !== "apikey";
+					const canLogin =
+						row.state !== "discovered" &&
+						row.transport !== undefined &&
+						row.transport !== "stdio" &&
+						row.auth !== "apikey";
 					const active = row.state ? row.state === "active" : row.enabled !== false;
 					return (
 						<div key={row.name} className="gui-agent-card">
@@ -138,7 +142,11 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 										</span>
 									)}
 									<span className="gui-provider-chip">
-										{active ? t("settings.mcpAvailable") : t("settings.disabled")}
+										{row.state === "discovered"
+											? t("tools.extDiscovered")
+											: active
+												? t("settings.mcpAvailable")
+												: t("settings.disabled")}
 									</span>
 								</div>
 								<div className="truncate font-mono text-[11.5px] text-[var(--color-text-muted)]">
@@ -197,7 +205,7 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 											{t("settings.login")}
 										</button>
 									))}
-								{row.extension ? (
+								{row.extension && row.state !== "discovered" ? (
 									<button
 										type="button"
 										role="switch"

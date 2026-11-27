@@ -31,7 +31,7 @@ describe("voice status strip", () => {
 		const host = render(createElement(VoiceStatusStrip, { phase: "recording" }));
 		const strip = host.querySelector(".gui-voice-strip");
 		expect(strip?.getAttribute("data-phase")).toBe("recording");
-		expect(host.querySelector(".gui-voice-dot")).not.toBeNull();
+		expect(host.querySelector(".gui-voice-dot") !== null).toBe(true);
 		expect(host.querySelector(".gui-voice-strip-label")?.textContent).not.toBe("");
 		expect(host.querySelector(".gui-voice-strip-hint kbd")?.textContent).toBe("Esc");
 		expect(strip?.getAttribute("role")).toBe("status");
@@ -41,11 +41,11 @@ describe("voice status strip", () => {
 		const host = render(createElement(VoiceStatusStrip, { phase: "recording", seconds: 4, level: 0.5 }));
 		// The transcript is painted at the caret: a second orb, rings or a 13-bar
 		// wave here would restate the same facts within 40px.
-		expect(host.querySelector(".gui-voice-visual")).toBeNull();
-		expect(host.querySelector(".gui-voice-ring")).toBeNull();
-		expect(host.querySelector(".gui-voice-wave")).toBeNull();
+		expect(host.querySelector(".gui-voice-visual") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-ring") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-wave") === null).toBe(true);
 		// "recognized text will appear here" stopped being true once it does.
-		expect(host.querySelector(".gui-voice-partial")).toBeNull();
+		expect(host.querySelector(".gui-voice-partial") === null).toBe(true);
 	});
 
 	test("carries the clock and exactly one meter, both in the strip", () => {
@@ -60,12 +60,12 @@ describe("voice status strip", () => {
 		const host = render(createElement(VoiceStatusStrip, { phase: "transcribing", seconds: 4, level: 0.5 }));
 		const strip = host.querySelector(".gui-voice-strip");
 		expect(strip?.getAttribute("data-phase")).toBe("transcribing");
-		expect(host.querySelector(".gui-voice-dot")).not.toBeNull();
+		expect(host.querySelector(".gui-voice-dot") !== null).toBe(true);
 		expect(host.querySelector(".gui-voice-strip-label")?.textContent).not.toBe("");
 		// Nothing is being captured: a live meter would claim otherwise, and a
 		// running clock would describe a recording that already ended.
-		expect(host.querySelector(".gui-voice-meter")).toBeNull();
-		expect(host.querySelector(".gui-voice-strip-time")).toBeNull();
+		expect(host.querySelector(".gui-voice-meter") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-strip-time") === null).toBe(true);
 	});
 });
 
@@ -77,8 +77,8 @@ describe("voice mic button", () => {
 		expect(button?.dataset.state).toBe("recording");
 		// The clock and the meter live in the dictation strip. An expanding
 		// capsule here was tried, reverted, and must not come back.
-		expect(host.querySelector(".gui-voice-seconds")).toBeNull();
-		expect(host.querySelector(".gui-voice-level")).toBeNull();
+		expect(host.querySelector(".gui-voice-seconds") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-level") === null).toBe(true);
 	});
 
 	test("idle carries no state tint", () => {
@@ -89,7 +89,7 @@ describe("voice mic button", () => {
 
 	test("transcribing shows a spinner instead of a second countdown", () => {
 		const host = render(createElement(VoiceButton, { state: "transcribing", onToggle: () => {} }));
-		expect(host.querySelector(".gui-voice-spinner")).not.toBeNull();
-		expect(host.querySelector(".gui-voice-seconds")).toBeNull();
+		expect(host.querySelector(".gui-voice-spinner") !== null).toBe(true);
+		expect(host.querySelector(".gui-voice-seconds") === null).toBe(true);
 	});
 });

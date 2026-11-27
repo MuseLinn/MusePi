@@ -9,7 +9,7 @@ import { Glob } from "bun";
  * navigation, so a moved or deleted document leaves the code claiming a home it
  * no longer has. Nothing else in the toolchain resolves these citations.
  *
- * The scan is textual, matching dsh's `verify-doc-refs`: it reads source text
+ * The scan is textual: it reads source text
  * rather than a syntax tree because a citation may appear in a line comment, a
  * JSDoc block, or a string literal, and all three are equally binding on a
  * maintainer. Built output and vendored upstream source are excluded — their

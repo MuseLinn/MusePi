@@ -3637,7 +3637,7 @@ button.gui-stats-pill {
 	white-space: nowrap;
 	vertical-align: baseline;
 	padding: 0 4px;
-	border-radius: var(--radius-xs, 4px);
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 	color: color-mix(in oklab, var(--color-accent) 85%, var(--color-text));
 	font-weight: 500;

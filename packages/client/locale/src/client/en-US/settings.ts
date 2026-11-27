@@ -5300,6 +5300,9 @@ export const settings = {
 	"Global dictation shortcut": "Global dictation shortcut",
 	"Electron accelerator that starts and stops global dictation":
 		"Electron accelerator that starts and stops global dictation",
+	"Global dictation trigger": "Global dictation trigger",
+	"Press the shortcut twice to start/stop, or hold it while speaking (Windows)":
+		"Press the shortcut twice to start/stop, or hold it while speaking (Windows)",
 	"Speech-to-Text Submit Trigger": "Speech-to-Text Submit Trigger",
 	"Speaker Verification": "Speaker Verification",
 	"Speech Enhancement": "Speech Enhancement",

@@ -38,6 +38,7 @@ export class GitHubService implements DaemonService {
 	readonly key = "github";
 	readonly routes = {
 		"github.prs": "prs",
+		"github.prChecks": "prChecks",
 		"github.prStatus": "prStatus",
 		"github.issues": "issues",
 		"github.prCreate": "prCreate",

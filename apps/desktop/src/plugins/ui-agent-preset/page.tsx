@@ -19,8 +19,7 @@ import { Icon } from "../../vendor/oc-icons";
  *  modes.get/modes.save;modes.changed 即时刷新。编辑字段:label/description/
  *  extends(继承多选)/extensions(三态白名单)/prompt 区块列表/promptComplete/
  *  runtimeContext/settings 键值。
- * 分组卡片 + 「查看配置」只读视图(dsh 0.2.0 预设设置页信息架构 parity,
- * 委托单 2026-09-29-preset-page-cards-design):内置/自定义两卡片区,只读视图
+ * 分组卡片 + 「查看配置」只读视图：内置/自定义两卡片区，只读视图
  * 展示继承展开结果(resolve-mode-view.ts,镜像 daemon resolveMode 语义,
  * 环/悬空/超深链客户端防御,零新 RPC——摘要行 + 链上逐次 modes.get)。 */
 
@@ -117,7 +116,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 		};
 	}, [rpc]);
 
-	/** DSH creation-flow: send the preset description to a Creator session
+	/** Creator flow: send the preset description to a Creator session
 	 *  (app layer owns createAndSend → createSession + sendPrompt). */
 	const submitPreset = (): void => {
 		const desc = newDesc.trim();
@@ -272,7 +271,7 @@ export default function ModesSettingsPage({ rpc, onCreateChat }: SlotComponentPr
 						{t("settings.modesBased")} {mode.extends.map(e => resolveModeLabel(e, modes)).join(" + ")}
 					</div>
 				) : null}
-				{/* 卡片右下角操作(DSH Agent presets 对齐):内置 = 查看/复制;
+				{/* 卡片右下角操作：内置 = 查看/复制;
 				 * 自定义 = 编辑/打开目录/复制/删除。点击卡片主体 = 设为默认。 */}
 				<div className="mt-1.5 flex items-center gap-2" onClick={e => e.stopPropagation()}>
 					<button

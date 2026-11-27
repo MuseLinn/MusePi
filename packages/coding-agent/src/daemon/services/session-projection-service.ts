@@ -10,7 +10,7 @@
  *   session is seeded when it is adopted); `stop` drops the state, so a
  *   remount starts clean.
  *
- * The split follows dsh's `sessionProjections`: the registry is a **service**
+ * The registry is a **service**
  * that owns driving and storage, and each domain contributes a pure unit from
  * its own service — there is no central list of domains anywhere. Adding a
  * domain therefore means writing its unit next to the domain and registering
@@ -33,7 +33,7 @@ import type { DaemonService } from "./types";
 
 declare module "@deepseek-ai/cordis" {
 	interface Context {
-		/** The projection registry service (dsh calls this `ctx.sessionProjections`). */
+		/** The projection registry service. */
 		sessionProjections: SessionProjectionService;
 	}
 }

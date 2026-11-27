@@ -820,7 +820,7 @@ export default function AppearanceSettingsPage({ rpc }: SlotComponentProps): Rea
 				</div>
 				<SchemaTabSection rpc={rpc ?? null} tabs={["appearance"]} groups={["images"]} />
 			</div>
-			{/* ── 本地化 — language / time format / week start (openchamber parity). ── */}
+			{/* ── 本地化 — language / time format / week start. ── */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("general.localization")}</div>
 				<div className="gui-settings-field">
@@ -876,7 +876,7 @@ export default function AppearanceSettingsPage({ rpc }: SlotComponentProps): Rea
 				</div>
 			</div>
 
-			{/* ── 代码设置 — code themes / line numbers / wrap / sizes (ZCode). ── */}
+			{/* ── 代码设置 — code themes / line numbers / wrap / sizes. ── */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("settings.codeSettings")}</div>
 				<div className="gui-settings-section-desc">{t("settings.codeSettingsDescription")}</div>
@@ -1066,7 +1066,7 @@ export default function AppearanceSettingsPage({ rpc }: SlotComponentProps): Rea
 				</div>
 			</div>
 
-			{/* ── 代码预览 — light/dark preview cards (ZCode), the active main
+			{/* ── 代码预览 — light/dark preview cards; the active main
 			 * theme's card carries the "settings.currentlyActive" tag. ── */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("settings.codePreview")}</div>
@@ -1106,7 +1106,7 @@ export default function AppearanceSettingsPage({ rpc }: SlotComponentProps): Rea
 	);
 }
 
-/** ZCode code-preview card: the selected theme's real colors over a sample
+/** Code-preview card: the selected theme's real colors over a sample
  * snippet; the card matching the active main scheme gets the tag. */
 const PREVIEW_SNIPPET = ["const greet = (name: string) => {", "  return `hello, ${name}!`;", "};"].join("\n");
 

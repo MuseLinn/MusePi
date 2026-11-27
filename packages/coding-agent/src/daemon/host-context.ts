@@ -53,7 +53,7 @@ export class DaemonHostContext {
 			// `cannot get property "x" without inject` rather than resolving.
 			...(service.inject && service.inject.length > 0 ? { inject: [...service.inject] } : {}),
 			apply: ctx => {
-				// dsh's `static inject` semantics: the service receives the context
+				// The service receives the context
 				// and reads its dependencies straight off it (`ctx.sessionProjections`),
 				// instead of having each one threaded through the constructor.
 				if (lifecycle === "cordis") void service.start?.(ctx);

@@ -4906,7 +4906,7 @@
 	flex: none;
 	padding: 3px 8px;
 	border: 1px solid transparent;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: none;
 	font: inherit;
 	font-size: 12px;
@@ -6748,7 +6748,7 @@ button.traj-error-note:hover {
 .gui-pr-diff-cell {
 	width: 6px;
 	height: 8px;
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--color-text) 12%, transparent);
 }
 

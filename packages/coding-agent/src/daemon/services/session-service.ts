@@ -134,7 +134,7 @@ export class SessionService implements DaemonService {
 		this.#deps = deps;
 	}
 
-	/** dsh's `static inject`: resolve the projection service from the host
+	/** Resolve the projection service from the host
 	 *  context and register the domain this service owns (context usage).
 	 *  `stop` withdraws it, so a stopped service leaves no key in the baseline. */
 	start(ctx: Context): void {

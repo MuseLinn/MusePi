@@ -345,7 +345,7 @@ export function RailCommunityLinks({ expanded }: { expanded: boolean }): ReactNo
 	return (
 		<div
 			className={`gui-rail-community${expanded ? " gui-rail-community--open" : ""}`}
-			{...(expanded ? {} : { inert: "" })}
+			{...(expanded ? {} : { inert: true })}
 		>
 			<div className="gui-rail-community-line">
 				<span className="gui-rail-community-mark" aria-hidden="true">

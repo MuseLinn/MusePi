@@ -417,7 +417,7 @@
 }
 
 .gui-conn-transport-state[data-tone="blocked"] {
-	color: var(--color-warn);
+	color: var(--color-warning);
 }
 
 .gui-conn-form-actions {

@@ -50,8 +50,10 @@ function withFoldStyles(root: ParentNode) {
 		const node = root.querySelector<HTMLElement>(REGIONS[key as keyof typeof REGIONS]);
 		if (!row || !node) continue;
 		const style = getComputedStyle(node);
-		(row as Record<string, unknown>).transitionProperty = style.transitionProperty;
-		(row as Record<string, unknown>).transitionDelay = style.transitionDelay;
+		Object.assign(row, {
+			transitionProperty: style.transitionProperty,
+			transitionDelay: style.transitionDelay,
+		});
 	}
 	return elements;
 }

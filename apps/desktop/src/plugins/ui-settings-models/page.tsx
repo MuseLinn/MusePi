@@ -22,7 +22,7 @@ import { Icon } from "../../vendor/oc-icons";
 import { CustomProviderPane } from "./custom-provider";
 
 /**
- * ZCode-parity appearance settings, sectioned like the reference: 本地化
+ * Sectioned appearance settings: 本地化
  * (language / time format / week start), then 界面设置 (theme + interface
  * type), 代码设置 (light/dark code themes, line numbers, long-line wrap, code
  * sizes), 代码预览 (live light/dark preview cards with a "currently active"
@@ -179,7 +179,7 @@ export default function ModelSettingsPage({ rpc, sessionId, settingsSection }: S
 	// Per-role provenance from the daemon (settings.getModelRoleProvenance):
 	// which layer actually supplies each role (runtime/overlay/project/
 	// global/default). Badges the scope toggle so a write never lands in an
-	// unexpected layer (openchamber "Configured in:" parity).
+	// unexpected layer; the badge names the source before any write.
 	const [roleSources, setRoleSources] = useState<Record<string, string>>({});
 	// Project-override ledger (settings.projectOverrides): keys the current
 	// project layer owns, with the global fallback for comparison. Only
@@ -731,7 +731,7 @@ export default function ModelSettingsPage({ rpc, sessionId, settingsSection }: S
 					</button>
 					{roleStorage === "project" &&
 						(() => {
-							// openchamber provenance parity: the badge shows the
+							// The badge shows the
 							// layer the CURRENT value lives in (dot marker) plus
 							// the next write target (label). When they differ —
 							// e.g. value inherited from global while the target

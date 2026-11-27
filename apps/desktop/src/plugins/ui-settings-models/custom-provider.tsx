@@ -48,7 +48,7 @@ export function CustomProviderPane({
 	sessionId: string | null;
 	onChanged(): void;
 	/** Land with the add dialog already open. The composer's 添加供应商 entry
-	 *  jumps into settings to ADD one — openchamber parity: it selects its
+	 *  jumps into settings to ADD one. It selects the
 	 *  `ADD_PROVIDER_ID` sentinel so the providers page shows the add form
 	 *  itself, not just the provider list the user then has to scan for a
 	 *  button. Seeded once (pane mounts fresh per settings open). */

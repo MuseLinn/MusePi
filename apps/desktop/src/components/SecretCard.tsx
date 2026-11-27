@@ -386,7 +386,8 @@ export function SecretCard({
 								disabled={busy}
 								onChange={e => setLoginSite(e.target.value)}
 							/>
-							<span className="gui-secret-field-hint">{t("tools.loginSiteHint")}</span>						</label>
+							<span className="gui-secret-field-hint">{t("tools.loginSiteHint")}</span>{" "}
+						</label>
 						<label className="gui-secret-check">
 							<input
 								type="checkbox"
@@ -515,7 +516,10 @@ export function SecretCard({
 								? t("tools.secretFileReachNote")
 								: t("tools.secretHiddenNote", { env: envVar })}
 							{tooShort ? (
-								<span className="gui-error"> {t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}</span>
+								<span className="gui-error">
+									{" "}
+									{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
+								</span>
 							) : null}
 						</p>
 					</>

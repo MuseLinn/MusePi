@@ -2,7 +2,7 @@
  * GoalService — the goal-mode RPC seam as an L2 daemon service.
  *
  * Seam:
- * - Services name/inject (dsh parity): key `goals`, injects
+ * - Services declare their dependencies: key `goals`, injects
  *   `sessionProjections`. Goal mode lives on the live AgentSession with no
  *   journal record of its own, so this service contributes its own projection
  *   unit — nobody else registers it on the service's behalf.
@@ -85,7 +85,7 @@ export class GoalService implements DaemonService {
 		this.#deps = deps;
 	}
 
-	/** dsh's `static inject`: resolve the projection service from the host
+	/** Resolve the projection service from the host
 	 *  context and register this domain's unit. A missing dependency throws so
 	 *  the mount fails loudly instead of the service running without its
 	 *  read-model contribution. */

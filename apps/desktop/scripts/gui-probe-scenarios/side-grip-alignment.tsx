@@ -115,7 +115,7 @@ const scenarios = {
 		},
 		async measure(body: ParentNode) {
 			const grip = body.querySelector<HTMLElement>(".gui-resize-x--side");
-			if (!grip) return null;
+			if (!grip) return { missing: true };
 			const style = getComputedStyle(grip, "::before");
 			return {
 				opacity: style.opacity,

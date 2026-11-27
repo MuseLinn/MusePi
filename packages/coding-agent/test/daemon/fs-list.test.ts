@@ -37,7 +37,11 @@ describe("fs.list", () => {
 		const listed = service().list({ path: dir });
 		expect(listed.entries.map(entry => entry.name)).toEqual(["alpha", "zeta", "note.txt"]);
 		// A directory picker that hides dotted directories cannot select them.
-		expect(service().list({ path: dir, showHidden: true }).entries.map(entry => entry.name)).toContain(".hidden");
+		expect(
+			service()
+				.list({ path: dir, showHidden: true })
+				.entries.map(entry => entry.name),
+		).toContain(".hidden");
 	});
 
 	test("the parent is reported, and a root has none", () => {

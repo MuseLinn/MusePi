@@ -2,7 +2,7 @@
  * PlanModeService — the plan-mode RPC seam as an L2 daemon service.
  *
  * Seam:
- * - Services name/inject (dsh parity): key `planMode`. Plan mode is a switch on
+ * - Services declare their dependencies: key `planMode`. Plan mode is a switch on
  *   the live AgentSession, and its captured state is `sessionMode`'s `plan`
  *   field — the unit is registered here by the service that owns the state, not
  *   by a central list.
@@ -117,7 +117,7 @@ export class PlanModeService implements DaemonService {
 		this.#deps = deps;
 	}
 
-	/** dsh's `static inject`: register this domain's projection unit from the
+	/** Register this domain's projection unit from the
 	 *  host context; a missing dependency fails the mount. */
 	start(ctx: Context): void {
 		const projections = ctx.sessionProjections;

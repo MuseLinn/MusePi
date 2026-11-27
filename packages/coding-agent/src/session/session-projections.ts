@@ -52,13 +52,13 @@ export interface ProjectionDefinition<S> {
 }
 
 /**
- * What a domain gets back from `register` (dsh's `ProjectionHandle`).
+ * What a domain gets back from `register`.
  *
  * The handle is how a domain READS the state it declared instead of keeping a
  * second copy: `stateOf` folds that session's committed events through the
  * unit, `viewOf` returns the client-facing value, and `dispose` unregisters.
  * Holding a WeakMap beside the unit instead would create a third source of
- * truth, which is why dsh only ever caches process-local ephemera there.
+ * truth; the cache is reserved for process-local ephemera.
  */
 export interface ProjectionHandle<S> {
 	/** The unit's folded state for one session; undefined when the session is
@@ -353,7 +353,7 @@ export class SessionProjectionRegistry {
 	readonly #sessions = new Map<string, SessionEntryState>();
 
 	/** Register one unit. Returns a handle so the owning domain can READ the
-	 *  state it declared (dsh's `ProjectionHandle`) and unregister on teardown:
+	 *  state it declared and unregister on teardown:
 	 *  a withdrawn unit stops folding, drops out of every baseline, and its key
 	 *  disappears from client snapshots.
 	 *

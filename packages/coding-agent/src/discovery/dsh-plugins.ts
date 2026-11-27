@@ -1,20 +1,17 @@
 /**
- * DSH profile plugin inventory.
+ * External profile plugin inventory.
  *
- * A DSH installation keeps each profile as its own pnpm project under
- * `<home>/profiles/<name>/`, with the packages it mounts listed in
- * `package.json`'s `dsh.profile.bundles` and installed under that project's
- * `node_modules`. This provider reads that inventory so a person can see what
- * their DSH install has and hand any of it to the agent to analyse.
+ * Each profile is a pnpm project under `<home>/profiles/<name>/`, with its
+ * mounted packages listed in `package.json` and installed under that project's
+ * `node_modules`. This provider exposes that read-only inventory for analysis.
  *
- * It deliberately does not convert, mount, or execute anything. A DSH plugin
- * names row identities its own Loader resolves and declares components against
- * `dsh.client` packages this host does not provide; treating one as a MusePi
- * extension would mount a package whose dependencies are absent. What is
- * portable is the source on disk, which the agent reads with its own tools.
+ * It deliberately does not convert, mount, or execute anything. External
+ * plugins name row identities for another Loader and declare client packages
+ * this host does not provide; mounting them would leave dependencies absent.
+ * The portable artifact is the source on disk, which the agent reads directly.
  *
- * Priority 60 keeps it below the providers that own real MusePi extensions, so
- * a DSH inventory never shadows an extension this host can actually load.
+ * Priority 60 keeps this inventory below providers that own loadable MusePi
+ * extensions, so it never shadows an extension this host can actually load.
  */
 import * as fs from "node:fs/promises";
 import { homedir } from "node:os";
@@ -30,9 +27,9 @@ const PROVIDER_ID = "dsh-plugins";
 const DISPLAY_NAME = "DeepSeek Harness";
 const PRIORITY = 60;
 
-/** One bundle a DSH profile declares, with whatever its manifest answers. */
+/** One bundle an external profile declares, with whatever its manifest answers. */
 interface DshBundleEntry {
-	/** Package name as `dsh.profile.bundles` writes it. */
+	/** Package name as written in the profile's bundle map. */
 	readonly name: string;
 	/** Version from the profile's dependency range, when declared. */
 	readonly version?: string;
@@ -51,7 +48,7 @@ interface DshProfileInventory {
 	readonly bundles: readonly DshBundleEntry[];
 }
 
-/** The DSH home this provider reads, honouring the variable DSH itself honours. */
+/** The external profile home, including its environment override. */
 export function dshHome(): string {
 	const configured = process.env.DSH_HOME;
 	return configured ? configured.replace(/^~/, homedir()) : path.join(homedir(), ".dsh");
@@ -119,7 +116,7 @@ async function bundleDetail(name: string, installed: string, declared: unknown):
 	};
 }
 
-/** Every profile under a DSH home, in directory order. */
+/** Every profile under the external home, in directory order. */
 export async function listDshProfiles(home: string = dshHome()): Promise<DshProfileInventory[]> {
 	const root = path.join(home, "profiles");
 	let names: string[];
@@ -140,7 +137,7 @@ export async function listDshProfiles(home: string = dshHome()): Promise<DshProf
 /**
  * Present one profile's bundles as a single extension entry.
  *
- * The profile, not each bundle, becomes the entry: a DSH bundle is a row set
+ * The profile, not each bundle, becomes the entry: an external bundle is a row set
  * for a Loader this host does not run, and fifteen separate entries would
  * suggest fifteen separately usable extensions. The manifest carries the
  * inventory as its description because that is what the discovery surfaces

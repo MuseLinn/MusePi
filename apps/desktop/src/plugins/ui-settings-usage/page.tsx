@@ -198,7 +198,7 @@ export default function UsageSettingsPage({ rpc }: SlotComponentProps): ReactNod
 	const overall = stats?.overall;
 	const series = stats?.timeSeries ?? [];
 	const modelSeries = stats?.modelSeries ?? [];
-	// ── ZCode-parity summary cards (user-facing metrics) ──────────────────
+	// ── Summary cards (user-facing metrics) ─────────────────────────────
 	const tokensTotal = overall
 		? overall.totalInputTokens +
 			overall.totalOutputTokens +
@@ -429,7 +429,7 @@ export default function UsageSettingsPage({ rpc }: SlotComponentProps): ReactNod
 							</div>
 						))}
 					</div>
-					{/* Active heatmap (ZCode parity): one cell per day, depth = tokens */}
+					{/* Active heatmap: one cell per day, depth = tokens */}
 					<div className="gui-settings-section">
 						<div className="flex items-center justify-between">
 							<div className="gui-settings-section-title">{t("settings.activeHeatmap")}</div>

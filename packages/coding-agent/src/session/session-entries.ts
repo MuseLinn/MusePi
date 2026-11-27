@@ -35,7 +35,7 @@ export interface SessionHeader {
 	timestamp: string;
 	cwd: string;
 	/**
-	 * The agent preset this session runs (dsh's name for it).
+	 * The agent preset this session runs.
 	 *
 	 * Older builds wrote the same value as `modeId`, which read as the approval
 	 * mode (`tools.approvalMode`) although it never meant that. Both are read so a

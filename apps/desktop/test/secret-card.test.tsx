@@ -116,7 +116,7 @@ describe("SecretCard 提交与已决态", () => {
 		await act(async () => button(host, "保存").click());
 		await flush();
 		expect(calls).toEqual([{ requestId: "r1", action: "save", value: secret, scope: "all" }]);
-		expect(host.querySelector("input")).toBeNull();
+		expect(host.querySelector("input") === null).toBe(true);
 		expect(host.textContent).toContain("已安全保存 EXAMPLE_KEY");
 		expect(host.innerHTML).not.toContain(secret);
 	});
@@ -130,7 +130,7 @@ describe("SecretCard 提交与已决态", () => {
 		await act(async () => button(host, "取消").click());
 		await flush();
 		expect(calls).toEqual([{ requestId: "r1", action: "cancel" }]);
-		expect(host.querySelector("input")).toBeNull();
+		expect(host.querySelector("input") === null).toBe(true);
 		expect(host.textContent).toContain("已取消");
 	});
 
@@ -139,7 +139,7 @@ describe("SecretCard 提交与已决态", () => {
 		const { host } = await renderCard({ kind: "allow" }, async answer => {
 			calls.push(answer);
 		});
-		expect(host.querySelector("input")).toBeNull();
+		expect(host.querySelector("input") === null).toBe(true);
 		await act(async () => button(host, "允许").click());
 		await flush();
 		expect(calls).toEqual([{ requestId: "r1", action: "allow" }]);
@@ -170,7 +170,7 @@ describe("SecretCard 提交与已决态", () => {
 		expect(host.textContent).toContain("替换密钥值");
 		// Replacing touches the value only: no scope pick appears, so no scope is
 		// sent and the entry keeps the grant it already had.
-		expect(host.querySelector(".gui-secret-scope")).toBeNull();
+		expect(host.querySelector(".gui-secret-scope") === null).toBe(true);
 		const secret = "replacement-value";
 		await typeSecret(host, secret);
 		await act(async () => button(host, "保存").click());
@@ -219,7 +219,7 @@ describe("SecretCard 校验与错误", () => {
 		await flush();
 		expect(host.querySelector('[role="alert"]')?.textContent).toContain(message);
 		const input = host.querySelector<HTMLInputElement>("input");
-		expect(input).not.toBeNull();
+		expect(input !== null).toBe(true);
 		expect(isMasked(input!)).toBe(true);
 		expect(input!.value).toBe(secret);
 		// 值只存在于输入框属性里，不进入任何文本节点。

@@ -310,7 +310,12 @@ describe("voice settings schema", () => {
 		fake.responses.set("settings.schema", {
 			voice: [
 				{ key: "stt.enabled", type: "boolean", default: true, ui: { group: "Speech", label: "Speech-to-Text" } },
-				{ key: "dictation.globalTrigger", type: "enum", default: "toggle", ui: { group: "Speech", label: "Global dictation trigger" } },
+				{
+					key: "dictation.globalTrigger",
+					type: "enum",
+					default: "toggle",
+					ui: { group: "Speech", label: "Global dictation trigger" },
+				},
 			],
 		});
 		fake.responses.set("settings.get", {});

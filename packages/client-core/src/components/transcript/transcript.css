@@ -1105,7 +1105,7 @@ button.tr-display-context-source:hover {
 	flex: none;
 	width: 20px;
 	height: 20px;
-	border-radius: 5px;
+	border-radius: var(--radius-md);
 	background: color-mix(in srgb, var(--accent) 13%, transparent);
 	color: var(--accent);
 }
@@ -1125,7 +1125,7 @@ button.tr-display-context-source:hover {
 .tr-compact-saved {
 	flex: none;
 	padding: 1px 5px;
-	border-radius: var(--radius-xs, 4px);
+	border-radius: var(--radius-xs);
 	background: color-mix(in srgb, var(--ok) 14%, transparent);
 	color: var(--ok);
 	font-size: 11px;
@@ -5708,7 +5708,7 @@ a.tr-tool-search-title:hover {
 	width: 100%;
 	padding: 5px 7px;
 	border: 1px solid var(--border, var(--line));
-	border-radius: var(--radius-sm, 4px);
+	border-radius: var(--radius-sm);
 	background: var(--color-surface, var(--bg));
 	color: var(--color-text, var(--fg));
 	font-size: 11.5px;
@@ -6118,7 +6118,7 @@ a.tr-tool-search-title:hover {
 	vertical-align: baseline;
 	margin: 0 1px;
 	padding: 0 5px;
-	border-radius: var(--radius-xs, 4px);
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--accent) 12%, transparent);
 	color: color-mix(in oklab, var(--accent) 85%, var(--fg));
 	font-weight: 500;

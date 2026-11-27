@@ -13,6 +13,7 @@ import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { BundleService } from "./bundle-service";
 import { ConnectorCatalogService } from "./connector-catalog-service";
+import { ConnectorRequestService } from "./connector-request-service";
 import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { CredentialService } from "./credential-service";
@@ -290,6 +291,8 @@ function buildRegistry(): HostServices {
 			setSelection: async () => ({ ok: true, appliedToLive: false }),
 		}),
 	);
+	// ConnectorRequestService：只认领路由（本测试不应答连接卡片）。
+	services.register(new ConnectorRequestService({ get: () => undefined, allSessions: () => [] }));
 	// McpServersService：只认领路由（本测试不读写 mcp.json），路径用隔离 temp。
 	services.register(
 		new McpServersService({
