@@ -4,114 +4,116 @@
 	margin: 8px 14px 0;
 }
 
-/* Approval CARD (ApprovalCard.tsx) — the tool-permission request. Keeps its
- * warning surface: it is an alert, not a chip, and the tint is the only
- * signal that the agent is blocked on you. */
-/* Two rows: the identity/prompt line, then the decision (note + actions).
+/* Approval CARD (ApprovalCard.tsx) — an L2 float (docs/gui-design.md §层级表:
+ * "ApprovalCard … 强底+缘+rim+泽+近环"). The material is `.gui-liquid-glass`;
+ * this rule declares layout and radius only — a card that paints its own tint
+ * drops out of the glass ladder and cannot follow the theme.
  *
- * Was a single flex row with every part as a sibling. `.gui-approval-note` is
- * `width: 100%`, so inside a row it squeezed its siblings to zero: the title
- * broke one character per line and the action buttons rendered with no width
- * at all — the card looked empty while its text was all present. A grid with an
- * explicit second row makes the note and the buttons share that row instead of
- * competing with the body for the first one. */
-.gui-approval {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
-	gap: 4px 8px;
-	padding: 8px 10px;
-	border-radius: var(--radius-md);
-	background: var(--color-warning-soft);
+ * Reading order matches the decision order: identity → evidence → actions.
+ * The note sits between the evidence and the actions because it is part of the
+ * answer, not part of the question. */
+.gui-approval-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: var(--radius-lg);
 }
 
-/* Approval-mode PILL (approval-mode-button.tsx) — the footer switch. Shares
- * the `.gui-approval` class for layout only; this is the transparent slot
- * that must never paint a surface (the chip inside owns the glass).
- *
- * Was: the shared `.gui-approval` rule painted `--color-warning-soft` behind
- * the chip, so the "borderless, no hairline ring" chip sat inside a visible
- * coloured capsule anyway — reported 2026-09-20 as 审批胶囊外面还是有一圈颜色. */
-.gui-approval--pill {
-	padding: 0;
-	border-radius: 0;
-	background: transparent;
+/* The approval-mode CHIP shares the `.gui-approval` name with the card for
+ * historical reasons; it is a footer control, not an alert, so it keeps its own
+ * layout and must not inherit the card's material. */
+.gui-approval {
+	display: flex;
 	align-items: center;
+}
+
+/* Identity: the alert mark, what kind of interruption this is, and the single
+ * name it is about. The tool name carries the weight the generic title does
+ * not — "需要审批" says nothing the card's presence has not already said. */
+.gui-approval-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
 }
 
 .gui-approval-icon {
 	color: var(--color-warning);
-	grid-column: 1;
-	grid-row: 1;
+	flex-shrink: 0;
 }
 
-.gui-approval-body {
+.gui-approval-id {
 	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	grid-column: 2;
-	grid-row: 1;
+	align-items: baseline;
+	gap: 8px;
 	min-width: 0;
 }
 
 .gui-approval-title {
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
+	flex-shrink: 0;
 }
 
 .gui-approval-tool {
 	font-family: var(--font-mono);
 	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	min-width: 0;
+}
+
+/* Evidence: the reason reads as a sentence; the command block keeps its line
+ * breaks and scrolls internally past ~4 lines so a long invocation cannot push
+ * the decision buttons off screen. */
+.gui-approval-reason {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-secondary);
+}
+
+/* The request's own claim about what it will not do. Quietest line on the card:
+ * it supports the decision, it is not the decision. */
+.gui-approval-safety {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-faint);
 }
 
 .gui-approval-prompt {
-	margin: 4px 0 0;
+	margin: 0;
+	padding: 6px 8px;
+	border-radius: var(--radius-sm);
+	/* A recessed well, not a second surface: the material owns the card's fill,
+	 * so the code block only needs to read as "inside". */
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
 	font-family: var(--font-mono);
 	font-size: var(--ui-font-size-xs);
-	line-height: 1.45;
+	line-height: 1.5;
 	color: var(--color-text-secondary);
 	white-space: pre-wrap;
 	word-break: break-word;
-	max-height: 96px;
+	max-height: 76px;
 	overflow-y: auto;
-	flex-shrink: 0;
 	overflow-x: clip;
 }
 
-/* The decision row wraps rather than shrinking the buttons: a squeezed
- * "Deny" is the one control that must never lose its hit area. */
-.gui-approval-actions {
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: 6px;
-	grid-column: 2;
-	grid-row: 3;
-}
-
-/* Approval note (TUI ask-dialog "✎ note" parity): multiline on purpose —
- * Enter inserts a newline; beyond five lines the field scrolls internally
- * instead of growing the card (ZCode 权限反馈换行输入 parity). */
 .gui-approval-note {
-	grid-column: 2;
-	grid-row: 2;
-	min-width: 0;
-	margin-top: 2px;
-}
-
-.gui-approval-note textarea {
 	display: block;
 	width: 100%;
-	min-height: 3.6em;
+	min-height: 2.1em;
 	max-height: 5.6em; /* ≈5 行，超出内部滚动 */
 	overflow-y: auto;
 	resize: none;
 	padding: 5px 8px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface) 60%, transparent);
 	color: var(--color-text);
 	font-family: inherit;
 	font-size: var(--ui-font-size-xs);
@@ -119,9 +121,24 @@
 	overflow-x: clip;
 }
 
-.gui-approval-note textarea:focus {
+.gui-approval-note:focus-visible {
 	outline: none;
 	border-color: var(--color-accent);
+}
+
+/* The decision row: approve and the scoped allowance lead, deny closes the row
+ * at the far end so a destructive click never sits beside the primary one.
+ * It wraps rather than shrinking — a squeezed "Deny" is the one control that
+ * must never lose its hit area. */
+.gui-approval-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-approval-actions .gui-btn-stop {
+	margin-left: auto;
 }
 
 .gui-btn-approve {

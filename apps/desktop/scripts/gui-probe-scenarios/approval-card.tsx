@@ -6,6 +6,11 @@
  * computed property can catch are the ones reading the JSX hid before — a third
  * button that crowds the row, a "quieter" action that still reads as a second
  * primary, and a prompt block that pushes the decision below the fold.
+ *
+ * Known limitation of this probe, not of the card: the semantic `--color-*`
+ * tokens resolve to the same values in both themes here, so the dark capture
+ * shows the light palette. Layout, hierarchy and geometry are still worth
+ * checking on both; colour parity needs the real window.
  */
 import { t } from "@musepi/client-core";
 import { ApprovalCard } from "../../src/components/ApprovalCard";
@@ -19,11 +24,12 @@ const CMD_PROMPT = [
 ].join("\n");
 
 const SELECTORS = {
-	card: ".gui-approval",
+	card: ".gui-approval-card",
 	title: ".gui-approval-title",
 	tool: ".gui-approval-tool",
 	prompt: ".gui-approval-prompt",
-	note: ".gui-approval-note textarea",
+	note: ".gui-approval-note",
+	reason: ".gui-approval-reason",
 	actions: ".gui-approval-actions",
 	approve: ".gui-btn-approve",
 	quiet: ".gui-btn-quiet",
@@ -54,6 +60,9 @@ export default {
 			tool: { display: "block", "box.h": { min: 12, max: 32 } },
 			// The command block is a bounded scroll area, not a page-wide wall.
 			prompt: { "box.h": { min: 20, max: 180 } },
+			// The reason reads as a sentence above the evidence; the safety claim
+			// sits under it at the quietest weight instead of inside the code block.
+			reason: { display: "block", "box.h": { min: 12, max: 40 } },
 			// All three actions stay on one row with a real hit area each.
 			actions: { display: "flex", "box.h": { max: 60 } },
 			approve: { "box.h": { min: 20, max: 40 }, "box.w": { min: 40 } },

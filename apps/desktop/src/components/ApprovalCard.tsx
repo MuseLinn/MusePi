@@ -6,20 +6,57 @@ import { sfxFor } from "../lib/sfx";
 import { BorderBeam } from "../vendor/border-beam";
 
 /**
- * Inline approval card (prototype §6.3) — rendered above the composer when a
- * tool call is paused awaiting a decision. Approve/deny calls
- * tool.approve / tool.deny on the daemon, which resolves the paused
- * ExtensionUIContext.select in the agent runtime.
+ * One line of the approval prompt, split by its own label.
  *
- * Pending state carries a pulse border beam + a soft chime so an
- * incoming approval interrupts without a modal.
+ * The daemon renders the prompt as labelled lines (`Allow tool: …`,
+ * `Reason: …`, the command block). The tool name is shown as the card's
+ * identity, so the rest is parsed into a reason line and a body — a single
+ * `<pre>` of the whole thing read as one undifferentiated wall.
+ */
+interface ApprovalDetail {
+	reason?: string;
+	/** The command or payload about to run — the evidence to judge. */
+	body?: string;
+	/** Bounds the request declares about itself ("no network, no destructive
+	 *  flags"). Kept apart from the command: it is the claim, the command is the
+	 *  act, and mixing them made the safety line read as part of the script. */
+	safety?: string;
+}
+
+const LABELLED = /^(Reason|Safety|Command|Args|Note):\s*(.*)$/;
+
+function splitPrompt(prompt: string | undefined): ApprovalDetail {
+	if (!prompt) return {};
+	const lines = prompt
+		.split("\n")
+		.slice(1)
+		.filter(line => line.trim().length > 0);
+	const reason: string[] = [];
+	const safety: string[] = [];
+	const body: string[] = [];
+	for (const line of lines) {
+		const labelled = LABELLED.exec(line);
+		// Reason and Safety read as sentences around the command; everything else
+		// (the command, its output, an indented block) keeps its line breaks.
+		if (labelled && labelled[1] === "Reason") reason.push(labelled[2] ?? "");
+		else if (labelled && labelled[1] === "Safety") safety.push(labelled[2] ?? "");
+		else body.push(line);
+	}
+	return {
+		...(reason.length > 0 ? { reason: reason.join(" ") } : {}),
+		...(safety.length > 0 ? { safety: safety.join(" ") } : {}),
+		...(body.length > 0 ? { body: body.join("\n") } : {}),
+	};
+}
+
+/**
+ * Inline approval card — an L2 float (docs/gui-design.md). It is an alert: the
+ * only surface where one click widens what the agent may do, so it carries the
+ * glass material, not a painted tint of its own.
  *
- * The note field (TUI ask-dialog "✎ note" parity) is a free-text reason:
- * on a DENIAL the daemon turns it into the rejection reason the agent
- * reads; on an approval it is recorded only. Multiline on purpose —
- * Enter inserts a newline (ZCode 权限反馈换行输入 parity), submission is
- * button-driven (⌘/Ctrl+Enter approves), and beyond five lines the field
- * scrolls internally.
+ * Reading order is the decision order: what is being asked (identity), why and
+ * what it would run (evidence), then the actions. Anything decorative — a
+ * second title, a repeated tool name — is dropped rather than stacked.
  */
 export function ApprovalCard({
 	requestId,
@@ -45,42 +82,37 @@ export function ApprovalCard({
 	}, [requestId]);
 	// Note is per-card: a fresh approval starts with an empty field.
 	const [note, setNote] = useState("");
-	// The prompt's first line ("Allow tool: <name>") duplicates the tool
-	// chip — show the detail lines (Reason / command+args / safety checks).
-	const details = prompt
-		? prompt
-				.split("\n")
-				.slice(1)
-				.filter(l => l.trim().length > 0)
-				.join("\n")
-		: "";
+	const { reason, body, safety } = splitPrompt(prompt);
 	return (
 		<div className="gui-approval-wrap">
 			<BorderBeam size="pulse-inner" colorVariant="ocean" theme="auto" borderRadius={14}>
-				<div className="gui-approval" role="alert">
-					<ShieldAlert size={14} className="gui-approval-icon" />
-					<div className="gui-approval-body">
-						<span className="gui-approval-title">{t("settings.approvalRequired")}</span>
-						<span className="gui-approval-tool">{tool}</span>
-						{details.length > 0 && <pre className="gui-approval-prompt">{details}</pre>}
+				<div className="gui-approval-card gui-liquid-glass" role="alert">
+					<div className="gui-approval-head">
+						<ShieldAlert size={14} className="gui-approval-icon" aria-hidden />
+						<div className="gui-approval-id">
+							<span className="gui-approval-title">{t("settings.approvalRequired")}</span>
+							<span className="gui-approval-tool">{tool}</span>
+						</div>
 					</div>
-					<div className="gui-approval-note">
-						<textarea
-							value={note}
-							rows={2}
-							placeholder={t("general.addNote")}
-							onChange={e => setNote(e.target.value)}
-							onKeyDown={e => {
-								if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-									e.preventDefault();
-									sfxFor("approval-ok");
-									haptic(1);
-									onDecide(requestId, true, note);
-								}
-							}}
-							spellCheck={false}
-						/>
-					</div>
+					{reason && <p className="gui-approval-reason">{reason}</p>}
+					{body && <pre className="gui-approval-prompt">{body}</pre>}
+					{safety && <p className="gui-approval-safety">{safety}</p>}
+					<textarea
+						className="gui-approval-note"
+						value={note}
+						rows={1}
+						placeholder={t("general.addNote")}
+						onChange={e => setNote(e.target.value)}
+						onKeyDown={e => {
+							if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+								e.preventDefault();
+								sfxFor("approval-ok");
+								haptic(1);
+								onDecide(requestId, true, note);
+							}
+						}}
+						spellCheck={false}
+					/>
 					<div className="gui-approval-actions">
 						<button
 							type="button"
