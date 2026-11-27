@@ -101,7 +101,9 @@ export interface SherpaSpeakerEmbeddingExtractor {
 export interface SherpaVad {
 	acceptWaveform(samples: Float32Array): void;
 	isEmpty(): boolean;
-	front(): { start: number; samples: Float32Array };
+	/** Whether the detector is currently inside an utterance. */
+	isDetected(): boolean;
+	front(enableExternalBuffer?: boolean): { start: number; samples: Float32Array };
 	pop(): void;
 	flush(): void;
 	reset(): void;
@@ -126,6 +128,8 @@ export interface SherpaRuntime {
 					minSpeechDuration: number;
 					minSilenceDuration: number;
 					windowSize: number;
+					/** Seconds after which an utterance is force-split. */
+					maxSpeechDuration?: number;
 				};
 				sampleRate: number;
 				numThreads: number;

@@ -20,8 +20,9 @@ import {
 import { resolveTinyModelDevicePreference, type TinyModelDevice, tinyModelDeviceLoadOrder } from "../tiny/device";
 import { resolveTinyModelDtypeOverride, type TinyModelDtype } from "../tiny/dtype";
 import { fetchHubFile } from "../tiny/hub-mirrors";
+import { ensureVoiceFrontendModel } from "../voice/frontend/models";
 import type { SttTransport, SttWorkerInbound } from "./asr-protocol";
-import { type EndpointerEvent, StreamEndpointer } from "./endpointer";
+import { type LiveEndpointer, StreamEndpointer } from "./endpointer";
 import {
 	getSttModelSpec,
 	type SherpaSttModelSpec,
@@ -36,7 +37,11 @@ import {
 	type SherpaOfflineRecognizer,
 	type SherpaRuntime,
 } from "./sherpa-runtime";
+import { SpeechEndpointer } from "./speech-endpointer";
+import { LiveStreamingSession } from "./streaming-session";
 import { normalizeChineseScript } from "./zh-hans";
+
+export { joinSegmentTexts } from "./streaming-session";
 
 const ASR_TASK = "automatic-speech-recognition";
 // Whisper long-form decoding: split into 30s windows with 5s overlap so audio of
@@ -46,11 +51,15 @@ const STRIDE_LENGTH_S = 5;
 // The client always resamples to 16 kHz mono float32 before sending; sherpa-onnx
 // is told the true input rate (it resamples internally to its feature config).
 const ASR_SAMPLE_RATE = 16_000;
-// On stop, committed segments are re-decoded as one utterance so the model sees
-// full sentence context (punctuation, word boundaries, homophones). Segments are
-// separated by a short silence gap; past the cap the per-segment texts are used.
-const FINAL_REDECODE_GAP_SAMPLES = ASR_SAMPLE_RATE / 5;
-const FINAL_REDECODE_MAX_SAMPLES = ASR_SAMPLE_RATE * 60;
+// Silero decides sentence boundaries; decoding always uses the session's raw PCM.
+const SILERO_VAD_SETTINGS = {
+	threshold: 0.5,
+	minSilenceDuration: 0.7,
+	minSpeechDuration: 0.25,
+	windowSize: 512,
+	maxSpeechDuration: 30,
+} as const;
+const VAD_BUFFER_SECONDS = 60;
 // Hub origins for raw sherpa-onnx model files (encoder/decoder/joiner/tokens):
 // upstream + mainland-China mirror fallback, probe-ordered per process
 // (tiny/hub-mirrors). Previously a hardcoded huggingface.co — unreachable
@@ -471,28 +480,7 @@ async function handleBatchRequest(
 
 // ── Live streaming sessions ─────────────────────────────────────────
 
-/** State for one in-flight {@link StreamEndpointer}-driven streaming session. */
-interface StreamingSession {
-	id: string;
-	spec: SttModel;
-	language: string | undefined;
-	model: Promise<LoadedModel>;
-	endpointer: StreamEndpointer;
-	/** Finalized segments awaiting decode, in order. */
-	segmentQueue: Float32Array[];
-	/** Latest in-progress segment audio awaiting a volatile partial decode (coalesced). */
-	pendingPartial: Float32Array | null;
-	/** Committed segment transcripts; the fallback final result when re-decode is skipped. */
-	committed: string[];
-	/** Audio of each committed segment, re-decoded as one utterance on stop. */
-	committedAudio: Float32Array[];
-	segmentIndex: number;
-	pumping: boolean;
-	cancelled: boolean;
-	ended: boolean;
-}
-
-const sessions = new Map<string, StreamingSession>();
+const sessions = new Map<string, LiveStreamingSession>();
 
 function startStreamingSession(
 	transport: SttTransport,
@@ -503,121 +491,57 @@ function startStreamingSession(
 		transport.send({ type: "error", id: request.id, error: `Unknown stt model: ${request.modelKey}` });
 		return;
 	}
-	sessions.set(request.id, {
+	const model = loadModel(request.modelKey, transport, request.id);
+	const session = new LiveStreamingSession({
 		id: request.id,
-		spec,
-		language: request.language,
-		model: loadModel(request.modelKey, transport, request.id),
-		endpointer: new StreamEndpointer(),
-		segmentQueue: [],
-		pendingPartial: null,
-		committed: [],
-		committedAudio: [],
-		segmentIndex: 0,
-		pumping: false,
-		cancelled: false,
-		ended: false,
+		createEndpointer: () => createLiveEndpointer(request.id, request.modelKey, transport),
+		decode: async audio => {
+			const loaded = await model;
+			return runOnModel(() => decodeSegment(loaded, spec, audio, request.language));
+		},
+		send: message => {
+			transport.send(message);
+			if (message.type === "stream_done" || message.type === "error") sessions.delete(request.id);
+		},
 	});
+	sessions.set(request.id, session);
 }
 
-function ingestStreamEvents(session: StreamingSession, events: EndpointerEvent[]): void {
-	for (const event of events) {
-		if (event.kind === "segment") session.segmentQueue.push(event.audio);
-		else session.pendingPartial = event.audio;
-	}
-}
-
-const CJK_CHAR = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uffef]/u;
-
-/** Join per-segment texts, without a separating space across a CJK boundary. */
-export function joinSegmentTexts(texts: readonly string[]): string {
-	let out = "";
-	for (const text of texts) {
-		if (text.length === 0) continue;
-		if (out.length > 0 && !CJK_CHAR.test(out.at(-1)!) && !CJK_CHAR.test(text[0]!)) out += " ";
-		out += text;
-	}
-	return out;
-}
-
-/** Concatenate segments with a silence gap between each, or `null` past the re-decode cap. */
-export function concatSegmentsForRedecode(segments: readonly Float32Array[]): Float32Array | null {
-	const total =
-		segments.reduce((sum, segment) => sum + segment.length, 0) +
-		FINAL_REDECODE_GAP_SAMPLES * Math.max(0, segments.length - 1);
-	if (total > FINAL_REDECODE_MAX_SAMPLES) return null;
-	const out = new Float32Array(total);
-	let offset = 0;
-	for (const [index, segment] of segments.entries()) {
-		if (index > 0) offset += FINAL_REDECODE_GAP_SAMPLES;
-		out.set(segment, offset);
-		offset += segment.length;
-	}
-	return out;
-}
+let sileroVadModel: Promise<string> | null = null;
 
 /**
- * The session's final transcript: a single segment stands as committed; several
- * are re-decoded as one utterance for full-sentence context, falling back to the
- * joined segment texts when the audio exceeds the cap or the re-decode is empty.
+ * A Silero-driven endpointer with its own detector (detector state is per
+ * stream). Falls back to the loudness endpointer when the sherpa-onnx runtime
+ * or the VAD model cannot be loaded, so a live session never loses audio.
  */
-async function finalTranscript(session: StreamingSession, model: LoadedModel): Promise<string> {
-	const fallback = joinSegmentTexts(session.committed);
-	if (session.committedAudio.length < 2) return fallback;
-	const audio = concatSegmentsForRedecode(session.committedAudio);
-	if (!audio) return fallback;
-	const text = await runOnModel(() => decodeSegment(model, session.spec, audio, session.language));
-	return text.length > 0 ? text : fallback;
-}
-
-/**
- * Drain a session's pending work: finalized segments first (committed in order),
- * then a single coalesced partial preview. Re-entrant-safe via `pumping`; new
- * audio that arrives mid-decode is picked up when the current decode resolves.
- */
-async function pumpSession(session: StreamingSession, transport: SttTransport): Promise<void> {
-	if (session.pumping) return;
-	session.pumping = true;
+async function createLiveEndpointer(
+	id: string,
+	modelKey: SttModelKey,
+	transport: SttTransport,
+): Promise<LiveEndpointer> {
 	try {
-		const model = await session.model;
-		while (!session.cancelled) {
-			if (session.segmentQueue.length > 0) {
-				const audio = session.segmentQueue.shift()!;
-				// A fresh segment supersedes any queued preview for the prior one.
-				session.pendingPartial = null;
-				const text = await runOnModel(() => decodeSegment(model, session.spec, audio, session.language));
-				if (session.cancelled) return;
-				if (text.length > 0) {
-					session.committed.push(text);
-					session.committedAudio.push(audio);
-					transport.send({ type: "segment", id: session.id, index: session.segmentIndex++, text });
-				}
-				continue;
-			}
-			if (session.pendingPartial) {
-				const audio = session.pendingPartial;
-				session.pendingPartial = null;
-				const text = await runOnModel(() => decodeSegment(model, session.spec, audio, session.language));
-				if (session.cancelled) return;
-				// Skip a now-stale preview if a segment finalized mid-decode.
-				if (text.length > 0 && session.segmentQueue.length === 0) {
-					transport.send({ type: "partial", id: session.id, text });
-				}
-				continue;
-			}
-			break;
-		}
-		if (session.ended && !session.cancelled && session.segmentQueue.length === 0 && !session.pendingPartial) {
-			const text = await finalTranscript(session, model);
-			if (session.cancelled) return;
-			transport.send({ type: "stream_done", id: session.id, text });
-			sessions.delete(session.id);
-		}
+		sileroVadModel ??= ensureVoiceFrontendModel("sileroVad").catch(error => {
+			sileroVadModel = null;
+			throw error;
+		});
+		const [runtime, model] = await Promise.all([loadSherpaRuntime(transport, id, modelKey), sileroVadModel]);
+		const vad = new runtime.Vad(
+			{
+				sileroVad: { model, ...SILERO_VAD_SETTINGS },
+				sampleRate: ASR_SAMPLE_RATE,
+				numThreads: 1,
+				debug: 0,
+				provider: "cpu",
+			},
+			VAD_BUFFER_SECONDS,
+		);
+		return new SpeechEndpointer(vad, { sampleRate: ASR_SAMPLE_RATE });
 	} catch (error) {
-		if (!session.cancelled) transport.send({ type: "error", id: session.id, error: errorText(error) });
-		sessions.delete(session.id);
-	} finally {
-		session.pumping = false;
+		sendLog(transport, "warn", "stt: speech detector unavailable; segmenting by loudness", {
+			modelKey,
+			error: errorMessage(error),
+		});
+		return new StreamEndpointer();
 	}
 }
 
@@ -627,31 +551,22 @@ function handleStreamMessage(transport: SttTransport, message: SttWorkerInbound)
 		return;
 	}
 	const session = sessions.get(message.id);
-	if (!session || session.cancelled) return;
+	if (!session) return;
 	switch (message.type) {
 		case "stream_audio":
-			ingestStreamEvents(session, session.endpointer.push(message.audio));
-			void pumpSession(session, transport);
+			session.pushAudio(message.audio);
 			return;
 		case "stream_utterance":
-			// Already delimited by the caller: decode once, commit as a segment.
-			session.pendingPartial = null;
-			session.segmentQueue.push(message.audio);
-			void pumpSession(session, transport);
+			session.pushUtterance(message.audio);
 			return;
 		case "stream_preview":
-			// Coalesce: only the newest still-growing run is worth decoding.
-			session.pendingPartial = message.audio;
-			void pumpSession(session, transport);
+			session.pushPreview(message.audio);
 			return;
 		case "stream_stop":
-			session.ended = true;
-			session.pendingPartial = null;
-			ingestStreamEvents(session, session.endpointer.flush());
-			void pumpSession(session, transport);
+			void session.stop();
 			return;
 		case "stream_cancel":
-			session.cancelled = true;
+			session.cancel();
 			sessions.delete(message.id);
 			return;
 	}

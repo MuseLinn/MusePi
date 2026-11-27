@@ -41,6 +41,9 @@ function fakeRuntime(): { runtime: SherpaRuntime; state: { extractorLoads: numbe
 				isEmpty(): boolean {
 					return true;
 				}
+				isDetected(): boolean {
+					return false;
+				}
 				front(): { start: number; samples: Float32Array } {
 					return { start: 0, samples: new Float32Array() };
 				}

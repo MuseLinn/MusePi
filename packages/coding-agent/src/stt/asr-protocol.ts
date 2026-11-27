@@ -48,11 +48,10 @@ export type SttWorkerOutbound =
 	| { type: "progress"; id: string; event: SttProgressEvent }
 	| { type: "log"; level: "debug" | "warn" | "error"; msg: string; meta?: Record<string, unknown> }
 	// ── Live streaming session ──
-	// `partial` is the volatile transcript of the in-progress speech segment
-	// (refreshed as more audio arrives, never appended verbatim); `segment` is a
-	// finalized segment committed once at an endpoint; `stream_done` carries the
-	// final transcript when the session ends — multiple segments re-decoded as one
-	// utterance, so it supersedes the committed segment texts rather than extending them.
+	// `partial` is the volatile transcript of the current sentence (refreshed as
+	// more audio arrives, never appended verbatim); `segment` is that sentence's
+	// final decode from retained raw audio and replaces its preview. `stream_done`
+	// joins the finalized sentences without another whole-session decode.
 	| { type: "partial"; id: string; text: string }
 	| { type: "segment"; id: string; index: number; text: string }
 	| { type: "stream_done"; id: string; text: string };

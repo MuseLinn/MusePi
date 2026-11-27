@@ -1,64 +1,54 @@
 /**
- * Energy-based speech endpointer for live transcription.
- *
- * The on-device ASR models we ship are non-streaming: the sherpa-onnx Parakeet
- * recognizer and the transformers.js Whisper pipelines both decode a complete
- * waveform in one shot. To transcribe *while the user is still speaking*, this
- * splits the continuous 16 kHz mono float stream into speech segments at natural
- * pauses — each segment is decoded and committed as it finalizes, and the
- * in-progress segment is re-decoded periodically for a volatile live preview.
- *
- * Segmentation is pure short-time-energy VAD with an adaptive noise floor, so it
- * needs no extra model and is engine-agnostic (it runs the same way whether the
- * downstream model is sherpa or transformers). It is deliberately simple and
- * fully deterministic so it can be unit-tested with synthetic signals.
+ * Energy-based fallback endpointer for live transcription. Events carry absolute
+ * sample ranges so the worker can decode retained raw audio instead of VAD output.
  */
 
-/** Tunable thresholds for {@link StreamEndpointer}. All durations in ms. */
 export interface EndpointerConfig {
-	/** Input sample rate (the recorder always delivers 16 kHz mono). */
 	sampleRate: number;
-	/** Short-time analysis frame size. */
 	frameMs: number;
-	/** Trailing silence inside a segment that finalizes (commits) it. */
 	endSilenceMs: number;
-	/** Shortest speech run that is committed; shorter runs are discarded as noise. */
 	minSpeechMs: number;
-	/** Hard cap on segment length so long pause-free speech still commits periodically. */
 	maxSegmentMs: number;
-	/** Audio retained before onset so the first phoneme of a segment is never clipped. */
 	preRollMs: number;
-	/** Cadence of volatile partial emissions for the in-progress segment. */
+	tailMs: number;
+	phraseSilenceMs: number;
+	minPhraseMs: number;
 	partialIntervalMs: number;
-	/** Speech threshold is `max(minThreshold, noiseFloor * energyRatio)`. */
 	energyRatio: number;
-	/** EMA weight tracking the ambient noise floor on non-speech frames. */
 	floorAttack: number;
-	/** Absolute RMS floor so a near-silent room never trips speech detection. */
 	minThreshold: number;
 }
 
 export const DEFAULT_ENDPOINTER_CONFIG: EndpointerConfig = {
 	sampleRate: 16_000,
 	frameMs: 30,
-	endSilenceMs: 600,
+	endSilenceMs: 700,
 	minSpeechMs: 200,
-	maxSegmentMs: 12_000,
-	preRollMs: 240,
+	maxSegmentMs: 30_000,
+	preRollMs: 250,
+	tailMs: 120,
+	phraseSilenceMs: 160,
+	minPhraseMs: 1_000,
 	partialIntervalMs: 450,
 	energyRatio: 2.5,
 	floorAttack: 0.05,
 	minThreshold: 0.008,
 };
 
-/**
- * Emitted by {@link StreamEndpointer.push} / {@link StreamEndpointer.flush}.
- * `partial` is the volatile in-progress segment (decode and show as preview,
- * never commit); `segment` is a finalized run (decode and commit once).
- */
-export type EndpointerEvent = { kind: "partial"; audio: Float32Array } | { kind: "segment"; audio: Float32Array };
+export type EndpointerEvent = {
+	kind: "partial" | "segment";
+	audio: Float32Array;
+	start: number;
+	end: number;
+};
 
-/** Append-growable Float32 buffer (amortized O(1) push, no per-frame realloc). */
+export interface LiveEndpointer {
+	push(samples: Float32Array, now?: number): EndpointerEvent[];
+	flush(): EndpointerEvent[];
+	readonly partialsEnabled: boolean;
+	notePartialDecode(ms: number, now?: number): void;
+}
+
 class FloatBuffer {
 	#data = new Float32Array(0);
 	#len = 0;
@@ -75,10 +65,9 @@ class FloatBuffer {
 			this.#data = next;
 		}
 		this.#data.set(samples, this.#len);
-		this.#len += samples.length;
+		this.#len = needed;
 	}
 
-	/** Copy `[0, end)` into a fresh array the caller can retain. */
 	take(end = this.#len): Float32Array {
 		return this.#data.slice(0, Math.max(0, Math.min(end, this.#len)));
 	}
@@ -94,34 +83,45 @@ function rms(frame: Float32Array): number {
 	return Math.sqrt(sum / Math.max(1, frame.length));
 }
 
-export class StreamEndpointer {
+export class StreamEndpointer implements LiveEndpointer {
 	readonly #cfg: EndpointerConfig;
 	readonly #frameSamples: number;
 	readonly #preRollSamples: number;
-
+	readonly #tailSamples: number;
+	#slowPartials = 0;
+	#lastPartialAt = 0;
 	#leftover = new Float32Array(0);
+	#consumed = 0;
 	#inSpeech = false;
 	#noiseFloor: number;
 	#silenceMs = 0;
 	#segmentMs = 0;
-	#msSincePartial = 0;
+	#segmentStart = -1;
+	#phraseStart = 0;
+	#lastVoicedEnd = 0;
 	#partialDirty = false;
-
 	readonly #segment = new FloatBuffer();
-	/** Ring of the most recent pre-onset frames, used as segment pre-roll. */
 	readonly #preRoll = new FloatBuffer();
 
 	constructor(config: Partial<EndpointerConfig> = {}) {
 		this.#cfg = { ...DEFAULT_ENDPOINTER_CONFIG, ...config };
 		this.#frameSamples = Math.max(1, Math.round((this.#cfg.sampleRate * this.#cfg.frameMs) / 1000));
 		this.#preRollSamples = Math.max(0, Math.round((this.#cfg.sampleRate * this.#cfg.preRollMs) / 1000));
+		this.#tailSamples = Math.max(0, Math.round((this.#cfg.sampleRate * this.#cfg.tailMs) / 1000));
 		this.#noiseFloor = this.#cfg.minThreshold;
 	}
 
-	/** Feed newly-captured samples; returns ordered partial/segment events. */
-	push(samples: Float32Array): EndpointerEvent[] {
+	get partialsEnabled(): boolean {
+		return this.#slowPartials < 2;
+	}
+
+	notePartialDecode(ms: number, now = performance.now()): void {
+		this.#lastPartialAt = now;
+		this.#slowPartials = ms >= this.#cfg.partialIntervalMs ? this.#slowPartials + 1 : 0;
+	}
+
+	push(samples: Float32Array, now = performance.now()): EndpointerEvent[] {
 		const events: EndpointerEvent[] = [];
-		// Prepend the carried-over tail, then consume whole frames.
 		let buf: Float32Array;
 		if (this.#leftover.length === 0) {
 			buf = samples;
@@ -132,128 +132,149 @@ export class StreamEndpointer {
 		}
 		let offset = 0;
 		for (; offset + this.#frameSamples <= buf.length; offset += this.#frameSamples) {
-			this.#processFrame(buf.subarray(offset, offset + this.#frameSamples), events);
+			const start = this.#consumed;
+			this.#consumed += this.#frameSamples;
+			this.#processFrame(buf.subarray(offset, offset + this.#frameSamples), start, now, events);
 		}
 		this.#leftover = buf.slice(offset);
 		return events;
 	}
 
-	/** End the stream; returns a trailing committed segment if one is pending. */
 	flush(): EndpointerEvent[] {
 		const events: EndpointerEvent[] = [];
+		let end = this.#consumed;
 		if (this.#inSpeech && this.#leftover.length > 0) {
 			this.#segment.push(this.#leftover);
 			this.#segmentMs += (this.#leftover.length / this.#cfg.sampleRate) * 1000;
+			end += this.#leftover.length;
 		}
 		this.#leftover = new Float32Array(0);
-		if (this.#inSpeech) {
-			const speechMs = this.#segmentMs - this.#silenceMs;
-			if (speechMs >= this.#cfg.minSpeechMs) {
-				events.push({ kind: "segment", audio: this.#segment.take(this.#endpointKeep()) });
-			}
+		if (this.#inSpeech && this.#segmentMs - this.#silenceMs >= this.#cfg.minSpeechMs) {
+			this.#emitSegment(events, end);
 		}
 		this.#reset();
 		return events;
 	}
 
-	#processFrame(frame: Float32Array, events: EndpointerEvent[]): void {
+	#processFrame(frame: Float32Array, start: number, now: number, events: EndpointerEvent[]): void {
 		const energy = rms(frame);
 		const threshold = Math.max(this.#cfg.minThreshold, this.#noiseFloor * this.#cfg.energyRatio);
 		const voiced = energy > threshold;
-		// Track ambient noise on non-speech frames only, so loud speech never
-		// inflates the floor (which would make the tail of an utterance read as
-		// silence and clip the segment short).
-		if (!voiced) {
-			this.#noiseFloor = this.#noiseFloor * (1 - this.#cfg.floorAttack) + energy * this.#cfg.floorAttack;
-		}
+		if (!voiced) this.#noiseFloor = this.#noiseFloor * (1 - this.#cfg.floorAttack) + energy * this.#cfg.floorAttack;
+		const end = start + frame.length;
 
 		if (!this.#inSpeech) {
-			this.#preRoll.push(frame);
-			// Keep only the most recent pre-roll window.
-			if (this.#preRoll.length > this.#preRollSamples) {
-				const tail = this.#preRoll.take().slice(this.#preRoll.length - this.#preRollSamples);
-				this.#preRoll.reset();
-				this.#preRoll.push(tail);
+			if (voiced) {
+				this.#beginSegment(frame, start);
+			} else {
+				this.#preRoll.push(frame);
+				if (this.#preRoll.length > this.#preRollSamples) {
+					const tail = this.#preRoll.take().slice(this.#preRoll.length - this.#preRollSamples);
+					this.#preRoll.reset();
+					this.#preRoll.push(tail);
+				}
 			}
-			if (voiced) this.#beginSegment(frame);
 			return;
 		}
 
 		this.#segment.push(frame);
-		this.#segmentMs += this.#cfg.frameMs;
-		this.#msSincePartial += this.#cfg.frameMs;
+		this.#segmentMs += (frame.length / this.#cfg.sampleRate) * 1000;
 		if (voiced) {
 			this.#silenceMs = 0;
+			this.#lastVoicedEnd = end;
 			this.#partialDirty = true;
 		} else {
-			this.#silenceMs += this.#cfg.frameMs;
+			this.#silenceMs += (frame.length / this.#cfg.sampleRate) * 1000;
 		}
 
 		if (this.#silenceMs >= this.#cfg.endSilenceMs) {
-			this.#finalizeSegment(events);
+			this.#finalizeSegment(events, end);
 			return;
 		}
 		if (this.#segmentMs >= this.#cfg.maxSegmentMs) {
-			// Pause-free long speech: commit what we have and continue a fresh
-			// segment so output keeps flowing.
-			events.push({ kind: "segment", audio: this.#segment.take() });
+			this.#emitSegment(events, end);
+			this.#segmentStart = end;
+			this.#phraseStart = end;
+			this.#lastVoicedEnd = end;
 			this.#segment.reset();
 			this.#segmentMs = 0;
 			this.#silenceMs = 0;
-			this.#msSincePartial = 0;
 			this.#partialDirty = false;
 			return;
 		}
-		if (this.#partialDirty && this.#msSincePartial >= this.#cfg.partialIntervalMs) {
-			events.push({ kind: "partial", audio: this.#segment.take() });
-			this.#msSincePartial = 0;
+
+		const phrasePause =
+			this.#silenceMs >= this.#cfg.phraseSilenceMs &&
+			this.#lastVoicedEnd - this.#phraseStart >= (this.#cfg.minPhraseMs * this.#cfg.sampleRate) / 1000;
+		if (
+			this.partialsEnabled &&
+			this.#partialDirty &&
+			(phrasePause || now - this.#lastPartialAt >= this.#cfg.partialIntervalMs)
+		) {
+			const partialEnd = Math.min(end, this.#lastVoicedEnd + this.#tailSamples);
+			if (partialEnd <= this.#segmentStart) return;
+			events.push({
+				kind: "partial",
+				start: this.#segmentStart,
+				end: partialEnd,
+				audio: this.#segment.take(partialEnd - this.#segmentStart),
+			});
+			this.#lastPartialAt = now;
+			if (phrasePause) this.#phraseStart = partialEnd;
 			this.#partialDirty = false;
 		}
 	}
 
-	#beginSegment(onsetFrame: Float32Array): void {
+	#beginSegment(onsetFrame: Float32Array, start: number): void {
 		this.#inSpeech = true;
 		this.#segment.reset();
 		const preRoll = this.#preRoll.take();
+		this.#segmentStart = Math.max(0, start - preRoll.length);
 		if (preRoll.length > 0) this.#segment.push(preRoll);
 		this.#segment.push(onsetFrame);
 		this.#preRoll.reset();
 		this.#silenceMs = 0;
 		this.#segmentMs = (this.#segment.length / this.#cfg.sampleRate) * 1000;
-		this.#msSincePartial = 0;
+		this.#phraseStart = this.#segmentStart;
+		this.#lastVoicedEnd = start + onsetFrame.length;
 		this.#partialDirty = true;
 	}
 
-	#finalizeSegment(events: EndpointerEvent[]): void {
-		const speechMs = this.#segmentMs - this.#silenceMs;
-		if (speechMs >= this.#cfg.minSpeechMs) {
-			events.push({ kind: "segment", audio: this.#segment.take(this.#endpointKeep()) });
-		}
+	#finalizeSegment(events: EndpointerEvent[], end: number): void {
+		if (this.#segmentMs - this.#silenceMs >= this.#cfg.minSpeechMs) this.#emitSegment(events, end);
 		this.#inSpeech = false;
-		this.#segment.reset();
-		this.#silenceMs = 0;
-		this.#segmentMs = 0;
-		this.#msSincePartial = 0;
-		this.#partialDirty = false;
-	}
-
-	/** Samples to keep when committing on silence: drop most of the trailing
-	 *  silence but leave a short tail so the final word is not cut. */
-	#endpointKeep(): number {
-		const tailMs = Math.min(this.#silenceMs, 120);
-		const dropMs = Math.max(0, this.#silenceMs - tailMs);
-		const drop = Math.round((this.#cfg.sampleRate * dropMs) / 1000);
-		return Math.max(0, this.#segment.length - drop);
-	}
-
-	#reset(): void {
-		this.#inSpeech = false;
+		this.#segmentStart = -1;
 		this.#segment.reset();
 		this.#preRoll.reset();
 		this.#silenceMs = 0;
 		this.#segmentMs = 0;
-		this.#msSincePartial = 0;
+		this.#partialDirty = false;
+		this.#slowPartials = 0;
+		this.#lastPartialAt = 0;
+	}
+
+	#emitSegment(events: EndpointerEvent[], frameEnd: number): void {
+		const dropMs = Math.max(0, this.#silenceMs - this.#cfg.tailMs);
+		const drop = Math.round((this.#cfg.sampleRate * dropMs) / 1000);
+		const end = Math.max(this.#segmentStart, frameEnd - drop);
+		events.push({
+			kind: "segment",
+			start: this.#segmentStart,
+			end,
+			audio: this.#segment.take(end - this.#segmentStart),
+		});
+	}
+
+	#reset(): void {
+		this.#inSpeech = false;
+		this.#segmentStart = -1;
+		this.#segment.reset();
+		this.#preRoll.reset();
+		this.#silenceMs = 0;
+		this.#segmentMs = 0;
 		this.#partialDirty = false;
 		this.#noiseFloor = this.#cfg.minThreshold;
+		this.#slowPartials = 0;
+		this.#lastPartialAt = 0;
 	}
 }
