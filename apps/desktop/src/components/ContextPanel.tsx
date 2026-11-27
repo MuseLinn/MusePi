@@ -266,10 +266,17 @@ function BrowserPanelTabIcon({ favicon }: { favicon: string | null }): ReactNode
 
 /**
  * The owning session's subagent roster, read from the daemon's disk-backed
- * scan (`session.agents`) every 5s while the pane is visible. Live progress
- * rows come from the session store; this is the durable half — a finished
- * one-shot subagent leaves the registry, but its transcript and child session
- * stay on disk, so the roster must not be rebuilt from the registry alone.
+ * scan (`session.agents`). Live progress rows come from the session store;
+ * this is the durable half — a finished one-shot subagent leaves the registry,
+ * but its transcript and child session stay on disk, so the roster must not be
+ * rebuilt from the registry alone.
+ *
+ * The scan hits the filesystem, so it is NOT polled on a short timer: a
+ * `agent-lifecycle` frame (spawned / completed / failed / aborted) means the
+ * disk row set just changed, and that is when it is re-read. The slow interval
+ * behind it is a safety net for the one case events cannot cover — a child
+ * whose row appears without this daemon emitting anything (a transcript
+ * written by another process).
  */
 function useSubagentRoster(rpc: RpcClient, sessionId: string | null, enabled: boolean): readonly AgentSnapshot[] {
 	const [roster, setRoster] = useState<readonly AgentSnapshot[]>([]);
@@ -324,10 +331,24 @@ function useSubagentRoster(rpc: RpcClient, sessionId: string | null, enabled: bo
 				});
 		};
 		poll();
-		const timer = setInterval(poll, 5000);
+		const timer = setInterval(poll, ROSTER_FALLBACK_MS);
+		// A lifecycle frame means the disk row set changed; coalesce a burst
+		// (a parallel spawn emits one frame per member) into one scan.
+		let pending: ReturnType<typeof setTimeout> | null = null;
+		const off = rpc.addEventListener(event => {
+			if (event.sessionId !== undefined && event.sessionId !== sessionId) return;
+			if (event.kind !== "agent-lifecycle") return;
+			if (pending !== null) return;
+			pending = setTimeout(() => {
+				pending = null;
+				if (alive) poll();
+			}, ROSTER_REFRESH_COALESCE_MS);
+		});
 		return () => {
 			alive = false;
 			clearInterval(timer);
+			if (pending !== null) clearTimeout(pending);
+			off();
 		};
 	}, [rpc, sessionId, enabled]);
 	return roster;
@@ -2533,6 +2554,11 @@ export const JOB_OUTPUT_TAIL_LIMIT = 4000;
 
 /** Poll cadence for the jobs list and the selected job's output (ms). */
 const JOBS_POLL_INTERVAL_MS = 1000;
+/** Roster safety net behind the `agent-lifecycle` push (see useSubagentRoster):
+ *  long enough that it is a backstop, not the mechanism. */
+const ROSTER_FALLBACK_MS = 15_000;
+/** A parallel spawn emits one lifecycle frame per member; one scan covers them. */
+const ROSTER_REFRESH_COALESCE_MS = 400;
 
 /** Settled jobs requested for the「全部」filter. The daemon defaults to 8
  *  (TUI `/jobs` parity), which made the option a quiet lie: 12 finished jobs

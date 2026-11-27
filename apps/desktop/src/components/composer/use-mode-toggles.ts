@@ -25,6 +25,10 @@ const EMPTY: ModeToggleState = {
 	prewalk: { enabled: false, target: null, thinkingLevel: null },
 };
 
+/** Reconciliation cadence for toggles changed outside this window (see the
+ *  hook doc). Local mutations never wait for it. */
+const MODE_TOGGLES_RECONCILE_MS = 30_000;
+
 /** Pick + normalize the toggle fields out of the full session.modes
  *  response (goal/plan/todo ride along in the wire shape; this UI only
  *  consumes the four session-mode toggles). Defensive against an older
@@ -56,11 +60,18 @@ function parseModes(res: unknown): ModeToggleState {
 
 /**
  * Session mode toggles for the composer footer (TUI /fast /computer
- * /vision /prewalk parity): polls session.modes every 10s while the
- * session id is present (visibility-gated like the goal/plan poll),
- * stores the toggle subset in local state, and exposes one-shot
- * mutations that round-trip through the daemon and merge the response
- * back immediately (no waiting for the next poll tick). Fail silently:
+ * /vision /prewalk parity).
+ *
+ * Every mutation this hook exposes merges the daemon's response straight
+ * into local state, so the local user never waits for a poll tick. The
+ * interval exists for the one thing no event covers: a toggle changed
+ * somewhere else (the TUI, another device, a `/fast` slash command in a
+ * terminal). Those values live only on the live AgentSession — unlike
+ * goal/plan/todo, which ride `SessionState` on `state` frames — so a slow
+ * read is the only way to notice them.
+ *
+ * It is therefore a reconciliation pass, not the mechanism: 30s instead of
+ * 10s, and visibility-gated so a hidden tab costs nothing. Fail silently:
  * RPC errors keep the last known state.
  */
 export function useModeToggles(
@@ -88,18 +99,17 @@ export function useModeToggles(
 			.catch(() => {});
 	}, [rpc, sessionId]);
 
-	// 10s poll while the session id is present; pause while the tab is
-	// hidden (background CPU + daemon RPCs for nothing — same visibility
-	// gating as the goal/plan modes poll).
+	// Reconciliation read (see the hook doc): slow, and paused while the tab
+	// is hidden.
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
 		refresh();
-		let id = setInterval(refresh, 10000);
+		let id = setInterval(refresh, MODE_TOGGLES_RECONCILE_MS);
 		const onVis = (): void => {
 			clearInterval(id);
 			if (document.visibilityState === "visible") {
 				refresh();
-				id = setInterval(refresh, 10000);
+				id = setInterval(refresh, MODE_TOGGLES_RECONCILE_MS);
 			}
 		};
 		document.addEventListener("visibilitychange", onVis);
