@@ -48,6 +48,10 @@ export class DaemonHostContext {
 		this.#lifecycles.set(key, lifecycle);
 		const fiber = this.plugin({
 			name: `daemon-service:${key}`,
+			// cordis only allows `ctx.<key>` property access inside a plugin that
+			// declared that key in `inject`; without this the read throws
+			// `cannot get property "x" without inject` rather than resolving.
+			...(service.inject && service.inject.length > 0 ? { inject: [...service.inject] } : {}),
 			apply: ctx => {
 				// dsh's `static inject` semantics: the service receives the context
 				// and reads its dependencies straight off it (`ctx.sessionProjections`),

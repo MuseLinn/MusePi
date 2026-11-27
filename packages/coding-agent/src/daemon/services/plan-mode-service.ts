@@ -108,6 +108,7 @@ export class PlanModeService implements DaemonService {
 		"session.setPlan": "setPlan",
 		"session.plan": "plan",
 	} as const;
+	readonly inject = ["sessionProjections"] as const;
 
 	readonly #deps: PlanModeServiceDeps;
 	#projection: ProjectionHandle<SessionModeProjection> | null = null;

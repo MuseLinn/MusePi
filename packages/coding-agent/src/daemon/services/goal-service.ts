@@ -75,6 +75,7 @@ export class GoalService implements DaemonService {
 		"session.setGoal": "setGoal",
 		"session.goal": "goal",
 	} as const;
+	readonly inject = ["sessionProjections"] as const;
 
 	readonly #deps: GoalServiceDeps;
 	#projection: ProjectionHandle<SessionModeProjection> | null = null;

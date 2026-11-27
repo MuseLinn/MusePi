@@ -125,6 +125,7 @@ export class SessionService implements DaemonService {
 		"session.resume": "resume",
 		"session.toolGates": "toolGates",
 	} as const;
+	readonly inject = ["sessionProjections"] as const;
 
 	readonly #deps: SessionServiceDeps;
 	readonly #projections: ProjectionHandle<unknown>[] = [];

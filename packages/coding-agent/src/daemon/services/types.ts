@@ -20,6 +20,13 @@ export interface DaemonService {
 	 * 路由覆盖快照测试据此强制"每个 case 必须归属某服务或 legacy 清单"。 */
 	readonly routes?: Readonly<Record<string, string>>;
 
+	/** 依赖的 L2 服务键（dsh 的 `static inject`）。
+	 *
+	 *  cordis 只在**声明过 inject** 的插件里允许属性访问 `ctx.<key>`：未声明就
+	 *  读会抛 `cannot get property "x" without inject`（reflect.ts:152）。所以
+	 *  依赖必须在这里列出，`mount` 会把它转成插件的 inject，cordis 也据它排序。 */
+	readonly inject?: readonly string[];
+
 	/** 服务启动（无状态服务可不实现）。
 	 *
 	 *  收到宿主 cordis Context（与 dsh 的 `Service.init` 相同），因此依赖按
