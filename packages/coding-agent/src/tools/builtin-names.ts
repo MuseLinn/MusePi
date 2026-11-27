@@ -27,6 +27,7 @@ export const BUILTIN_TOOL_NAMES = [
 	"office_convert",
 	"office_recalculate",
 	"workflow",
+	"request_login",
 	"request_secret",
 	"list_secrets",
 	"connector_catalog",

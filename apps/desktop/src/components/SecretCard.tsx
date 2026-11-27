@@ -15,10 +15,15 @@ export interface SecretRequest {
 	requestId: string;
 	name: string;
 	purpose: string;
-	/** "fill" asks for a new value, "allow" re-confirms an already saved one. */
-	kind: "fill" | "allow";
+	/**
+	 * `fill` asks for a new value, `allow` re-confirms an already saved one,
+	 * and `login` asks for a website sign-in the agent will only ever fill.
+	 */
+	kind: "fill" | "allow" | "login";
 	/** How the value will reach the agent: env var or a private file. */
 	delivery?: "env" | "file";
+	/** For `login`: the site the agent is on, prefilled in the form. */
+	site?: string;
 }
 
 type SecretAction = "save" | "allow" | "cancel";
@@ -32,6 +37,12 @@ export interface SecretAnswer {
 	value?: string;
 	/** Chosen scope for `save`; `allow` uses the request's own workspace. */
 	scope?: SecretScopeChoice;
+	/** For a login card: the sign-in the form collected. */
+	login?: {
+		site: string;
+		username: string;
+		totp?: string;
+	};
 }
 
 /** Values this short are redacted only where they stand alone; the card holds
@@ -80,6 +91,11 @@ export function SecretCard({
 }): ReactNode {
 	const [value, setValue] = useState("");
 	const [scope, setScope] = useState<SecretScopeChoice>("all");
+	// Login-only fields: the site, the username and an optional setup key. The
+	// password travels in `value`, so it shares the same clear-on-submit path.
+	const [loginSite, setLoginSite] = useState(request.site ?? "");
+	const [loginUsername, setLoginUsername] = useState("");
+	const [loginTotp, setLoginTotp] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [settled, setSettled] = useState<SecretAction | null>(null);
@@ -94,10 +110,13 @@ export function SecretCard({
 	useEffect(() => {
 		setValue("");
 		setScope("all");
+		setLoginSite(request.site ?? "");
+		setLoginUsername("");
+		setLoginTotp("");
 		setBusy(false);
 		setError("");
 		setSettled(null);
-	}, [request.requestId]);
+	}, [request.requestId, request.site]);
 
 	useEffect(() => {
 		if (!settled) return;
@@ -114,6 +133,13 @@ export function SecretCard({
 		if (action === "save") {
 			answer.value = value;
 			answer.scope = scope;
+			if (request.kind === "login") {
+				answer.login = {
+					site: loginSite.trim(),
+					username: loginUsername.trim(),
+					...(loginTotp.trim() ? { totp: loginTotp.trim() } : {}),
+				};
+			}
 		}
 		try {
 			await onAnswer(answer);
@@ -192,12 +218,18 @@ export function SecretCard({
 				className="gui-ask-card gui-ask-card--entered gui-secret-card"
 				style={CARD_STYLE}
 				role="group"
-				aria-label={isFill ? t("tools.secretTitle") : t("tools.secretAllowTitle")}
+				aria-label={
+					isFill
+						? t(request.kind === "login" ? "tools.loginTitle" : "tools.secretTitle")
+						: t("tools.secretAllowTitle")
+				}
 			>
 				<div className="gui-ask-card-head">
 					<Icon name="key" className="h-3.5 w-3.5 flex-none opacity-70" />
 					<span className="gui-ask-card-title">
-						{isFill ? t("tools.secretTitle") : t("tools.secretAllowTitle")}
+						{isFill
+							? t(request.kind === "login" ? "tools.loginTitle" : "tools.secretTitle")
+							: t("tools.secretAllowTitle")}
 					</span>
 					<button
 						type="button"
@@ -211,6 +243,28 @@ export function SecretCard({
 					</button>
 				</div>
 				<p className="gui-note">{request.purpose}</p>
+				{isFill && request.kind === "login" ? (
+					<>
+						<input
+							className="gui-input w-full"
+							value={loginSite}
+							placeholder={t("tools.loginSitePlaceholder")}
+							aria-label={t("tools.loginSite")}
+							spellCheck={false}
+							disabled={busy}
+							onChange={e => setLoginSite(e.target.value)}
+						/>
+						<input
+							className="gui-input w-full"
+							value={loginUsername}
+							placeholder={t("tools.loginUsernamePlaceholder")}
+							aria-label={t("tools.loginUsername")}
+							autoComplete="off"
+							disabled={busy}
+							onChange={e => setLoginUsername(e.target.value)}
+						/>
+					</>
+				) : null}
 				{isFill ? (
 					<>
 						<input
@@ -234,7 +288,23 @@ export function SecretCard({
 						<p className={tooShort ? "gui-error" : "gui-note"}>
 							{t("tools.secretMinLength", { count: MIN_SECRET_VALUE_LENGTH })}
 						</p>
-						<p className="gui-note">{t("tools.secretHiddenNote", { env: envVar })}</p>
+						{request.kind === "login" ? (
+							<>
+								<input
+									className="gui-input w-full"
+									value={loginTotp}
+									placeholder={t("tools.loginTotpPlaceholder")}
+									aria-label={t("tools.loginTotp")}
+									autoComplete="off"
+									spellCheck={false}
+									disabled={busy}
+									onChange={e => setLoginTotp(e.target.value)}
+								/>
+								<p className="gui-note">{t("tools.loginHiddenNote")}</p>
+							</>
+						) : (
+							<p className="gui-note">{t("tools.secretHiddenNote", { env: envVar })}</p>
+						)}
 					</>
 				) : (
 					<p className="gui-note">{t("tools.secretAlreadySaved", { env: envVar })}</p>

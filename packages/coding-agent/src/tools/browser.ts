@@ -7,10 +7,12 @@ import { prompt, Snowflake, untilAborted } from "@musepi/pi-utils";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
 import { resolveToCwd } from "../render/path-utils";
+import { getAgentSecretStore, secretScopeIncludes } from "../secrets/agent-store";
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { resolveCmuxKind } from "./browser/cmux/rpc";
 import { BROWSER_DEVICE_PROFILES, type BrowserDeviceConfiguration, deviceActionCode } from "./browser/devices";
+import { fillLoginIntoPage } from "./browser/login-fill";
 import { managedBrowserBridgeUrl, managedBrowserEnabled } from "./browser/managed-bridge";
 import { type BrowserNavigationResult, navigationActionCode } from "./browser/navigation";
 import { type PageTextSnapshot, pageTextCode } from "./browser/page-text";
@@ -95,7 +97,7 @@ const appSchema = type({
 
 const browserSchema = type({
 	action: type(
-		"'open' | 'close' | 'run' | 'status' | 'read' | 'screenshot' | 'elements' | 'visual' | 'visual_crop' | 'click' | 'double_click' | 'right_click' | 'click_if_interactive' | 'visual_type' | 'fill' | 'type' | 'press' | 'hover' | 'scroll' | 'drag' | 'drag_path' | 'select_option' | 'set_checked' | 'scroll_into_view' | 'dialog' | 'dialog_respond' | 'activate' | 'activate_panel' | 'switch' | 'release' | 'device_profiles' | 'set_device' | 'history' | 'downloads' | 'navigate' | 'search' | 'back' | 'forward' | 'reload' | 'stop' | 'wait_load' | 'wait_for'",
+		"'open' | 'close' | 'run' | 'status' | 'read' | 'screenshot' | 'elements' | 'visual' | 'visual_crop' | 'click' | 'double_click' | 'right_click' | 'click_if_interactive' | 'visual_type' | 'fill' | 'type' | 'press' | 'hover' | 'scroll' | 'drag' | 'drag_path' | 'select_option' | 'set_checked' | 'scroll_into_view' | 'dialog' | 'dialog_respond' | 'activate' | 'activate_panel' | 'switch' | 'release' | 'device_profiles' | 'set_device' | 'history' | 'downloads' | 'navigate' | 'search' | 'back' | 'forward' | 'reload' | 'stop' | 'wait_load' | 'wait_for' | 'fill_login'",
 	).describe("operation"),
 	"name?": type("string").describe("tab id (default 'main')"),
 	"url?": type("string").describe("url to open"),
@@ -149,6 +151,7 @@ const browserSchema = type({
 	"value?": type("string").describe("option value for select_option"),
 	"checked?": type("boolean").describe("checked state for set_checked"),
 	"replace?": type("boolean").describe("replace existing text instead of appending"),
+	"login?": type("string").describe("saved login name for fill_login (see request_login)"),
 	"selector?": type("string").describe("optional element selector for screenshot"),
 	"fullPage?": type("boolean").describe("capture the full page instead of the viewport"),
 	"region?": {
@@ -650,6 +653,8 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 					return await this.#navigation(name, params, details, timeoutMs, signal, _onUpdate);
 				case "wait_for":
 					return await this.#waitFor(name, params, details, timeoutMs, signal, _onUpdate);
+				case "fill_login":
+					return await this.#fillLogin(name, params, details);
 				default:
 					throw new ToolError(`Unsupported action: ${(params as BrowserParams).action}`);
 			}
@@ -1258,6 +1263,51 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			details.result = message;
 			return toolResult(details).text(message).error().done();
 		}
+	}
+
+	/**
+	 * Type a saved login into the current page.
+	 *
+	 * The values never enter the tool's result, its `run` code, or the worker
+	 * channel: this method reads them from the vault, types them itself, and
+	 * reports only which fields it filled.
+	 */
+	async #fillLogin(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const loginName = params.login?.trim();
+		if (!loginName) throw new ToolError("fill_login requires 'login', the saved login's name.");
+		const tab = getTab(name);
+		if (!tab || tab.state === "dead") {
+			throw new ToolError(`Tab ${JSON.stringify(name)} is not alive. Open it first with action:"open".`);
+		}
+		const store = getAgentSecretStore(this.session.settings.getAgentDir());
+		const entry = await store.getEntry(loginName);
+		if (entry?.kind !== "login") {
+			throw new ToolError(`${loginName} is not a saved login. Use request_login first.`);
+		}
+		if (!secretScopeIncludes(entry.scope, this.session.cwd)) {
+			throw new ToolError(`${loginName} is not allowed in this workspace.`);
+		}
+		const values = await store.loginFill(loginName);
+		if (!values) throw new ToolError(`${loginName} could not be read; the vault may be locked.`);
+		const kind = tab.browser.kind;
+		const cdpUrl = "cdpUrl" in kind ? kind.cdpUrl : undefined;
+		if (!cdpUrl) {
+			throw new ToolError("This browser does not take a CDP connection, so a saved login cannot be filled into it.");
+		}
+		const report = await fillLoginIntoPage(cdpUrl, values);
+		details.url = tab.info.url;
+		details.result = report.problem ?? `Filled ${report.filled.join(", ") || "nothing"}`;
+		const lines = [
+			`Filled ${report.filled.join(", ") || "no fields"} on ${tab.info.url}.`,
+			report.submitted ? "Submitted the form." : "The form was not submitted; submit it yourself if needed.",
+			...(report.problem ? [`Note: ${report.problem}`] : []),
+			"You did not see the password or any one-time code, and neither was stored in this transcript.",
+		];
+		return toolResult(details).text(lines.join("\n")).done();
 	}
 
 	async #run(

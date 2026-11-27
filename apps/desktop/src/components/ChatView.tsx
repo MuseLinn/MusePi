@@ -537,7 +537,7 @@ export function ChatView({
 					typeof payload.requestId !== "string" ||
 					typeof payload.name !== "string" ||
 					typeof payload.purpose !== "string" ||
-					(payload.kind !== "fill" && payload.kind !== "allow")
+					payload.kind !== "fill" && payload.kind !== "allow" && payload.kind !== "login"
 				) {
 					return;
 				}
@@ -547,6 +547,7 @@ export function ChatView({
 					purpose: payload.purpose,
 					kind: payload.kind,
 					delivery: payload.delivery === "file" ? "file" : "env",
+					...(typeof payload.site === "string" ? { site: payload.site } : {}),
 				};
 				// A subscribe replay of a request already on screen keeps one card.
 				setSecretRequests(current =>
@@ -577,6 +578,7 @@ export function ChatView({
 					action: answer.action,
 					...(answer.value !== undefined ? { value: answer.value } : {}),
 					...(answer.scope !== undefined ? { scope: answer.scope } : {}),
+					...(answer.login !== undefined ? { login: answer.login } : {}),
 				});
 			} catch (err) {
 				answeredSecretRequestsRef.current.delete(answer.requestId);

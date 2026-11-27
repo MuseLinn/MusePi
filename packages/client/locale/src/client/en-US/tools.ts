@@ -2182,6 +2182,15 @@ export const tools = {
 	// into the local encrypted store.
 	"tools.secretTitle": "Secret required",
 	"tools.secretAllowTitle": "Secret access",
+	"tools.loginTitle": "Sign-in needed",
+	"tools.loginSite": "Site",
+	"tools.loginSitePlaceholder": "example.com",
+	"tools.loginUsername": "Username or email",
+	"tools.loginUsernamePlaceholder": "you@example.com",
+	"tools.loginTotp": "2FA setup key (optional)",
+	"tools.loginTotpPlaceholder": "Setup key or otpauth:// link",
+	"tools.loginHiddenNote":
+		"Saved in this computer's vault. The agent fills the page itself and never sees the password or a code.",
 	"tools.secretValuePlaceholder": "Paste the secret value",
 	"tools.secretMinLength": "At least {count} characters",
 	"tools.secretHiddenNote": "The agent cannot see this value — it reaches the agent only as {env}.",

@@ -15,7 +15,15 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
-import type { SecretDelivery, SecretEntryView, SecretScope, SecretStatus } from "@musepi/pi-wire";
+import type {
+	SecretDelivery,
+	SecretEntryView,
+	SecretKind,
+	SecretLoginInput,
+	SecretLoginView,
+	SecretScope,
+	SecretStatus,
+} from "@musepi/pi-wire";
 import { writeFileAtomically } from "../utils/atomic-file";
 import {
 	decryptMasterKey,
@@ -28,8 +36,9 @@ import {
 	rephraseMasterKey,
 	unlockMasterKey,
 } from "./encrypted-store";
+import { parseTotpKey, totpCode } from "./totp";
 
-export type { SecretDelivery, SecretEntryView, SecretScope, SecretStatus };
+export type { SecretDelivery, SecretEntryView, SecretKind, SecretLoginView, SecretScope, SecretStatus };
 
 export const AGENT_SECRET_DIR = "agent-secrets";
 export const AGENT_SECRET_FILES_DIR = "files";
@@ -42,6 +51,39 @@ export const MIN_AGENT_SECRET_VALUE_LENGTH = 4;
 const METADATA_FILE = "metadata.json";
 const METADATA_VERSION = 1;
 const VALUE_KEY = "value";
+/** A login's TOTP setup key, in the same envelope as its password. */
+const TOTP_KEY = "totp";
+
+/** Merge a login's non-secret half, keeping what the form left blank. */
+function normalizeLogin(
+	input: { site?: string; hosts?: string[]; exactHost?: boolean; username?: string } | undefined,
+	previous: SecretLoginView | undefined,
+	hasTotp: string | undefined,
+): SecretLoginView {
+	const site =
+		typeof input?.site === "string" && input.site.trim() !== ""
+			? input.site.trim().toLowerCase()
+			: (previous?.site ?? "");
+	const hosts = Array.isArray(input?.hosts)
+		? [
+				...new Set(
+					input.hosts
+						.filter(host => typeof host === "string" && host.trim() !== "")
+						.map(host => host.trim().toLowerCase()),
+				),
+			]
+		: (previous?.hosts ?? []);
+	return {
+		site,
+		hosts,
+		exactHost: typeof input?.exactHost === "boolean" ? input.exactHost : (previous?.exactHost ?? false),
+		username:
+			typeof input?.username === "string" && input.username !== "" ? input.username : (previous?.username ?? ""),
+		// A blank TOTP field keeps the stored key: the form cannot show what it
+		// already holds, and clearing it would silently stop codes working.
+		hasTotp: typeof hasTotp === "string" && hasTotp.trim() !== "" ? true : (previous?.hasTotp ?? false),
+	};
+}
 
 interface SecretMetadata {
 	version: 1;
@@ -50,6 +92,9 @@ interface SecretMetadata {
 		{
 			purpose: string;
 			scope: SecretScope;
+			kind: SecretKind;
+			/** Present exactly when `kind` is `login`; the password stays in the envelope. */
+			login?: SecretLoginView;
 			delivery: SecretDelivery;
 			createdAt: number;
 			updatedAt: number;
@@ -125,6 +170,23 @@ export function parseStoredSecretScope(scope: unknown): SecretScope {
 		scope: String(scope),
 	});
 	return [];
+}
+
+/** A stored login's non-secret half; a malformed record yields a fillable empty site. */
+function parseStoredLogin(login: unknown): SecretLoginView {
+	if (!isRecord(login)) return { site: "", hosts: [], exactHost: false, username: "", hasTotp: false };
+	const hosts = Array.isArray(login.hosts)
+		? login.hosts
+				.filter((host): host is string => typeof host === "string" && host.trim() !== "")
+				.map(host => host.trim())
+		: [];
+	return {
+		site: typeof login.site === "string" ? login.site.trim().toLowerCase() : "",
+		hosts: [...new Set(hosts.map(host => host.toLowerCase()))],
+		exactHost: login.exactHost === true,
+		username: typeof login.username === "string" ? login.username : "",
+		hasTotp: login.hasTotp === true,
+	};
 }
 
 /**
@@ -222,9 +284,12 @@ export class AgentSecretStore {
 				) {
 					continue;
 				}
+				const kind: SecretKind = value.kind === "login" ? "login" : "secret";
 				entries[name] = {
 					purpose: typeof value.purpose === "string" ? value.purpose : "",
 					scope: parseStoredSecretScope(value.scope),
+					kind,
+					...(kind === "login" ? { login: parseStoredLogin(value.login) } : {}),
 					delivery: normalizeSecretDelivery(value.delivery, "env"),
 					createdAt: value.createdAt,
 					updatedAt: value.updatedAt,
@@ -290,8 +355,12 @@ export class AgentSecretStore {
 		return entry ? this.#toView(name, entry) : undefined;
 	}
 
-	/** Decrypted value, or undefined when the entry is missing or unreadable. */
+	/** Decrypted value, or undefined when the entry is missing, unreadable, or a login. */
 	async getValue(name: string): Promise<string | undefined> {
+		// A saved login's password is not a value the agent may use: it belongs to
+		// a browser form, and `loginCredentials` is the only reader.
+		const entry = await this.getEntry(name);
+		if (entry?.kind === "login") return undefined;
 		const values = await readSecret(this.#values, name);
 		return values?.[VALUE_KEY];
 	}
@@ -302,6 +371,7 @@ export class AgentSecretStore {
 		purpose?: string,
 		scope?: unknown,
 		delivery?: unknown,
+		identity?: { kind?: SecretKind; login?: SecretLoginInput },
 	): Promise<SecretEntryView> {
 		validateSecretName(name);
 		validateSecretValue(value);
@@ -309,27 +379,114 @@ export class AgentSecretStore {
 			const metadata = await this.#readMetadata();
 			const previous = metadata.entries[name];
 			const now = Date.now();
+			const kind: SecretKind = identity?.kind === "login" || previous?.kind === "login" ? "login" : "secret";
+			// A login never leaves the store as a value: no env var, no file. Its
+			// delivery is normalized to `env` only to keep one field non-optional;
+			// `getValue` refuses to hand a login out, which is what enforces it.
+			const login =
+				kind === "login" ? normalizeLogin(identity?.login, previous?.login, identity?.login?.totp) : undefined;
 			const next = {
 				purpose: typeof purpose === "string" ? purpose : (previous?.purpose ?? ""),
 				// Replacing a value must not widen an entry the user narrowed.
 				scope: normalizeSecretScope(scope, previous?.scope ?? "all"),
-				delivery: normalizeSecretDelivery(delivery, previous?.delivery ?? "env"),
+				kind,
+				...(login ? { login } : {}),
+				delivery: kind === "login" ? "env" : normalizeSecretDelivery(delivery, previous?.delivery ?? "env"),
 				createdAt: previous?.createdAt ?? now,
 				updatedAt: now,
 				...(previous?.lastUsedAt !== undefined ? { lastUsedAt: previous.lastUsedAt } : {}),
 			};
-			await mergeSecret(this.#values, name, { [VALUE_KEY]: value });
+			// A login's password and its TOTP key ride in the same envelope, so a
+			// single read gets both and the whole record is one atomic write.
+			const entryValues: Record<string, string> = { [VALUE_KEY]: value };
+			if (kind === "login" && typeof identity?.login?.totp === "string" && identity.login.totp.trim() !== "") {
+				entryValues[TOTP_KEY] = identity.login.totp.trim();
+			}
+			await mergeSecret(this.#values, name, entryValues);
 			metadata.entries[name] = next;
 			await this.#writeMetadata(metadata);
-			if (next.delivery === "file") await this.#writeDeliveryFile(name, value);
+			if (next.kind === "login") await this.removeDeliveryFile(name);
+			else if (next.delivery === "file") await this.#writeDeliveryFile(name, value);
 			else await this.removeDeliveryFile(name);
 			return this.#toView(name, next);
 		});
 	}
 
+	/**
+	 * The password and TOTP key of one saved login, for the browser tool to type.
+	 *
+	 * Refuses anything that is not a `login` entry: a plain secret's value must
+	 * never travel this path, because this one hands the value to a caller
+	 * rather than placing it in a child process's environment.
+	 */
+	async loginCredentials(name: string): Promise<{ password: string; totp?: string } | undefined> {
+		validateSecretName(name);
+		const entry = await this.getEntry(name);
+		if (entry?.kind !== "login") return undefined;
+		const values = await readSecret(this.#values, name);
+		const password = values?.[VALUE_KEY];
+		if (password === undefined) return undefined;
+		const totp = values?.[TOTP_KEY];
+		return { password, ...(totp ? { totp } : {}) };
+	}
+
+	/**
+	 * Everything one login needs to fill a form: username, password, and a
+	 * current one-time code when a TOTP key is stored.
+	 *
+	 * The codes are computed here, in the daemon's process, and handed to the
+	 * browser tool that will type them. Neither the password nor a code ever
+	 * travels back through a tool result.
+	 */
+	async loginFill(
+		name: string,
+		now: number = Date.now(),
+	): Promise<{ username: string; password: string; code?: string } | undefined> {
+		const entry = await this.getEntry(name);
+		if (entry?.kind !== "login") return undefined;
+		const credentials = await this.loginCredentials(name);
+		if (!credentials) return undefined;
+		let code: string | undefined;
+		if (credentials.totp) {
+			try {
+				code = totpCode(parseTotpKey(credentials.totp), now);
+			} catch (error) {
+				// A malformed setup key means no code, not a failed sign-in: the form
+				// can still take the password and the person finishes the step.
+				logger.warn("Stored 2FA setup key could not be read", {
+					name,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+		return {
+			username: entry.login?.username ?? "",
+			password: credentials.password,
+			...(code ? { code } : {}),
+		};
+	}
+
+	/** Saved logins whose site or host matches `host`, narrowest-first. */ async loginsForHost(
+		host: string,
+	): Promise<SecretEntryView[]> {
+		const target = host.trim().toLowerCase();
+		if (target === "") return [];
+		const entries = await this.list();
+		const matches = entries.filter(entry => {
+			if (entry.kind !== "login" || !entry.login) return false;
+			const { site, hosts, exactHost } = entry.login;
+			// `exactHost` is the user saying "only on these hosts": a bare site
+			// match must not widen it back to the whole site.
+			if (hosts.includes(target)) return true;
+			return !exactHost && site !== "" && (target === site || target.endsWith(`.${site}`));
+		});
+		return matches;
+	}
+
 	/** Rewrite a `file` delivery's working copy from the stored value; idempotent. */
 	async materializeFile(name: string): Promise<void> {
 		validateSecretName(name);
+		// A login never has a delivery file; `getValue` already returns nothing.
 		const value = await this.getValue(name);
 		if (value !== undefined) await this.#writeDeliveryFile(name, value);
 	}
@@ -404,6 +561,9 @@ export class AgentSecretStore {
 		const out: Array<{ name: string; purpose: string; scope: SecretScope; delivery: SecretDelivery; value: string }> =
 			[];
 		for (const [name, entry] of Object.entries(metadata.entries)) {
+			// A login has no value to export; skipping it here keeps passwords out
+			// of every bash environment and every redaction list.
+			if (entry.kind === "login") continue;
 			const value = await this.getValue(name);
 			if (value === undefined) {
 				logger.warn("Agent secret could not be decrypted; skipping it", { name });
@@ -430,6 +590,8 @@ export class AgentSecretStore {
 			name,
 			purpose: entry.purpose,
 			scope: entry.scope,
+			kind: entry.kind,
+			...(entry.login ? { login: { ...entry.login } } : {}),
 			delivery: entry.delivery,
 			createdAt: entry.createdAt,
 			updatedAt: entry.updatedAt,
@@ -452,15 +614,21 @@ export function getAgentSecretStore(agentDir: string): AgentSecretStore {
 }
 
 /**
- * What the card must collect. `fill` is the only kind the tool sends today;
- * `allow` remains accepted at the wire level for future consent hosts.
+ * What the card must collect. `fill` asks for a value; `allow` extends an
+ * existing entry's scope; `login` asks for a website sign-in (site, username,
+ * password and optionally a 2FA setup key) that the agent will only ever fill,
+ * never read.
  */
-export type AgentSecretRequestKind = "fill" | "allow";
+export type AgentSecretRequestKind = "fill" | "allow" | "login";
 
 /** Tool → UI request. Carries no value and no request id; the host assigns one. */
 export interface AgentSecretRequest {
 	name: string;
 	purpose: string;
+	/** For `login`: the page the agent is on, so the card can prefill its site. */
+	site?: string;
+	/** For `login`: the asking session's current URL, shown as the form it saves. */
+	url?: string;
 	kind: AgentSecretRequestKind;
 	/** Proposed delivery for a new save; a stored entry keeps its own. */
 	delivery?: SecretDelivery;

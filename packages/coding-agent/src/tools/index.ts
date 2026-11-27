@@ -43,6 +43,7 @@ import { OfficeConvertTool, OfficeRecalculateTool, OfficeRenderTool } from "./of
 import { wrapToolWithMetaNotice } from "./output-meta";
 import { PresentTool } from "./present";
 import { ReadTool } from "./read";
+import { RequestLoginTool } from "./request-login";
 import { RequestSecretTool } from "./request-secret";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
@@ -134,6 +135,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	office_convert: s => new OfficeConvertTool(s),
 	office_recalculate: s => new OfficeRecalculateTool(s),
 	workflow: s => new WorkflowTool(s),
+	request_login: s => new RequestLoginTool(s),
 	request_secret: s => new RequestSecretTool(s),
 	list_secrets: s => new ListSecretsTool(s),
 	// Session-creation gate: the prompt and tool schema are fixed once a

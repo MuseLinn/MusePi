@@ -140,7 +140,8 @@ the name but never the value.
 | Tool             | Input                     | Result                                             |
 | ---------------- | ------------------------- | -------------------------------------------------- |
 | `request_secret` | `name`, `purpose`, `delivery?` | Environment variable name or private file path, and a status; never the value |
-| `list_secrets`   | none                      | Name, purpose, scope, delivery and availability; never the value |
+| `request_login`  | `name`, `site`, `purpose` | The login name and a status; never the username or password |
+| `list_secrets`   | none                      | Name, purpose, kind, scope, delivery and availability; never the value |
 
 `name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. A stored value answers immediately
 only when it is readable and its scope covers the session's working directory. A
@@ -152,6 +153,28 @@ stored entry keeps the delivery it was saved with. A card times out as a cancel
 after ten minutes. Interactive collection requires a host that implements the
 `requestSecret` UI channel (the daemon approval bridge); a headless/TUI host
 returns an error telling the user to add the secret from Settings → Vault.
+
+### Saved logins
+
+A `kind:"login"` entry holds a website sign-in — site, username, password and an
+optional 2FA setup key — and is deliberately not a secret: `getValue` refuses it
+and `values()` skips it, so the password never reaches `$MUSEPI_SECRET_*`, a
+private file, or the redaction list. The only reader is the fill path.
+
+`request_login` opens a `kind:"login"` card, prefilling the site the agent is on.
+A login for that site and this workspace already existing answers without a card.
+Afterwards the agent signs in with the browser tool's `fill_login` action:
+
+```
+browser { action: "fill_login", name: "main", login: "ACME_PORTAL" }
+```
+
+The daemon reads the entry, computes a current TOTP code when a setup key is
+stored (RFC 6238), and types all three into the page over its own CDP
+connection — not through `run`, whose code the model authors and could print.
+Field roles come from `autocomplete` hints and field names; a page with no
+password field is reported instead of having a password typed into it. The
+result names which fields were filled, never a value.
 
 ### Storage
 

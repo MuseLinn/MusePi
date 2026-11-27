@@ -1,0 +1,44 @@
+{
+	"name": "musepi-tool-request-login",
+	"version": "0.7.7",
+	"private": true,
+	"type": "module",
+	"license": "Apache-2.0",
+	"description": "Ask the user to save a website sign-in.",
+	"main": "./lib/index.js",
+	"types": "./lib/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/types/index.d.ts",
+			"default": "./lib/index.js"
+		},
+		"./package.json": "./package.json",
+		"./*": "./*.ts"
+	},
+	"files": [
+		"lib",
+		"*.ts",
+		"*.tsx",
+		"*.md",
+		"*.json",
+		"locale",
+		"skills"
+	],
+	"peerDependencies": {
+		"@musepi/pi-coding-agent": "workspace:*"
+	},
+	"scripts": {
+		"check": "tsgo -p tsconfig.json --noEmit"
+	},
+	"musepi": {
+		"label": "Request Login",
+		"description": "Ask the user to save a website sign-in.",
+		"icon": "🔐",
+		"extensions": [
+			"./index.ts"
+		],
+		"host": {
+			"readonly": true
+		}
+	}
+}
