@@ -23,17 +23,20 @@ import { PET_ACTIVITY_EVENT, PET_CHANGED_EVENT } from "./lib/companion-events";
 // Loaded for its host-table registration: compiled input-card artifacts bind
 // to `window.MusePiHostModules.composer`.
 import "./components/Composer";
+// Icon DATA, not components: `MorphIcon` consumes an `IconNode` (or a raw `d`
+// string), while `lucide-react` exports components it cannot read — passing one
+// threw during the first render and took the whole shell down.
 import {
 	CalendarClock,
 	GitPullRequest,
-	House as HouseIcon,
+	House as HouseNode,
 	HousePlus,
 	LayoutDashboard,
 	LayoutPanelTop,
 	ListTodo,
 	Sparkles,
 	Star,
-} from "lucide-react";
+} from "lucide";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { AppRail, RailCommunityLinks, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
@@ -5316,7 +5319,7 @@ function AppInner(): ReactNode {
 			// Named for what it shows: the session list, not a marketing "home".
 			label: "rail sessions",
 			icon: "chat-1",
-			morphIcon: { idle: HouseIcon, current: HousePlus },
+			morphIcon: { idle: HouseNode, current: HousePlus },
 			panelId: "home",
 			active: !pageDestinationActive && !settingsActive,
 			onSelect: () => {

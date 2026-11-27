@@ -8,6 +8,7 @@
  * states, which is the fact the eye actually reads as "aligned".
  */
 import type { ReactNode } from "react";
+import { House as HouseNode, HousePlus, LayoutDashboard, LayoutPanelTop } from "lucide";
 import { AppRail, RailCommunityLinks } from "../../src/components/AppRail";
 import { InstanceButton } from "../../src/components/InstanceButton";
 import { UserAccountButton } from "../../src/components/AppRail";
@@ -17,8 +18,21 @@ import { mount } from "../gui-probe-helpers";
 const rail = (expanded: boolean): ReactNode => (
 	<AppRail
 		destinations={[
-			{ id: "home", label: "general.home", icon: "home", active: true, onSelect: () => {} },
-			{ id: "board", label: "settings.board", icon: "layout-column", onSelect: () => {} },
+			{
+				id: "home",
+				label: "rail sessions",
+				icon: "chat-1",
+				active: true,
+				morphIcon: { idle: HouseNode, current: HousePlus },
+				onSelect: () => {},
+			},
+			{
+				id: "board",
+				label: "settings.board",
+				icon: "layout-column",
+				morphIcon: { idle: LayoutDashboard, current: LayoutPanelTop },
+				onSelect: () => {},
+			},
 		]}
 		panelAvailable
 		onTogglePanel={() => {}}
