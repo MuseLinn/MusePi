@@ -20,6 +20,7 @@ import type {
 	SessionProjectionSnapshot,
 	WireUsage,
 } from "@musepi/pi-wire";
+import { goalFromModeData } from "../goals/state";
 import { cacheHitRate } from "../modes/utils/cache-hit";
 import type { SessionStats } from "../session/agent-session-types";
 
@@ -27,11 +28,6 @@ import type { SessionStats } from "../session/agent-session-types";
 export interface ProjectionSampleSource {
 	model(): { provider?: string; id: string; contextWindow?: number | null } | null | undefined;
 	sessionStats(): SessionStats;
-	/** Session mode switches. These have no wire event of their own: they are
-	 *  set through an RPC (`session.setGoal` / `session.setPlan`), which is what
-	 *  `session_mode_changed` names — the daemon samples after the RPC writes
-	 *  the state, so a client never has to poll for them. */
-	sessionMode?(): SessionModeProjection;
 }
 
 export interface ProjectionSeed {
@@ -74,10 +70,21 @@ export interface ProjectionHandle<S> {
 	dispose(): void;
 }
 
-/** Wire events plus the daemon-only facts that have no wire payload of their
- *  own: a `model_changed` route switch, and a `session_mode_changed` goal/plan
- *  write. The unit samples the live value when one arrives. */
-export type ProjectionEvent = AgentEvent | { type: "model_changed" } | { type: "session_mode_changed" };
+/**
+ * What a projection unit folds.
+ *
+ * `AgentEvent` covers the journal's wire events; `entry` covers the session
+ * entries that are NOT wire events (`mode_change` among them) — a mode switch
+ * is journaled as an entry, so folding entries is what makes the journal the
+ * single source instead of sampling the live session. The two daemon-only facts
+ * keep their own shape: `model_changed` has no payload, and
+ * `session_mode_changed` is published after an RPC writes a switch.
+ */
+export type ProjectionEvent =
+	| AgentEvent
+	| { type: "entry"; entry: SessionEntry }
+	| { type: "model_changed" }
+	| { type: "session_mode_changed" };
 interface SessionEntryState {
 	states: Map<string, unknown>;
 	views: Map<string, unknown>;
@@ -279,36 +286,56 @@ export const contextUsageProjectionDefinition: ProjectionDefinition<ContextUsage
 	sample: (state, source) => fromStats(source.sessionStats(), source, state),
 };
 
+/** Fold one journal entry onto the mode state. Pure, so `init` and `apply`
+ *  share it — a seeded baseline and a live switch can never disagree. */
+function applyModeEntry(state: SessionModeProjection, rawEntry: unknown): SessionModeProjection {
+	const entry = rawEntry as { type?: string; mode?: unknown; data?: Record<string, unknown> } | null;
+	if (entry?.type !== "mode_change") return state;
+	const mode = typeof entry.mode === "string" ? entry.mode : "none";
+	if (mode === "plan" || mode === "plan_paused") {
+		const planFilePath = entry.data?.planFilePath;
+		// `plan_paused` keeps the path but is not "in plan mode"; entering
+		// without a path could never be approved, so it counts as off.
+		const plan = mode === "plan" && typeof planFilePath === "string" && planFilePath !== "";
+		return plan === state.plan ? state : { ...state, plan };
+	}
+	if (mode === "goal" || mode === "goal_paused") {
+		const goal = goalFromModeData(entry.data);
+		// `goal_paused` is a recorded goal that is NOT running. Projecting it as
+		// an active goal would make the badge claim work the agent is not doing,
+		// so only `goal` counts as on.
+		const nextGoal =
+			goal && mode === "goal" ? { enabled: true, objective: goal.objective, status: goal.status } : null;
+		if (nextGoal === null && state.goal === null) return state;
+		return { ...state, goal: nextGoal };
+	}
+	// Any other mode ("none", "vibe", …) means neither switch is on. Vibe is a
+	// tool-set mode of its own and does not project here.
+	if (state.goal === null && state.plan === false) return state;
+	return { goal: null, plan: false };
+}
+
 /**
- * Session mode switches — goal and plan. These have no wire event of their own:
- * `session.setGoal` / `session.setPlan` write them through the live
- * AgentSession, so the projection samples them at a `session_mode_changed`
- * boundary the daemon emits after the RPC writes the state. This replaces the
- * GUI's 30s `session.modes` poll for the two fields the transcript cannot
- * express, and makes a change made by the TUI or another device arrive
- * immediately instead of up to 30s later.
+ * Session mode switches — goal and plan.
+ *
+ * The source is the journal, not the live session: a switch is recorded as a
+ * `mode_change` entry, and this unit folds those entries. That is what makes
+ * the journal the single authority — the projection derives from persisted
+ * history, so a reload shows the mode the journal recorded rather than
+ * whatever the fresh AgentSession happens to hold, and the
+ * `session_mode_changed` boundary only re-reads after an RPC wrote the entry.
  */
 export const sessionModeProjectionDefinition: ProjectionDefinition<SessionModeProjection> = {
 	key: "sessionMode",
-	// Seed from the live source so a freshly opened surface shows the real
-	// switches in its baseline — an empty seed would paint "no goal, no plan"
-	// until the next write.
+	// Fold the transcript the snapshot already carries, so an opened session
+	// starts from what the journal recorded rather than from the live session's
+	// freshly-initialized fields.
 	init: seed => {
-		const mode = seed.source?.sessionMode?.();
-		if (!mode) return { goal: null, plan: false };
-		return { goal: mode.goal?.enabled ? mode.goal : null, plan: mode.plan };
+		let state: SessionModeProjection = { goal: null, plan: false };
+		for (const entry of seed.entries) state = applyModeEntry(state, entry);
+		return state;
 	},
-	// Mode switches are written through the live session, never through a
-	// journal record, so there is nothing to fold here — `sample` does the work
-	// at the `session_mode_changed` boundary.
-	apply: state => state,
-	sample: (state, source) => {
-		const mode = source.sessionMode?.();
-		if (!mode) return state;
-		const goal = mode.goal?.enabled ? mode.goal : null;
-		return goal === state.goal && mode.plan === state.plan ? state : { goal, plan: mode.plan };
-	},
-	sampleOn: new Set(["session_mode_changed"]),
+	apply: (state, event) => (event.type === "entry" ? applyModeEntry(state, event.entry) : state),
 	view: (state): SessionModeProjection => state,
 	viewEquals: (left, right) => left === right || JSON.stringify(left) === JSON.stringify(right),
 };

@@ -2071,20 +2071,6 @@ export class DaemonSessionHost {
 					cachedStats = { revision, stats };
 					return stats;
 				},
-				// Goal/plan live only on the AgentSession and are written by RPC,
-				// so there is nothing to fold — the unit samples them at the
-				// `session_mode_changed` boundary the RPC handler publishes.
-				sessionMode: () => {
-					const goalState = agentSession.getGoalModeState?.();
-					const goal = goalState?.goal
-						? {
-								enabled: goalState.enabled === true,
-								objective: goalState.goal.objective,
-								status: goalState.goal.status,
-							}
-						: null;
-					return { goal, plan: agentSession.getPlanModeState?.()?.enabled === true };
-				},
 			} satisfies ProjectionSampleSource,
 		});
 		let persistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -2380,6 +2366,18 @@ export class DaemonSessionHost {
 			}
 		};
 		const unsubscribeName = agentSession.sessionManager.onSessionNameChanged(onSessionNameChanged);
+		// Entries that are not wire events (mode_change among them) still belong
+		// to the read model: feeding them through the projection is what makes
+		// the journal its single source, so a unit derives from persisted
+		// history instead of sampling whatever the live session holds.
+		const sessionManager = agentSession.sessionManager;
+		const previousOnEntryAppended = sessionManager.onEntryAppended;
+		sessionManager.onEntryAppended = entry => {
+			previousOnEntryAppended?.(entry);
+			// The two SessionEntry types differ only in their extra fields; the
+			// projection reads `type`/`mode`/`data`, which both carry.
+			this.#publishProjectionChanges(live, { type: "entry", entry: entry as never }, 0);
+		};
 		agentSession.subscribe(event => {
 			// Goal continuation sees every session event, including the ones the
 			// wire guard drops. It must run before journal/stream handling so the

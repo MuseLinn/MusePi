@@ -1,67 +1,98 @@
-// The sessionMode projection: goal/plan switches are sampled after the RPC
-// that writes them and pushed as whole values, so clients never poll for them.
+// The sessionMode projection derives from the JOURNAL, not from the live
+// session: a switch is a mode_change entry, and the unit folds those. Sampling
+// the live fields would make the journal one of two authorities.
 import { describe, expect, test } from "bun:test";
-import {
-	type ProjectionSampleSource,
-	SessionProjectionRegistry,
-	sessionModeProjectionDefinition,
-} from "../../src/session/session-projections";
+import type { SessionEntry } from "@musepi/pi-wire";
+import { SessionProjectionRegistry, sessionModeProjectionDefinition } from "../../src/session/session-projections";
 
-function source(mode: { goal: { enabled: boolean; objective?: string; status?: string } | null; plan: boolean }) {
+function modeEntry(mode: string, data?: Record<string, unknown>): SessionEntry {
 	return {
-		model: () => null,
-		sessionStats: () => ({}) as never,
-		sessionMode: () => mode,
-	} satisfies ProjectionSampleSource;
+		type: "mode_change",
+		id: `mode-${mode}-${Math.random()}`,
+		parentId: null,
+		timestamp: new Date().toISOString(),
+		mode,
+		...(data ? { data } : {}),
+	} as unknown as SessionEntry;
 }
 
-function registry(seed: ReturnType<typeof source>): SessionProjectionRegistry {
+function registry(): SessionProjectionRegistry {
 	const r = new SessionProjectionRegistry();
 	r.register(sessionModeProjectionDefinition);
-	r.seed("s1", { entries: [], source: seed });
 	return r;
 }
 
-describe("sessionMode projection", () => {
-	test("starts from the seeded live values", () => {
-		const r = registry(source({ goal: { enabled: true, objective: "ship", status: "active" }, plan: true }));
-		expect(r.snapshot("s1")?.values.sessionMode).toEqual({
-			goal: { enabled: true, objective: "ship", status: "active" },
-			plan: true,
-		});
+const GOAL = {
+	id: "goal-1",
+	objective: "ship it",
+	status: "active",
+	tokensUsed: 1,
+	timeUsedSeconds: 1,
+	createdAt: 1,
+	updatedAt: 2,
+};
+
+describe("sessionMode projection (journal-derived)", () => {
+	test("seeding folds the transcript the snapshot already carries", () => {
+		// This is the part that makes a reopened session honest: the baseline
+		// comes from persisted history, so it cannot disagree with the journal.
+		const r = registry();
+		r.seed("s1", { entries: [modeEntry("plan", { planFilePath: "local://PLAN.md" })] });
+
+		expect(r.snapshot("s1")?.values.sessionMode).toEqual({ goal: null, plan: true });
 	});
 
-	test("a mode write publishes the new value", () => {
-		const mode = { goal: null as { enabled: boolean; objective?: string; status?: string } | null, plan: false };
-		const r = registry(source(mode));
+	test("a mode entry folded live publishes the switch", () => {
+		const r = registry();
+		r.seed("s1", { entries: [] });
 		expect(r.snapshot("s1")?.values.sessionMode).toEqual({ goal: null, plan: false });
 
-		// The RPC wrote plan mode; the host samples at this boundary.
-		mode.plan = true;
-		const changes = r.applyEvent("s1", { type: "session_mode_changed" });
-
+		const changes = r.applyEvent("s1", { type: "entry", entry: modeEntry("plan", { planFilePath: "local://P.md" }) });
 		expect(changes).toHaveLength(1);
 		expect(changes[0]).toMatchObject({ key: "sessionMode", value: { goal: null, plan: true } });
 	});
 
-	test("an unrelated event publishes nothing", () => {
-		const r = registry(source({ goal: null, plan: false }));
-		// This is what keeps the projection feed quiet: an agent turn must not
-		// re-push a switch it did not touch.
-		const changes = r.applyEvent("s1", { type: "turn_end" } as never);
+	test("leaving a mode clears it", () => {
+		const r = registry();
+		r.seed("s1", { entries: [modeEntry("goal", { goal: GOAL })] });
+		expect(r.snapshot("s1")?.values.sessionMode).toMatchObject({ goal: { objective: "ship it" } });
+
+		r.applyEvent("s1", { type: "entry", entry: modeEntry("none") });
+		expect(r.snapshot("s1")?.values.sessionMode).toEqual({ goal: null, plan: false });
+	});
+
+	test("plan without a path counts as off", () => {
+		// The proposal/approve flow cannot complete without a path.
+		const r = registry();
+		r.seed("s1", { entries: [modeEntry("plan", {})] });
+		expect(r.snapshot("s1")?.values.sessionMode).toEqual({ goal: null, plan: false });
+	});
+
+	test("a paused goal is not an active goal", () => {
+		const r = registry();
+		r.seed("s1", { entries: [modeEntry("goal_paused", { goal: GOAL })] });
+		expect(r.snapshot("s1")?.values.sessionMode).toEqual({ goal: null, plan: false });
+	});
+
+	test("an unrelated entry publishes nothing", () => {
+		const r = registry();
+		r.seed("s1", { entries: [] });
+		const changes = r.applyEvent("s1", {
+			type: "entry",
+			entry: { type: "message", id: "m", parentId: null, timestamp: "" } as unknown as SessionEntry,
+		});
 		expect(changes).toEqual([]);
 	});
 
-	test("a boundary that samples the same value publishes nothing", () => {
-		const r = registry(source({ goal: null, plan: true }));
-		const changes = r.applyEvent("s1", { type: "session_mode_changed" });
-		expect(changes).toEqual([]);
+	test("an unrelated event type publishes nothing", () => {
+		const r = registry();
+		r.seed("s1", { entries: [modeEntry("plan", { planFilePath: "local://P.md" })] });
+		expect(r.applyEvent("s1", { type: "turn_end" } as never)).toEqual([]);
 	});
 
-	test("goal off projects null rather than a disabled record", () => {
-		// The GUI badge keys off `goal === null`; a disabled record would read
-		// as "a goal exists and is off", which is a different state.
-		const r = registry(source({ goal: { enabled: false, objective: "old" }, plan: false }));
+	test("a malformed goal record restores nothing", () => {
+		const r = registry();
+		r.seed("s1", { entries: [modeEntry("goal", { goal: { id: "x" } })] });
 		expect(r.snapshot("s1")?.values.sessionMode).toEqual({ goal: null, plan: false });
 	});
 });
