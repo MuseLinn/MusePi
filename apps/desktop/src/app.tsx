@@ -5528,6 +5528,7 @@ function AppInner(): ReactNode {
 					 * survive the settings round-trip. Narrow windows use the same
 					 * mounted sidebar as a drawer instead of deleting its content. */}
 					<div
+						id="gui-sidebar-list-region"
 						className={[
 							"gui-side-keeper",
 							shell.sideKeeperHidden ? "gui-side-keeper--hidden" : "",
@@ -5591,6 +5592,8 @@ function AppInner(): ReactNode {
 							onImportSessions={() => setImportOpen(true)}
 							modeCatalog={welcomeModes}
 							collapsed={peekOpen || narrowSidebarOpen ? false : sideCollapsed}
+							toggleAvailable={!pageDestinationActive || secondTierPanelVisible}
+							onToggleCollapsed={toggleSidebar}
 							width={sideWidth}
 							onDeleteArchived={deleteSession}
 							onDeleteSession={deleteSession}
@@ -5676,7 +5679,6 @@ function AppInner(): ReactNode {
 											: sideCollapsed
 								}
 								panelAvailable={!pageDestinationActive || secondTierPanelVisible}
-								onToggleSidebar={toggleSidebar}
 								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
 								onTogglePause={() => void togglePause()}

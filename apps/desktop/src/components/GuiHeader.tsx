@@ -2,8 +2,6 @@ import { t, unarchiveSession, archiveSession as writeArchivedSession } from "@mu
 import {
 	MessageSquare as MessageSquareIconData,
 	MessageSquareText as MessageSquareTextIconData,
-	PanelLeftClose as PanelLeftCloseIconData,
-	PanelLeftOpen as PanelLeftOpenIconData,
 	Pause as PauseIconData,
 	Play as PlayIconData,
 	Square as SquareIconData,
@@ -114,7 +112,6 @@ export function GuiHeader({
 	rpc,
 	sideCollapsed,
 	panelAvailable = true,
-	onToggleSidebar,
 	paused,
 	pausedAt,
 	onTogglePause,
@@ -154,7 +151,6 @@ export function GuiHeader({
 	 *  center): the fold button would fold nothing, and the collapsed spacer
 	 *  would shove the session tabs into the far left. */
 	panelAvailable?: boolean;
-	onToggleSidebar(): void;
 	/** Per-session agent freeze (TUI `/pause` parity): engaged state + epoch
 	 *  ms when the freeze began (drives the live hold timer). */
 	paused?: boolean;
@@ -707,29 +703,9 @@ export function GuiHeader({
 				...(hasOverlay ? { paddingRight: 150 } : {}),
 			}}
 		>
-			{/* TitlebarLeftControls: a fixed, HORIZONTAL overlay
-			 * cluster — a CHILD of the drag header so Electron honors
-			 * no-drag reliably. Sidebar toggle + the project-actions capsule
-			 * (auto-discover dev server / stop while running), the toggle and the actions capsule both work from here. */}
+			{/* TitlebarLeftControls: the project-actions capsule stays fixed to
+			 * the drag header; the sidebar toggle lives in the panel itself. */}
 			<div className="gui-float-controls gui-float-controls--overlay" ref={floatRef}>
-				{panelAvailable && (
-					<button
-						type="button"
-						className="gui-sidebar-toggle"
-						data-collapsed={sideCollapsed ? "true" : "false"}
-						title={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
-						aria-label={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
-						onClick={onToggleSidebar}
-					>
-						<MorphIcon
-							icon={sideCollapsed ? PanelLeftOpenIconData : PanelLeftCloseIconData}
-							size={16}
-							spring="snappy"
-							reducedMotion="user"
-							className="h-4 w-4"
-						/>
-					</button>
-				)}
 				<div className="gui-openin-capsule gui-liquid-glass">
 					<button
 						type="button"
