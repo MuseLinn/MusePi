@@ -226,6 +226,43 @@ export class GitHubService implements DaemonService {
 		}
 	}
 
+	async prChecks(params: unknown): Promise<unknown> {
+		// CI for one PR, at the level a person actually needs: which check is
+		// which, and what its bucket is. `gh pr checks --json` reports `bucket`
+		// (pass / fail / pending / skipping / cancel), which is the same
+		// classification the row's single light already implies — so the detail
+		// view and the list can never disagree about whether a PR is green.
+		//
+		// Exit code 8 means "some checks pending", not failure: `gh` exits
+		// non-zero for that case, so the parsed body is what decides, never the
+		// exit code alone.
+		const p = (params ?? {}) as { cwd?: string; number?: unknown };
+		const num = Number(p.number);
+		if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+		const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.host.cwd();
+		const res = await runGh(cwd, [
+			"pr",
+			"checks",
+			String(num),
+			"--json",
+			"name,state,bucket,link,description,startedAt,completedAt",
+		]);
+		if (res.exitCode === null) return { error: "gh CLI not installed" };
+		// 8 = pending, which still carries a usable body; anything above that
+		// without a parseable body is a real failure.
+		if (res.exitCode !== 0 && res.exitCode !== 8) {
+			const err = res.stderr.trim();
+			if (/no checks reported|no pull requests found/i.test(err)) return { checks: [] };
+			return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
+		}
+		try {
+			const checks = JSON.parse(res.stdout || "[]") as unknown[];
+			return { checks: Array.isArray(checks) ? checks : [] };
+		} catch {
+			return { error: "invalid gh output" };
+		}
+	}
+
 	async prReview(params: unknown): Promise<unknown> {
 		const p = (params ?? {}) as { cwd?: string; number?: unknown; event?: unknown; body?: unknown };
 		if (p.event !== "approve" && p.event !== "request-changes") return { error: "review event required" };

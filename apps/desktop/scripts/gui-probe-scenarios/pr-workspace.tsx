@@ -24,7 +24,7 @@ const tree = (rows: Scope[]) => (
 			<button
 				key={row.label}
 				type="button"
-				className={`gui-pr-scope-row${row.active ? " gui-pr-scope-row--active" : ""}`}
+				className={`gui-side-panel-row${row.active ? " gui-side-panel-row--active" : ""}`}
 				aria-pressed={row.active === true}
 			>
 				<span className="gui-pr-scope-label">{row.label}</span>
@@ -103,11 +103,11 @@ const scenarios = {
 					list: ".gui-pr-list",
 					detail: ".gui-pr-detail-pane",
 				}),
-				rows: countAll(body, ".gui-pr-scope-row"),
-				activeRows: countAll(body, ".gui-pr-scope-row--active"),
+				rows: countAll(body, ".gui-side-panel-row"),
+				activeRows: countAll(body, ".gui-side-panel-row--active"),
 				// A zero-count scope must still render: hiding it would make the
 				// tree change shape between refreshes.
-				zeroScopeRendered: Array.from(body.querySelectorAll(".gui-pr-scope-row")).some(
+				zeroScopeRendered: Array.from(body.querySelectorAll(".gui-side-panel-row")).some(
 					row => row.querySelector(".gui-pr-scope-count")?.textContent === "0",
 				),
 				cells: countAll(body, ".gui-pr-diff-cell"),

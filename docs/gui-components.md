@@ -98,6 +98,8 @@ The desktop host re-exports the moved seat constants from `slot-host.tsx` during
 | `SecretSettingsSection` | The secret vault page | `apps/desktop/src/plugins/ui-secrets/page.tsx`; the protection card's **title is the state** (`本机密钥文件` / `口令保护` / `已锁定`) with the connector relation as one line, `保险库 · N` + a quiet search + add, then **one body only** (`form ? form : empty-or-rows`), eased by `HeightMorph` on the body state. Rows are `gui-agent-card`; a row's third line names the MCP servers granted that key. `范围` is read-only (only a secret-request card can scope to a workspace); `交付方式` is a real `Segmented` — `secret.set` always accepted `delivery` |
 | Host bands for `SplitterGrip` | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | The positioning layer for each of the three seams |
 | `MarketplaceDetailDialog` | Plugin detail page (versions, description, skills, footer actions) | `components/MarketplaceDetailDialog.tsx`; its stylesheet is `styles/gui-marketplace-detail.css` |
+| `.gui-side-panel-row` | Dense list-row geometry (gap, height, radius, hover/`--active`) | Every dense labelled row; add trailing furniture, never re-declare it |
+| `PrChecksList` | A PR's CI, itemised, on demand | `pr-center.tsx`; gh `bucket` decides (`cancel` = failure) |
 
 **Desktop stylesheets have one home: `apps/desktop/src/styles/`.** Every sheet is a `gui-*` family file there; a component that needs one imports it from that directory (`../styles/gui-<name>.css`) and never ships a sibling `.css` of its own. The last holdout, the marketplace detail sheet, moved in from `components/` so the cascade has no section without an owner.
 

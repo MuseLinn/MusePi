@@ -88,6 +88,117 @@ function PrDiffStat({ pr, showFiles }: { pr: GhPr; showFiles?: boolean }): React
 	);
 }
 
+/** One CI check as `gh pr checks --json` reports it. */
+interface GhCheck {
+	name?: string;
+	state?: string;
+	/** gh's own classification: pass / fail / pending / skipping / cancel. The
+	 *  detail list groups by this rather than re-deriving it from `state`, so a
+	 *  new gh state string cannot silently land in the wrong bucket. */
+	bucket?: string;
+	link?: string;
+	description?: string;
+	startedAt?: string;
+	completedAt?: string;
+}
+
+/** Bucket → the dot/label pair this shell already uses for check state. */
+function checkBucketClass(bucket: string | undefined): "success" | "failure" | "pending" | "none" {
+	if (bucket === "pass") return "success";
+	if (bucket === "fail" || bucket === "cancel") return "failure";
+	if (bucket === "pending") return "pending";
+	return "none";
+}
+
+/**
+ * The PR's CI, itemised. The row's single light answers "is it green"; this
+ * answers "which job", which is the question that actually blocks a merge. A
+ * failing check links to its run so the log is one click away instead of a
+ * trip through the browser.
+ *
+ * Collapsed by default and mounted on demand: a PR routinely carries 20+
+ * checks, and building that list inside a detail pane every time a row is
+ * selected is work the reader did not ask for.
+ */
+function PrChecksList({ rpc, cwd, number }: { rpc: RpcClient; cwd: string; number: number }): ReactNode {
+	const [checks, setChecks] = useState<GhCheck[] | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [open, setOpen] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const load = useCallback((): void => {
+		if (loading) return;
+		setLoading(true);
+		void rpc
+			.request<{ checks?: GhCheck[]; error?: string }>("github.prChecks", { cwd, number })
+			.then(res => {
+				setError(res.error ?? null);
+				setChecks(res.checks ?? []);
+			})
+			.catch(() => setError(t("general.requestFailed")))
+			.finally(() => setLoading(false));
+	}, [rpc, cwd, number, loading]);
+	const total = checks?.length ?? 0;
+	const failing = (checks ?? []).filter(c => checkBucketClass(c.bucket) === "failure").length;
+	return (
+		<div className="gui-pr-checks">
+			<button
+				type="button"
+				className="gui-pr-checks-toggle"
+				aria-expanded={open}
+				onClick={() => {
+					if (!open && checks === null) load();
+					setOpen(v => !v);
+				}}
+			>
+				<Icon name={open ? "arrow-down-s" : "arrow-right-s"} className="h-3 w-3 flex-shrink-0" />
+				<span>{t("pr checks")}</span>
+				{checks !== null && <span className="gui-pr-checks-count">{total}</span>}
+				{failing > 0 && (
+					<span className="gui-pr-checks-failing">{t("pr checks failing count", { count: failing })}</span>
+				)}
+			</button>
+			{open ? (
+				<div className="gui-pr-checks-body">
+					{loading && <div className="gui-pr-checks-empty">{t("pr checks loading")}</div>}
+					{!loading && error ? <div className="gui-pr-checks-empty">{error}</div> : null}
+					{!loading && !error && total === 0 ? (
+						<div className="gui-pr-checks-empty">{t("pr no checks")}</div>
+					) : null}
+					{(checks ?? []).map((check, index) => {
+						const bucket = checkBucketClass(check.bucket);
+						const row = (
+							<>
+								<span className={`gui-pr-check-dot gui-pr-check-dot--${bucket}`} aria-hidden="true" />
+								<span className="min-w-0 flex-1 truncate">{check.name ?? check.state ?? "—"}</span>
+								{check.link ? <Icon name="external-link" className="h-3 w-3 flex-shrink-0 opacity-60" /> : null}
+							</>
+						);
+						return check.link ? (
+							<button
+								key={`${check.name ?? index}-${index}`}
+								type="button"
+								className="gui-side-panel-row gui-pr-checks-row"
+								title={check.description || check.name}
+								onClick={() => void openExternalUrl(check.link as string)}
+							>
+								{row}
+							</button>
+						) : (
+							<div
+								key={`${check.name ?? index}-${index}`}
+								className="gui-pr-checks-row gui-pr-checks-row--static"
+								title={check.description || check.name}
+							>
+								{row}
+							</div>
+						);
+					})}
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 /** Check-state line (dot + label) shared by the card and the list rows. */
 function PrChecks({ rollup }: { rollup: unknown }): ReactNode {
 	const state = rollupCheckState(rollup);
@@ -695,6 +806,7 @@ function PrDetail({
 				<PrMergeLine pr={detail} />
 				<PrDiffStat pr={detail} showFiles />
 			</div>
+			<PrChecksList rpc={rpc} cwd={cwd} number={detail.number} />
 			<CheckItemList rollup={detail.statusCheckRollup} />
 			{detail.labels.length > 0 && (
 				<div className="flex flex-wrap gap-1">
@@ -1067,7 +1179,7 @@ function ScopeRow({
 	return (
 		<button
 			type="button"
-			className={`gui-pr-scope-row${active ? " gui-pr-scope-row--active" : ""}`}
+			className={`gui-side-panel-row${active ? " gui-side-panel-row--active" : ""}`}
 			aria-pressed={active}
 			onClick={onSelect}
 		>
@@ -1284,6 +1396,12 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 	 *  scope whose count is zero is still listed with its 0 — hiding it would
 	 *  make the tree change shape as data arrives. */
 	const [scope, setScope] = useState<PrScope>("open");
+	/** Bulk selection. A Set of PR numbers, mirrored from the rows the reader can
+	 *  currently see — selecting rows and then narrowing the scope keeps the
+	 *  selection intact but the ACTION only ever targets visible rows, so a
+	 *  hidden leftover can never be closed by a bulk move nobody saw. */
+	const [selected, setSelected] = useState<Set<number>>(() => new Set());
+	const [bulkBusy, setBulkBusy] = useState(false);
 	// 搜索词过滤（编号/标题）；链接形态不改列表，交给「打开链接」行。
 	const filteredPrs = (data?.prs ?? [])
 		.filter(p2 => matchesQuery(query, p2.number, p2.title))
@@ -1296,6 +1414,38 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 	}, [data, query]);
 	const linkQuery = isLinkQuery(query);
 	const allPrs = data?.prs ?? [];
+	const selectedVisible = filteredPrs.filter(p2 => selected.has(p2.number));
+	const toggleSelected = (number: number): void => {
+		setSelected(current => {
+			const next = new Set(current);
+			if (next.has(number)) next.delete(number);
+			else next.add(number);
+			return next;
+		});
+	};
+	/** Bulk close runs one `pr close` per PR: gh has no batch verb, and a partial
+	 *  failure must leave the successful ones closed rather than reporting the
+	 *  whole move as failed. */
+	const closeSelected = async (): Promise<void> => {
+		if (bulkBusy || selectedVisible.length === 0) return;
+		setBulkBusy(true);
+		const results = await Promise.all(
+			selectedVisible.map(item =>
+				rpc
+					.request<{ ok?: boolean; error?: string }>("github.prState", {
+						cwd,
+						number: item.number,
+						state: "closed",
+					})
+					.catch(() => ({ error: "request failed" })),
+			),
+		);
+		const failed = results.filter(result => result.error !== undefined).length;
+		setBulkBusy(false);
+		setSelected(new Set());
+		refresh();
+		if (failed > 0) setError(t("pr bulk partial failure", { failed, total: results.length }));
+	};
 	// Counts come from the SAME predicates the rows use, so a number and the
 	// list behind it can never disagree.
 	const scopeCount = (target: PrScope): number => allPrs.filter(p2 => inScope(p2, target, viewer)).length;
@@ -1353,6 +1503,29 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 				list={
 					data ? (
 						<>
+							{selectedVisible.length > 0 && (
+								<div className="gui-pr-bulk" role="group" aria-label={t("pr bulk actions")}>
+									<span className="gui-pr-bulk-count">
+										{t("pr bulk selected", { count: selectedVisible.length })}
+									</span>
+									<button
+										type="button"
+										className="gui-pane-action !w-auto px-2"
+										disabled={bulkBusy}
+										onClick={() => void closeSelected()}
+									>
+										<Icon name="close" className="h-3.5 w-3.5" />
+										<span>{t("state closed")}</span>
+									</button>
+									<button
+										type="button"
+										className="gui-pane-action !w-auto px-2"
+										onClick={() => setSelected(new Set())}
+									>
+										<span>{t("pr bulk clear")}</span>
+									</button>
+								</div>
+							)}
 							{pr ? (
 								<div className="gui-pr-card">
 									<div className="flex min-w-0 items-center gap-2">
@@ -1420,9 +1593,28 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 										<button
 											key={pr.number}
 											type="button"
-											className={`gui-changes-row gui-pr-list-row${selectedPr === pr.number ? " gui-changes-row--active" : ""}`}
+											className={`gui-changes-row gui-pr-list-row${selectedPr === pr.number ? " gui-changes-row--active" : ""}${selected.has(pr.number) ? " gui-pr-list-row--checked" : ""}`}
 											onClick={() => setSelectedPr(pr.number)}
 										>
+											<span
+												role="checkbox"
+												aria-checked={selected.has(pr.number)}
+												aria-label={t("pr bulk select row", { number: pr.number })}
+												tabIndex={0}
+												className={`gui-pr-check${selected.has(pr.number) ? " gui-pr-check--on" : ""}`}
+												onClick={event => {
+													event.stopPropagation();
+													toggleSelected(pr.number);
+												}}
+												onKeyDown={event => {
+													if (event.key !== "Enter" && event.key !== " ") return;
+													event.preventDefault();
+													event.stopPropagation();
+													toggleSelected(pr.number);
+												}}
+											>
+												{selected.has(pr.number) ? <Icon name="check" className="h-3 w-3" /> : null}
+											</span>
 											<span className={`gui-changes-badge gui-pr-badge--${prVisualState(pr)}`}>
 												{pr.isDraft ? "D" : pr.state === "MERGED" ? "M" : pr.state === "CLOSED" ? "X" : "O"}
 											</span>

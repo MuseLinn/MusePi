@@ -3818,6 +3818,9 @@ export class DaemonServer {
 				// 实现归 GitHubService（github.* 面语义不变）。
 				return this.#services.get<GitHubService>("github").prs(params ?? {});
 			}
+			case "github.prChecks": {
+				return this.#services.get<GitHubService>("github").prChecks(params ?? {});
+			}
 			case "github.prStatus": {
 				// 实现归 GitHubService（github.* 面语义不变）。
 				return this.#services.get<GitHubService>("github").prStatus(params ?? {});
