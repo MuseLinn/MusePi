@@ -160,6 +160,16 @@ Windows 安装器先在 WebView2 向导中收集语言与安装选项，检查 M
 - [`docs/`](docs/)：产品与实现文档，按要求维护中英双语配对。
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md)：发布说明。
 
+## 致谢
+
+MusePi 的架构借鉴了若干 agent harness 的公开设计。感谢这些项目把设计开放出来：
+
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：全插件 Cordis 组合模型、能力缝，以及生成式文档门禁，MusePi 的扩展体系以此对齐。
+- [pi](https://github.com/badlogic/pi-mono)：本项目的上游分支来源。
+- Cordis 框架，以及 MusePi 直接使用的 Superpowers、Modern Web Guidance 插件生态。
+
+以上仅作设计参考。MusePi 独立发版，本仓库的代码、文档与默认值均为自有实现。
+
 ## 许可证
 
 MusePi 以 [Apache License 2.0](LICENSE) 发布。它是 MIT 许可的 pi 项目的分支，上游声明保留在 [NOTICE](NOTICE) 与 [LICENSES/MIT-pi.txt](LICENSES/MIT-pi.txt)。MusePi 名称与标识不在 Apache-2.0 的授权范围内。

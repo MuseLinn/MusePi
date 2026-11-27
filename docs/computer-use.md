@@ -222,7 +222,7 @@ See [Tool approval mode](./approval-mode.html) for general policy resolution.
 
 | Platform | Backend | Setup and current status |
 |---|---|---|
-| macOS x64/arm64 | Bounded macOS `screencapture` service capture; Quartz/CGEvent and native input | Supported. Grant Screen Recording and Accessibility. Real remote desktop execution was verified on Apple hardware; see [Verification boundary](#verification-boundary). |
+| macOS x64/arm64 | Bounded macOS `screencapture` service capture; Quartz/CGEvent and native input | Supported. Grant Screen Recording and Accessibility. Real remote desktop execution was verified on Apple hardware; see [Verification boundary](#verified-limitations). |
 | Linux x64/arm64, glibc/musl, X11 | Pure-Rust X11 capture and XTest input (`x11rb`), bundled in the core addon | Supported when a graphical session and `DISPLAY` are available. No GUI system libraries are required; the backend speaks the X protocol directly over the display socket. Requires the RandR and XTEST server extensions. |
 | Linux x64/arm64, glibc/musl, Wayland | XWayland capture; XTest input bridged by the compositor | **Unsupported on the default rootless XWayland** (GNOME/KDE/sway): its root window has no readable pixmap, so root `GetImage` fails and the tool reports `DESKTOP_BACKEND_UNAVAILABLE` at initialization. Capture needs a rooted X server (a real X11 session, Xvfb, or a rootful `Xwayland -rootful`), which exposes only X11 clients — native Wayland windows are invisible to X11. Pure Wayland capture (portal/PipeWire) is not implemented. |
 | Windows x64 | xcap capture; Win32 virtual-desktop pointer movement and native input | Implemented, including negative origins and secondary monitors. Not remotely exercised in this feature's verification. |

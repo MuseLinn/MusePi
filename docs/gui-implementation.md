@@ -177,7 +177,7 @@ daemon RPC:
 Semantics: three-dot status colors green active / gray disabled / orange shadowed (details show shadowedBy). Once a provider is disabled, its entries disappear from the list (loadCapability-layer behavior, same source as TUI, not a bug). Builtin determination: provider native|omp-managed|builtin-defaults.
 
 - **Component configuration versus effective state**: `PluginComponentDesc.enabled` means only that the component is absent from its own denylist. The detail dialog renders effective on/green only for `item.state === "active" && !item.loadError && component.enabled`; a disabled parent preserves the component choice but disables its switch and shows the inherited-off explanation. It does not clear the denylist.
-- **Profile/bundle composition**: `bundles.composition` returns both the composed layers/rows and `availableBundles`, including selected-but-missing packages. `bundles.setEnabled{name,enabled}` serializes selection writes into the active profile's `musepi.profile.bundles`, preserving unrelated manifest fields and ignoring DSH profile fields; enabling requires a readable installed `dsh.bundle.patch`, while disabling a missing selection remains allowed. `bundles.rows.setEnabled` still writes row overrides in `cordis.patch.yml`. Reading composition creates no files. Ordinary package enablement stays in the runtime lock. Agent preset declarations from the same composition feed `presets.list` and SDK resolution in file > profile > extension order; `presets.getDefault`/`presets.setDefault` read and update `agent-preset-registry.config.selectedDefault`, and preset changes are rejected after the session's first message.
+- **Profile/bundle composition**: `bundles.composition` returns both the composed layers/rows and `availableBundles`, including selected-but-missing packages. `bundles.setEnabled{name,enabled}` serializes selection writes into the active profile's `musepi.profile.bundles`, preserving unrelated manifest fields and ignoring other profile fields; enabling requires a readable installed `dsh.bundle.patch`, while disabling a missing selection remains allowed. `bundles.rows.setEnabled` still writes row overrides in `cordis.patch.yml`. Reading composition creates no files. Ordinary package enablement stays in the runtime lock. Agent preset declarations from the same composition feed `presets.list` and SDK resolution in file > profile > extension order; `presets.getDefault`/`presets.setDefault` read and update `agent-preset-registry.config.selectedDefault`, and preset changes are rejected after the session's first message.
 - **Cards, details, and device monitoring**: package and module rows share `PluginHorizontalCard`: icon on the leading edge, vertically stacked title/description/tags in the center, and switches or other actions on the trailing edge. A manifest's literal `experimental: true` reaches both card types and renders the localized Experimental badge. The detail view shows declared components and configuration without a generic component explainer. `VoiceInputDevicePicker` is shared by the voice package detail and Settings → Voice; while its owning surface is active it enumerates devices, listens for hot-plug changes, opens the selected microphone, and displays real RMS level without a separate test button. Closing or hiding the surface stops tracks and closes the audio context.
 - **Marketplace details and persistence**: `marketplace.detail {name,marketplace}` returns the card fields plus `displayName`, `longDescription`, `capabilities`, and name-sorted `skills` parsed from each `SKILL.md` frontmatter. `MarketplaceManager.getPluginDetail` and installation share `#preparePluginSource`; the first read materializes the normal marketplace clone and later reads reuse it without installing or enabling anything. `MarketplaceListEntry.enabled` reflects the active install. The detail view calls `plugins.setEnabled`, preserves install/remove/upgrade confirmations, and restores the open detail from `musepi-gui-marketplace-detail-v1`; `musepi-gui-marketplace-view-v1` stores segment, search text and category. Only the id and UI preferences live in renderer storage; the daemon cache owns source bytes.
 - **Live plugin apply**: install, uninstall, marketplace upgrade, and package enable/disable hand the affected entry paths to every open session, so a change is visible without starting a new session. `PluginInstallDialog` subscribes to `plugins.apply.state` for the package it just installed and shows one line under the capability summary — live session count, sessions that apply after the current turn, or a failure count. A streaming session reports deferred; that is a timing fact, not an error. No event is sent when no session had anything to apply.
@@ -511,7 +511,7 @@ The right-side Browser tool is a **managed browser**: the page is a DOM `<webvie
 - Empty query preserves catalog order (bare `/` list isn't reordered); non-matches sink to the bottom preserving order (survivors of skill: queries aren't dropped);
 - Pure function + unit test `lib/slash-rank.test.ts` (tiers/GUI tie-break/stable order/sink).
 
-## 14. Trajectory Overview timeline + selection inspector (2026-08-21, DSH Trajectory absorption)
+## 14. Trajectory Overview timeline + selection inspector (2026-08-21)
 
 Design spec in `gui-design.md` §1 (trajectory timeline & inspector). This section records data contracts and pitfalls.
 
@@ -531,7 +531,7 @@ Design spec in `gui-design.md` §1 (trajectory timeline & inspector). This secti
 
 - Range dragging: **pointer capture** + commits only after ≥3px movement; clicking a segment selects that whole round, clicking blank space clears; `msAtClientX` back-computes via `getBoundingClientRect`, zero re-render dependencies.
 - Esc key: **clears range first, then selection** (`window` keydown, deps [range, selectedId] — same ordering as the modal keyboard contract).
-- Focus = **dim, don't filter** (`.traj-event--dim` 0.35 + saturate .6), DSH-style "focus, don't filter".
+- Focus = **dim, don't filter** (`.traj-event--dim` 0.35 + saturate .6).
 - Map data growth never forces a viewport fit: initial fit, explicit reset, and a real horizontal/vertical switch are the only fit triggers. Overview segments, map cards, jumpable event rows, and the independent branch-fold button expose their click action to Enter/Space with visible focus styling.
 
 ### Pitfalls
@@ -585,7 +585,7 @@ Naming normalization in `docs/gui-design.md` §0 (session list / message tree / 
 **Streaming markdown timing** (answering "does it only render after completion" — **no**):
 - `Markdown.tsx` `renderStreamingMarkdown`: while streaming the head **GROWS** — each frame promotes every block that has just become complete (a balanced `\n\n` boundary that did not exist on the previous frame), so paragraphs, lists, and a code fence the moment it closes take shape as they arrive. The region after the **last** balanced boundary stays RAW TEXT (one entrance animation per char — which is also why the cut can only advance on balanced boundaries, and why an unclosed fence stays literal). With `streaming:false` the tail re-parses into real markdown (head blocks reused, avoiding whole-string `md.parse`'s "stutter then everything renders at once"). The tail DOM pass handles an advancing cut by clearing and re-appending, so already-shown characters are not re-animated.
 - Thinking blocks pass through `Markdown` sentence-by-sentence (`tr-think-sentence--live` entrance).
-- DSH (`deepseek-harness`)-style incrementality: everything except the last two chunks frozen as cached React elements, tail chunk re-parsed per chunk via `IncrementalMarkdownParser`; known deviation — reference-style link/footnote definitions crossing frozen boundaries display literally during streaming, self-healing on settle's full parse.
+- Incremental rendering: everything except the last two chunks frozen as cached React elements, tail chunk re-parsed per chunk via `IncrementalMarkdownParser`; known deviation — reference-style link/footnote definitions crossing frozen boundaries display literally during streaming, self-healing on settle's full parse.
 
 ## 17. OTA update channel + tri-state send/stop button run-level working semantics (2026-08-22)
 
@@ -893,7 +893,7 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 
 ## 28c. Native scrollbars + skin presets
 
-- Decision: [ADR 0008](../adr/0008-native-scrollbars.md).
+- Decision: [ADR 0008](adr/0008-native-scrollbars.md).
 - **The scrollbar is native again** (`packages/client-core/src/styles/base.css`): the engine draws, sizes, drags and exposes the bar, so layout width, hover, keyboard, reduced motion and the OS accessibility surface are the platform's. `gui-base.css` no longer hides system bars globally, and the `FloatingScrollbar` pool, probe, intent gate, idle ghost and drag inversion are gone with `ui-theme/rail.tsx`, `rail.css` and `test/ui-theme-rail.test.tsx`.
 - **Two rendering paths, mutually exclusive.** A non-`auto` `scrollbar-width`/`scrollbar-color` makes Chromium and Safari drop every `::-webkit-scrollbar*` rule for that element, the hover thumb included, so the standard properties sit behind `@supports not selector(::-webkit-scrollbar)` and the pseudo-element rules stay outside it. The track stays transparent; only the thumb carries the tint.
 - **Palette → tint indirection** (`base.css`): `--mp-scrollbar-bg-l1`/`-l2` and the hover pair resolve into one tint re-declared on `body, body *` — an inherited value would carry the colour already substituted at `body`, so a descendant could not rebind it. A surface picks its elevation by rebinding `--mp-scrollbar-tint`/`-hover` to the l2 pair: settings dialog, connector/device/import dialogs, reminders list, music queue, OBO form, action toast, BTW body and the extension detail pane.
@@ -1356,6 +1356,22 @@ folds domain events itself.
   `init(seed)`, pure `apply(state, event)`, `view(state)`, optional `viewEquals`,
   and an optional `sample(state, source)` gated by `sampleOn`. Unrelated events
   must return the same state reference.
+- **Who registers** (2026-11-27): the registry is an L2 **service**
+  (`daemon/services/session-projection-service.ts`, key `sessionProjections`),
+  mirroring dsh's `ctx.sessionProjections` — it owns driving and storage and
+  names no domain. Domain units are registered by the service that owns the
+  state: `SessionService.start` registers the session-state domains and `stop`
+  withdraws them, so a stopped service leaves no keys in the baseline. There is
+  no central list of domains anywhere, which is the point: adding a domain means
+  writing its unit near the state it derives from and registering it there. The
+  host keeps its registry instance (the commit path and snapshot builders read
+  it directly); the service wraps that same instance, so there is never a second
+  copy of a session's fold state.
+- **Isolation** (2026-11-27): `seed` and `applyEvent` catch per unit. A throw
+  inside one unit used to abort the whole loop, so every later unit silently
+  vanished from the baseline — a partial `SessionStats` object was enough to
+  lose the mode badges entirely. A unit that cannot seed is absent for that
+  session and the next `applyEvent` gives it another chance.
 - **Drive**: `SessionProjectionRegistry.applyEvent` folds every unit once per
   committed wire event; only a changed view yields a change. `sampleOn` is the
   boundary set (`turn_end`, `agent_end`, `auto_compaction_end`,
@@ -1537,7 +1553,7 @@ For the current display-context transport, FilePane quote producer, session subt
 - **Quote comments**: `SelectionToolbar`'s `onQuote` gains a fourth `comment` argument; the inline editor submits it through `ChatView.appendQuote` into `createChatQuoteContext`, the quote card keeps editing it through `withDisplayContextComment`, and `composeDisplayContextPrompt` folds it into the quoted body on send. File/PDF/Office selections pass the comment through `FilePane.appendFileQuote` into `createFileQuoteContext`.
 - **Local HTML preview**: `lib/file-workspace.ts`'s `panelBrowserPreviewUrl()` builds `musepi-file://localhost/<path>`; the main process adds/strips the slash before a Windows drive in both `normalizeAddressBarUrl` and the protocol handler, so `pathToFileURL` no longer produces `file:///D:/D:/...`. `will-navigate` allows same-scheme `musepi-file:` navigation, so relative links keep working, and the HTML preview header opens the page in the managed browser through `musepi-open-url`.
 - **Annotation panel**: `annotation/overlay.ts` renders a structured card inside the shadow root, with sections read directly from `AnnotationElementTarget` (tag/classes, selector/path/bounds/center, role/aria/disabled semantics, data-*, pageUrl/viewport/DPR). `AnnotationPayload.includeScreenshot` defaults to true; when off, `attach.ts` omits the screenshot and the prompt says `Screenshot: not attached`, and `runAnnotationSession` skips the capture. The page context menu's Annotate entry passes `elementAt` to preselect the element under the pointer and open the card directly. Quote/annotation cards are non-modal, so the transcript and page keep scrolling. Hosts that pass no panel labels keep the compact legacy editor.
-- **Plugin section**: the session info card's plugin section is the single plugin surface — its header carries the running/total count and expands the per-plugin state list in place. A second status strip with a popup roster was removed because it repeated the same registry rows. Plugin state is profile-global, matching DSH's `ui-plugin-manager`; there is no per-session enable/disable.
+- **Plugin section**: the session info card's plugin section is the single plugin surface — its header carries the running/total count and expands the per-plugin state list in place. A second status strip with a popup roster was removed because it repeated the same registry rows. Plugin state is profile-global; there is no per-session enable/disable.
 - **AI rename**: after `session.retitle`, `retitleSessionById` writes the returned title into the target `session.tree` row and `sessionMeta.title` before the background `refreshSessions` reconciles. Failures map to distinct `empty/generation-failed/offline/timeout/unsupported` messages, and a busy strip plus disabled menu covers the in-flight state.
 - **Connector install RPC**: `mcp.servers.list/add/remove` reads and writes the user-level `<agentDir>/mcp.json` through `mcp/config-writer.ts` (same lock and atomic rename). List returns name/transport/URL/command and auth kind, never headers. Tokens stay in the user's local config and never enter the repository. Installs reconcile live managers in place: removed or changed servers disconnect, new ones connect, and every live session in that working directory receives the refreshed MCP tool set, so no daemon restart is needed.
 - **HTML card annotations and wide tables**: `widgets/html.tsx` reuses `annotationOverlayLabels()`, so HTML cards and browser pages share one structured annotation panel. Wide-table preferences persist by content hash in `musepi-gui-wide-tables`, restored on remount and capped at 200 entries.

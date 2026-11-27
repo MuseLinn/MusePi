@@ -13,7 +13,7 @@ the gate, and the progressive rollout policy.
 - **Both languages carry equal authority.** A document may be authored in
   either language first; the counterpart is translated from it. Neither file
   outranks the other; what binds them is that they must say the same thing.
-- **A pair is three sibling files.** The English `foo.md`, the Chinese
+- **A pair is three sibling files.** <!-- link-example: naming convention --> The English `foo.md`, the Chinese
   `foo.zh-CN.md`, and a consistency record `foo.i18n.yaml`, all in the same
   directory. No locale directories, no interleaved bilingual files.
 - **The consistency record.** `foo.i18n.yaml` holds the git blob hash of each
@@ -24,7 +24,7 @@ the gate, and the progressive rollout policy.
   ```
   Blob hashes (not commit hashes) so the record is computable for files edited
   in the same PR and consistency is a pure content comparison.
-- **Language switcher.** The English side links to the Chinese side right
+- **Language switcher.** <!-- link-example: switcher convention --> The English side links to the Chinese side right
   after its heading: `English | [中文](foo.zh-CN.md)` (or the equivalent inline
   HTML, as READMEs use). The Chinese side reciprocates with
   `[English](foo.md) | 中文`. Jekyll's relative-links plugin rewrites `.md`

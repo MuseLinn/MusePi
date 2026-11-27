@@ -46,13 +46,13 @@ musepi-omp 是 oh-my-pi 的 fork,扩展运行时同源,但 musepi 在**加载、
 - GUI 里 pi/omp 遗产归设置侧「**扩展与插件**」控制中心;自有插件系统品牌一律「**插件**」。
 - 两者的分界是**来源**不是能力:一个用 `pi.extensions` 装载的模块在界面上也可能表现为一个卡片。
 
-An ordinary plugin package declares its entries, configuration, and resources in `package.json`'s `musepi` block and uses the runtime lock for enablement. The application profile selects bundles through `musepi.profile.bundles`, with row overrides in its `cordis.patch.yml`; Only `musepi.profile.bundles` is supported; DSH profile fields are ignored. Agent presets are declared as plugin rows inside that same composition and resolve in file > profile > extension order. Their new-session default lives in the profile's `agent-preset-registry.config.selectedDefault`; once a session starts, its preset is locked and its existing composition is retained. Component switches remain independent of the parent switch: a component selection is preserved while its parent is off, but the component is not active until both gates allow it.
+An ordinary plugin package declares its entries, configuration, and resources in `package.json`'s `musepi` block and uses the runtime lock for enablement. The application profile selects bundles through `musepi.profile.bundles`, with row overrides in its `cordis.patch.yml`; Only `musepi.profile.bundles` is supported; other profile fields are ignored. Agent presets are declared as plugin rows inside that same composition and resolve in file > profile > extension order. Their new-session default lives in the profile's `agent-preset-registry.config.selectedDefault`; once a session starts, its preset is locked and its existing composition is retained. Component switches remain independent of the parent switch: a component selection is preserved while its parent is off, but the component is not active until both gates allow it.
 
 Preset rows are also the composition unit for per-session MCP servers and file skills. A row's `config` reaches its plugin as the second argument of `apply(ctx, config)`, validated and defaulted by the exported `Config`; Track A has no `ctx.config` reader (`pi.config` remains on Track B). `musepi-mcp-client` is a `presetOnly` row package: each row names one server (`serverName`, `transport`, stdio `command`/`args`/`env`/`cwd` or `url`/`headers`, `timeout`, `enabled`) and connects it inside the session's `session_start` through `registerMcpServer`, so the server is released by the same runner. `musepi-skill-filesystem` registers the skills under its `roots` (`<name>/SKILL.md` or flat `<name>.md`, frontmatter required) at mount through `registerSkill`; discovery is a snapshot of that mount, not a watcher, because a preset generation is disposable. Neither package loads ambiently, and neither has a global config surface. Command hooks follow the same row shape: `musepi-hooks-claude-code` and `musepi-hooks-codex` mount an external `hooks.json` (`configPath`) and map its five command-hook points onto session events through the shared engine in `extensibility/hooks/command`; they differ only in matcher mode and `${…}` substitution. The directory convention is a third row package, `musepi-hooks-scripts`: scripts under `roots/pre/<tool>` and `roots/post/<tool>` are scanned into the same config (`pre` → PreToolUse, `post` → PostToolUse, file stem is the tool name, `*`/`all` means every tool), so it shares matching, exit-code, context and merge semantics rather than adding a second protocol.
 
 The Plugins view manages packages and profile bundles at one card granularity. Ordinary package switches use the runtime lock; bundle switches update `musepi.profile.bundles`, and selected-but-unreadable bundles stay visible. Detailed layer and row composition remains available through `bundles.composition` without a separate Composition tab. Preset rows mount as real Cordis fibers in each session: `isolate` creates service-specific child realms, and switching modes disposes the old preset fibers before mounting the new composition. Plugin-owned skills are declared with `registerSkill` beside the plugin's other resources and disappear with that plugin; the Android emulator uses this lifecycle.
 
-Creator quick-create sends only the user's natural-language requirement. Its preset prompt owns the operational workflow: call `modes.save` with the complete new definition, then call `modes.validate` with the persisted id. `modes.save` performs structural, inheritance, and extension-existence checks before writing; `modes.validate` performs the mount check. A failed check must be repaired and repeated before completion is reported. Host UI instructions must not be appended to the user message.
+Creator quick-create sends only the user's natural-language requirement. Its preset prompt owns the operational workflow: call `presets.save` with the complete new definition, then call `presets.validate` with the persisted id. `presets.save` performs structural, inheritance, and extension-existence checks before writing; `presets.validate` performs the mount check. A failed check must be repaired and repeated before completion is reported. Host UI instructions must not be appended to the user message.
 
 Desktop releases must stage self-contained first-party plugin bundles with the daemon. Run `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>` after compiling it. The script compiles and validates `bundled-plugins` and `desktop-plugins` under `apps/desktop/vendor/daemon`, including every entry declared by `musepi.extensions` and `musepi.components`; component styles remain beside the compiled component. Direct and transitive JavaScript dependencies are bundled, while the terminal PTY bridge and its native runtime packages are copied into the staged layout. Electron unpacks this directory and passes both absolute roots to the daemon through the platform-delimited `MUSEPI_BUNDLED_PLUGIN_ROOTS` variable. Development discovery retains its source-tree fallbacks; a release must not depend on source trees or development dependencies.
 
@@ -68,7 +68,7 @@ Discovered JavaScript and TypeScript hooks use the production extension chain: `
 - LLM 工具:`ctx.tools.register({ name, description, parameters, execute })`(进入工具注册表,权限链照常生效)。有副作用的工具在执行前会 flush 唯一一条 start intent 与宿主 journal；可证明只读的工具可声明 `requiresDurableIntent: false`，也可提供 `(args) => boolean` 按调用豁免；未声明的插件/MCP 工具默认需要屏障。LSP 仅对只读 action 跳过，raw/未知 action 与写操作保留屏障。
 - 会话日志写入:`ctx.ensureSessionOnDisk()`、`ctx.appendCustomEntry(type, data)`、`ctx.flushSession()` 让工具持久化自定义条目;写入前检查 `signal`,并处理 `sessionManager` 只读快照无法写入的情况。
 - 会话维护接入:`ctx.settings.get(key)` 读取当前会话设置;`ctx.isIdle()` 与可选的 `ctx.isSettled()` 构成空闲门禁,`ctx.hasDraftInput()`(仅终端宿主提供)报告编辑器是否有未提交草稿;`ctx.runIdleCompaction()` 触发压缩,`ctx.runEphemeralTurn()` 生成 recap,`ctx.getGoalModeState()` / `ctx.getTodoPhases()` 提供锚点,`ctx.recordRecap()` 落库、`ctx.showRecap()` 交给宿主展示。`musepi-idle-maintenance` 插件只用这些缝调度,计时器归插件,不归各宿主控制器。
-- 子智能体:`ctx.subagents.register({ name, description, systemPrompt, external })`;本地 Agent 必须提供非空 `systemPrompt`,外部 Agent 改为提供一次性 `external(context)` 执行器,并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力;本地子智能体的多轮接续属于运行时生命周期(`hub send` / `agents.chat` / 冷恢复),不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件,可参考 DSH 将团队服务、模型工具与 UI 拆包的做法,不要把任务所有权塞进子智能体注册。
+- 子智能体:`ctx.subagents.register({ name, description, systemPrompt, external })`;本地 Agent 必须提供非空 `systemPrompt`,外部 Agent 改为提供一次性 `external(context)` 执行器,并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力;本地子智能体的多轮接续属于运行时生命周期(`hub send` / `agents.chat` / 冷恢复),不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件:团队服务、模型工具与 UI 分属各自的包,不要把任务所有权塞进子智能体注册。
 - 斜杠命令:`ctx.commands.register(...)`(TUI `/cmd` + GUI 命令面板)
 - 快捷键/flags、自定义消息渲染、会话/消息注入(`sendMessage` / `sendUserMessage` / `appendEntry`)
 - **工具执行拦截**:每个工具执行都被扩展拦截层包裹(`tool_call` / `tool_result` 事件可介入)
@@ -132,7 +132,7 @@ export default function myExtension(pi: ExtensionAPI) {
 ## 4. 内置扩展 vs 第三方
 
 - **native/内置配置**(`discovery/builtin.ts`):`~/.musepi/agent` 与 `.musepi/` 配置文件扫描项,`extensions.list` 里 provider = native。native provider 自 0.5.0(M2.1)起在 TUI/GUI 的 provider tab 可见(不再 skip-native),无 provider 级开关(daemon 拒绝禁用 native)。
-- **第一方 Cordis 包**(`src/bundled-plugins/*/package.json` + `extensibility/extensions-center/builtin-registry.ts`):语音、终端、浏览器、文件、computer、LSP、桌面壳、任务卡片、主题与工具卡片均由真实插件包发现。第一方包与外部 MusePi 包使用相同身份和生命周期。包名是管理 ID,`disabledExtensions` 中的裸包名是包启停的唯一事实源;`voice:stt` 等 MusePi 早期独立 ID、`settingsMirror` 和旧 deny-list 不再参与解析或兼容读取。
+- **第一方 Cordis 包**(`src/plugins/*/*/package.json` + `extensibility/extensions-center/builtin-registry.ts`):语音、终端、浏览器、文件、computer、LSP、桌面壳、任务卡片、主题与工具卡片均由真实插件包发现。第一方包与外部 MusePi 包使用相同身份和生命周期。包名是管理 ID,`disabledExtensions` 中的裸包名是包启停的唯一事实源;`voice:stt` 等 MusePi 早期独立 ID、`settingsMirror` 和旧 deny-list 不再参与解析或兼容读取。
   - `musepi.components[].entry` 定义独立子 fiber。`disabledExtensionComponents` 中的 `<package>/<component>` 是组件启停的唯一事实源;关闭组件只反注册该组件的服务或效果,同包其他 entry 不受影响。`tools.disabled` 只负责独立的工具过滤,不充当组件状态存储。
   - `configStorage: "settings"` 的字段与设置页共用存储。`stt.enabled`、`speech.enabled`、`browser.enabled`、`computer.enabled` 和 `lsp.enabled` 等领域配置继续控制各自功能,但不决定包状态。`terminal`、`browser`、`computer` 等 provider/service 由包或 entry 组件注册,宿主通过服务名消费;卸载 effect 负责反注册。
   - `readonly: true` 的主题和工具卡片是只读集合/组合包。它们没有独立 entry 组件,不宣称包内每个主题或渲染器都能分别启停;daemon 与 UI 都拒绝无效包开关。
@@ -431,7 +431,7 @@ pi.registerWidget({
 - **分派**：daemon 编译 → `extensions.list.widgets` → 宿主用 `loadExtensionWidgets`（`client-core`）blob-import 并 `registerExternalWidgets`；桌面 `useExtensionWidgets`（ChatView）与 guest/移动端 `BoardPanel` 共用同一份加载器。同名覆盖内置类型，picker、内联卡与看板共用同一份。
 - **运行时校验**：`widget` / `board` 调用时把 `ctx.getRegisteredWidgets()` 合并进类型表；`board.save` / `widget.schema` 这类无工具上下文的 RPC 读 daemon 进程索引（`registerWidget` 写入）。插件类型因此能真正通过校验，而不只是出现在扩展清单里。
 - **与 registerToolView 的区别**：后者按工具名替换整条工具渲染；本项按卡片类型新增/替换一个 widget 渲染器。
-- **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` / `clock` 试点，`widget-compile.test.ts` 端到端校验编译产物）。
+- **参考实现**：`packages/coding-agent/src/plugins/media/visuals/`（`metric` / `clock` 试点，`widget-compile.test.ts` 端到端校验编译产物）。
 
 ## 9.2 扩展 markdown 块渲染器（registerMarkdownBlock）
 
@@ -477,9 +477,9 @@ pi.registerScrollbarSkin({
 - **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `shell.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
 - **参考实现**：`apps/desktop/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
 
-## 10. 扩展 transcript 节点渲染(conversation.chat.node seat, DSH 粒度, 2026-08-27)
+## 10. 扩展 transcript 节点渲染(conversation.chat.node seat, 2026-08-27)
 
-扩展为**指定节点 kind** 贡献 transcript 渲染器。对应 DSH `conversation.chat.node` 的单一"聊天节点 seat"槽：按节点 kind(entryKey) 分发，命中即"拥有"该条目的渲染，未命中回退到内建渲染(fallback)。
+扩展为**指定节点 kind** 贡献 transcript 渲染器。`conversation.chat.node` 是单一「聊天节点 seat」槽：按节点 kind(entryKey) 分发，命中即「拥有」该条目的渲染，未命中回退到内建渲染(fallback)。
 
 **注册**:
 
@@ -496,22 +496,22 @@ pi.registerComponent({
 - default export React component, 收到 `SlotComponentProps.node`: `{ entry, kind, turnIndex?, children? }`。
   - `entry` = 原始 `SessionEntry` wire 值;`kind` = `transcriptNodeKind(entry)` 派发键;
   - `children` = 内建 MusePi 对该条目的渲染 —— 组件可包含它做"增强"(保留官方骨架), 或完全自绘(**拥有**该 kind)。
-- 未命中的 kind -> 内建渲染(children 直接返回), 等价 DSH fallback。
+- 未命中的 kind -> 内建渲染(children 直接返回)。
 
 **分派**: daemon 编译(透传 `entryKinds`) -> `extensions.list.components` -> GUI `useSlotComponents(rpc, "conversation.chat.node")` -> `renderTranscriptNode`(ChatView) 按 kind 过滤(`selectTranscriptNodeComponents`) -> 命中组件收到 `node` 上下文拥有渲染, 未命中回退内建。组件集只在 `extensions.changed` 变化, 不随 stream 帧变(memo 安全)。
 
-**防置换**: 扩展声明的 kind 只影响该 kind 条目的渲染; 内建类型(message/compaction/branch_summary/model_change 等)仍由宿主持有, 扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致 —— 官方 sidebar/conversation 的 owner 始终是宿主, 插件贡献到 seat, 不覆写核心。
+**防置换**: 扩展声明的 kind 只影响该 kind 条目的渲染; 内建类型(message/compaction/branch_summary/model_change 等)仍由宿主持有, 扩展只能经 `children` 基座增强声明的 kind。官方 sidebar/conversation 的 owner 始终是宿主, 插件贡献到 seat, 不覆写核心。
 
 **参考实现**: `packages/client-core/src/components/transcript/Transcript.tsx`(`transcriptNodeKind`/`renderTranscriptNode`)、`apps/desktop/src/lib/slot-host.tsx`(`selectTranscriptNodeComponents`/`SlotComponentMount`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectSlotComponents` 透传 `entryKinds`)。
 
 ## 11. 桌面壳与 Shell 模式(desktop-shell, dsh-desktop parity, 2026-08-28)
 
 Electron 壳由第一方 Cordis 包 `desktop-shell` 提供,与其他 MusePi 包使用同一生命周期:
-- `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳连接状态(`shell.enabled` 设置键)、DSH 三模式、daemon serve 的渲染器 origin。
+- `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳连接状态(`shell.enabled` 设置键)、三模式、daemon serve 的渲染器 origin。
 - `extensions.setEnabled("desktop-shell", { enabled, mode? })` 切换包状态与模式(写包名到 `disabledExtensions`,并维护 `shell.enabled`/`shell.mode` 与 `web.port` 发现文件 —— 壳进程据此决定 loadURL 运行时渲染器 or 本地 bundle)。
 - daemon `--web-port` serve 渲染器(`guest-client/dist`) + `/__daemon.json`(wsUrl/token); 壳 `probeWeb()` 读 `web.port` 自动发现。
 
-**Shell 三模式**(DSH compatibility/extended/enhanced):
+**Shell 三模式**(compatibility/extended/enhanced):
 - `compatibility`(默认): 注入脚本只注册 `conversation.chat.node` —— 扩展贡献聊天节点。
 - `extended`: 注入脚本额外注册 `conversation.composer.dock` / `panel.tab.dock` / `statusbar`; guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件(composer 上方 dock、底部状态条、右侧栏面板)。
 - `enhanced`: 渲染器侧同 extended, 壳保留原生 titlebar(原生 UI 面板预留)。
@@ -683,39 +683,34 @@ my-plugin/
 
 换源与否由 `attributeFailure`(`extensibility/plugins/profile/registry-fallback.ts`)判定,而非「失败就重试」:包管理器报的是哪一类失败、该失败是否点名了 spec 自己的主机(host 失败换 registry 无意义)、纯 registry spec 的失败永远可换。链在每次重试前先还原本轮开始时捕获的文件,否则失败尝试留下的半写状态会成为下一次尝试的起点。
 
-**不测延迟、不做粘性回退**,理由与 DSH 的差异见 `docs/handoff-plugin-install.md` §4。
+**不测延迟、不做粘性回退**,理由见 `docs/handoff-plugin-install.md` §4。
 
 ## 15. 用户自定义扩展(现状核实,2026-10-06)
 
-对照 DSH 的用户 patch 层核实过两次(2026-10-06 修正)。**先纠正本文档早前的一处错误记录**:早前称「DSH 可以在 patch 里写 `insert: [{ id, name, config }]` 而不必有包」——**这是错的**。`insert` 的 `name` 必须是一个真实的、已安装的包名,Loader 靠它 import;`insert` 做的是**在 Loader 树里增加一行指向该包**,并可同时携带 `config` 与 `disabled` 条件(`vendor/include/src/index.ts:77-101`、`packages/bundle/web-app/cordis.patch.yml:44-63`)。它不是凭空造插件,配置里永远配着实现。
+用户自定义扩展走运行时发现:插件目录被扫描后即可用,不需要进入 Loader 树。
 
-两侧的真实对照:
+| 能力 | 机制 | 依据 |
+|---|---|---|
+| 本地未发布插件 | `PluginManager.link(path)` 建符号链接;`PluginManager.install` 支持 path/tarball 形态 | `extensibility/plugins/management/manager.ts:917` |
+| 装完即生效 | 是——`getAllPluginExtensionPaths` 运行时发现 | `extensibility/extensions/loader.ts:1012-1015` |
+| 按组件开关 | `extensions.setComponentEnabled`,粒度 `<plugin>/<component>` | `daemon/services/extension-service.ts:601` |
+| 整包启停 | `plugins.setEnabled` → `settings.disabledExtensions` | `daemon/server.ts:1928` |
+| 关掉整个发现层 | `disableExtensionDiscovery`,已用于 compress/session、security/coordinator、commit/agentic | `extensibility/extensions/loader.ts:950-955`、`compress/session.ts:61`、`security/coordinator.ts:265` |
+| profile 隔离 | `~/.musepi/profiles/<name>/agent/`,含 sessions/MCP 凭据/兼容性豁免/扩展加载 | `discovery/builtin.ts:72-73`、`mcp/oauth-flow.ts:26-30` |
 
-| 能力 | DSH | musepi | 依据 |
-|---|---|---|---|
-| 本地未发布插件 | `plugin add .`,相对路径锚定到调用目录;装完按 manifest 的 `dsh.bundle.patch` 自动 reconcile 进 `profile.bundles` | `PluginManager.link(path)` 建符号链接;`PluginManager.install` 支持 path/tarball 形态 | `deepseek-harness/apps/cli/reference/README.md:81`、`extensibility/plugins/management/manager.ts:917` |
-| 装完即生效 | 否——须进 Loader 树 | 是——`getAllPluginExtensionPaths` 运行时发现 | `extensibility/extensions/loader.ts:1012-1015` |
-| 按行开关 | `setPluginEnabled` 写 patch 的 `disabled` 覆写 | `extensions.setComponentEnabled`,粒度 `<plugin>/<component>` | `daemon/services/extension-service.ts:601` |
-| 整包启停 | 同上(行级) | `plugins.setEnabled` → `settings.disabledExtensions` | `daemon/server.ts:1928` |
-| **关掉整个发现层** | **无此概念** | `disableExtensionDiscovery`,已用于 compress/session、security/coordinator、commit/agentic | `extensibility/extensions/loader.ts:950-955`、`compress/session.ts:61`、`security/coordinator.ts:265` |
-| **整包条件启停** | `disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"` | **无** | DSH `packages/bundle/web-app/cordis.patch.yml:47` |
-| profile 隔离 | `$DSH_HOME/profiles/<name>/`,含完整 Loader 树 | `~/.musepi/profiles/<name>/agent/`,含 sessions/MCP 凭据/兼容性豁免/扩展加载 | `discovery/builtin.ts:72-73`、`mcp/oauth-flow.ts:26-30` |
+`Extension` 接口为每个注册面各持一个独立通道(`extensibility/extensions/types.ts` 的 `Extension`),每条各自加载与卸载;通道数会随注册 API 增加而变,故不复述具体数字,以该接口为准。
 
-**粒度上我们不比 DSH 细**:DSH 的「行」不可再分,而 `Extension` 接口为每个注册面各持一个独立通道(`extensibility/extensions/types.ts` 的 `Extension`),每条各自加载与卸载。但我们**多一个控制维度**——`disableExtensionDiscovery` 能整层关闭环境发现,DSH 的 Loader 树没有对应概念。通道数会随注册 API 增加而变,故不复述具体数字,以该接口为准。
+### 整包条件启停尚未支持
 
-### 真实差异只有一处:整包级条件启停
+`disabledExtensions` 是静态 id 列表,没有表达式求值,所以「这个包只在 desktop profile 下启用」不可表达。兼容层读取外部插件清单时按常见形态求值(比较 profile 名、判断环境变量存在性)并写入 `disabledExtensions`;求值不了的表达式显式报「无法翻译」而非静默忽略——静默忽略会让一个本该禁用的插件被装载。
 
-`disabledExtensions` 是静态 id 列表,没有表达式求值。DSH 能在 patch 里写 `disabled: !!js <表达式>`,Loader 在每次挂载决策时针对 loader ctx 求值——所以「这个包只在 desktop profile 下启用」是可表达的。
-
-这条差异**在 DSH 插件兼容层落地时会直接咬人**:bundle 的 `disabled: !!js` 翻译不了。对应的做法是兼容层求值常见形态(比较 profile 名、判断环境变量存在性)并写入 `disabledExtensions`,求值不了的表达式显式报「无法翻译」而非静默忽略——静默忽略会让一个本该禁用的插件被装载。
-
-不必为此把 musepi 改成声明式 Loader 树:那会把「插件是运行时发现的」这个前提改掉,代价大于收益。
+把扩展系统改成声明式 Loader 树能补上这一维,但会改掉「插件是运行时发现的」这个前提,代价大于收益。
 
 ## 16. Claude Code 兼容面(现状核实,2026-10-06)
 
-对照 DSH 的 `hooks-claude-code` 核实过一次。DSH 的 Claude Code 兼容**只有一件事**:把 Claude Code `hooks.json` 的 command 型钩子桥到自己的扩展点,认 7 个事件(`SessionStart` / `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStart` / `SubagentStop`),`configPath` 必填、无自动发现,且不读 `.claude-plugin/plugin.json`、marketplace、commands、agents、skills、`.mcp.json`。
+Claude Code 兼容覆盖插件目录、配置目录、指令文件、skills、slash commands、hooks、自定义工具、MCP、marketplace、LSP 与 settings 十一个面:
 
-musepi 的覆盖面**更广**;命令钩子已按下方说明补齐,其余不必为了"对齐 DSH"改窄:
+命令钩子已按下方说明补齐,其余覆盖面不因别家实现更窄而收窄:
 
 | 兼容面 | 实现 | 依据 |
 |---|---|---|
@@ -724,7 +719,7 @@ musepi 的覆盖面**更广**;命令钩子已按下方说明补齐,其余不必�
 | CLAUDE.md / AGENTS.md | 指令文件 + `@import` 展开 | `discovery/claude.ts:128-149`、`discovery/at-imports.ts` |
 | skills | `~/.claude/skills/*/SKILL.md` | `discovery/claude.ts:539` |
 | slash commands | `~/.claude/commands/*.md` | `discovery/claude.ts:555` |
-| hooks | `.claude/hooks/pre/` 与 `post/` directories + the preset row `musepi-hooks-claude-code`'s `hooks.json` (command hooks, five events) | `discovery/claude.ts:563`, `bundled-plugins/hooks-claude-code/index.ts` |
+| hooks | `.claude/hooks/pre/` 与 `post/` directories + the preset row `musepi-hooks-claude-code`'s `hooks.json` (command hooks, five events) | `discovery/claude.ts:563`, `plugins/runtime/hooks-claude-code/index.ts` |
 | 自定义工具 | `~/.claude/tools/` | `discovery/claude.ts:571` |
 | MCP | `.claude.json`、`.claude/mcp.json` | `discovery/claude.ts:523` |
 | marketplace | `.claude-plugin/marketplace.json` 目录清单 | `extensibility/plugins/marketplace/fetcher.ts:199` |
@@ -733,7 +728,7 @@ musepi 的覆盖面**更广**;命令钩子已按下方说明补齐,其余不必�
 
 优先级是刻意排的:claude-plugins(70) < claude(80),所以用户自己在 `.claude/` 里的覆盖优先于 marketplace 装来的插件(`discovery/agent-plugins.ts:39-40`)。
 
-**Command hooks now follow DSH's split; the remaining differences are scope and semantic subset.** The shared engine lives in `extensibility/hooks/command` (config / matcher / exec / codec / merge); the dialect plugins `musepi-hooks-claude-code` and `musepi-hooks-codex` own only `configPath`, matcher mode and `${…}` substitution. Both are `presetOnly` row packages mounted and released with the session, not process-level bridges. A `UserPromptSubmit` refusal uses `before_agent_start`'s `cancel` contract and stops the prompt before it is sent; `PostToolUse` rewrites the result into an error carrying the reason; `Stop` reuses `session_stop`'s continuation. `ask` has no hook-level approval integration yet, so it degrades to allow with a warning (the dsh-codex subset); `SubagentStart/Stop` are parsed and reported as skipped.
+**Command hooks are split by dialect; the remaining differences are scope and semantic subset.** The shared engine lives in `extensibility/hooks/command` (config / matcher / exec / codec / merge); the dialect plugins `musepi-hooks-claude-code` and `musepi-hooks-codex` own only `configPath`, matcher mode and `${…}` substitution. Both are `presetOnly` row packages mounted and released with the session, not process-level bridges. A `UserPromptSubmit` refusal uses `before_agent_start`'s `cancel` contract and stops the prompt before it is sent; `PostToolUse` rewrites the result into an error carrying the reason; `Stop` reuses `session_stop`'s continuation. `ask` has no hook-level approval integration yet, so it degrades to allow with a warning (the codex subset); `SubagentStart/Stop` are parsed and reported as skipped.
 
 ## 17a. 第三方 Cordis 插件适配
 
@@ -1068,4 +1063,4 @@ Plan, goal, and vibe runtime context deliberately stay host-owned custom message
 
 Date, cwd, skills/rules, the tool inventory, and persona/preset data remain in `buildSystemPrompt`; do not describe the prompt surface as fully pluginized.
 
-**Anchors**: `packages/coding-agent/test/prompts-registry.test.ts`, `packages/coding-agent/test/prompts-composer.test.ts`, `packages/coding-agent/test/prompts-host.test.ts`, `packages/coding-agent/test/prompt-host-session.test.ts`, `packages/coding-agent/test/prompt-project-context.test.ts`, `packages/coding-agent/src/prompts/{orders,registry,composer,host,store,types,project-context}.ts`, `packages/coding-agent/src/bundled-plugins/loader.ts`.
+**Anchors**: `packages/coding-agent/test/prompts-registry.test.ts`, `packages/coding-agent/test/prompts-composer.test.ts`, `packages/coding-agent/test/prompts-host.test.ts`, `packages/coding-agent/test/prompt-host-session.test.ts`, `packages/coding-agent/test/prompt-project-context.test.ts`, `packages/coding-agent/src/prompts/{orders,registry,composer,host,store,types,project-context}.ts`, `packages/coding-agent/src/plugins-runtime/loader.ts`.

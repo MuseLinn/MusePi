@@ -174,7 +174,7 @@ daemon RPC:
 语义:状态三色点 绿 active / 灰 disabled / 橙 shadowed(详情显 shadowedBy)。provider 关闭后其条目从列表消失(loadCapability 层行为,与 TUI 同源,不是 bug)。内置判定 provider native|omp-managed|builtin-defaults。
 
 - **组件配置态与生效态**：`PluginComponentDesc.enabled` 只表示组件不在自己的黑名单中。详情弹层仅在 `item.state === "active" && !item.loadError && component.enabled` 时显示绿色/开启；父插件停用后保留组件选择，但开关不可操作并显示继承停用原因，不清空黑名单。
-- **profile/bundle 组合**：`bundles.composition` 同时返回组合层/行和 `availableBundles`，已选但缺失的包也在内。`bundles.setEnabled{name,enabled}` 串行写入当前 profile 的 `musepi.profile.bundles`，保留其他清单字段，DSH profile 字段直接忽略；启用要求包已安装且 `dsh.bundle.patch` 可读，缺失的已选项仍可停用。`bundles.rows.setEnabled` 仍把行覆盖写入 `cordis.patch.yml`。读取组合不创建文件。普通插件启停仍归 runtime lock。同一组合中的 Agent preset 声明按文件 > profile > 扩展的顺序进入 `presets.list` 与 SDK；`presets.getDefault`/`presets.setDefault` 读写 `agent-preset-registry.config.selectedDefault`，出现首条消息后拒绝切换 preset。
+- **profile/bundle 组合**：`bundles.composition` 同时返回组合层/行和 `availableBundles`，已选但缺失的包也在内。`bundles.setEnabled{name,enabled}` 串行写入当前 profile 的 `musepi.profile.bundles`，保留其他清单字段，其他 profile 字段直接忽略；启用要求包已安装且 `dsh.bundle.patch` 可读，缺失的已选项仍可停用。`bundles.rows.setEnabled` 仍把行覆盖写入 `cordis.patch.yml`。读取组合不创建文件。普通插件启停仍归 runtime lock。同一组合中的 Agent preset 声明按文件 > profile > 扩展的顺序进入 `presets.list` 与 SDK；`presets.getDefault`/`presets.setDefault` 读写 `agent-preset-registry.config.selectedDefault`，出现首条消息后拒绝切换 preset。
 - **卡片、详情与设备检测**：普通包和模块行共用 `PluginHorizontalCard`：左侧图标，中间垂直排列标题、说明和标签，右侧开关或其他操作。清单中字面值 `experimental: true` 会传到两类卡片并显示本地化「实验性」标签。详情页只展示已声明组件和配置，不再附加通用组件说明。语音包详情与设置「语音」共用 `VoiceInputDevicePicker`；所属界面处于活动状态时枚举设备、监听热插拔、打开所选麦克风并显示真实 RMS 电平，不需要独立检测按钮。关闭或隐藏界面会停止音轨并关闭音频上下文。
 - **市场详情与持久化**：`marketplace.detail {name,marketplace}` 返回卡片字段以及 `displayName`、`longDescription`、`capabilities` 和按名称排序的技能 frontmatter。`MarketplaceManager.getPluginDetail` 与安装共用 `#preparePluginSource`；首次读取生成常规 marketplace 克隆，后续读取复用，不安装或启用插件。`MarketplaceListEntry.enabled` 反映活动安装状态。详情页通过 `plugins.setEnabled` 启停，保留安装/移除/升级确认，并从 `musepi-gui-marketplace-detail-v1` 恢复打开的详情；`musepi-gui-marketplace-view-v1` 保存视图、搜索词和分类。渲染端只保存插件 id 和界面偏好，源码字节由 daemon 缓存持有。
 - **插件即时生效**：安装、卸载、市场升级与包启停会把受影响入口路径交给每个已打开会话，改动不必等新会话才可见。`PluginInstallDialog` 只订阅本次所装包的 `plugins.apply.state`，在能力摘要下显示一行：已生效会话数、回合结束后生效的会话数，或失败数。流式会话报 deferred，这是时机事实而非错误；没有任何会话需要改动时不发事件。
@@ -506,7 +506,7 @@ daemon RPC:
 - 空 query 保持目录序(裸 `/` 列表不重排);非匹配项沉底保序(skill: 查询的幸存者不被丢弃);
 - 纯函数 + 单测 `lib/slash-rank.test.ts`(tier/GUI 决胜/稳定序/沉底)。
 
-## 14. 轨迹 Overview 时间轴 + 选择检视(2026-08-21,DSH Trajectory 吸收)
+## 14. 轨迹 Overview 时间轴 + 选择检视(2026-08-21)
 
 设计规范见 `gui-design.md` §1(轨迹时间轴与检视)。此处记数据契约与坑。
 
@@ -526,7 +526,7 @@ daemon RPC:
 
 - 拖拽区间:**pointer capture** + 位移 ≥3px 才提交;单击段 = 选中该整轮、单击空白 = 清除;`msAtClientX` 经 `getBoundingClientRect` 反算,零 re-render 依赖。
 - Esc 键:**先清区间、再清选中**(`window` keydown,依赖 [range, selectedId]——与模态键盘契约同序)。
-- 聚焦 = **置灰不裁剪**(`.traj-event--dim` 0.35 + saturate .6),DSH 同款"聚焦而非过滤"。
+- 聚焦 = **置灰不裁剪**(`.traj-event--dim` 0.35 + saturate .6)。
 - 地图数据增长不会强制重新 fit:仅初次适配、显式重置和真正切换横/纵方向会触发 fit。Overview 轮段、地图轮卡、可跳转事件行和独立分支折叠按钮都把单击操作暴露给 Enter/Space,并带可见焦点样式。
 
 ### 坑
@@ -580,7 +580,7 @@ daemon RPC:
 **流式 markdown 时机**(答「是不是结束后才渲染」——**不是**):
 - `Markdown.tsx` `renderStreamingMarkdown`:流式时 head **随流增长**——每帧把「刚刚成立」的平衡 `\n\n` 块提升为 markdown(段落、列表、以及围栏一闭合即成的代码块),内容是边到边成形;**最后一个**平衡边界之后仍是 RAW TEXT(逐字单次入场动画——切点只能停在平衡边界上正因如此,未闭合围栏保持字面量同理)。`streaming:false` 时只把尾块重解析为真 markdown(复用 head 块,避免整条 `md.parse` 的「卡一下才都渲染」)。切点前移由尾段 DOM pass 处理(清空并重挂,已显示字符不会重播)。
 - 思考块按句过 `Markdown`(`tr-think-sentence--live` 入场)。
-- DSH(`deepseek-harness`)同款增量:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
+- 增量渲染:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
 
 ## 17. OTA 更新渠道 + 三合一按钮 run 级 working 语义（2026-08-22）
 
@@ -888,7 +888,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 28c. 原生滚动条 + 皮肤预设
 
-- 决定：[ADR 0008](../adr/0008-native-scrollbars.md)。
+- 决定：[ADR 0008](adr/0008-native-scrollbars.md)。
 - **滚动条回到原生**(`packages/client-core/src/styles/base.css`):尺寸、拖拽、悬停、键盘、减少动效与系统无障碍面都交给引擎。`gui-base.css` 不再全局隐藏系统滚动条;`FloatingScrollbar` 的轨池、探活、意图闸、闲时幽灵、拖拽反解与 `stackZ` 随 `ui-theme/rail.tsx`、`rail.css`、`test/ui-theme-rail.test.tsx` 一并删除。
 - **两条渲染路径互斥**。非 `auto` 的 `scrollbar-width`/`scrollbar-color` 会让 Chromium/Safari 丢弃该元素上所有 `::-webkit-scrollbar*` 规则(含 hover 拇指),所以标准属性放在 `@supports not selector(::-webkit-scrollbar)` 里,伪元素规则留在外面。轨道保持透明,只有拇指带色。
 - **调色板 → tint 间接层**(`base.css`):`--mp-scrollbar-bg-l1`/`-l2` 与 hover 对解析成一个在 `body, body *` 上重新声明的 tint —— 继承值携带的是在 `body` 已替换好的颜色,后代无法重绑。表面通过把 `--mp-scrollbar-tint`/`-hover` 重绑到 l2 对来选择海拔:设置对话框、连接器/设备/导入对话框、提醒列表、音乐队列、OBO 表单、操作提示、BTW 正文与扩展详情。
@@ -1254,6 +1254,18 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
   `init(seed)`、纯函数 `apply(state, event)`、`view(state)`、可选 `viewEquals`，
   以及由 `sampleOn` 门槛控制的可选 `sample(state, source)`。无关事件必须返回同一
   state 引用。
+- **谁负责注册**（2026-11-27）：注册表是一个 L2 **服务**
+  （`daemon/services/session-projection-service.ts`，key `sessionProjections`），
+  对齐 dsh 的 `ctx.sessionProjections`——它负责驱动与存放，不认识任何具体域。
+  域单元由拥有该状态的服务注册：`SessionService.start` 注册会话状态域，`stop`
+  撤销它们，所以停掉的服务不会在基线里留下 key。任何地方都没有一份中央域清单，
+  这正是重点：新增一个域就是写它的单元、并在它派生自的状态旁注册。宿主保留自己的
+  注册表实例（commit 路径与快照构造直接读它）；服务包装的是同一实例，因此一个会话
+  的折叠状态永远不会出现第二份。
+- **隔离**（2026-11-27）：`seed` 与 `applyEvent` 都按单元捕获异常。此前一个单元抛错
+  会中断整个循环，于是它之后的每个单元都从基线里静默消失——一个不完整的
+  `SessionStats` 就足以让模式徽标全部消失。无法播种的单元在该会话里缺席，下一次
+  `applyEvent` 会再给它一次机会。
 - **驱动**：`SessionProjectionRegistry.applyEvent` 对每个已提交 wire 事件把全部单元
   折叠一次；只有 view 变化才产出 change。`sampleOn` 是边界集合（`turn_end`、
   `agent_end`、`auto_compaction_end`、`session_leaf_moved`、`model_changed`），
@@ -1417,7 +1429,7 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 - **引用评论**:`SelectionToolbar` 的 `onQuote` 增加第 4 个 `comment` 参数;浮层内输入后由 `ChatView.appendQuote` 传入 `createChatQuoteContext`,引用卡继续用 `withDisplayContextComment` 编辑,发送时 `composeDisplayContextPrompt` 把评论拼进引用正文。文件/PDF/Office 选区的评论同样经 `FilePane.appendFileQuote` 写入 `createFileQuoteContext`。
 - **HTML 本地预览**:`lib/file-workspace.ts` 的 `panelBrowserPreviewUrl()` 生成 `musepi-file://localhost/<path>`;主进程 `normalizeAddressBarUrl` 与协议处理器统一补/去 Windows 盘符前的斜杠,`pathToFileURL` 才不会拼成 `file:///D:/D:/...`。`will-navigate` 允许 `musepi-file:` 同方案导航,页面内相对链接可继续跳转;FilePane 的 HTML 预览头部按钮经 `musepi-open-url` 在受管浏览器中打开。
 - **标注面板**:`annotation/overlay.ts` 在 shadow DOM 内渲染结构化卡片，分区数据直接取自 `AnnotationElementTarget`（tag/classes、selector/path/bounds/center、role/aria/disabled 等语义、data-*、pageUrl/viewport/DPR）；`AnnotationPayload.includeScreenshot` 缺省为 true，关闭时 `attach.ts` 不附截图且 prompt 标记 `Screenshot: not attached`，`runAnnotationSession` 也不会再捕获。网页右键「标注」通过 `elementAt` 预选指针下的元素，直接打开该卡；引用/标注卡为非模态，打开期间聊天与页面可继续滚动。未传 panel 文案的宿主自动回退旧紧凑输入条。
-- **插件分区**:会话信息卡的插件分区是唯一的插件入口——分区头给出运行数/总数,展开后原地列出逐个插件的运行/禁用状态。原先另有一条打开浮层的状态条,与这里的注册表条目重复,已移除。插件状态是 profile 级全局状态,与 DSH 的 `ui-plugin-manager` 一致,不做会话级启停。
+- **插件分区**:会话信息卡的插件分区是唯一的插件入口——分区头给出运行数/总数,展开后原地列出逐个插件的运行/禁用状态。原先另有一条打开浮层的状态条,与这里的注册表条目重复,已移除。插件状态是 profile 级全局状态,不做会话级启停。
 - **AI 重命名**:`retitleSessionById` 成功后先用返回标题写 `session.tree` 的目标行与 `sessionMeta.title`，再后台 `refreshSessions` 对账；失败按 `empty/generation-failed/offline/timeout/unsupported` 映射为不同提示，进行中显示状态条并禁用菜单。
 - **连接器安装 RPC**:`mcp.servers.list/add/remove` 读写用户级 `<agentDir>/mcp.json`，复用 `mcp/config-writer.ts` 的锁与原子写；list 只返回名字/传输/URL/命令与 auth 类型，绝不返回 headers。token 只落在用户本机配置，不进仓库。安装会就地 reconcile live manager：移除或变更的服务器断开、新服务器连接，该工作目录下所有 live 会话收到刷新后的 MCP 工具集，无需重启 daemon。
 - **HTML 卡片标注与宽表**:`widgets/html.tsx` 复用 `annotationOverlayLabels()`，会话内 HTML 卡片与浏览器页面走同一套结构化标注 panel；表格加宽按内容 hash 写入 `musepi-gui-wide-tables`，重新挂载后恢复，超过 200 条裁剪。

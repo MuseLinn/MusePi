@@ -178,7 +178,7 @@ If a host rejects the emitted effort with 400/422, `resolveOpenAIReasoningEffort
 ### Interactions
 
 - **Sampling clamps**: models with active reasoning (Opus 4.7+, Fable/Mythos 5, o-series/GPT-5) reject explicit `temperature`/`top_p`; `anthropic.ts` and the compat policy (`supportsSamplingParams`) suppress them.
-- **Forced tool choice**: see [§4](#edge-cases); several providers must drop thinking when a tool call is forced.
+- **Forced tool choice**: see [§4](#edge-guards); several providers must drop thinking when a tool call is forced.
 
 ## 3. Tool handling per provider
 

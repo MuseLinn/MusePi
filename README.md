@@ -160,6 +160,16 @@ Run the release workflow only for an explicit release request. Version and chang
 - [`docs/`](docs/): product and implementation documentation, with bilingual pairs where required.
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md): release notes.
 
+## Acknowledgements
+
+MusePi's architecture draws on ideas from several agent harnesses. We are grateful to their authors for publishing their designs openly:
+
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — the all-plugin Cordis composition model, capability seams, and generated-document gates that MusePi's extension system is built to align with.
+- [pi](https://github.com/badlogic/pi-mono) — the upstream this project forked from.
+- The Cordis framework and the Superpowers and Modern Web Guidance plugin ecosystems, which MusePi consumes directly.
+
+These are design references. MusePi versions independently, and the code, documentation, and defaults in this repository are its own.
+
 ## License
 
 MusePi is released under the [Apache License 2.0](LICENSE). It is a fork of the MIT-licensed pi project, so the upstream notice is retained in [NOTICE](NOTICE) and [LICENSES/MIT-pi.txt](LICENSES/MIT-pi.txt). The MusePi name and logo are not licensed under Apache-2.0.

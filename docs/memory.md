@@ -167,7 +167,7 @@ hindsight:
    apiToken: ${HINDSIGHT_API_TOKEN}
 ```
 
-`HINDSIGHT_*` environment variables override `hindsight.*` settings, which override built-in defaults. See the [complete Hindsight environment-variable table](./environment-variables.html#hindsight-memory-backend) for all 18 supported overrides, accepted values, parsing rules, precedence, and defaults.
+`HINDSIGHT_*` environment variables override `hindsight.*` settings, which override built-in defaults. See the [complete Hindsight environment-variable table](#hindsight-remote-backend) for all 18 supported overrides, accepted values, parsing rules, precedence, and defaults.
 
 The `hindsight.*` rows in this section are contributed by the `memory-hindsight` plugin. The values remain under the same keys and stay readable when the plugin is not mounted; an absent plugin only removes the settings UI.
 
