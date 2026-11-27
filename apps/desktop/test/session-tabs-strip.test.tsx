@@ -91,7 +91,6 @@ async function renderHeader() {
 				store={null}
 				rpc={rpc}
 				sideCollapsed
-				onToggleSidebar={() => {}}
 				onNewSession={() => {
 					newSessions += 1;
 				}}

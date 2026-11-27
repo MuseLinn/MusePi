@@ -87,6 +87,7 @@ function sessionMarkdownLabels(): MarkdownLabels {
 }
 
 import { MenuPopup } from "./MenuPopup";
+import { NotificationCenter } from "./NotificationCenter";
 import { ProjectActionsDialog } from "./ProjectActionsDialog";
 
 /** "mm:ss" hold time for the paused-state hint (matches the composer's
@@ -1116,6 +1117,7 @@ export function GuiHeader({
 				)}
 			</div>
 			<div className="ml-auto flex shrink-0 items-center gap-1">
+				<NotificationCenter />
 				{/* Pause controls (per-session then global), left of the
 				 * terminal toggle — kept out of the left titlebar overlay so
 				 * they never collide with the session-title button. */}
