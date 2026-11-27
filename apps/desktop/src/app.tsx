@@ -3937,6 +3937,29 @@ function AppInner(): ReactNode {
 		[selectedId],
 	);
 
+	/** Approve now and stop asking about this tool for the rest of the session.
+	 *  The daemon owns the scope; the card only says which tool it covers. */
+	const allowApprovalForSession = useCallback(
+		(requestId: string, tool: string, note?: string): void => {
+			const client = rpcRef.current;
+			const id = selectedId;
+			const current = storeRef.current;
+			if (!client || !id || !current) return;
+			setError(null);
+			const trimmed = note?.trim();
+			void client
+				.request("tool.allowForSession", {
+					sessionId: id,
+					requestId,
+					tool,
+					...(trimmed ? { note: trimmed } : {}),
+				})
+				.then(() => current.dismissApproval(requestId))
+				.catch(err => setError(fmtError("tool.allowForSession", err)));
+		},
+		[selectedId],
+	);
+
 	/** Ask answer (TUI ask parity): the floating AskCard above the composer
 	 *  answered — resolve the daemon's ask-request promise. */
 	const answerAsk = useCallback(
@@ -5154,6 +5177,7 @@ function AppInner(): ReactNode {
 								),
 							onStop: stop,
 							onDecideApproval: decideApproval,
+							onAllowApprovalForSession: allowApprovalForSession,
 							onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
 							onForkSession: async forkId => {
 								await refreshSessions(rpc);
@@ -5627,6 +5651,7 @@ function AppInner(): ReactNode {
 													),
 												onStop: stop,
 												onDecideApproval: decideApproval,
+												onAllowApprovalForSession: allowApprovalForSession,
 												onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
 												onForkSession: async forkId => {
 													await refreshSessions(rpc);

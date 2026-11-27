@@ -42,6 +42,7 @@ export class ApprovalService implements DaemonService {
 		"session.askAnswer": "answer",
 		"tool.approve": "approve",
 		"tool.deny": "deny",
+		"tool.allowForSession": "allowForSession",
 	} as const;
 
 	readonly #deps: ApprovalServiceHostAccess;
@@ -60,6 +61,30 @@ export class ApprovalService implements DaemonService {
 		const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : undefined;
 		if (!live.approvals.resolve(p.requestId, true, note)) throw new Error(`Unknown approval request: ${p.requestId}`);
 		return { ok: true };
+	}
+
+	/** RPC tool.allowForSession：批准当前请求，并且本次会话不再询问这个工具。
+	 *
+	 *  会话级而不是持久化：这是对眼前这项工作的决定，不是长期策略；长期策略
+	 *  的入口是 `tools.approvalMode`，两者混在一起会让一次点击悄悄放宽之后
+	 *  所有会话。返回加入后的工具名，让界面能如实说明放宽了什么。 */
+	allowForSession(params: { sessionId: string; requestId: string; tool?: string; note?: string }): {
+		ok: true;
+		tool: string;
+	} {
+		const p = (params ?? {}) as { sessionId: string; requestId: string; tool?: string; note?: string };
+		const live = this.#deps.get(p.sessionId);
+		if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+		const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : undefined;
+		const pendingRecord = live.approvals.pending.get(p.requestId);
+		const tool = p.tool ?? pendingRecord?.tool;
+		if (!tool) throw new Error(`Unknown approval request: ${p.requestId}`);
+		// Record the allowance BEFORE resolving, so the very next request for the
+		// same tool already passes without a card.
+		live.approvals.allowedTools.add(tool);
+		if (pendingRecord && !live.approvals.resolve(p.requestId, true, note))
+			throw new Error(`Unknown approval request: ${p.requestId}`);
+		return { ok: true, tool };
 	}
 
 	/** RPC tool.deny：拒绝待审批工具调用，note 成为 agent 看到的拒绝理由。 */

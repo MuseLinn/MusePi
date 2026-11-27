@@ -1736,6 +1736,8 @@ export const settings = {
 	"settings.petPanelSessions": "会话",
 	"settings.petPanelNoRecent": "暂无最近会话",
 	"settings.approve": "批准",
+	"settings.approveForSession": "本次会话总是允许",
+	"settings.approveForSessionHint": "之后这个工具的调用不再询问；审批模式本身不变",
 	"settings.cancel2": "取消",
 	"settings.connect": "连接",
 	"settings.deny": "拒绝",

@@ -7,10 +7,18 @@
 /* Approval CARD (ApprovalCard.tsx) — the tool-permission request. Keeps its
  * warning surface: it is an alert, not a chip, and the tint is the only
  * signal that the agent is blocked on you. */
+/* Two rows: the identity/prompt line, then the decision (note + actions).
+ *
+ * Was a single flex row with every part as a sibling. `.gui-approval-note` is
+ * `width: 100%`, so inside a row it squeezed its siblings to zero: the title
+ * broke one character per line and the action buttons rendered with no width
+ * at all — the card looked empty while its text was all present. A grid with an
+ * explicit second row makes the note and the buttons share that row instead of
+ * competing with the body for the first one. */
 .gui-approval {
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 4px 8px;
 	padding: 8px 10px;
 	border-radius: var(--radius-md);
 	background: var(--color-warning-soft);
@@ -32,14 +40,16 @@
 
 .gui-approval-icon {
 	color: var(--color-warning);
-	flex-shrink: 0;
+	grid-column: 1;
+	grid-row: 1;
 }
 
 .gui-approval-body {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
-	flex: 1;
+	grid-column: 2;
+	grid-row: 1;
 	min-width: 0;
 }
 
@@ -70,19 +80,25 @@
 	overflow-x: clip;
 }
 
+/* The decision row wraps rather than shrinking the buttons: a squeezed
+ * "Deny" is the one control that must never lose its hit area. */
 .gui-approval-actions {
 	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
 	gap: 6px;
-	flex-shrink: 0;
+	grid-column: 2;
+	grid-row: 3;
 }
 
 /* Approval note (TUI ask-dialog "✎ note" parity): multiline on purpose —
  * Enter inserts a newline; beyond five lines the field scrolls internally
  * instead of growing the card (ZCode 权限反馈换行输入 parity). */
 .gui-approval-note {
-	flex-shrink: 0;
-	width: 100%;
-	margin-top: 6px;
+	grid-column: 2;
+	grid-row: 2;
+	min-width: 0;
+	margin-top: 2px;
 }
 
 .gui-approval-note textarea {
@@ -113,6 +129,23 @@
 	border-color: transparent;
 	color: var(--color-bg);
 	font-weight: 600;
+}
+
+/* Scoped allowance beside Approve: the same decision extended in time, so it
+ * reads quieter — a text-weight button, not a second primary. Hover and
+ * :focus-visible share one state set (docs/gui-design.md), and the hint lives
+ * in the native title rather than a second line of copy on the card. */
+.gui-btn-quiet {
+	background: transparent;
+	border-color: transparent;
+	color: var(--color-text-muted);
+	font-weight: 500;
+}
+
+.gui-btn-quiet:hover,
+.gui-btn-quiet:focus-visible {
+	background: color-mix(in oklab, var(--color-text-muted) 12%, transparent);
+	color: var(--color-text);
 }
 
 .gui-composer {

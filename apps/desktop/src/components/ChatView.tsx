@@ -310,6 +310,7 @@ export function ChatView({
 	onSend,
 	onStop,
 	onDecideApproval,
+	onAllowApprovalForSession,
 	onReloadSession,
 	onForkSession,
 	modes,
@@ -383,6 +384,7 @@ export function ChatView({
 	): void;
 	onStop(): void;
 	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
+	onAllowApprovalForSession?(requestId: string, tool: string, note?: string): void;
 	/** Reload the active session snapshot (revert/edit truncation). */
 	onReloadSession?(): Promise<void> | void;
 	/** Open a forked session (session.forkAt result) — switches the UI to
@@ -4298,6 +4300,7 @@ export function ChatView({
 										tool={a.tool}
 										prompt={a.prompt}
 										onDecide={onDecideApproval}
+										onAllowForSession={onAllowApprovalForSession}
 									/>
 								))}
 								{secretRequests.map(request => (

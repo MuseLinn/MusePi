@@ -1820,6 +1820,9 @@ export const settings = {
 	"settings.petPanelSessions": "Sessions",
 	"settings.petPanelNoRecent": "No recent sessions",
 	"settings.approve": "Approve",
+	"settings.approveForSession": "Always allow this session",
+	"settings.approveForSessionHint":
+		"This tool stops asking for the rest of the session; the approval mode itself is unchanged",
 	"settings.cancel2": "Cancel",
 	"settings.connect": "Connect",
 	"settings.deny": "Deny",
@@ -7573,7 +7576,8 @@ export const settings = {
 		"A secret with this name already exists. Replace its value instead, or delete it first.",
 	"settings.secretsSetFailed": "Could not save the secret: {error}",
 	"settings.secretsDeleteFailed": "Could not delete the secret: {error}",
-	"settings.secretsProtectionKeyFileMeta": "One key file on this machine protects the vault, connector tokens and MCP sign-ins.",
+	"settings.secretsProtectionKeyFileMeta":
+		"One key file on this machine protects the vault, connector tokens and MCP sign-ins.",
 	"settings.secretsProtectionPassphraseMeta":
 		"A passphrase wraps the one key behind the vault, connector tokens and MCP sign-ins.",
 	"settings.secretsScopeAllHint": "Works in every session. The agent can ask for one limited to its workspace.",
@@ -7625,7 +7629,8 @@ export const settings = {
 	"settings.connectionKindLocal": "Local",
 	"settings.connectionKindWsl": "WSL",
 	"settings.connectionKindSsh": "SSH",
-	"settings.projectHostNoInstance": "No instance for that host yet. Add it in Connection locations so the project can be created there.",
+	"settings.projectHostNoInstance":
+		"No instance for that host yet. Add it in Connection locations so the project can be created there.",
 	"settings.projectHostConnectFailed": "Could not reach {label}; the project was not created.",
 	"settings.connectionSshCardHint": "Reach a daemon on another machine over SSH",
 	"settings.connectionDockerCardHint": "Run the daemon inside an existing container",

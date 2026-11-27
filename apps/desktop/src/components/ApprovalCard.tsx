@@ -26,12 +26,16 @@ export function ApprovalCard({
 	tool,
 	prompt,
 	onDecide,
+	onAllowForSession,
 }: {
 	requestId: string;
 	tool: string;
 	/** Full approval prompt body (Allow tool / Reason / command+args). */
 	prompt?: string;
 	onDecide(requestId: string, approved: boolean, note?: string): void;
+	/** Approve now and stop asking about this tool for the rest of the session.
+	 *  Omitted when the caller cannot scope an allowance to a session. */
+	onAllowForSession?(requestId: string, tool: string, note?: string): void;
 }): ReactNode {
 	// Notify once per pending card (browser blocks audio before a gesture).
 	// requestId is the per-card identity — the effect must re-run when the
@@ -89,6 +93,23 @@ export function ApprovalCard({
 						>
 							{t("settings.approve")}
 						</button>
+						{onAllowForSession ? (
+							// A quieter control than Approve: it is the same decision
+							// extended in time, not a bigger one, and its scope is what
+							// the title says — this session, this tool.
+							<button
+								type="button"
+								className="gui-btn gui-btn-quiet"
+								title={t("settings.approveForSessionHint")}
+								onClick={() => {
+									sfxFor("approval-ok");
+									haptic(1);
+									onAllowForSession(requestId, tool, note);
+								}}
+							>
+								{t("settings.approveForSession")}
+							</button>
+						) : null}
 						<button
 							type="button"
 							className="gui-btn gui-btn-stop"
