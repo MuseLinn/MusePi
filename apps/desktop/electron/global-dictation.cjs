@@ -19,11 +19,11 @@
 const { ipcMain } = require("electron");
 
 const SAMPLE_RATE = 16_000;
-const MAX_SECONDS = 30;
+const MAX_SECONDS = 600;
 const MIN_SAMPLES = SAMPLE_RATE / 2;
 const HUD_SIZE = { width: 300, height: 190 };
 
-/** Quantise float samples so a 30 s clip stays inside one RPC frame. */
+/** Quantise float samples so streamed chunks stay inside one RPC frame. */
 function quantizeSamples(samples) {
 	const out = new Array(samples.length);
 	for (let i = 0; i < samples.length; i += 1) out[i] = Math.round(samples[i] * 1000) / 1000;
@@ -35,6 +35,15 @@ function rms(samples) {
 	let sum = 0;
 	for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
 	return Math.min(1, Math.sqrt(sum / samples.length) * 3);
+}
+
+const CJK_CHAR = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uffef]/u;
+
+function appendTranscript(base, addition) {
+	const text = (addition ?? "").trim();
+	if (!text) return base;
+	if (base && !CJK_CHAR.test(base.at(-1)) && !CJK_CHAR.test(text[0])) return `${base} ${text}`;
+	return `${base}${text}`;
 }
 
 class GlobalDictation {
@@ -62,8 +71,13 @@ class GlobalDictation {
 		this.nativeModule = null;
 		this.session = null;
 		this.capture = null;
-		this.chunks = [];
 		this.sampleCount = 0;
+		this.lastLevel = 0;
+		this.sessionId = null;
+		this.streamQueue = Promise.resolve();
+		this.streamSegments = new Map();
+		this.streamPartial = "";
+		this.streamPartialId = null;
 		this.startedAt = 0;
 		this.recordTimer = null;
 		this.escRegistered = false;
@@ -76,6 +90,9 @@ class GlobalDictation {
 		this.registered = null;
 		this.hideTimer = null;
 		this.language = undefined;
+		this.modelKey = "balanced";
+		this.speakerMode = "off";
+		this.enhanceAudio = false;
 		this.sttEnabled = true;
 	}
 
@@ -96,12 +113,15 @@ class GlobalDictation {
 		if (!(await this.ensureDaemon())) return;
 		const values = await this.request(
 			"settings.get",
-			{ keys: ["dictation.globalEnabled", "dictation.globalShortcut", "stt.enabled", "stt.language", "settings.locale"] },
+			{ keys: ["dictation.globalEnabled", "dictation.globalShortcut", "stt.enabled", "stt.language", "stt.modelName", "stt.speakerMode", "stt.enhanceAudio", "settings.locale"] },
 			4000,
 		);
 		if (!values) return;
 		if (typeof values["settings.locale"] === "string") this.locale = values["settings.locale"];
 		this.language = typeof values["stt.language"] === "string" ? values["stt.language"] : undefined;
+		this.modelKey = typeof values["stt.modelName"] === "string" && values["stt.modelName"].trim() ? values["stt.modelName"].trim() : "balanced";
+		this.speakerMode = ["off", "prefer", "strict"].includes(values["stt.speakerMode"]) ? values["stt.speakerMode"] : "off";
+		this.enhanceAudio = values["stt.enhanceAudio"] === true;
 		const enabled = values["dictation.globalEnabled"] === true;
 		const accelerator =
 			typeof values["dictation.globalShortcut"] === "string" && values["dictation.globalShortcut"].trim()
@@ -150,6 +170,7 @@ class GlobalDictation {
 		try {
 			const status = await this.request("stt.modelStatus", {}, 6000);
 			const key = status?.defaultKey ?? status?.models?.[0]?.key;
+		this.modelKey = key || this.modelKey;
 			const cached = status?.models?.find(model => model.key === key)?.cached ?? status?.defaultCached ?? false;
 			if (!key) {
 				this.fail("globalDictation.failed", { sticky: true });
@@ -173,14 +194,32 @@ class GlobalDictation {
 			this.fail("globalDictation.failed", { sticky: true });
 			return;
 		}
-		this.chunks = [];
 		this.sampleCount = 0;
+		this.lastLevel = 0;
 		this.transcript = "";
 		this.generation += 1;
-		this.startedAt = Date.now();
-		this.registerEscape();
+		const generation = this.generation;
+		this.streamSegments.clear();
+		this.streamPartial = "";
+		this.streamPartialId = null;
+		this.streamQueue = Promise.resolve();
 		try {
+			const started = await this.request(
+				"voice.frontendStreamStart",
+				{
+					modelKey: this.modelKey,
+					...(this.language && this.language !== "auto" ? { language: this.language } : {}),
+					speakerMode: this.speakerMode,
+					enhanceAudio: this.enhanceAudio,
+				},
+				45_000,
+			);
+			if (generation !== this.generation || !started?.sessionId) return;
+			this.sessionId = started.sessionId;
+			this.startedAt = Date.now();
+			this.registerEscape();
 			this.capture = new native.AudioCapture(SAMPLE_RATE, (error, samples) => {
+				if (generation !== this.generation) return;
 				if (error) {
 					this.log(`dictation capture error: ${error.message}`);
 					this.abortCapture();
@@ -188,26 +227,43 @@ class GlobalDictation {
 					return;
 				}
 				if (!samples || samples.length === 0) return;
-				this.chunks.push(samples);
 				this.sampleCount += samples.length;
+				this.lastLevel = rms(samples);
+				this.queueStreamAudio(samples, generation);
 				if (this.sampleCount >= MAX_SECONDS * SAMPLE_RATE) this.finishRecording();
 			});
 		} catch (err) {
-			this.log(`dictation mic failed: ${err?.message ?? err}`);
+			this.log(`dictation mic/stream failed: ${err?.message ?? err}`);
+			this.clearStream();
 			this.fail("globalDictation.micFailed", { sticky: true });
 			return;
 		}
-		this.show({ phase: "recording", level: 0, seconds: 0 });
+		this.show({ phase: "recording", level: 0, seconds: 0, partialText: "" });
 		this.recordTimer = setInterval(() => this.pushRecordingState(), 100);
+	}
+
+	queueStreamAudio(samples, generation) {
+		const sessionId = this.sessionId;
+		const audio = quantizeSamples(samples);
+		this.streamQueue = this.streamQueue.then(async () => {
+			if (generation !== this.generation || sessionId !== this.sessionId) return;
+			await this.request("voice.frontendStreamAudio", { sessionId, audio }, 180_000);
+		});
+		void this.streamQueue.catch(err => {
+			if (generation !== this.generation) return;
+			this.log(`dictation audio stream failed: ${err?.message ?? err}`);
+			this.abortCapture();
+			this.fail("globalDictation.failed", { sticky: true });
+		});
 	}
 
 	pushRecordingState() {
 		if (!this.capture) return;
-		const last = this.chunks[this.chunks.length - 1];
 		this.show({
 			phase: "recording",
-			level: last ? rms(last) : 0,
+			level: this.lastLevel,
 			seconds: Math.min(MAX_SECONDS, Math.floor((Date.now() - this.startedAt) / 1000)),
+			partialText: this.displayTranscript(),
 		});
 	}
 
@@ -223,15 +279,16 @@ class GlobalDictation {
 			// capture already ended
 		}
 		this.capture = null;
-		const samples = this.flatten();
-		this.chunks = [];
-		if (samples.length < MIN_SAMPLES) {
+		const sessionId = this.sessionId;
+		if (this.sampleCount < MIN_SAMPLES || !sessionId) {
+			if (sessionId) void this.request("voice.frontendStreamCancel", { sessionId }).catch(() => {});
+			this.clearStream();
 			this.finishing = false;
 			this.show({ phase: "error", message: "globalDictation.tooShort" });
 			this.scheduleHide(1800);
 			return;
 		}
-		void this.transcribeAndInsert(samples, this.generation)
+		void this.transcribeAndInsert(sessionId, this.generation)
 			.catch(err => {
 				this.log(`dictation transcribe failed: ${err?.message ?? err}`);
 				this.fail("globalDictation.failed", { sticky: true });
@@ -241,31 +298,31 @@ class GlobalDictation {
 			});
 	}
 
-	async transcribeAndInsert(samples, generation) {
-		this.show({ phase: "transcribing" });
-		const result = await this.request(
-			"stt.transcribe",
-			{ audio: quantizeSamples(samples), ...(this.language && this.language !== "auto" ? { language: this.language } : {}) },
-			180_000,
-		);
+	async transcribeAndInsert(sessionId, generation) {
+		this.show({ phase: "transcribing", partialText: this.displayTranscript() });
+		await this.streamQueue;
+		if (generation !== this.generation || sessionId !== this.sessionId) return;
+		const result = await this.request("voice.frontendStreamStop", { sessionId }, 180_000);
 		if (generation !== this.generation) return;
-		const text = typeof result?.text === "string" ? result.text.trim() : "";
+		for (const [segmentId, segment] of (result?.results ?? []).entries()) {
+			if (segment.text && segment.state !== "reject") this.streamSegments.set(segmentId, segment.text);
+		}
+		const text = (typeof result?.text === "string" ? result.text.trim() : "") || this.finalizedTranscript();
+		this.clearStream();
 		if (!text) {
 			this.show({ phase: "error", message: "globalDictation.empty" });
 			this.scheduleHide(1800);
 			return;
 		}
 		this.transcript = text;
-		this.show({ phase: "inserting" });
+		this.show({ phase: "inserting", partialText: text });
 		if (generation !== this.generation) return;
 		const inserted = await this.typeIntoFocusedApp(text);
 		if (inserted) {
-			this.show({ phase: "done" });
+			this.show({ phase: "done", partialText: text });
 			this.scheduleHide(900);
 			return;
 		}
-		// Codex's recovery: the text is in the clipboard and the HUD explains
-		// how to paste it, instead of silently dropping the transcript.
 		try {
 			this.clipboard.writeText(text);
 		} catch {
@@ -318,10 +375,46 @@ class GlobalDictation {
 		return this.nativeModule || null;
 	}
 
+	finalizedTranscript() {
+		return [...this.streamSegments.entries()]
+			.sort(([left], [right]) => left - right)
+			.reduce((text, [, segment]) => appendTranscript(text, segment), "");
+	}
+
+	displayTranscript() {
+		return appendTranscript(this.finalizedTranscript(), this.streamPartial);
+	}
+
+	clearStream() {
+		this.sessionId = null;
+		this.streamSegments.clear();
+		this.streamPartial = "";
+		this.streamPartialId = null;
+	}
+
 	handleEvent(event) {
 		const kind = event?.kind;
 		const payload = event?.payload;
-		if (!this.downloadKey || !payload) return;
+		if (!payload) return;
+		if (payload.sessionId && payload.sessionId === this.sessionId) {
+			if (payload.type === "voice.frontendPartial") {
+				this.streamPartial = payload.state === "reject" ? "" : (payload.text ?? "");
+				this.streamPartialId = payload.segmentId;
+				this.pushRecordingState();
+				return;
+			}
+			if (payload.type === "voice.frontendSegment") {
+				if (payload.state === "reject") this.streamSegments.delete(payload.segmentId);
+				else this.streamSegments.set(payload.segmentId, payload.text ?? "");
+				if (this.streamPartialId === payload.segmentId) {
+					this.streamPartial = "";
+					this.streamPartialId = null;
+				}
+				this.pushRecordingState();
+				return;
+			}
+		}
+		if (!this.downloadKey) return;
 		if (kind !== "stt.downloadProgress" && kind !== "stt.downloadDone") return;
 		if (payload.modelKey !== this.downloadKey) return;
 		if (kind === "stt.downloadDone") {
@@ -348,29 +441,20 @@ class GlobalDictation {
 			// already stopped
 		}
 		this.capture = null;
-		this.chunks = [];
 		this.sampleCount = 0;
+		this.lastLevel = 0;
 	}
 
 	cancel() {
 		if (!this.capture && this.phase === "hidden") return;
-		this.generation += 1;
 		this.downloadKey = null;
+		const sessionId = this.sessionId;
+		if (sessionId) void this.request("voice.frontendStreamCancel", { sessionId }).catch(() => {});
+		this.generation += 1;
+		this.clearStream();
 		this.abortCapture();
 		this.show({ phase: "hidden" });
 		this.hideHud();
-	}
-
-	flatten() {
-		let total = 0;
-		for (const chunk of this.chunks) total += chunk.length;
-		const out = new Float32Array(total);
-		let offset = 0;
-		for (const chunk of this.chunks) {
-			out.set(chunk, offset);
-			offset += chunk.length;
-		}
-		return out;
 	}
 
 	registerEscape() {
