@@ -7,12 +7,18 @@
  * `ToolSession` registered for the current execution and forwards to the same
  * `callSessionTool` implementation the JS bridge uses.
  */
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import type { ToolSession } from "../../tools";
 import { callSessionTool, type JsStatusEvent } from "../js/tool-bridge";
 
 export interface PyToolBridgeEntry {
 	toolSession: ToolSession;
+	/**
+	 * Authorization context of the enclosing `eval` call, applied to every
+	 * nested `tool.<name>(...)` call this kernel makes.
+	 */
+	context?: AgentToolContext;
 	/**
 	 * Turn-cancel handed to the tool implementation. Raw and never deferred, so
 	 * delegated work — above all the subagents `agent()` spawns — stops at once.
@@ -69,6 +75,7 @@ async function callSessionToolPromptOnAbort(name: string, args: unknown, entry: 
 	}
 	const call = callSessionTool(name, args, {
 		session: entry.toolSession,
+		context: entry.context,
 		signal: entry.signal,
 		emitStatus: entry.emitStatus,
 	});

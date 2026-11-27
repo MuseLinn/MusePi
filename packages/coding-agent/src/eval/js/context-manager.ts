@@ -1,3 +1,4 @@
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { logger, postmortem, Snowflake, workerHostEntry } from "@musepi/pi-utils";
 import {
 	createWorkerHandle,
@@ -46,6 +47,8 @@ interface PendingRun {
 	runId: string;
 	runState: VmRunState;
 	toolSession: ToolSession;
+	/** Authorization context of the `eval` call, applied to nested tool dispatches. */
+	toolContext?: AgentToolContext;
 	resolve(value: { value: unknown }): void;
 	reject(error: Error): void;
 	toolCalls: Map<string, AbortController>;
@@ -131,6 +134,7 @@ export async function executeInVmContext(options: {
 	ownerId?: string;
 	cwd: string;
 	session: ToolSession;
+	context?: AgentToolContext;
 	localRoots?: Record<string, string>;
 	reset?: boolean;
 	code: string;
@@ -273,6 +277,7 @@ async function runOnce(
 		sessionId: string;
 		cwd: string;
 		session: ToolSession;
+		context?: AgentToolContext;
 		localRoots?: Record<string, string>;
 		code: string;
 		filename: string;
@@ -285,6 +290,7 @@ async function runOnce(
 		runId,
 		runState: options.runState,
 		toolSession: options.session,
+		toolContext: options.context,
 		resolve,
 		reject,
 		toolCalls: new Map(),
@@ -535,6 +541,7 @@ async function handleToolCall(session: JsSession, msg: Extract<WorkerOutbound, {
 	try {
 		const value = await callSessionTool(msg.name, msg.args, {
 			session: pending.toolSession,
+			context: pending.toolContext,
 			signal: ctrl.signal,
 			emitStatus: (event: JsStatusEvent) => {
 				trackDeferPhase(pending, event);

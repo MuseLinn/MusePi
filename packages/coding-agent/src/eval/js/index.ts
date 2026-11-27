@@ -34,6 +34,7 @@ export default {
 			onChunk: opts.onChunk,
 			onStatus: opts.onStatus,
 			session: opts.session,
+			context: opts.context,
 			localRoots: resolveEvalUrlRoots(opts.session),
 		});
 		return toExecutorBackendResult(result);

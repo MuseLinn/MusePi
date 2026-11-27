@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { getProjectDir, logger } from "@musepi/pi-utils";
 import type { ToolSession } from "../../tools";
 import {
@@ -45,6 +46,8 @@ export interface JuliaExecutorOptions {
 	kernelOwnerId?: string;
 	reset?: boolean;
 	toolSession?: ToolSession;
+	/** Authorization context of the enclosing `eval` call, applied to nested tools. */
+	context?: AgentToolContext;
 	bridge?: PyToolBridgeInfo;
 	bridgeSessionId?: string;
 	artifactId?: string;

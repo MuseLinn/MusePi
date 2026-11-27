@@ -50,6 +50,7 @@ export default {
 			onChunk: opts.onChunk,
 			onStatus: opts.onStatus,
 			toolSession: opts.session,
+			context: opts.context,
 		};
 		const result = await executePython(code, executorOptions);
 		return toExecutorBackendResult(result);

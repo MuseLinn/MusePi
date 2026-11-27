@@ -1,3 +1,4 @@
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { buildEvalUrlRoots, type LocalProtocolOptions } from "../internal-urls";
 import type { ToolSession } from "../tools";
 import type { EvalDisplayOutput, EvalLanguage, EvalStatusEvent } from "./types";
@@ -10,6 +11,13 @@ export interface ExecutorBackendExecOptions {
 	kernelOwnerId: string | undefined;
 	signal?: AbortSignal;
 	session: ToolSession;
+	/**
+	 * Tool-execution context carried through from the `eval` call that owns the
+	 * cell. Nested `tool.<name>(...)` calls resolve approvals against this
+	 * value, so a script cannot fall through to the wrapper's unconfigured
+	 * default. Absent when the cell has no enclosing tool call.
+	 */
+	context?: AgentToolContext;
 	/**
 	 * Runtime-work budget in milliseconds (the cell's `timeout`). Cancellation is
 	 * driven entirely by `signal`, which the eval tool arms as a watchdog that

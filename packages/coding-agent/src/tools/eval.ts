@@ -396,7 +396,7 @@ export class EvalTool implements AgentTool<typeof evalSchema> {
 		params: typeof evalSchema.infer,
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback,
-		_ctx?: AgentToolContext,
+		ctx?: AgentToolContext,
 	): Promise<AgentToolResult<EvalToolDetails | undefined>> {
 		if (this.#proxyExecutor) {
 			return this.#proxyExecutor(params, signal);
@@ -572,6 +572,7 @@ export class EvalTool implements AgentTool<typeof evalSchema> {
 							kernelOwnerId,
 							signal: combinedSignal,
 							session,
+							context: ctx,
 							idleTimeoutMs,
 							reset: cell.reset,
 							onChunk: chunk => {

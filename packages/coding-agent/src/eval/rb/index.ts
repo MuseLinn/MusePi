@@ -48,6 +48,7 @@ export default {
 			onChunk: opts.onChunk,
 			onStatus: opts.onStatus,
 			toolSession: opts.session,
+			context: opts.context,
 		});
 		return toExecutorBackendResult(result);
 	},
