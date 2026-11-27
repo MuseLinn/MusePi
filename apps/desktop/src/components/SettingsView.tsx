@@ -391,7 +391,6 @@ export function SettingsView({
 									{activeSection === "git" && <GitSection rpc={rpc} />}
 									{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
 									{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
-									{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 									{activeSection.startsWith("ext:")
 										? (() => {
 												const item = extSettingsTabs.find(x => x.id === activeSection.slice("ext:".length));
@@ -449,6 +448,5 @@ import {
 	InteractionSection,
 	MediaSection,
 	SessionMemorySection,
-	SkillsSection,
 	VoiceSection,
 } from "./settings-sections";

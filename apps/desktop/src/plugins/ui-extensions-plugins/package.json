@@ -1,0 +1,13 @@
+{
+	"name": "musepi-ui-extensions-plugins",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned extensions and plugins page: the extensions control centre over skills and context files.",
+	"type": "module",
+	"musepi": {
+		"icon": "🧩",
+		"label": "MusePi Extensions & Plugins",
+		"description": "Installed extensions, skills and context files in one control centre.",
+		"extensions": ["./index.ts"]
+	}
+}

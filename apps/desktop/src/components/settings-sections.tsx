@@ -15,5 +15,4 @@ export { MediaSection } from "./settings-sections/media";
 export { SchemaTabSection } from "./settings-sections/schema";
 export { SessionMemorySection } from "./settings-sections/session-memory";
 export { hitText, NumberStepper } from "./settings-sections/shared";
-export { SkillsSection } from "./settings-sections/skills";
 export { VoiceSection } from "./settings-sections/voice";
