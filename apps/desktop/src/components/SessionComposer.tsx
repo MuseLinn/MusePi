@@ -15,7 +15,7 @@ import {
 	messageDisplayContext,
 	normalizeDisplayContexts,
 } from "@musepi/client-core/src/messages/display-context";
-import type { ContextUsageProjection, SessionEntry } from "@musepi/pi-wire";
+import type { ContextUsageProjection, SessionEntry, SessionModeProjection } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../i18n/index.js";
@@ -149,6 +149,8 @@ export interface SessionComposerProps {
 	working: boolean;
 	/** Host-computed context/usage projection; pushed per committed event. */
 	contextUsage?: ContextUsageProjection | null;
+	/** Goal/plan switches, pushed by the daemon's `sessionMode` projection. */
+	sessionMode?: SessionModeProjection | null;
 	/** Agent companion mood (伙伴) — derived by ChatView from the session
 	 *  snapshot; the pet renders only when enabled + input mode. */
 	companionMood?: CompanionMood;
@@ -276,6 +278,7 @@ async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: s
 export function SessionComposer({
 	working,
 	contextUsage = null,
+	sessionMode = null,
 	companionMood,
 	companionState,
 	onSend,
@@ -584,7 +587,7 @@ export function SessionComposer({
 		setTodoOpen,
 		appendText,
 		setAppendText,
-	} = useModes(rpc, sessionId, entries ?? []);
+	} = useModes(rpc, sessionId, entries ?? [], sessionMode);
 	// ── Design-session style select（M3.7b §3 生效链路）──────────────────
 	// session.modes.agentPreset === "design" gates the row; the pick writes via
 	// session.setDesignSystem RPC (null = 跟随既有/清除) and the initial

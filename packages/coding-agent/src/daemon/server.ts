@@ -6186,6 +6186,9 @@ export class DaemonServer {
 				} else if (current?.enabled) {
 					live.agentSession.setGoalModeState?.(undefined);
 				}
+				// Switch state lives on the AgentSession, not the journal: publish
+				// it so the badge updates without the client polling.
+				this.#host.publishSessionModeProjection(p.sessionId);
 				return modesOf(live.agentSession);
 			}
 			case "session.goal": {
@@ -6223,18 +6226,21 @@ export class DaemonServer {
 						if (!g.getGoalModeState()?.enabled) throw new Error("No active goal to pause.");
 						await g.goalRuntime.pauseGoal();
 						await setGoalTools(false);
+						this.#host.publishSessionModeProjection(p.sessionId);
 						return modesOf(g);
 					}
 					case "resume": {
 						const state = await g.goalRuntime.resumeGoal();
 						await setGoalTools(true);
 						g.setGoalModeState(state);
+						this.#host.publishSessionModeProjection(p.sessionId);
 						return modesOf(g);
 					}
 					case "drop": {
 						await g.goalRuntime.dropGoal();
 						await setGoalTools(false);
 						g.setGoalModeState(undefined);
+						this.#host.publishSessionModeProjection(p.sessionId);
 						return modesOf(g);
 					}
 					case "budget": {
@@ -6356,6 +6362,7 @@ export class DaemonServer {
 					g.setPlanProposalHandler(null);
 					g.setPlanModeState?.(undefined);
 				}
+				this.#host.publishSessionModeProjection(p.sessionId);
 				return modesOf(live.agentSession);
 			}
 			case "session.plan": {
@@ -6418,6 +6425,9 @@ export class DaemonServer {
 						g.setPlanProposalHandler(null);
 						g.setPlanModeState?.(undefined);
 						g.markPlanReferenceSent();
+						// Approving leaves plan mode; publish before the long
+						// execution path so the badge flips with the click.
+						this.#host.publishSessionModeProjection(p.sessionId);
 
 						// Capture the pre-clear execution tool set (TUI parity):
 						// approved-plan prompts require `read` to load the durable

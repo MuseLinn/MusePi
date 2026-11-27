@@ -63,6 +63,7 @@ import {
 	type ProjectionEvent,
 	type ProjectionSampleSource,
 	SessionProjectionRegistry,
+	sessionModeProjectionDefinition,
 } from "../session/session-projections";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
 import { resolvePromptInput } from "../system-prompt";
@@ -1190,6 +1191,7 @@ export class DaemonSessionHost {
 		this.#options = options;
 		this.#store = new ViewStore(viewStorePath(JOURNAL_DIR));
 		this.#projections.register(contextUsageProjectionDefinition);
+		this.#projections.register(sessionModeProjectionDefinition);
 		this.#idleScanner = setInterval(() => this.#scanIdle(), IDLE_SCAN_INTERVAL_MS);
 		this.#idleScanner.unref?.();
 		sweepEmptySessionDirs();
@@ -2016,6 +2018,20 @@ export class DaemonSessionHost {
 					const stats = agentSession.getSessionStats();
 					cachedStats = { revision, stats };
 					return stats;
+				},
+				// Goal/plan live only on the AgentSession and are written by RPC,
+				// so there is nothing to fold — the unit samples them at the
+				// `session_mode_changed` boundary the RPC handler publishes.
+				sessionMode: () => {
+					const goalState = agentSession.getGoalModeState?.();
+					const goal = goalState?.goal
+						? {
+								enabled: goalState.enabled === true,
+								objective: goalState.goal.objective,
+								status: goalState.goal.status,
+							}
+						: null;
+					return { goal, plan: agentSession.getPlanModeState?.()?.enabled === true };
 				},
 			} satisfies ProjectionSampleSource,
 		});
@@ -2921,6 +2937,18 @@ export class DaemonSessionHost {
 				changes: Object.entries(baseline.values).map(([key, value]) => ({ key, value })),
 			},
 		});
+	}
+
+	/** Publish the session's goal/plan projection after an RPC wrote it.
+	 *  Called by `session.setGoal` / `session.setPlan` (and the `/goal`
+	 *  lifecycle ops): those switch state on the live AgentSession without a
+	 *  journal record, so without this call the projection never learns and
+	 *  clients would have to poll. Cheap and idempotent — an unchanged sample
+	 *  produces no frame. */
+	publishSessionModeProjection(sessionId: string): void {
+		const live = this.#sessions.get(sessionId);
+		if (!live) return;
+		this.#publishProjectionChanges(live, { type: "session_mode_changed" }, 0);
 	}
 
 	/** Drive every projection unit for one committed event and push only the

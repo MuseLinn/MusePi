@@ -15,6 +15,7 @@ import type {
 	AgentEvent,
 	ContextUsageProjection,
 	SessionEntry,
+	SessionModeProjection,
 	SessionProjectionChange,
 	SessionProjectionSnapshot,
 	WireUsage,
@@ -26,6 +27,11 @@ import type { SessionStats } from "../session/agent-session-types";
 export interface ProjectionSampleSource {
 	model(): { provider?: string; id: string; contextWindow?: number | null } | null | undefined;
 	sessionStats(): SessionStats;
+	/** Session mode switches. These have no wire event of their own: they are
+	 *  set through an RPC (`session.setGoal` / `session.setPlan`), which is what
+	 *  `session_mode_changed` names — the daemon samples after the RPC writes
+	 *  the state, so a client never has to poll for them. */
+	sessionMode?(): SessionModeProjection;
 }
 
 export interface ProjectionSeed {
@@ -49,10 +55,10 @@ export interface ProjectionDefinition<S> {
 	sample?(state: S, source: ProjectionSampleSource): S;
 }
 
-/** Wire events plus the daemon-only `model_changed` fact (no wire payload of
- *  its own; the unit samples the live model when it arrives). */
-export type ProjectionEvent = AgentEvent | { type: "model_changed" };
-
+/** Wire events plus the daemon-only facts that have no wire payload of their
+ *  own: a `model_changed` route switch, and a `session_mode_changed` goal/plan
+ *  write. The unit samples the live value when one arrives. */
+export type ProjectionEvent = AgentEvent | { type: "model_changed" } | { type: "session_mode_changed" };
 interface SessionEntryState {
 	states: Map<string, unknown>;
 	views: Map<string, unknown>;
@@ -252,6 +258,40 @@ export const contextUsageProjectionDefinition: ProjectionDefinition<ContextUsage
 	},
 	sampleOn: SAMPLE_ON,
 	sample: (state, source) => fromStats(source.sessionStats(), source, state),
+};
+
+/**
+ * Session mode switches — goal and plan. These have no wire event of their own:
+ * `session.setGoal` / `session.setPlan` write them through the live
+ * AgentSession, so the projection samples them at a `session_mode_changed`
+ * boundary the daemon emits after the RPC writes the state. This replaces the
+ * GUI's 30s `session.modes` poll for the two fields the transcript cannot
+ * express, and makes a change made by the TUI or another device arrive
+ * immediately instead of up to 30s later.
+ */
+export const sessionModeProjectionDefinition: ProjectionDefinition<SessionModeProjection> = {
+	key: "sessionMode",
+	// Seed from the live source so a freshly opened surface shows the real
+	// switches in its baseline — an empty seed would paint "no goal, no plan"
+	// until the next write.
+	init: seed => {
+		const mode = seed.source?.sessionMode?.();
+		if (!mode) return { goal: null, plan: false };
+		return { goal: mode.goal?.enabled ? mode.goal : null, plan: mode.plan };
+	},
+	// Mode switches are written through the live session, never through a
+	// journal record, so there is nothing to fold here — `sample` does the work
+	// at the `session_mode_changed` boundary.
+	apply: state => state,
+	sample: (state, source) => {
+		const mode = source.sessionMode?.();
+		if (!mode) return state;
+		const goal = mode.goal?.enabled ? mode.goal : null;
+		return goal === state.goal && mode.plan === state.plan ? state : { goal, plan: mode.plan };
+	},
+	sampleOn: new Set(["session_mode_changed"]),
+	view: (state): SessionModeProjection => state,
+	viewEquals: (left, right) => left === right || JSON.stringify(left) === JSON.stringify(right),
 };
 
 /**

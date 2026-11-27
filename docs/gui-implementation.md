@@ -1369,10 +1369,26 @@ folds domain events itself.
   reader. `undefined` means the key has not landed.
 - **What it replaces**: `contextUsage` is now pushed; the wide `/context` facets
   (threshold, snapcompact, breakdown) stay a one-off user-initiated RPC.
+- **State with no journal record still rides the seam** (2026-11-27): goal and
+  plan switches live only on the live `AgentSession` — `session.setGoal` /
+  `session.setPlan` write them with no wire event — so a unit that folds
+  committed events would never see them. The `sessionMode` unit therefore has an
+  empty `apply` and does all its work in `sample`, gated on a daemon-only
+  `session_mode_changed` boundary (the same shape as `model_changed`). The RPC
+  handlers call `DaemonSessionHost.publishSessionModeProjection` after writing,
+  so the change is pushed in the same tick that answered the caller — including
+  a switch flipped by the TUI or another device, which a client previously could
+  only learn by polling `session.modes`. `init` seeds from the live source so a
+  freshly opened surface shows the real switches in its baseline instead of
+  "no goal, no plan" until the next write. Goal off projects as `null`, not as a
+  disabled record, because the badge keys off `goal === null`.
 
 **Verification:** `packages/coding-agent/test/session-projections.test.ts`
-(fold, retry replacement, boundary sample), `apps/desktop/test/session-projection-store.test.tsx`
-(resume seed, pushed change, keyed re-render).
+(fold, retry replacement, boundary sample),
+`packages/coding-agent/test/daemon/session-mode-projection.test.ts` (mode write
+publishes, unrelated events stay quiet, unchanged sample publishes nothing),
+`apps/desktop/test/session-projection-store.test.tsx` (resume seed, pushed
+change, keyed re-render).
 
 ## 51. HTML card answer readback (2026-10-18)
 

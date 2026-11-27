@@ -34,6 +34,7 @@ import {
 	type OfficeQuoteAnchor,
 	type PdfQuoteAnchor,
 	type SessionEntry,
+	type SessionModeProjection,
 } from "@musepi/pi-wire";
 import { Info as InfoIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
@@ -537,7 +538,7 @@ export function ChatView({
 					typeof payload.requestId !== "string" ||
 					typeof payload.name !== "string" ||
 					typeof payload.purpose !== "string" ||
-					payload.kind !== "fill" && payload.kind !== "allow" && payload.kind !== "login"
+					(payload.kind !== "fill" && payload.kind !== "allow" && payload.kind !== "login")
 				) {
 					return;
 				}
@@ -3376,6 +3377,9 @@ export function ChatView({
 		? {
 				working: snap?.working ?? false,
 				contextUsage: (snap?.projections?.get("contextUsage") as ContextUsageProjection | undefined) ?? null,
+				// Goal/plan switches are pushed (the daemon samples them after the
+				// RPC that writes them), so the badges never wait on a timer.
+				sessionMode: (snap?.projections?.get("sessionMode") as SessionModeProjection | undefined) ?? null,
 				entries: snap?.entries ?? [],
 				companionMood: companionMoodFromSession({
 					working: snap?.working ?? false,

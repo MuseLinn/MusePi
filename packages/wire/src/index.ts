@@ -826,6 +826,21 @@ export interface ContextUsageProjection {
 	};
 }
 
+/**
+ * Goal and plan switches — the `sessionMode` projection.
+ *
+ * These two have no wire event of their own: `session.setGoal` / `session.setPlan`
+ * write them through the live session, so the daemon samples them after the RPC
+ * and pushes the result. A client therefore renders the badges from a pushed
+ * value instead of re-reading `session.modes` on a timer, and a change made by
+ * the TUI or another device lands immediately.
+ */
+export interface SessionModeProjection {
+	/** Active goal, or null when goal mode is off. */
+	goal: { enabled: boolean; objective?: string; status?: string } | null;
+	plan: boolean;
+}
+
 export interface Participant {
 	name: string;
 	role: "host" | "guest";

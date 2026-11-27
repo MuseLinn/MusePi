@@ -1266,10 +1266,22 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
   `undefined` 表示该 key 尚未落地。
 - **取代关系**：`contextUsage` 现在走推送；更宽的 `/context` 字段（阈值、
   snapcompact、breakdown）仍是用户显式打开时的一次性 RPC。
+- **没有 journal 记录的状态也走这条缝**（2026-11-27）：goal 与 plan 开关只存在于
+  live `AgentSession` 上——`session.setGoal` / `session.setPlan` 写入时不产生任何
+  wire 事件——所以「折叠已提交事件」的单元永远看不到它们。`sessionMode` 单元的
+  `apply` 因此是空的，全部工作在 `sample` 里完成，由 daemon 私有的
+  `session_mode_changed` 边界触发（与 `model_changed` 同一形状）。RPC handler 写完后
+  调用 `DaemonSessionHost.publishSessionModeProjection`，所以变化与被调用方拿到应答
+  在同一 tick 内推送——包括由 TUI 或另一台设备翻动的开关，而此前客户端只能靠轮询
+  `session.modes` 才知道。`init` 从实时源播种，新打开的界面在 baseline 里就是真实
+  开关状态，而不是等到下次写入前一直显示「无目标、无计划」。goal 关闭时投影为
+  `null` 而非一条 disabled 记录，因为徽标以 `goal === null` 判型。
 
 **验证**：`packages/coding-agent/test/session-projections.test.ts`（折叠、重试替换、
-边界采样）、`apps/desktop/test/session-projection-store.test.tsx`（resume 播种、
-推送变更、按键重渲染）。
+边界采样）、`packages/coding-agent/test/daemon/session-mode-projection.test.ts`
+（模式写入即推送、无关事件保持安静、同值不重复推送）、
+`apps/desktop/test/session-projection-store.test.tsx`（resume 播种、推送变更、按键
+重渲染）。
 
 ## 51. HTML 卡片答案回读（2026-10-18）
 
