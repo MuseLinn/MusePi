@@ -1358,15 +1358,16 @@ folds domain events itself.
   must return the same state reference.
 - **Who registers** (2026-11-27): the registry is an L2 **service**
   (`daemon/services/session-projection-service.ts`, key `sessionProjections`),
-  mirroring dsh's `ctx.sessionProjections` — it owns driving and storage and
-  names no domain. Domain units are registered by the service that owns the
-  state: `SessionService.start` registers the session-state domains and `stop`
-  withdraws them, so a stopped service leaves no keys in the baseline. There is
-  no central list of domains anywhere, which is the point: adding a domain means
-  writing its unit near the state it derives from and registering it there. The
-  host keeps its registry instance (the commit path and snapshot builders read
-  it directly); the service wraps that same instance, so there is never a second
-  copy of a session's fold state.
+  named after dsh's `ctx.sessionProjections`. It owns driving and storage and
+  names no domain. Each domain service registers the unit it owns, from its own
+  `start`, resolved through the host context the way dsh's `static inject`
+  works: `goals` (key `goals`) and `planMode` (key `planMode`) both contribute
+  `sessionMode`, `session-tree` contributes `contextUsage`. An unresolvable
+  dependency throws, so the mount fails instead of the service running without
+  its read-model contribution, and `stop` withdraws the unit through the
+  disposer `register` returns. The host keeps its registry instance (the commit
+  path and snapshot builders read it directly); the service wraps that same
+  instance, so a session's fold state is never duplicated.
 - **Isolation** (2026-11-27): `seed` and `applyEvent` catch per unit. A throw
   inside one unit used to abort the whole loop, so every later unit silently
   vanished from the baseline — a partial `SessionStats` object was enough to

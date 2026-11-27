@@ -1256,12 +1256,14 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
   state 引用。
 - **谁负责注册**（2026-11-27）：注册表是一个 L2 **服务**
   （`daemon/services/session-projection-service.ts`，key `sessionProjections`），
-  对齐 dsh 的 `ctx.sessionProjections`——它负责驱动与存放，不认识任何具体域。
-  域单元由拥有该状态的服务注册：`SessionService.start` 注册会话状态域，`stop`
-  撤销它们，所以停掉的服务不会在基线里留下 key。任何地方都没有一份中央域清单，
-  这正是重点：新增一个域就是写它的单元、并在它派生自的状态旁注册。宿主保留自己的
-  注册表实例（commit 路径与快照构造直接读它）；服务包装的是同一实例，因此一个会话
-  的折叠状态永远不会出现第二份。
+  命名对齐 dsh 的 `ctx.sessionProjections`：负责驱动与存放，不认识任何具体域。
+  每个域服务在自己的 `start` 里注册它拥有的单元，依赖经宿主 Context 解析——与 dsh
+  的 `static inject` 同一语义：`goals`（key `goals`）与 `planMode`（key
+  `planMode`）各自贡献 `sessionMode`，`session-tree` 贡献 `contextUsage`。依赖
+  解析不到时直接抛错，挂载失败——绝不让服务在缺读模型贡献的状态下跑起来；
+  `stop` 通过 `register` 返回的 disposer 撤销该单元。宿主保留自己的注册表实例
+  （commit 路径与快照构造直接读它），服务包装的是同一实例，因此一个会话的折叠状态
+  不会出现第二份。
 - **隔离**（2026-11-27）：`seed` 与 `applyEvent` 都按单元捕获异常。此前一个单元抛错
   会中断整个循环，于是它之后的每个单元都从基线里静默消失——一个不完整的
   `SessionStats` 就足以让模式徽标全部消失。无法播种的单元在该会话里缺席，下一次

@@ -21,7 +21,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getDashboardStats } from "@musepi/musepi-stats";
 import type { AgentEvent } from "@musepi/pi-agent-core";
-import { AgentBusyError, agentPauseGate } from "@musepi/pi-agent-core";
+import { agentPauseGate } from "@musepi/pi-agent-core";
 import { resolveUsedFraction } from "@musepi/pi-ai";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { resolveModelCapabilities } from "@musepi/pi-catalog/identity";
@@ -138,7 +138,6 @@ import type { CollabToolHandle } from "../tools/collab";
 import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES, VIDEO_PROVIDER_CHOICES } from "../tools/image-providers";
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
-import { ToolError } from "../tools/tool-errors";
 
 /** The scanner reads the persisted entries behind the snapshot's JSON boundary. */
 type AgentSessionEntries = Parameters<typeof collectPendingToolCalls>[0];
@@ -376,6 +375,7 @@ import { GitContextService } from "./services/git-context-service";
 import { GitService } from "./services/git-service";
 import { GitWatchService } from "./services/git-watch-service";
 import { GitHubService } from "./services/github-service";
+import { GoalService } from "./services/goal-service";
 import { KnowledgeService } from "./services/knowledge-service";
 import { LivenessService } from "./services/liveness-service";
 import { MarketplaceService } from "./services/marketplace-service";
@@ -383,6 +383,7 @@ import { McpOAuthService } from "./services/mcp-oauth-service";
 import { McpServersService } from "./services/mcp-servers-service";
 import { MemoryService } from "./services/memory-service";
 import { ModelsService } from "./services/models-service";
+import { PlanModeService } from "./services/plan-mode-service";
 import { PluginInstallService } from "./services/plugin-install-service";
 import { PresetsService } from "./services/presets-service";
 import { ProvidersService } from "./services/providers-service";
@@ -993,6 +994,54 @@ export class DaemonServer {
 		// 里注册——注册点跟着状态走，因此新增一个域不会改这里，也不会改注册表。
 		const projectionService = new SessionProjectionService(this.#host.projectionRegistry);
 		this.#services.register(projectionService);
+		// goal / plan 各自成服务（对齐 dsh 的 `goals` / `planMode`）：它们拥有自己
+		// 的会话状态，因此在自己的 start 里向 sessionProjections 注册投影单元——
+		// 注册点跟着状态走，注册表本身不认识任何具体域。
+		this.#services.register(
+			new GoalService({
+				get: sessionId => this.#host.get(sessionId) as never,
+				publishSessionModeProjection: sessionId => this.#host.publishSessionModeProjection(sessionId),
+				modesOf: session => modesOf(session),
+				renderGuidedKickoff: input => prompt.render(guidedGoalInterviewPrompt, { initial: input.objective }),
+				resolveMedia: async input => ({
+					images: await resolveImageRefs(input.images),
+					videos: input.videos,
+				}),
+			}),
+		);
+		this.#services.register(
+			new PlanModeService({
+				get: sessionId => this.#host.get(sessionId) as never,
+				publishSessionModeProjection: sessionId => this.#host.publishSessionModeProjection(sessionId),
+				modesOf: session => modesOf(session),
+				files: {
+					read: (planFilePath, options) => readPlanFile(planFilePath, options as never),
+					list: options => listPlanFiles(options as never),
+					write: (planFilePath, content, options) => writePlanFile(planFilePath, content, options as never),
+					resolveTitle: input => resolvePlanTitle(input),
+					resolveApproved: input => resolveApprovedPlan(input as never),
+				},
+				local: {
+					root: options => resolveLocalRoot(options as never),
+					copy: (from, to) => copyLocalArtifacts(from, to),
+					urlToPath: (url, options) => resolveLocalUrlToPath(url, options as never),
+				},
+				renderApprovedPrompt: input => prompt.render(planModeApprovedPrompt, input),
+				renderCompactNote: input => prompt.render(planModeCompactInstructionsPrompt, input),
+				resolveExecutionModel: input =>
+					input.executionModel.provider
+						? resolveProviderModelReference(
+								input.executionModel.provider,
+								input.executionModel.id,
+								input.models as never,
+							)
+						: input.models.find(m => m.id === input.executionModel.id),
+				writeFile: (path, content, encoding) => fs.promises.writeFile(path, content, encoding),
+				readFile: (path, encoding) => fs.promises.readFile(path, encoding),
+				mkdir: (path, options) => fs.promises.mkdir(path, options),
+				writePlanViaLocal: (url, content, options) => writePlanFile(url, content, options as never),
+			}),
+		);
 		this.#services.register(
 			new SessionService({
 				registerProjections: definition => projectionService.register(definition),
@@ -6165,372 +6214,20 @@ export class DaemonServer {
 				return (await live.agentSession.resetSessionContext()) ?? { droppedCount: 0 };
 			}
 			case "session.setGoal": {
-				// Set or replace the goal with an objective; without one, close
-				// an active goal. Opening goal mode without an objective is not
-				// supported here — a goal needs a target (the GUI's one-tap
-				// "armed" path sends the next message's text as the objective
-				// instead of toggling an empty goal).
-				const p = (params ?? {}) as { sessionId: string; objective?: string | null };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const current = live.agentSession.getGoalModeState?.();
-				const objective = p.objective?.trim();
-				if (objective) {
-					const now = Date.now();
-					live.agentSession.setGoalModeState?.({
-						enabled: true,
-						mode: "active",
-						goal: {
-							id: `goal-${now}`,
-							objective,
-							status: "active",
-							tokensUsed: 0,
-							timeUsedSeconds: 0,
-							createdAt: now,
-							updatedAt: now,
-						},
-					});
-				} else if (current?.enabled) {
-					live.agentSession.setGoalModeState?.(undefined);
-				}
-				// Switch state lives on the AgentSession, not the journal: publish
-				// it so the badge updates without the client polling.
-				this.#host.publishSessionModeProjection(p.sessionId);
-				return modesOf(live.agentSession);
+				// 实现归 GoalService（key `goals`）：goal 状态只存在于 live
+				// AgentSession，无 journal 记录，写入后由该服务通知投影采样。
+				return this.#services.get<GoalService>("goals").setGoal(params);
 			}
 			case "session.goal": {
-				// Full goal lifecycle (TUI /goal parity): show details,
-				// pause/resume/drop, budget mutation, and the guided-goal
-				// interview (/guided-goal). The GUI exposes these from the
-				// goal chip / attach menu instead of the terminal's
-				// subcommand + selector menus.
-				const p = (params ?? {}) as {
-					sessionId: string;
-					op: "show" | "pause" | "resume" | "drop" | "budget" | "guided";
-					objective?: string | null;
-					budget?: string | null;
-					// Guided kickoff media attachments (same wire shape as
-					// session.send): they ride on the synthetic interview kickoff.
-					images?: { type: "image"; data: string; mimeType: string }[];
-					videos?: { type: "video"; mimeType: string; url?: string; data?: string }[];
-				};
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const g = live.agentSession;
-				// The goal tool is only active while goal mode is: entering
-				// (incl. the guided interview) adds it to the toolset, leaving
-				// (pause/drop) restores the pre-goal set.
-				const setGoalTools = async (enabled: boolean): Promise<void> => {
-					const previous = g.getEnabledToolNames().filter(name => name !== "goal");
-					await g.setActiveToolsByName(enabled ? [...new Set([...previous, "goal"])] : previous);
-				};
-				switch (p.op) {
-					case "show": {
-						const state = g.getGoalModeState();
-						return state?.goal ? { enabled: state.enabled === true, ...state.goal } : null;
-					}
-					case "pause": {
-						if (!g.getGoalModeState()?.enabled) throw new Error("No active goal to pause.");
-						await g.goalRuntime.pauseGoal();
-						await setGoalTools(false);
-						this.#host.publishSessionModeProjection(p.sessionId);
-						return modesOf(g);
-					}
-					case "resume": {
-						const state = await g.goalRuntime.resumeGoal();
-						await setGoalTools(true);
-						g.setGoalModeState(state);
-						this.#host.publishSessionModeProjection(p.sessionId);
-						return modesOf(g);
-					}
-					case "drop": {
-						await g.goalRuntime.dropGoal();
-						await setGoalTools(false);
-						g.setGoalModeState(undefined);
-						this.#host.publishSessionModeProjection(p.sessionId);
-						return modesOf(g);
-					}
-					case "budget": {
-						if (!g.getGoalModeState()?.enabled) throw new Error("No active goal.");
-						const trimmed = (p.budget ?? "").trim().toLowerCase();
-						let next: number | undefined;
-						if (trimmed !== "off") {
-							const parsed = Number.parseInt(trimmed, 10);
-							if (!Number.isInteger(parsed) || parsed <= 0) {
-								throw new Error("Goal budget must be a positive integer or `off`.");
-							}
-							next = parsed;
-						}
-						await g.goalRuntime.onBudgetMutated(next);
-						return modesOf(g);
-					}
-					case "guided": {
-						// TUI /guided-goal parity: a hidden kickoff starts a
-						// normal conversation in which the agent interviews the
-						// user, then calls the `goal create` tool to finish.
-						// Pre-checks mirror the TUI's handleGuidedGoalCommand in
-						// the same order (plan → vibe → goal.enabled →
-						// active/paused goal) so both entry points reject the
-						// same states with the same wording.
-						if (g.getPlanModeState?.()?.enabled === true) {
-							throw new Error("Exit plan mode first.");
-						}
-						if (g.getVibeModeState?.()?.enabled === true) {
-							throw new Error("Exit vibe mode first.");
-						}
-						if (!g.settings.get("goal.enabled")) {
-							throw new Error("Goal mode is disabled. Enable it in settings (goal.enabled).");
-						}
-						if (g.getGoalModeState()?.enabled) {
-							throw new Error("Goal mode is already active.");
-						}
-						const paused = g.getGoalModeState();
-						if (paused?.goal?.status === "paused") {
-							throw new Error("Resume the current goal first, or drop it before starting a new one.");
-						}
-						await setGoalTools(true);
-						const kickoff = prompt.render(guidedGoalInterviewPrompt, {
-							initial: p.objective?.trim() || undefined,
-						});
-						// Media attachments (composer chips) ride on the kickoff —
-						// TUI input.images parity, plus video parts.
-						const images = await resolveImageRefs(
-							Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined,
-						);
-						const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : undefined;
-						try {
-							if (g.isStreaming) {
-								await g.followUp(kickoff, images, { synthetic: true, videos });
-							} else {
-								await g.prompt(kickoff, {
-									synthetic: true,
-									...(images ? { images } : {}),
-									...(videos ? { videos } : {}),
-								});
-							}
-						} catch (error) {
-							// AgentBusyError during the race between the streaming
-							// check and prompt(): queue instead of failing.
-							if (!(error instanceof AgentBusyError)) throw error;
-							await g.followUp(kickoff, images, { synthetic: true, videos });
-						}
-						return { ok: true };
-					}
-				}
-				break;
+				return this.#services.get<GoalService>("goals").goal(params);
 			}
 			case "session.setPlan": {
-				// Toggle plan mode (read-only proposal flow, TUI /plan parity).
-				const p = (params ?? {}) as { sessionId: string; enabled?: boolean };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const g = live.agentSession;
-				const on = p.enabled ?? !(g.getPlanModeState?.()?.enabled === true);
-				if (on) {
-					g.setPlanModeState?.({ enabled: true, planFilePath: "" });
-					// Install the plan-proposal handler (xd://propose parity):
-					// the agent writes the plan file, then submits its title;
-					// the handler validates the plan and waits for the GUI's
-					// approve/refine (session.plan) — without it the proposal
-					// device reports "No plan is awaiting approval" and plan
-					// mode strands. Mirrors InteractiveMode/ACP for the parts
-					// the agent sees (same PlanApprovalDetails shape).
-					const sessionManager = g.sessionManager;
-					const cwd = sessionManager.getCwd();
-					const localProtocolOptions = {
-						artifactsDir: sessionManager.getArtifactsDir(),
-						getSessionId: () => sessionManager.getSessionId(),
-					};
-					g.setPlanProposalHandler(async (title: string) => {
-						const state = g.getPlanModeState();
-						if (!state?.enabled) throw new ToolError("Plan mode is not active.");
-						const { planFilePath, title: resolvedTitle } = await resolveApprovedPlan({
-							suppliedTitle: title,
-							statePlanFilePath: state.planFilePath,
-							readPlan: url => readPlanFile(url, { localProtocolOptions, cwd }),
-							listPlanFiles: () => listPlanFiles({ localProtocolOptions }),
-						});
-						// Promote the reviewed path into plan-mode state so a
-						// later approve/refine targets the plan just proposed.
-						if (state.planFilePath !== planFilePath) {
-							g.setPlanModeState({ ...state, planFilePath });
-						}
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Plan submitted for approval: ${resolvedTitle}. Waiting for the operator to approve or refine it.`,
-								},
-							],
-							details: { planFilePath, title: resolvedTitle, planExists: true },
-						};
-					});
-				} else {
-					g.setPlanProposalHandler(null);
-					g.setPlanModeState?.(undefined);
-				}
-				this.#host.publishSessionModeProjection(p.sessionId);
-				return modesOf(live.agentSession);
+				// 实现归 PlanModeService（key `planMode`）：开关在 live
+				// AgentSession 上，写入后由该服务通知投影采样。
+				return this.#services.get<PlanModeService>("planMode").setPlan(params);
 			}
 			case "session.plan": {
-				// Plan review lifecycle (TUI plan-approval overlay parity): show
-				// the plan file + title, approve (exit plan mode + dispatch the
-				// approved-plan directive), or refine (feed feedback back into
-				// the planning conversation). The terminal's in-overlay section
-				// edits/annotations are chat-side in the GUI — the plan file is
-				// read-only here, and Refine re-prompts the model with the
-				// feedback text.
-				const p = (params ?? {}) as {
-					sessionId: string;
-					op: "show" | "approve" | "refine" | "save";
-					feedback?: string | null;
-					content?: string | null;
-					/** TUI "Approve and compact context" parity: distill the
-					 *  planning conversation before the approved-prompt dispatch. */
-					compact?: boolean;
-					/** Start the approved prompt in a fresh context (TUI default
-					 *  clear-then-execute parity). Falls back to context-preserved
-					 *  when the session is streaming (resetSessionContext rejects). */
-					fresh?: boolean;
-					/** Optional execution model override (provider/id) for the
-					 *  approved prompt. Passed through session.setModel before
-					 *  the prompt so the chosen model applies to execution only. */
-					executionModel?: { id: string; provider?: string };
-				};
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const g = live.agentSession;
-				const sessionManager = g.sessionManager;
-				const cwd = sessionManager.getCwd();
-				const localProtocolOptions = {
-					artifactsDir: sessionManager.getArtifactsDir(),
-					getSessionId: () => sessionManager.getSessionId(),
-				};
-				const currentPlanPath = async (): Promise<string | undefined> => {
-					const state = g.getPlanModeState();
-					if (state?.planFilePath) return state.planFilePath;
-					return (await listPlanFiles({ localProtocolOptions }))[0];
-				};
-				switch (p.op) {
-					case "show": {
-						const enabled = g.getPlanModeState()?.enabled === true;
-						const planFilePath = enabled ? await currentPlanPath() : undefined;
-						if (!enabled || !planFilePath) {
-							return { enabled, planFilePath: null, content: null, title: null };
-						}
-						const content = await readPlanFile(planFilePath, { localProtocolOptions, cwd });
-						const { title } = resolvePlanTitle({ planContent: content ?? "", planFilePath });
-						return { enabled, planFilePath, content, title };
-					}
-					case "approve": {
-						if (!g.getPlanModeState()?.enabled) throw new Error("Plan mode is not active.");
-						const planFilePath = await currentPlanPath();
-						if (!planFilePath) throw new Error("No plan file to approve.");
-						const content = await readPlanFile(planFilePath, { localProtocolOptions, cwd });
-						if (content === null) throw new Error(`Plan file not found at ${planFilePath}`);
-						const { title } = resolvePlanTitle({ planContent: content, planFilePath });
-						g.setPlanProposalHandler(null);
-						g.setPlanModeState?.(undefined);
-						g.markPlanReferenceSent();
-						// Approving leaves plan mode; publish before the long
-						// execution path so the badge flips with the click.
-						this.#host.publishSessionModeProjection(p.sessionId);
-
-						// Capture the pre-clear execution tool set (TUI parity):
-						// approved-plan prompts require `read` to load the durable
-						// local:// plan file, so force it into the restored set.
-						const executionTools = [...new Set([...g.getEnabledToolNames(), "read"])];
-
-						if (p.compact === true) {
-							// Pin the reference path BEFORE compacting so the
-							// approved-prompt injection can find it on the
-							// post-compaction session (issue #4359).
-							g.setPlanReferencePath(planFilePath);
-							await g.compact(undefined, {
-								internalGuidance: prompt.render(planModeCompactInstructionsPrompt, {
-									planFilePath,
-								}),
-								// Plan approval hands control back to the user with the
-								// execution model armed — it must NOT auto-resume the
-								// aborted turn the way a plain mid-turn `/compact` does
-								// (oh-my-pi #11873). TUI parity with #approvePlan.
-								suppressContinuation: true,
-							});
-						}
-
-						if (p.fresh === true) {
-							// TUI "clear then execute" parity: drop the planning
-							// conversation so the approved prompt runs in a fresh
-							// context. resetSessionContext rejects while streaming.
-							const oldLocalRoot = resolveLocalRoot(localProtocolOptions);
-							const dropResult = await g.resetSessionContext();
-							if (dropResult === undefined) {
-								throw new Error("Wait for the current response to finish before approving in a fresh context.");
-							}
-							// Migrate the plan file into the new session's local
-							// root so the approved prompt's local:// ref still
-							// resolves (mirrors interactive-mode copyLocalArtifacts
-							// + resolveLocalUrlToPath + writeFile).
-							const newLocalRoot = resolveLocalRoot(localProtocolOptions);
-							await copyLocalArtifacts(oldLocalRoot, newLocalRoot);
-							const newPlanPath = resolveLocalUrlToPath(planFilePath, {
-								getArtifactsDir: () => sessionManager.getArtifactsDir(),
-								getSessionId: () => sessionManager.getSessionId(),
-							});
-							await fs.promises.mkdir(path.dirname(newPlanPath), { recursive: true });
-							await fs.promises.writeFile(newPlanPath, content, "utf-8");
-						}
-
-						const executionModel = p.executionModel;
-						if (executionModel?.id) {
-							const models = g.getAvailableModels();
-							const model = executionModel.provider
-								? resolveProviderModelReference(executionModel.provider, executionModel.id, models)
-								: models.find(m => m.id === executionModel.id);
-							if (!model) throw new Error(`Unknown execution model: ${executionModel.id}`);
-							await g.setModelTemporary(model);
-						}
-
-						// Restore the execution tool set (TUI parity): approved-plan
-						// prompts now require `read` to load the durable plan file.
-						await g.setActiveToolsByName(executionTools);
-
-						const contextPreserved = !p.fresh;
-						const approvePrompt = prompt.render(planModeApprovedPrompt, {
-							planFilePath,
-							contextPreserved,
-						});
-						if (g.isStreaming) {
-							await g.followUp(approvePrompt, undefined, { synthetic: true });
-						} else {
-							try {
-								await g.prompt(approvePrompt, { synthetic: true });
-							} catch (error) {
-								if (!(error instanceof AgentBusyError)) throw error;
-								await g.followUp(approvePrompt, undefined, { synthetic: true });
-							}
-						}
-						return { ok: true, title };
-					}
-					case "refine": {
-						const feedback = p.feedback?.trim();
-						if (!feedback) throw new Error("Refine feedback is empty.");
-						await g.followUp(feedback, undefined, { synthetic: true });
-						return { ok: true };
-					}
-					case "save": {
-						// In-place plan edit (TUI overlay-edit parity): write the
-						// edited content back to the current plan file so the
-						// approved plan reflects GUI-side changes.
-						const content = (p.content ?? "").trim();
-						if (!content) throw new Error("Plan content is empty.");
-						const planFilePath = await currentPlanPath();
-						if (!planFilePath) throw new Error("No plan file to save.");
-						await writePlanFile(planFilePath, `${content}\n`, { localProtocolOptions, cwd });
-						return { ok: true, planFilePath };
-					}
-				}
-				break;
+				return this.#services.get<PlanModeService>("planMode").plan(params);
 			}
 			case "session.roles": {
 				// Per-role model presets (TUI /model parity): the modelRoles

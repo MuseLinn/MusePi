@@ -10,6 +10,12 @@
  * 声明自己的接缝——输入（RPC 路由/事件）、输出（返回值/广播）、
  * 生命周期（start/stop 的副作用与可逆性）。
  */
+/** `start` 拿到的宿主上下文：只暴露依赖解析，不暴露 cordis 本身。 */
+export interface ServiceStartContext {
+	/** 解析一个已挂载的 L2 服务；缺席返回 undefined（调用方决定是否致命）。 */
+	get<T>(key: string): T | undefined;
+}
+
 export interface DaemonService {
 	/** 稳定服务键（未来 cordis 化的 ctx.<key>）。 */
 	readonly key: string;
@@ -18,8 +24,13 @@ export interface DaemonService {
 	 * 路由覆盖快照测试据此强制"每个 case 必须归属某服务或 legacy 清单"。 */
 	readonly routes?: Readonly<Record<string, string>>;
 
-	/** 服务启动（无状态服务可不实现）。 */
-	start?(): Promise<void> | void;
+	/** 服务启动（无状态服务可不实现）。
+	 *
+	 *  收到宿主 cordis Context，因此依赖按 dsh 的 `static inject` 语义在
+	 *  这里解析（`ctx.get("sessionProjections")`），不必由 DaemonServer 逐项
+	 *  注入。解析不到的依赖应当抛出——挂载会以 DaemonServiceMountError 失败，
+	 *  而不是让服务在缺依赖的状态下静默跑起来。 */
+	start?(ctx: ServiceStartContext): Promise<void> | void;
 
 	/** 服务停止：反向卸载 start/构造的全部副作用（cordis effect 语义
 	 * 等价物），供未来热重载与 orderly shutdown 使用。 */

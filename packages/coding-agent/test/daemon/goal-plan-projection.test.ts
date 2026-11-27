@@ -1,0 +1,103 @@
+// The goal/plan services own their state, so they register their own
+// projection unit — registered on start, withdrawn on stop, never listed
+// centrally.
+import { describe, expect, test } from "bun:test";
+import { GoalService } from "../../src/daemon/services/goal-service";
+import { PlanModeService } from "../../src/daemon/services/plan-mode-service";
+import { SessionProjectionService } from "../../src/daemon/services/session-projection-service";
+import { SessionProjectionRegistry } from "../../src/session/session-projections";
+
+function stats() {
+	return {
+		sessionFile: undefined,
+		sessionId: "s1",
+		userMessages: 0,
+		assistantMessages: 0,
+		toolCalls: 0,
+		toolResults: 0,
+		totalMessages: 0,
+		tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		premiumRequests: 0,
+		cost: 0,
+	};
+}
+
+/** A host context that resolves the projection service, as cordis does. */
+function ctxWith(projections: SessionProjectionService | undefined) {
+	return { get: <T>(key: string) => (key === "sessionProjections" ? (projections as T) : undefined) };
+}
+
+function seedMode(projections: SessionProjectionService): void {
+	projections.seed("s1", {
+		entries: [],
+		source: {
+			model: () => null,
+			sessionStats: stats as never,
+			sessionMode: () => ({ goal: null, plan: false }),
+		},
+	});
+}
+
+function goalService(published: string[]): GoalService {
+	return new GoalService({
+		get: () => undefined,
+		publishSessionModeProjection: sessionId => published.push(sessionId),
+		modesOf: () => ({}),
+		renderGuidedKickoff: () => "",
+		resolveMedia: async () => ({}),
+	});
+}
+
+function planService(published: string[]): PlanModeService {
+	return new PlanModeService({
+		get: () => undefined,
+		publishSessionModeProjection: sessionId => published.push(sessionId),
+		modesOf: () => ({}),
+		files: {
+			read: async () => null,
+			list: async () => [],
+			write: async () => {},
+			resolveTitle: () => ({ title: "" }),
+			resolveApproved: async () => ({ planFilePath: "", title: "" }),
+		},
+		local: { root: () => "", copy: async () => {}, urlToPath: () => "" },
+		renderApprovedPrompt: () => "",
+		renderCompactNote: () => "",
+		resolveExecutionModel: () => undefined,
+		writeFile: async () => {},
+		readFile: async () => "",
+		mkdir: async () => {},
+		writePlanViaLocal: async () => {},
+	});
+}
+
+describe("goal and plan own their projection unit", () => {
+	test("each service registers the unit it owns on start", () => {
+		const projections = new SessionProjectionService(new SessionProjectionRegistry());
+		const goals = goalService([]);
+		goals.start(ctxWith(projections));
+		seedMode(projections);
+		// `sessionMode` is the unit both services contribute; once goal mounted it
+		// must be present in the baseline.
+		expect(projections.snapshot("s1")?.values.sessionMode).toBeDefined();
+		goals.stop();
+	});
+
+	test("stop withdraws the unit it registered", () => {
+		const projections = new SessionProjectionService(new SessionProjectionRegistry());
+		const plans = planService([]);
+		plans.start(ctxWith(projections));
+		seedMode(projections);
+		expect(projections.snapshot("s1")?.values.sessionMode).toBeDefined();
+
+		plans.stop();
+		expect(projections.snapshot("s1")?.values.sessionMode).toBeUndefined();
+	});
+
+	test("a missing projection service fails the mount instead of running blind", () => {
+		// dsh's `static inject` contract: an unresolvable dependency is fatal, so
+		// the service never runs without contributing its read model.
+		expect(() => goalService([]).start(ctxWith(undefined))).toThrow(/sessionProjections/);
+		expect(() => planService([]).start(ctxWith(undefined))).toThrow(/sessionProjections/);
+	});
+});

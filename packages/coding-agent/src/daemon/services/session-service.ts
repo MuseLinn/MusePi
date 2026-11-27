@@ -1,18 +1,12 @@
 import type { SessionProjectionSnapshot } from "@musepi/pi-wire";
-import {
-	contextUsageProjectionDefinition,
-	type ProjectionDefinition,
-	sessionModeProjectionDefinition,
-} from "../../session/session-projections";
+import { contextUsageProjectionDefinition, type ProjectionDefinition } from "../../session/session-projections";
 import type { DaemonService } from "./types";
 
-/** The projection domains this service owns: the session's own read-model
- *  state (context occupancy and the goal/plan switches). Registration lives
- *  here, next to the state, not in a central list — the projection service only
- *  drives whatever gets registered with it. */
+/** The projection domains this service owns: context occupancy, which is folded
+ *  from committed messages. The goal/plan switches ride `sessionMode` and are
+ *  registered by the services that own them (`goals`, `planMode`). */
 const SESSION_STATE_PROJECTIONS: readonly ProjectionDefinition<unknown>[] = [
 	contextUsageProjectionDefinition,
-	sessionModeProjectionDefinition,
 ] as readonly ProjectionDefinition<unknown>[];
 
 import { type DeletedWorkspaces, sessionHiddenByWorkspace } from "./workspace-registry";
