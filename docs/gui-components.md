@@ -179,6 +179,17 @@ The user's report was not "make the session card prettier" but "why does the pro
 3. **Extract on the second copy, not the fourth.** The two cards had already copied the same six declarations into one file. The recipe (`.gui-hover-card` + its parts) is that extraction, so a third hover card consumes it rather than adding a third copy.
 4. **Counter-rule: convergence never restyles behaviour.** A row gets a hover affordance only when clicking it does something. The project card's directory rows open, the session card's rows are read-only, and that asymmetry is correct and stays — the row grid converged, the hit area did not. Convergence is about finish, never about giving a surface an action it does not have.
 
+## Entrance origin (grow from the trigger, never the centre)
+
+A surface opened by a control grows from the edge or corner touching it. A scale with no `transform-origin` uses the box centre, so the surface inflates out of its own middle, detached from the click.
+
+1. **Compute the side; do not guess it.** `useFloatingMenu` already derives `pos.up` / `side` / `align` and sets the origin inline. A popover that positions itself another way owes the same computation — a hard-coded `top left` is only right while it happens to open down-right.
+2. **In-place changes grow from the side they belong to.** An armed chip takes `left center`. The one exception is a selection bar marking a row: its centre *is* the trigger.
+3. **Rotation and uniform decoration are exempt** — spinners, pulses, pet hops, a horizontally stretching drop indicator.
+4. **The exit collapses toward the trigger too**; anchoring only the entrance makes dismissal read as a vanish.
+
+Audit is a grep for `scale(` blocks without `transform-origin`; the 33 that remain are decoration or closing states, and each new one must be justified as such.
+
 ## Press gesture (a centred control presses in place)
 
 A press is a **scale, never a displacement**. A control whose resting transform also carries a centring (`translateX(-50%)` under `left: 50%`) must keep the two in separate custom properties — `.gui-agent-capsule` uses `--gui-capsule-shift` for the centring and `--gui-capsule-press` for the gesture — so a surface that centres the same control by LAYOUT can zero only the shift and keep the press. The settings effects preview (`.gui-effect-preview-identity`) is that surface: a flex row centring the real pill, which used to jump half its width left on click because `:active` re-declared the whole transform. A zero shift is `translateX(0)`, never `none` — `none scale(0.97)` is an invalid transform and drops the gesture. `test/agent-capsule-geometry.test.ts` drives the REAL `:active` through CDP `CSS.forcePseudoState` (an injected rule setting `--gui-capsule-press` only proves the variable works and stays green with the bug restored) and asserts the pressed pill's centre x is unchanged in both surfaces while the pill measurably narrows in both. Any new pill that composes a centring transform with a press follows the same split.

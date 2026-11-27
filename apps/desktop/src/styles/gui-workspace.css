@@ -103,6 +103,10 @@
 .gui-mode-chip--armed {
 	color: var(--color-accent);
 	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
+	/* The chip arms in place when a mode is picked, so it grows from its own
+	 * leading edge — at the centre it would look like a separate badge appearing
+	 * over the row. */
+	transform-origin: left center;
 	animation: gui-chip-in 180ms var(--spring), gui-armed-pulse 2s ease-in-out infinite;
 }
 

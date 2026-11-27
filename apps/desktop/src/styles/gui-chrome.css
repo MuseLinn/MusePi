@@ -187,8 +187,16 @@
  * collapsed spacer the chat header subtracts. */
 .gui-rail--wide {
 	width: var(--gui-rail-w-wide);
-	align-items: stretch;
+	/* 6px of inline padding on both sides, matching the collapsed rail's own
+	 * centring inset (see the rule below), so the content column's width steps
+	 * once instead of the rows rebuilding their x from a different formula. */
 	padding: 0 6px 8px;
+}
+
+/* Collapsed keeps the same inline inset as the wide rail. 52 - 2*6 = 40, and a
+ * 36px row centred in 40 sits at 8 — the exact x it paints at when expanded. */
+.gui-rail:not(.gui-rail--wide) {
+	padding-inline: 6px;
 }
 
 /* Brand header: the mark that toggles the rail's width. Only mounted where the
@@ -347,13 +355,25 @@
  * widened rail was the "变一个居中图标" report: the button changed shape without
  * its container, so it looked like a different control rather than the same one
  * with room. */
-.gui-rail--wide .gui-rail-group {
+.gui-rail-group {
 	align-items: stretch;
-	padding: 0 6px;
+	width: 100%;
 }
 
 .gui-rail--wide .gui-rail-group > * {
 	width: 100%;
+}
+
+/* Collapsed, the footer's controls are squares: centre each one inside the
+ * stretched group rather than letting `stretch` widen it. */
+.gui-rail:not(.gui-rail--wide) .gui-rail-group > * {
+	align-self: center;
+}
+
+/* Same for the destinations: a stretched column would widen the 36px buttons to
+ * fill it, so each takes its own size and centres. */
+.gui-rail:not(.gui-rail--wide) .gui-rail-scroll > * {
+	align-self: center;
 }
 
 /* Footer controls become rows with their leading glyph: the avatar keeps its
@@ -384,7 +404,13 @@
 	width: 100%;
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	/* Stretch in BOTH widths. Centring the 36px rows while collapsed and
+	 * stretching them while expanded means the rows' left edge is computed by two
+	 * different models, so it shifts as the width animates — the visible "slide"
+	 * on open. With stretch, the collapsed state supplies symmetric inline
+	 * padding instead (see `.gui-rail:not(.gui-rail--wide)`), which puts the rows
+	 * at the same x they occupy when expanded. */
+	align-items: stretch;
 	gap: 2px;
 	overflow-y: auto;
 	scrollbar-width: none;
@@ -459,7 +485,11 @@
  * must not make one row taller than its neighbours. */
 .gui-rail-btn--wide {
 	width: 100%;
-	height: 34px;
+	/* The SAME height as the collapsed square. A 36 → 34 step is invisible on its
+	 * own, but every row below it shifts up by that much, so six destinations
+	 * move the last row 10px: that accumulated shift is the "跳动" on open, not
+	 * any single row changing shape. */
+	height: 36px;
 	justify-content: flex-start;
 	gap: 10px;
 	padding: 0 8px;
