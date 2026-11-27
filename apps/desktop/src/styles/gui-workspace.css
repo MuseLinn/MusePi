@@ -6659,6 +6659,56 @@ button.traj-error-note:hover {
 	color: var(--color-text-muted);
 }
 
+/* ── Diff size: the row's change bar plus its +A −D counts ─────────────
+ * One glance answers "how big is this PR", which a title alone cannot. The bar
+ * is a fixed five-cell strip (git's own proportion made readable at a glance
+ * without rendering hundreds of 1px columns): green cells for additions, red
+ * for deletions, proportional to their share. Cells rather than a continuous
+ * gradient so a tiny PR still shows a visible cell on each side instead of
+ * sub-pixel slivers that read as a single grey line. */
+.gui-pr-diff {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-pr-diff-bar {
+	display: inline-flex;
+	gap: 2px;
+	flex: none;
+}
+
+.gui-pr-diff-cell {
+	width: 6px;
+	height: 8px;
+	border-radius: 1px;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+}
+
+.gui-pr-diff-cell--add {
+	background: var(--color-success, #34d399);
+}
+
+.gui-pr-diff-cell--del {
+	background: var(--color-warning, #f87171);
+}
+
+.gui-pr-diff-add {
+	color: var(--color-success, #34d399);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-pr-diff-del {
+	color: var(--color-warning, #f87171);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-pr-diff-files {
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
 .gui-pr-check {
 	display: inline-flex;
 	align-items: center;
@@ -6918,6 +6968,89 @@ button.traj-error-note:hover {
 
 .gui-pr-workspace--narrow {
 	display: block;
+}
+
+/* Three columns when the scope tree is present: filters, list, detail. The tree
+ * is a fixed 168px — it is a label list, and growing it would steal width from
+ * the list the reader actually scans. */
+.gui-pr-workspace--scope {
+	grid-template-columns: 168px minmax(240px, 0.8fr) minmax(0, 1.4fr);
+}
+
+.gui-pr-scope-tree {
+	min-width: 0;
+}
+
+.gui-pr-scope {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 2px 4px 8px;
+}
+
+.gui-pr-scope-heading {
+	padding: 8px 8px 4px;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+
+.gui-pr-scope-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	padding: 5px 8px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: 12.5px;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.gui-pr-scope-row:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+.gui-pr-scope-row:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
+}
+
+.gui-pr-scope-row--active {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
+.gui-pr-scope-label {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-pr-scope-count {
+	flex-shrink: 0;
+	min-width: 18px;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	color: var(--color-text-faint);
+}
+
+.gui-pr-scope-row--active .gui-pr-scope-count {
+	color: inherit;
 }
 
 .gui-pr-workspace--narrow .gui-pr-detail-pane {

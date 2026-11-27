@@ -37,6 +37,55 @@ interface GhPr {
 	mergeable?: boolean;
 	mergeStateStatus?: string;
 	reviewDecision?: string;
+	/** Diff size. `gh` reports these per PR; they drive the row's change bar and
+	 *  the "+A −D" counts. Absent on a PR whose head could not be diffed. */
+	additions?: number;
+	deletions?: number;
+	changedFiles?: number;
+	/** Assignment and triage, used by the detail's people rows. */
+	reviewRequests?: { login?: string; slug?: string; name?: string }[];
+	assignees?: { login: string }[];
+	labels?: { name: string; color?: string }[];
+}
+
+/** Diff size for a PR row: a five-cell bar plus the `+A −D` counts.
+ *
+ * `gh` reports the counts per PR; a PR whose head could not be diffed has
+ * neither, and then this renders NOTHING rather than a zero bar — an empty
+ * "0" would claim the PR changes no files.
+ *
+ * The bar is proportion-only: with 12 additions and 1 deletion the split is
+ * 92/8, so at least one cell is always reserved for the minority side once it
+ * exists, or a small deletion would round away and the row would read as an
+ * all-additions change. */
+function PrDiffStat({ pr, showFiles }: { pr: GhPr; showFiles?: boolean }): ReactNode {
+	const add = pr.additions ?? 0;
+	const del = pr.deletions ?? 0;
+	const total = add + del;
+	if (total <= 0) return null;
+	const CELLS = 5;
+	// Floor one cell for each side that exists, then split the rest by share.
+	const both = add > 0 && del > 0;
+	const addCells = both ? Math.max(1, Math.min(CELLS - 1, Math.round((add / total) * CELLS))) : add > 0 ? CELLS : 0;
+	const delCells = both ? CELLS - addCells : del > 0 ? CELLS : 0;
+	const label = `${t("pr additions")} ${add}, ${t("pr deletions")} ${del}`;
+	return (
+		<span className="gui-pr-diff" role="img" aria-label={label} title={label}>
+			<span className="gui-pr-diff-bar" aria-hidden="true">
+				{Array.from({ length: CELLS }, (_, index) => (
+					<span
+						key={index}
+						className={`gui-pr-diff-cell${index < addCells ? " gui-pr-diff-cell--add" : index < addCells + delCells ? " gui-pr-diff-cell--del" : ""}`}
+					/>
+				))}
+			</span>
+			<span className="gui-pr-diff-add">+{add}</span>
+			<span className="gui-pr-diff-del">−{del}</span>
+			{showFiles && pr.changedFiles !== undefined ? (
+				<span className="gui-pr-diff-files">{t("general.changesFileCount", { count: pr.changedFiles })}</span>
+			) : null}
+		</span>
+	);
 }
 
 /** Check-state line (dot + label) shared by the card and the list rows. */
@@ -644,6 +693,7 @@ function PrDetail({
 			<div className="gui-pr-meta">
 				<PrChecks rollup={detail.statusCheckRollup} />
 				<PrMergeLine pr={detail} />
+				<PrDiffStat pr={detail} showFiles />
 			</div>
 			<CheckItemList rollup={detail.statusCheckRollup} />
 			{detail.labels.length > 0 && (
@@ -1002,6 +1052,73 @@ const PR_STATE_SEGMENTS: SegmentedOption<"open" | "closed" | "merged" | "all">[]
 	{ value: "all", label: t("state all") },
 ];
 
+/** One row of the scope tree: label, count, and the selection it drives. */
+function ScopeRow({
+	label,
+	count,
+	active,
+	onSelect,
+}: {
+	label: string;
+	count: number;
+	active: boolean;
+	onSelect(): void;
+}): ReactNode {
+	return (
+		<button
+			type="button"
+			className={`gui-pr-scope-row${active ? " gui-pr-scope-row--active" : ""}`}
+			aria-pressed={active}
+			onClick={onSelect}
+		>
+			<span className="gui-pr-scope-label">{label}</span>
+			<span className="gui-pr-scope-count">{count}</span>
+		</button>
+	);
+}
+
+/**
+ * The scope a row belongs to, derived from data the list already carries, never
+ * from a second request: `mine` and `reviewing` read `author` and
+ * `reviewRequests`, `assigned` reads `assignees`, and the state rows read
+ * `state`/`isDraft`. Deriving them here keeps the counts honest — each number is
+ * the size of the list you would get by clicking it, not a server estimate that
+ * can disagree with the filter.
+ */
+type PrScope = "all" | "open" | "merged" | "closed" | "draft" | "mine" | "assigned" | "reviewing";
+
+const PR_SCOPE_ORDER: { scope: PrScope; labelKey: string }[] = [
+	{ scope: "open", labelKey: "state open" },
+	{ scope: "draft", labelKey: "pr scope draft" },
+	{ scope: "merged", labelKey: "state merged" },
+	{ scope: "closed", labelKey: "state closed" },
+	{ scope: "mine", labelKey: "pr scope mine" },
+	{ scope: "assigned", labelKey: "pr scope assigned" },
+	{ scope: "reviewing", labelKey: "pr scope reviewing" },
+];
+
+/** Does `pr` belong to `scope`? `all` is the escape hatch; the rest are exact. */
+function inScope(pr: GhPr, scope: PrScope, viewer: string | null): boolean {
+	switch (scope) {
+		case "all":
+			return true;
+		case "open":
+			return pr.state === "OPEN" && !pr.isDraft;
+		case "draft":
+			return pr.state === "OPEN" && pr.isDraft;
+		case "merged":
+			return pr.state === "MERGED";
+		case "closed":
+			return pr.state === "CLOSED";
+		case "mine":
+			return viewer !== null && pr.author?.login === viewer;
+		case "assigned":
+			return (pr.assignees ?? []).some(a => a.login === viewer);
+		case "reviewing":
+			return (pr.reviewRequests ?? []).some(r => r.login === viewer || r.slug !== undefined);
+	}
+}
+
 function useNarrowPrPane(): { narrow: boolean; paneRef: (element: HTMLDivElement | null) => void } {
 	const [element, setElement] = useState<HTMLDivElement | null>(null);
 	const [narrow, setNarrow] = useState(false);
@@ -1025,6 +1142,7 @@ function PrWorkspace({
 	narrow,
 	itemLabel,
 	filters,
+	scopeTree,
 	notice,
 	list,
 	detail,
@@ -1032,6 +1150,9 @@ function PrWorkspace({
 	narrow: boolean;
 	itemLabel: string;
 	filters: ReactNode;
+	/** The scope tree (state + people). Hidden in the narrow layout, where the
+	 *  filter row's segmented control is the reachable path instead. */
+	scopeTree?: ReactNode;
 	notice?: ReactNode;
 	list: ReactNode;
 	detail: ReactNode;
@@ -1059,7 +1180,10 @@ function PrWorkspace({
 				<div className="gui-issue-filters">{filters}</div>
 			</div>
 			{notice}
-			<div className={`gui-pr-workspace${narrow ? " gui-pr-workspace--narrow" : ""}`}>
+			<div
+				className={`gui-pr-workspace${narrow ? " gui-pr-workspace--narrow" : ""}${scopeTree ? " gui-pr-workspace--scope" : ""}`}
+			>
+				{!narrow && scopeTree ? <FadeScroll className="gui-pr-scope-tree">{scopeTree}</FadeScroll> : null}
 				{!narrow && <FadeScroll className="gui-pr-list">{list}</FadeScroll>}
 				<FadeScroll className="gui-pr-detail-pane">{detail}</FadeScroll>
 				{narrow && (
@@ -1115,7 +1239,9 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 	} | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedPr, setSelectedPr] = useState<number | null>(null);
-	const [prState, setPrState] = useState<"open" | "closed" | "merged" | "all">("open");
+	const [prState, setPrState] = useState<"open" | "closed" | "merged" | "all">("all");
+	/** The authenticated GitHub login, or null when gh cannot say who it is. */
+	const [viewer, setViewer] = useState<string | null>(null);
 	const listRequestSeq = useRef(0);
 	const { narrow, paneRef } = useNarrowPrPane();
 	const load = useCallback((): void => {
@@ -1127,7 +1253,8 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 				.request<{ branch?: string | null; ahead?: number; error?: string }>("git.status", { cwd })
 				.catch(() => null),
 			rpc.request<{ branches?: string[]; error?: string }>("git.branches", { cwd }).catch(() => null),
-		]).then(([statusRes, listRes, gitRes, branchesRes]) => {
+			rpc.request<{ login?: string; authenticated?: boolean }>("github.authStatus", {}).catch(() => null),
+		]).then(([statusRes, listRes, gitRes, branchesRes, authRes]) => {
 			if (seq !== listRequestSeq.current) return;
 			// A null slot means the RPC itself failed at the transport/daemon
 			// layer — without this the pane silently renders "no PR → create
@@ -1144,12 +1271,23 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 				ahead: gitRes?.ahead ?? 0,
 				branches: branchesRes?.branches ?? [],
 			});
+			// The viewer names "mine" / "assigned" / "reviewing". Without a login
+			// those three scopes are empty rather than guessed: matching nothing is
+			// honest, while matching everyone would silently widen the filter.
+			setViewer(authRes?.authenticated && authRes.login ? authRes.login : null);
 		});
 	}, [rpc, cwd, prState]);
 	const refresh = useFocusRefreshedLoad(load);
 	const pr = data?.pr ?? null;
+	/** The scope tree narrows the fetched list; the fetch itself stays one
+	 *  request per state (`prState`), and the tree filters what it returned. A
+	 *  scope whose count is zero is still listed with its 0 — hiding it would
+	 *  make the tree change shape as data arrives. */
+	const [scope, setScope] = useState<PrScope>("open");
 	// 搜索词过滤（编号/标题）；链接形态不改列表，交给「打开链接」行。
-	const filteredPrs = (data?.prs ?? []).filter(p2 => matchesQuery(query, p2.number, p2.title));
+	const filteredPrs = (data?.prs ?? [])
+		.filter(p2 => matchesQuery(query, p2.number, p2.title))
+		.filter(p2 => inScope(p2, scope, viewer));
 	useEffect(() => {
 		const visible = (data?.prs ?? []).filter(item => matchesQuery(query, item.number, item.title));
 		setSelectedPr(current =>
@@ -1157,10 +1295,45 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 		);
 	}, [data, query]);
 	const linkQuery = isLinkQuery(query);
+	const allPrs = data?.prs ?? [];
+	// Counts come from the SAME predicates the rows use, so a number and the
+	// list behind it can never disagree.
+	const scopeCount = (target: PrScope): number => allPrs.filter(p2 => inScope(p2, target, viewer)).length;
+	const scopeTree = (
+		<div className="gui-pr-scope" role="group" aria-label={t("pr scope filter")}>
+			<div className="gui-pr-scope-heading">{t("pr scope state")}</div>
+			{PR_SCOPE_ORDER.slice(0, 4).map(entry => (
+				<ScopeRow
+					key={entry.scope}
+					label={t(entry.labelKey as TranslationKey)}
+					count={scopeCount(entry.scope)}
+					active={scope === entry.scope}
+					onSelect={() => setScope(entry.scope)}
+				/>
+			))}
+			<div className="gui-pr-scope-heading">{t("pr scope people")}</div>
+			{PR_SCOPE_ORDER.slice(4).map(entry => (
+				<ScopeRow
+					key={entry.scope}
+					label={t(entry.labelKey as TranslationKey)}
+					count={scopeCount(entry.scope)}
+					active={scope === entry.scope}
+					onSelect={() => setScope(entry.scope)}
+				/>
+			))}
+			<ScopeRow
+				label={t("state all")}
+				count={allPrs.length}
+				active={scope === "all"}
+				onSelect={() => setScope("all")}
+			/>
+		</div>
+	);
 	return (
 		<div ref={paneRef} className="gui-pr-pane">
 			<PrWorkspace
 				narrow={narrow}
+				scopeTree={scopeTree}
 				notice={error ? <div className="gui-pr-load-state gui-pr-error">{error}</div> : undefined}
 				itemLabel={selectedPr === null ? t("pr select detail") : `#${selectedPr}`}
 				filters={
@@ -1282,6 +1455,7 @@ function PrPane({ rpc, cwd, query }: { rpc: RpcClient; cwd: string; query: strin
 													{pr.comments?.length ?? 0}
 												</span>
 											)}
+											<PrDiffStat pr={pr} />
 											<span className="gui-pr-list-branches text-[10.5px] text-[var(--color-text-faint)]">
 												{pr.headRefName} → {pr.baseRefName}
 											</span>

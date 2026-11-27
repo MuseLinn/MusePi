@@ -84,7 +84,7 @@ export class GitHubService implements DaemonService {
 			"--limit",
 			"50",
 			"--json",
-			"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,comments,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision",
+			"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,comments,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,reviewRequests,assignees,labels",
 		]);
 		if (res.exitCode === null) return { error: "gh CLI not installed" };
 		if (res.exitCode !== 0) {
@@ -199,7 +199,7 @@ export class GitHubService implements DaemonService {
 				"view",
 				String(num),
 				"--json",
-				"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
+				"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt,additions,deletions,changedFiles",
 			]),
 			readGithubPrReviewComments(cwd, num, runGh),
 		]);
