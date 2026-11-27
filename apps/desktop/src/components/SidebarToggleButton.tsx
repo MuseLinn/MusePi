@@ -6,9 +6,13 @@ import type { ReactNode } from "react";
 export function SidebarToggleButton({
 	collapsed,
 	onToggle,
+	onPeekOpen,
+	onPeekClose,
 }: {
 	collapsed: boolean;
 	onToggle(anchor: HTMLButtonElement): void;
+	onPeekOpen?(anchor: HTMLButtonElement): void;
+	onPeekClose?(): void;
 }): ReactNode {
 	const label = collapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar");
 	return (
@@ -20,6 +24,8 @@ export function SidebarToggleButton({
 			aria-label={label}
 			aria-expanded={!collapsed}
 			aria-controls="gui-sidebar-list-region"
+			onPointerEnter={event => onPeekOpen?.(event.currentTarget)}
+			onPointerLeave={() => onPeekClose?.()}
 			onClick={event => onToggle(event.currentTarget)}
 		>
 			<MorphIcon

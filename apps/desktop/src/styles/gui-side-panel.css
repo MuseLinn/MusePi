@@ -203,7 +203,7 @@
 	/* The docked active-pane selector is more specific; these geometry
 	 * overrides must win or the floating card keeps its in-flow box. */
 	position: fixed !important;
-	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
+	top: var(--gui-peek-top, calc(var(--gui-header-h) + var(--gui-card-gutter)));
 	bottom: calc(var(--gui-card-gutter) * 2);
 	/* The rail is a card now, so three gutters sit between its right edge and
 	 * the pane's card: the rail's own side margin, the pane's side margin, and
@@ -212,7 +212,7 @@
 	 * grows into (measured 88 vs 96 with the old two-gutter formula). */
 	/* Follows the rail wherever it is: a wide rail must not leave the floating
 	 * card computing from the collapsed strip. */
-	left: calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3);
+	left: var(--gui-peek-left, calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3));
 	z-index: 42;
 	height: auto !important;
 	margin: 0 !important;
