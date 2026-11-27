@@ -934,6 +934,7 @@ export function VoiceSection({ rpc, sessionId }: { rpc: RpcClient | null; sessio
 					"tts.localModel",
 					"dictation.globalEnabled",
 					"dictation.globalShortcut",
+					"dictation.globalTrigger",
 					...(ttsOn ? [] : (["providers.tts"] as const)),
 				]}
 				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts.", "speech."] as const))]}

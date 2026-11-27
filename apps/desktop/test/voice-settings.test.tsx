@@ -310,6 +310,7 @@ describe("voice settings schema", () => {
 		fake.responses.set("settings.schema", {
 			voice: [
 				{ key: "stt.enabled", type: "boolean", default: true, ui: { group: "Speech", label: "Speech-to-Text" } },
+				{ key: "dictation.globalTrigger", type: "enum", default: "toggle", ui: { group: "Speech", label: "Global dictation trigger" } },
 			],
 		});
 		fake.responses.set("settings.get", {});
@@ -324,6 +325,7 @@ describe("voice settings schema", () => {
 			await new Promise(resolve => setTimeout(resolve, 20));
 		});
 		expect(host.textContent).toContain("语音转文字");
+		expect(host.textContent).not.toContain("Global dictation trigger");
 		const schemaCalls = fake.calls("settings.schema") as { tabs?: string[] }[];
 		expect(schemaCalls.length).toBeGreaterThan(0);
 		expect(schemaCalls.every(call => call.tabs?.includes("voice"))).toBe(true);
