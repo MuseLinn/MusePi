@@ -24,6 +24,23 @@
 
 `--auto-approve` 和 `--yolo` 强制将该会话的 `tools.approvalMode` 设为 `yolo`。
 
+### 解析顺序
+
+一次调用取其所存在的最具体一层决定模式（`tools/approval-mode.ts` 的
+`resolveApprovalMode`）。该函数是唯一读取 `tools.approvalMode` 的地方，因此
+工具包装器、Cursor 桥接与渲染路径对顺序和默认值始终一致：
+
+| 层 | 设置方 | 说明 |
+| --- | --- | --- |
+| `auto-approve` | `--auto-approve` | 高于以下所有选择：更窄的层不得收回整个会话的免打扰授权。 |
+| `turn` | 单次提交 | 一次性选择。 |
+| `session` | 会话自身 | 为单个会话覆盖身份预设。 |
+| `identity` | 所属身份 | bot lane 的 bot，或子代理自身的模式。 |
+| `global` | `tools.approvalMode`（默认 `yolo`） | 兜底。 |
+
+解析结果同时带出是哪一层决定的（`source`），界面因此能说明*为什么*该会话运行在
+这个模式下，而不只是显示模式本身。
+
 ## 用户覆盖
 
 `tools.approval` 在每种模式下都被尊重：

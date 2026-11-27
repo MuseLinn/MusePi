@@ -13,7 +13,8 @@ import { sanitizeText, untilAborted } from "@musepi/pi-utils";
 import type { Settings } from "../../config/settings";
 import { t } from "../../i18n";
 import type { Theme } from "../../render/theme/theme";
-import { type ApprovalMode, formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
+import { formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
+import { resolveApprovalMode, resolveApprovalPolicies } from "../../tools/approval-mode";
 import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import { withFileMutationSession } from "../../tools/file-write-fallback";
 import { normalizeToolEventInput, resolveToolEventInput } from "../tool-event-input";
@@ -189,9 +190,8 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 		// newly prompt-gated command and have it run unapproved.
 		const cliAutoApprove = context?.autoApprove === true;
 		const settings: Settings | undefined = context?.settings;
-		const configuredMode = (settings?.get("tools.approvalMode") ?? "yolo") as ApprovalMode;
-		const approvalMode: ApprovalMode = cliAutoApprove ? "yolo" : configuredMode;
-		const userPolicies = (settings?.get("tools.approval") ?? {}) as Record<string, unknown>;
+		const approvalMode = resolveApprovalMode(settings, { autoApprove: cliAutoApprove }).mode;
+		const userPolicies = resolveApprovalPolicies(settings);
 		const preResolved = resolveApproval(this.tool, approvalArgs(params, context), approvalMode, userPolicies);
 		if (preResolved.policy === "deny") {
 			throw new Error(

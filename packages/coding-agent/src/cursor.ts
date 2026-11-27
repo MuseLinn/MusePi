@@ -30,8 +30,8 @@ import {
 import { sanitizeText } from "@musepi/pi-utils";
 import type { MCPResourceReadResult } from "./mcp/types";
 import { confineToWorkspace, resolveToCwd } from "./render/path-utils";
-import type { ApprovalMode } from "./tools/approval";
 import { resolveApproval } from "./tools/approval";
+import { resolveApprovalMode, resolveApprovalPolicies } from "./tools/approval-mode";
 import type { TodoPhase, TodoStatus } from "./tools/todo";
 
 /** Phase used for Cursor-owned tasks with no local phase grouping. */
@@ -300,13 +300,12 @@ async function executeTool(
 function refuseByWritePolicy(options: CursorExecBridgeOptions, toolName: string, pathArg: string): string | null {
 	const context = options.getToolContext?.();
 	const settings = context?.settings;
-	const approvalMode: ApprovalMode =
-		context?.autoApprove === true ? "yolo" : (settings?.get("tools.approvalMode") ?? "yolo");
+	const approvalMode = resolveApprovalMode(settings, { autoApprove: context?.autoApprove === true }).mode;
 	const approval = resolveApproval(
 		{ name: toolName, approval: "write" },
 		{ path: pathArg },
 		approvalMode,
-		(settings?.get("tools.approval") ?? {}) as Record<string, unknown>,
+		resolveApprovalPolicies(settings),
 	);
 	if (approval.policy === "allow") return null;
 	return approval.policy === "deny"
@@ -951,15 +950,9 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		if (!tool) return false;
 		const context = this.options.getToolContext?.();
 		const settings = context?.settings;
-		const approvalMode: ApprovalMode =
-			context?.autoApprove === true ? "yolo" : (settings?.get("tools.approvalMode") ?? "yolo");
+		const approvalMode = resolveApprovalMode(settings, { autoApprove: context?.autoApprove === true }).mode;
 		const args = Object.keys(call.args ?? {}).length > 0 ? call.args : decodeMcpArgs(call.rawArgs ?? {});
-		const approval = resolveApproval(
-			tool,
-			args,
-			approvalMode,
-			(settings?.get("tools.approval") ?? {}) as Record<string, unknown>,
-		);
+		const approval = resolveApproval(tool, args, approvalMode, resolveApprovalPolicies(settings));
 		return approval.policy === "allow";
 	}
 }
