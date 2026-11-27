@@ -8,6 +8,7 @@ import { mount, measure } from "../gui-probe-helpers";
  *  renders (`VoiceOverlays` above `ComposerEditorStack`). */
 type ProbeEditor = {
 	writeDictation(c: string, h: string, restart: boolean): void;
+	commitDictation(): void;
 	setSelectionRange(start: number): void;
 };
 
@@ -62,6 +63,10 @@ export default {
 			handle.setSelectionRange(6);
 			handle.writeDictation("", "第一句", true);
 			handle.writeDictation("第一句", "第二句", false);
+			// The stream ends: the words become ordinary draft text and the
+			// provisional paint is retired (the "still looks like a preview"
+			// report came from a region that outlived its dictation).
+			handle.commitDictation();
 			await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
 		},
 		async measure(body) {
@@ -88,6 +93,8 @@ export default {
 				// Dictating replaces the "what you could type" hint with the act of
 				// speaking; two instructions in one box compete.
 				placeholders: body.querySelectorAll(".musepi-composer-editor__placeholder").length,
+				// After the dictation ended nothing may still be painted as a guess.
+				provisional: body.querySelectorAll(".musepi-composer-editor__preview").length,
 				// The capsule carries both, inside the control they describe.
 
 			};

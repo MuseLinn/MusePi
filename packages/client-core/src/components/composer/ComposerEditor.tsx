@@ -377,7 +377,13 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 				setSelectionRange(start, end = start) {
 					const view = viewRef.current;
 					if (!view) return;
-					view.dispatch({ selection: { anchor: start, head: end } });
+					// Offsets arrive from callers that computed them elsewhere (a
+					// measured token, a restored caret); clamp instead of asking
+					// CodeMirror for a position the document no longer has.
+					const max = view.state.doc.length;
+					view.dispatch({
+						selection: { anchor: Math.max(0, Math.min(start, max)), head: Math.max(0, Math.min(end, max)) },
+					});
 				},
 				focus() {
 					viewRef.current?.focus();
@@ -393,9 +399,14 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 				replaceRange(from, to, text) {
 					const view = viewRef.current;
 					if (!view) return;
+					// A stale range here throws "Invalid change range" and takes the
+					// window down with it, so clamp to the live document.
+					const max = view.state.doc.length;
+					const start = Math.max(0, Math.min(from, max));
+					const end = Math.max(start, Math.min(to, max));
 					view.dispatch({
-						changes: { from, to, insert: text },
-						selection: { anchor: from + text.length },
+						changes: { from: start, to: end, insert: text },
+						selection: { anchor: start + text.length },
 					});
 				},
 				setPreview() {
@@ -426,15 +437,26 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 					// animation. Here a growing phrase extends its own tail, so the
 					// per-character effect plays for the new glyphs and nothing else.
 					const previous = dictationFieldRange(view);
-					// The dictated block, lead separator included. The write goes to the
-					// region only — never the whole document — so CodeMirror rebuilds
-					// just that range and the per-character entrance effect animates
-					// the new glyphs instead of replaying the entire draft.
 					const { from: dictatedAt, to: dictatedTo, ins: block } = next;
+					void dictatedTo;
 					// The live document's region spans the previous block — or, on the
-					// first write, the start caret and any replaced selection.
+					// first write, the start caret and any replaced selection. Either
+					// can be stale: the document may have been replaced wholesale while
+					// a hypothesis was in flight (a send that cleared the composer, a
+					// draft restore, the user selecting everything). Handing such an
+					// offset to CodeMirror throws "Invalid change range N to M", which
+					// takes the whole render tree down, so verify before dispatching.
 					const replaceFrom = previous ? previous.from : region.start;
 					const replaceTo = previous ? previous.to : region.end;
+					const fits = replaceFrom >= 0 && replaceFrom <= replaceTo && replaceTo <= doc.length;
+					if (!fits) {
+						// The region no longer describes this document. Dropping the
+						// write keeps the user's text intact; guessing where the words
+						// belonged is how a draft gets corrupted instead.
+						dictationRef.current = null;
+						view.dispatch({ effects: setDictationRangeEffect.of(null) });
+						return;
+					}
 					if (doc !== next.value) {
 						view.dispatch({
 							changes: { from: replaceFrom, to: replaceTo, insert: block },
@@ -442,11 +464,17 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 							annotations: dictationWriteAnnotation.of(true),
 						});
 					}
-					const from = dictatedAt;
-					const to = dictatedAt + block.length;
+					const from = Math.min(dictatedAt, view.state.doc.length);
+					const to = Math.min(dictatedAt + block.length, view.state.doc.length);
 					view.dispatch({ effects: setDictationRangeEffect.of({ from, to }) });
 					view.requestMeasure();
 					setPreviewing(false);
+				},
+				commitDictation() {
+					const view = viewRef.current;
+					dictationRef.current = null;
+					if (!view) return;
+					view.dispatch({ effects: setDictationRangeEffect.of(null) });
 				},
 				cancelDictation() {
 					const view = viewRef.current;

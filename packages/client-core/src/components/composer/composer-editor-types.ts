@@ -76,6 +76,11 @@ export interface ComposerEditorHandle {
 	 *  and false for every later repaint so the origin cannot drift.
 	 */
 	writeDictation(committed: string, hypothesis: string, restart: boolean): void;
+	/** Finish the dictation: whatever is in the region becomes ordinary draft
+	 *  text and the provisional paint is dropped. Called on every outcome that
+	 *  keeps the words — the region must never outlive the dictation, or the
+	 *  text stays looking like a guess forever and re-arms as a splice target. */
+	commitDictation(): void;
 	/** Discard everything this dictation wrote and restore the frozen document.
 	 *  Dictation writes into the draft now, so cancelling must take its words
 	 *  back out — an Esc that left a half sentence behind is worse than no

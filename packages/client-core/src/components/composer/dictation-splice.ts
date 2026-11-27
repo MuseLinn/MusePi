@@ -85,3 +85,21 @@ export function dictationSplice(anchor: DictationAnchor, hypothesis: string): Di
 	// retracted or repeated hypothesis cannot stack.
 	return { value, caret, from, to, ins: value.slice(from, to), next: anchor };
 }
+
+/**
+ * Merge the recognizer's final answer into what this dictation already holds.
+ *
+ * Recorders answer in two shapes and both must land once, never twice: the
+ * WHOLE utterance (`"first second"` after `"first"` was committed) or just the
+ * run that was still in flight (`"second"`). Taking the final as the whole when
+ * it already contains the committed text is what stops the last phrase from
+ * doubling — or from being dropped, which is how a finished dictation kept
+ * showing only its provisional tail.
+ */
+export function mergeDictationFinal(committed: string, finalText: string): string {
+	const done = committed.trim();
+	const last = finalText.trim();
+	if (!last) return committed;
+	if (done && last.startsWith(done)) return last;
+	return `${committed}${last}`;
+}

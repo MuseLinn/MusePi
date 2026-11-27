@@ -86,6 +86,7 @@ function fakeEditor(initial: { value: string; start: number; end?: number; edita
 		autosize: () => {},
 		setPreview: () => {},
 		writeDictation: () => {},
+		commitDictation: () => {},
 		cancelDictation: () => {},
 		setFocused: () => {},
 	};

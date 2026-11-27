@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type DictationAnchor, dictationSplice } from "./dictation-splice";
+import { type DictationAnchor, dictationSplice, mergeDictationFinal } from "./dictation-splice";
 
 /** The bug this covers: while dictating mid-draft, each committed segment was
  *  appended to the END of the whole draft while the volatile preview was
@@ -41,5 +41,23 @@ describe("dictation splicing", () => {
 		const first = dictationSplice(anchor, "one");
 		const retracted = dictationSplice(first.next, "one");
 		expect(retracted.value).toBe("start one");
+	});
+});
+
+describe("merging the final answer", () => {
+	test("takes the whole utterance when the final already contains it", () => {
+		// The recognizer returns everything it heard; appending it again is how
+		// the last phrase doubled.
+		expect(mergeDictationFinal("first phrase ", "first phrase second phrase")).toBe("first phrase second phrase");
+	});
+
+	test("appends the remaining run exactly once", () => {
+		expect(mergeDictationFinal("first phrase ", "second phrase")).toBe("first phrase second phrase");
+	});
+
+	test("keeps what is there when the final is empty", () => {
+		// A finished dictation must not lose the words it already wrote: this is
+		// the "stopped but only the preview text remains" report.
+		expect(mergeDictationFinal("spoken", "")).toBe("spoken");
 	});
 });

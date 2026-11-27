@@ -1,3 +1,4 @@
+import { mergeDictationFinal } from "@musepi/client-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import {
@@ -55,6 +56,7 @@ export function useDictation(opts: {
 	editor?: {
 		current: {
 			writeDictation(committed: string, hypothesis: string, restart: boolean): void;
+			commitDictation(): void;
 			cancelDictation(): void;
 		} | null;
 	};
@@ -140,6 +142,28 @@ export function useDictation(opts: {
 			optsRef.current.editor?.current?.writeDictation(spoken.committed, spoken.hypothesis, !started);
 			started = true;
 		};
+		// The dictation's ending. `transcript` is the recognizer's final answer;
+		// it replaces a still-provisional tail so the last words are not lost
+		// between "the stream stopped" and "the region is retired".
+		const finish = (transcript: string, maySubmit: boolean): void => {
+			const finalText = transcript.trim();
+			if (finalText) {
+				// The final is authoritative for the run still in flight, so the
+				// provisional copy is dropped rather than kept beside it.
+				spoken.committed = mergeDictationFinal(spoken.committed, finalText);
+				spoken.hypothesis = "";
+				write();
+			}
+			optsRef.current.editor?.current?.commitDictation();
+			if (maySubmit) {
+				const utterance = spoken.committed.trim() || finalText;
+				const { submit, trimTrailing } = evaluateSubmitTrigger(utterance, optsRef.current.sttSubmitTrigger);
+				if (submit && utterance) {
+					optsRef.current.onSubmit(utterance.slice(0, utterance.length - trimTrailing));
+				}
+			}
+			settle();
+		};
 		const stop = startDictationOpts({
 			rpc,
 			deviceId: getVoiceInputDevice() ?? undefined,
@@ -158,25 +182,13 @@ export function useDictation(opts: {
 				write();
 			},
 			onReview: transcript => {
-				// Uncertain speaker match: keep it as a draft, no auto-send.
-				if (!spoken.committed) {
-					spoken.committed = transcript;
-					write();
-				}
-				settle();
+				// Uncertain speaker match: keep it as a plain draft, no auto-send.
+				finish(transcript, false);
 			},
 			onFinal: transcript => {
 				// The whole utterance is what was spoken — not just this last
 				// transcript — so the submit decision and the sent text both use it.
-				const utterance = spoken.committed + spoken.hypothesis || transcript;
-				const { submit, trimTrailing } = evaluateSubmitTrigger(utterance, optsRef.current.sttSubmitTrigger);
-				if (submit) {
-					optsRef.current.onSubmit(utterance.slice(0, utterance.length - trimTrailing));
-				} else if (!spoken.committed) {
-					spoken.committed = transcript;
-					write();
-				}
-				settle();
+				finish(transcript, true);
 			},
 			onEmpty: settle,
 			onError: message => {
