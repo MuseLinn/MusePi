@@ -24,6 +24,7 @@ import { DiagnosticsView } from "./CapabilityCenter";
 import { addTextToChat } from "./composer/add-to-chat";
 import { HeightMorph } from "./HeightMorph";
 import { MarketplaceView } from "./MarketplaceView";
+import { Reveal } from "./Reveal";
 import {
 	isPluginLaneEntry,
 	type PluginPackageEntry as PluginEntry,
@@ -125,7 +126,7 @@ function isGuiKind(e: ExtensionItem): boolean {
  * The CONFIG/diagnosis perspective; discovery & install live in the
  * first-class CapabilityCenterPage this CTA opens.
  */
-function OverviewView({
+export function OverviewView({
 	extensions,
 	providers,
 	unhosted,
@@ -143,6 +144,8 @@ function OverviewView({
 		displayNameI18n?: LocalizedPluginText;
 		loadError?: string | null;
 		state: string;
+		/** The extension whose same-named row displaced this one, when shadowed. */
+		shadowedBy?: string | null;
 		source: { provider: string };
 	}>;
 	providers: Array<{ id: string; displayName: string; enabled: boolean }>;
@@ -218,7 +221,22 @@ function OverviewView({
 								/>
 								<span className="gui-ext-overview-row-text">
 									<span className="gui-ext-overview-row-title">{extensionDisplayName(e, locale)}</span>
-									{e.loadError && <span className="gui-ext-overview-row-sub">{e.loadError}</span>}
+									{/* Why it needs attention, in the row that says it does. A row
+									 * that only states "shadowed" leaves the reader to open the
+									 * detail pane to learn what shadowed it, which is the one
+									 * fact that decides whether forcing it on is safe. */}
+									{e.loadError ? (
+										<span className="gui-ext-overview-row-sub">{e.loadError}</span>
+									) : (
+										e.shadowedBy && (
+											<span className="gui-ext-overview-row-sub">
+												{t("tools.shadowedByWithName", { name: e.shadowedBy })}
+											</span>
+										)
+									)}
+									{!e.loadError && !e.shadowedBy && (
+										<span className="gui-ext-overview-row-sub">{t("tools.extShadowedNoSource")}</span>
+									)}
 								</span>
 								{e.loadError ? (
 									<>
@@ -530,8 +548,14 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		}[] = [];
 		for (const p of providers) {
 			const items = filtered.filter(e => e.source.provider === p.id);
-			// Empty disabled providers stay hidden — EXCEPT musepi-extensions (above).
-			if (items.length === 0 && !p.enabled && p.id !== "musepi-extensions") continue;
+			// A provider tab narrows the inventory to that provider, so a node with
+			// no matching row is not part of the result — it stayed behind only
+			// because it was enabled, which made the selected tab read as "this one
+			// floated to the top" rather than as a filter. The `native` node and
+			// musepi-extensions are inventory surfaces the user must always be able
+			// to reach, so the unfiltered view keeps them.
+			const surfacesAll = tab === "all";
+			if (items.length === 0 && !(surfacesAll && (p.enabled || p.id === "musepi-extensions"))) continue;
 			const kinds = new Map<string, ExtensionItem[]>();
 			for (const it of items) {
 				const list = kinds.get(it.kind) ?? [];
@@ -782,108 +806,105 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 														</button>
 													)}
 												</div>
-												{!providerCollapsed && (
-													<div className="gui-ext-provider-children">
-														{node.kinds.map(k => {
-															const kindKey = `${node.provider.id}:${k.kind}`;
-															const kindCollapsed = collapsedKinds.has(kindKey);
-															return (
-																<div key={kindKey}>
-																	<div
-																		className="gui-ext-kind-h"
-																		role="button"
-																		tabIndex={0}
-																		onClick={() => toggleKind(kindKey)}
-																	>
-																		<MorphIcon
-																			icon={
-																				kindCollapsed ? ChevronRightIconData : ChevronDownIconData
-																			}
-																			size={12}
-																			spring="snappy"
-																			reducedMotion="user"
-																			className="h-3 w-3 shrink-0 opacity-50"
-																		/>
-																		<span className="min-w-0 flex-1 truncate text-[11.5px]">
-																			{kindLabel(k.kind)}
-																		</span>
-																		<span className="gui-ext-group-count">{k.count}</span>
-																	</div>
-																	{!kindCollapsed &&
-																		k.items.map(e => (
-																			<div
-																				key={e.id}
-																				role="button"
-																				tabIndex={0}
-																				className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
-																				onClick={() => setSelectedId(e.id)}
-																				onKeyDown={ev => {
-																					if (ev.key === "Enter" || ev.key === " ") {
-																						ev.preventDefault();
-																						setSelectedId(e.id);
-																					}
-																				}}
-																			>
-																				<span
-																					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
-																				/>
-																				<span className="min-w-0 flex-1 truncate" title={e.name}>
-																					{extensionDisplayName(e, locale)}
-																				</span>
-																				{e.loadError && (
-																					<span className="gui-ext-item-tag gui-ext-item-tag--err">
-																						{t("tools.extLoadFailed")}
-																					</span>
-																				)}
-																				{isGuiKind(e) && (
-																					<span className="gui-ext-item-tag gui-ext-item-tag--gui">
-																						GUI
-																					</span>
-																				)}
-																				<span className="gui-ext-item-tag">{levelLabel(e)}</span>
-																				<span className="gui-ext-item-ops">
-																					{isRemovable(e) && (
-																						<button
-																							type="button"
-																							className="gui-icon-btn"
-																							onClick={ev => {
-																								ev.stopPropagation();
-																								remove(e);
-																							}}
-																							title={removeLabel(e)}
-																							aria-label={removeLabel(e)}
-																						>
-																							<Icon name="delete-bin" className="h-3 w-3" />
-																						</button>
-																					)}
-																					{/* 只读内置项(主题包/渲染器包)无禁用语义,不渲染开关。 */}
-																					{!e.readonly && (
-																						<button
-																							type="button"
-																							role="switch"
-																							aria-checked={e.state === "active"}
-																							aria-label={
-																								e.state === "active"
-																									? t("tools.disableSkill")
-																									: t("tools.enableSkill")
-																							}
-																							className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
-																							onClick={ev => {
-																								ev.stopPropagation();
-																								toggle(e, e.state !== "active");
-																							}}
-																						>
-																							<span className="gui-toggle-knob" />
-																						</button>
-																					)}
-																				</span>
-																			</div>
-																		))}
+												<Reveal open={!providerCollapsed} className="gui-ext-provider-children">
+													{node.kinds.map(k => {
+														const kindKey = `${node.provider.id}:${k.kind}`;
+														const kindCollapsed = collapsedKinds.has(kindKey);
+														return (
+															<div key={kindKey}>
+																<div
+																	className="gui-ext-kind-h"
+																	role="button"
+																	tabIndex={0}
+																	onClick={() => toggleKind(kindKey)}
+																>
+																	<MorphIcon
+																		icon={kindCollapsed ? ChevronRightIconData : ChevronDownIconData}
+																		size={12}
+																		spring="snappy"
+																		reducedMotion="user"
+																		className="h-3 w-3 shrink-0 opacity-50"
+																	/>
+																	<span className="min-w-0 flex-1 truncate text-[11.5px]">
+																		{kindLabel(k.kind)}
+																	</span>
+																	<span className="gui-ext-group-count">{k.count}</span>
 																</div>
-															);
-														})}
-													</div>
-												)}
+																<Reveal open={!kindCollapsed}>
+																	{k.items.map(e => (
+																		<div
+																			key={e.id}
+																			role="button"
+																			tabIndex={0}
+																			className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
+																			onClick={() => setSelectedId(e.id)}
+																			onKeyDown={ev => {
+																				if (ev.key === "Enter" || ev.key === " ") {
+																					ev.preventDefault();
+																					setSelectedId(e.id);
+																				}
+																			}}
+																		>
+																			<span
+																				className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+																			/>
+																			<span className="min-w-0 flex-1 truncate" title={e.name}>
+																				{extensionDisplayName(e, locale)}
+																			</span>
+																			{e.loadError && (
+																				<span className="gui-ext-item-tag gui-ext-item-tag--err">
+																					{t("tools.extLoadFailed")}
+																				</span>
+																			)}
+																			{isGuiKind(e) && (
+																				<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+																					GUI
+																				</span>
+																			)}
+																			<span className="gui-ext-item-tag">{levelLabel(e)}</span>
+																			<span className="gui-ext-item-ops">
+																				{isRemovable(e) && (
+																					<button
+																						type="button"
+																						className="gui-icon-btn"
+																						onClick={ev => {
+																							ev.stopPropagation();
+																							remove(e);
+																						}}
+																						title={removeLabel(e)}
+																						aria-label={removeLabel(e)}
+																					>
+																						<Icon name="delete-bin" className="h-3 w-3" />
+																					</button>
+																				)}
+																				{/* 只读内置项(主题包/渲染器包)无禁用语义,不渲染开关。 */}
+																				{!e.readonly && (
+																					<button
+																						type="button"
+																						role="switch"
+																						aria-checked={e.state === "active"}
+																						aria-label={
+																							e.state === "active"
+																								? t("tools.disableSkill")
+																								: t("tools.enableSkill")
+																						}
+																						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+																						onClick={ev => {
+																							ev.stopPropagation();
+																							toggle(e, e.state !== "active");
+																						}}
+																					>
+																						<span className="gui-toggle-knob" />
+																					</button>
+																				)}
+																			</span>
+																		</div>
+																	))}
+																</Reveal>
+															</div>
+														);
+													})}
+												</Reveal>
 											</div>
 										);
 									})}

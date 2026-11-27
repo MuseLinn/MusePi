@@ -172,6 +172,7 @@ try {
 	stage("rendered");
 	// Point 2: the app owns data-theme and rewrites it on mount.
 	document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)});
+	document.documentElement.setAttribute("data-platform", ${JSON.stringify(process.platform)});
 	await new Promise(r => setTimeout(r, 250));
 	stage("measure");
 	publish("result", (await entry.measure?.(document.body)) ?? null);
@@ -189,8 +190,15 @@ function pageHtml(theme: string, bootName: string, scenario: string): string {
 <style>${stylesheetText()}</style>
 <style>
   /* Point 4: a bare page has no inherited colour. */
-  html { color: var(--color-text); background: var(--color-bg); }
-  body { margin: 0; padding: 20px; background: var(--color-bg); }
+  html { color: var(--color-text); }
+  body { margin: 0; padding: 20px; }
+
+  /* Point 7: the desktop shell is deliberately transparent at html/body so the
+   * native window material shows through; gui-base.css then paints the canvas
+   * only under a platform attribute, and a window without one renders no
+   * backdrop at all. The app always sets it, so the probe must too — otherwise
+   * every light-theme capture shows light cards floating on black. */
+  body { background: var(--color-bg); }
   #root { max-width: ${width}px; }
 </style>
 </head><body>

@@ -809,6 +809,7 @@ export const tools = {
 	"tools.trigger": "Trigger",
 	"tools.rawData": "Raw data",
 	"tools.shadowedByWithName": "Shadowed by {name}",
+	"tools.extShadowedNoSource": "Shadowed by a same-named entry; see diagnostics for its source",
 	"tools.forceEnable": "Force enable",
 	"tools.plugin": "Plugin",
 	"tools.isolated": "Isolated",

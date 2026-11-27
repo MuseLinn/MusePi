@@ -354,7 +354,13 @@ export function MarketplaceGrid({
 
 	return (
 		<div ref={shellRef} className="mp-grid-shell" aria-busy={showLoading ? "true" : "false"}>
-			<header className="mp-grid-toolbar gui-liquid-glass">
+			{/* The row is layout, not a surface. `gui-liquid-glass` carries the whole
+			 * material — tint, lit bands, hairlines, inner spill and lift — so
+			 * applying it here made the search field, the buttons and the empty
+			 * space between them one pane, and the redrawn border sat above rows it
+			 * did not belong to. Each control owns its own surface; the toolbar only
+			 * places them. */}
+			<header className="mp-grid-toolbar">
 				{showCatalogControls && (
 					<SearchField
 						className="mp-search-field"

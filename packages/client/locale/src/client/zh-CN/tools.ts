@@ -771,6 +771,7 @@ export const tools = {
 	"tools.trigger": "触发",
 	"tools.rawData": "原始数据",
 	"tools.shadowedByWithName": "被 {name} 遮蔽",
+	"tools.extShadowedNoSource": "被同名条目遮蔽，可在诊断里查看来源",
 	"tools.forceEnable": "强制启用",
 	"tools.plugin": "插件",
 	"tools.isolated": "隔离",

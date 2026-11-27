@@ -4897,29 +4897,41 @@
  *
  * Six bordered, filled buttons stacked down the right edge of the page carried
  * more weight than the six names they belonged to: the eye landed on the
- * repeats instead of on what needs attention. A row action is the consequence
- * of the row, so it stays reachable and legible without a box of its own —
- * underline on hover is the affordance, the row is the target. */
+ * repeats instead of on what needs attention. So the action states itself with
+ * text and earns its target on hover: the label is the affordance, and a fill
+ * with room around it appears under the pointer to say "this is one control,
+ * press here". A colour-only hover left the strip reading as static copy —
+ * nothing said it could be pressed, and the hit area was the glyphs alone. */
 .gui-ext-overview-row-action {
 	flex: none;
-	padding: 2px 0;
-	border: 0;
+	padding: 3px 8px;
+	border: 1px solid transparent;
+	border-radius: 6px;
 	background: none;
 	font: inherit;
 	font-size: 12px;
 	color: var(--color-text-muted);
 	cursor: pointer;
-	transition: color 120ms ease;
+	transition:
+		color 120ms ease,
+		background 120ms ease,
+		border-color 120ms ease;
 }
 .gui-ext-overview-row-action:hover {
 	color: var(--color-accent);
-	text-decoration: underline;
-	text-underline-offset: 2px;
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 22%, transparent);
 }
+.gui-ext-overview-row-action:active {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+/* Keyboard reaches the same target the pointer does: one visible control, not
+ * an underline that only the mouse ever sees. */
 .gui-ext-overview-row-action:focus-visible {
-	outline: 1px solid var(--accent);
-	outline-offset: 3px;
-	border-radius: 3px;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	border-color: var(--accent);
+	outline: none;
 }
 
 .gui-ext-overview-cta {
