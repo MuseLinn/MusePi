@@ -182,10 +182,16 @@
 	user-select: none;
 }
 
-/* Wide (expanded) rail: labels beside the glyphs. `--gui-rail-w` itself is
- * unchanged — the wide width is a separate token, because that variable is the
- * collapsed spacer the chat header subtracts. */
+/* Wide (expanded) rail: labels beside the glyphs.
+ *
+ * It REPUBLISHES `--gui-rail-w` for its own subtree. Everything positioned from
+ * that variable (the side grip, the peek card, the header spacer) must follow
+ * the rail wherever it is, and a wide rail that only widened itself left those
+ * consumers computing from the collapsed 52px — the handle ended up 156px inside
+ * the panel. The root value still means "collapsed strip", which is what the
+ * header spacer wants while folded. */
 .gui-rail--wide {
+	--gui-rail-w: var(--gui-rail-w-wide);
 	width: var(--gui-rail-w-wide);
 	/* 6px of inline padding on both sides, matching the collapsed rail's own
 	 * centring inset (see the rule below), so the content column's width steps
@@ -3767,66 +3773,11 @@
 	white-space: pre-wrap;
 }
 
-/* ── Sidebar reveal (folding → docked) ──────────────────────────────────
- * `revealSidePanel` wraps the expansion in a same-document view transition.
- * With `gui-vt-left-col` the window's root snapshot is dropped (the transition
- * also carries `gui-vt-surface-only`), so the surfaces named here are what the
- * two
- * surfaces named here are what the browser paints: the rail card and the pane's
- * card. Naming them lets the browser move each group from its old box to its
- * new one on one composited layer, instead of the rail snapping to its new
- * position while the pane slides in from nothing.
- *
- * Each card gets its OWN name. Two elements sharing one name in a single
- * snapshot makes the browser ignore both (the trap `view-transition.ts`
- * documents for dialogs), and the rail exists in both snapshots while the pane
- * exists in only one — so they are named separately and never pair with each
- * other.
- *
- * The pane's content is drawn from the NEW snapshot at its own size
- * (`object-fit: none`), so a widening column never stretches the text: it
- * reveals more of it, exactly like the fold's clip. */
-:root.gui-vt-left-col .gui-rail {
-	view-transition-name: gui-rail-card;
-}
-
-:root.gui-vt-left-col .gui-side-keeper > .gui-pane-side {
-	view-transition-name: gui-pane-card;
-}
-
-/* The header toggle is the pane's counterpart on the tier-two fold: the list
- * morphs INTO this button (KiroCrew 的会话列表折叠收进开合按钮). It is named on
- * both snapshots — the button is always mounted, so the browser can pair its
- * box with the pane's whenever the pane appears or leaves. */
-:root.gui-vt-left-col .gui-sidebar-toggle {
-	view-transition-name: gui-side-toggle;
-}
-
-:root.gui-vt-left-col::view-transition-group(gui-rail-card),
-:root.gui-vt-left-col::view-transition-group(gui-pane-card),
-:root.gui-vt-left-col::view-transition-group(gui-side-toggle) {
-	overflow: clip;
-	animation-duration: 240ms;
-	animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
-}
-
-:root.gui-vt-left-col::view-transition-old(gui-pane-card) {
-	animation: none;
-	opacity: 0;
-}
-
-:root.gui-vt-left-col::view-transition-new(gui-pane-card) {
-	animation: none;
-	width: auto;
-	height: auto;
-	object-fit: none;
-	object-position: top left;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	:root.gui-vt-left-col::view-transition-group(gui-rail-card),
-	:root.gui-vt-left-col::view-transition-group(gui-pane-card),
-	:root.gui-vt-left-col::view-transition-group(gui-side-toggle) {
-		animation: none;
-	}
-}
+/* The left column starts NO view transitions. Every rect change it has — the
+ * rail's width, each row's geometry, the pane's fold and its regions' cascade —
+ * is a CSS transition, and wrapping one in `startViewTransition` snapshots the
+ * whole window: any path reaching it without a scoped name cross-fades the
+ * entire UI. The transition that used to live here was removed after three
+ * destinations flickered on click (sessions / task center / capability center —
+ * the ones that reveal this panel).
+ */

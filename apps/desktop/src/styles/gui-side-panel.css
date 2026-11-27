@@ -141,7 +141,9 @@
 	 * the gutter its row consumes before the card starts. The floating card must
 	 * land on the docked card's x, or the peek visibly sits left of the card it
 	 * grows into (measured 88 vs 96 with the old two-gutter formula). */
-	left: calc(var(--gui-rail-w) + var(--gui-card-gutter) * 3);
+	/* Follows the rail wherever it is: a wide rail must not leave the floating
+	 * card computing from the collapsed strip. */
+	left: calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3);
 	z-index: 42;
 	height: auto !important;
 	margin: 0 !important;

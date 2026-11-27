@@ -4898,6 +4898,48 @@
  *
  * States are rest / hover+`:focus-visible` / drag. `:focus-visible` rather
  * than `:focus-within`: a pointer grab must not leave a lit grip behind. */
+/* ── Seam hint line ────────────────────────────────────────────────────
+ * A hairline running the band's full height, hidden at rest and revealed on
+ * hover/focus/drag. It is a gradient that FADES at both ends rather than a
+ * solid rule: a line that stopped abruptly read as a divider between two
+ * regions, while a line that dissolves reads as "this edge is grabbable" and
+ * does not compete with the seam it marks. `::before` on the band keeps it from
+ * needing extra markup in every host.
+ *
+ * Only the three vertical seams get it — the terminal dock's horizontal band is
+ * a different affordance and keeps its own pill. */
+:is(.gui-resize-x--side, .gui-pane-resize-x)::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	transform: translateX(-50%);
+	background: linear-gradient(
+		to bottom,
+		transparent,
+		var(--gui-grip-hover) 12%,
+		var(--gui-grip-hover) 88%,
+		transparent
+	);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--gui-grip-transition);
+}
+
+:is(.gui-resize-x--side, .gui-pane-resize-x):hover::before,
+:is(.gui-resize-x--side, .gui-pane-resize-x):focus-visible::before,
+:is(.gui-resize-x--side, .gui-pane-resize-x)[data-resizing]::before {
+	opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is(.gui-resize-x--side, .gui-pane-resize-x)::before {
+		transition: none;
+	}
+}
+
 .gui-split-grip {
 	position: absolute;
 	top: 50%;
@@ -4989,7 +5031,27 @@
  * insets itself by header + two gutters at the top and two at the bottom,
  * so a workspace-relative 50% rode ~24px above the seam. */
 .gui-resize-x--side {
-	left: calc(var(--gui-rail-w) + var(--gui-side-w) + var(--gui-card-gutter) * 2 - 6px);
+	/* The seam is the GAP between two cards, not the edge of either.
+	 *
+	 * Geometry: the pane sits at rail + its own left margin + its width, and drops
+	 * its right margin; the chat card carries a FULL gutter on its left. So the
+	 * gap is exactly one gutter, and its midpoint is `rail + gutter + side +
+	 * gutter/2`. The band is 12px wide with its pill centred by `translate(-50%)`,
+	 * so its left edge is that midpoint minus 6.
+	 *
+	 * Earlier versions anchored to the pane's edge (pill sat ON the divider, read
+	 * as "inside the panel") and then to a hand-tuned constant, which drifted as
+	 * soon as the rail became a card. This is the measured formula.
+	 */
+	/* Measured: with the base sum at `rail + gutter + side + gutter/2` the band's
+	 * left edge lands 16px left of the pill's target, so the constant is +10
+	 * (16 minus the band's own 6px half-width). A derived constant, not a guess:
+	 * the base sum is the pane's right edge plus half the gap, and the band is
+	 * centred on it by `translate(-50%)` inside its 12px box. */
+	left: calc(
+		var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) + var(--gui-side-w) +
+			var(--gui-card-gutter) / 2 + 10px
+	);
 	width: 12px;
 	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
 	bottom: calc(var(--gui-card-gutter) * 2);

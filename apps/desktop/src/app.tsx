@@ -5430,7 +5430,19 @@ function AppInner(): ReactNode {
 	const railFooter = null;
 
 	return (
-		<div className="gui-shell" style={{ "--gui-side-w": `${sideWidth}px` } as CSSProperties}>
+		<div
+			className="gui-shell"
+			style={
+				{
+					"--gui-side-w": `${sideWidth}px`,
+					// The rail's LIVE width. `--gui-rail-w` is the collapsed strip and
+					// stays that (the header spacer subtracts it); consumers that must
+					// follow the rail wherever it is — the band and the peek card — read
+					// this one, so a wide rail cannot leave them computing from 52px.
+					"--gui-rail-w-current": railExpanded ? "var(--gui-rail-w-wide)" : "var(--gui-rail-w)",
+				} as CSSProperties
+			}
+		>
 			{error && (
 				<div className="gui-error gui-error-toast" role="alert">
 					<span className="gui-error-toast-text">{error}</span>
