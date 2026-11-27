@@ -1257,13 +1257,18 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
 - **谁负责注册**（2026-11-27）：注册表是一个 L2 **服务**
   （`daemon/services/session-projection-service.ts`，key `sessionProjections`），
   命名对齐 dsh 的 `ctx.sessionProjections`：负责驱动与存放，不认识任何具体域。
-  每个域服务在自己的 `start` 里注册它拥有的单元，依赖经宿主 Context 解析——与 dsh
-  的 `static inject` 同一语义：`goals`（key `goals`）与 `planMode`（key
-  `planMode`）各自贡献 `sessionMode`，`session-tree` 贡献 `contextUsage`。依赖
-  解析不到时直接抛错，挂载失败——绝不让服务在缺读模型贡献的状态下跑起来；
-  `stop` 通过 `register` 返回的 disposer 撤销该单元。宿主保留自己的注册表实例
-  （commit 路径与快照构造直接读它），服务包装的是同一实例，因此一个会话的折叠状态
-  不会出现第二份。
+  每个域服务在自己的 `start` 里注册它拥有的单元，注册表直接从宿主 Context 上读——
+  与 dsh 的 `static inject` 同一语义：`goals` 与 `planMode` 各自贡献
+  `sessionMode`，`session-tree` 贡献 `contextUsage`。依赖解析不到时直接抛错，
+  挂载失败，绝不让服务在缺读模型贡献的状态下跑起来。
+- **返回的是句柄，不是 disposer**（2026-11-27）：`register` 返回 dsh 的
+  `ProjectionHandle`——`stateOf(sessionId)`、`viewOf(sessionId)`、`dispose()`。
+  `stateOf` 正是让域不必在单元旁边再存一份自己声明的事实的机制；撤销后的单元什么
+  都不返回，因此停用的域读起来是「缺席」而不是「过期」。goal 与 plan 模式现在和
+  TUI 一样写进日志（每次切换 `appendModeChange`），并由 `restoreModeFromJournal`
+  在恢复时折叠回来——因为这两个开关只存在于 live AgentSession 上，新恢复的会话两者
+  都是关闭的。恢复的每个值都当作不可信输入：没有路径的 plan 保持关闭（提案流程无法
+  完成），写到一半的 goal 记录什么都不恢复。
 - **隔离**（2026-11-27）：`seed` 与 `applyEvent` 都按单元捕获异常。此前一个单元抛错
   会中断整个循环，于是它之后的每个单元都从基线里静默消失——一个不完整的
   `SessionStats` 就足以让模式徽标全部消失。无法播种的单元在该会话里缺席，下一次

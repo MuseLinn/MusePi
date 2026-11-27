@@ -1360,14 +1360,21 @@ folds domain events itself.
   (`daemon/services/session-projection-service.ts`, key `sessionProjections`),
   named after dsh's `ctx.sessionProjections`. It owns driving and storage and
   names no domain. Each domain service registers the unit it owns, from its own
-  `start`, resolved through the host context the way dsh's `static inject`
-  works: `goals` (key `goals`) and `planMode` (key `planMode`) both contribute
-  `sessionMode`, `session-tree` contributes `contextUsage`. An unresolvable
-  dependency throws, so the mount fails instead of the service running without
-  its read-model contribution, and `stop` withdraws the unit through the
-  disposer `register` returns. The host keeps its registry instance (the commit
-  path and snapshot builders read it directly); the service wraps that same
-  instance, so a session's fold state is never duplicated.
+  `start`, reading the registry straight off the host context the way dsh's
+  `static inject` works: `goals` and `planMode` both contribute `sessionMode`,
+  `session-tree` contributes `contextUsage`. An unresolvable dependency throws,
+  so the mount fails instead of the service running without its read-model
+  contribution.
+- **A handle, not a disposer** (2026-11-27): `register` returns dsh's
+  `ProjectionHandle` — `stateOf(sessionId)`, `viewOf(sessionId)`, `dispose()`.
+  `stateOf` is what stops a domain from keeping a second copy of the facts it
+  declared; a withdrawn unit serves nothing, so a disabled domain reads as
+  absent rather than stale. Goal and plan mode are recorded in the journal like
+  the TUI does (`appendModeChange` on every switch) and folded back on resume by
+  `restoreModeFromJournal`, because the switches live only on the live
+  AgentSession and a fresh resume starts with both off. Every restored value is
+  treated as untrusted: plan without a path stays off (the proposal flow could
+  never complete) and a half-written goal record restores nothing.
 - **Isolation** (2026-11-27): `seed` and `applyEvent` catch per unit. A throw
   inside one unit used to abort the whole loop, so every later unit silently
   vanished from the baseline — a partial `SessionStats` object was enough to
