@@ -24,7 +24,7 @@ function Live({
 }) {
 	return createElement(
 		"div",
-		{ className: "gui-composer-frame gui-liquid-glass" },
+		{ className: "gui-composer-frame gui-liquid-glass", style: { width: 560 } },
 		createElement(VoiceStatusStrip, { phase, seconds: 6, level }),
 		createElement(ComposerEditor, {
 			value: "note:  here",

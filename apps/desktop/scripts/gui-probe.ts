@@ -88,7 +88,11 @@ function stylesheetText() {
 	// The transcript sheet is imported by main.tsx outside gui.css, so a scenario
 	// that renders transcript components needs it appended explicitly.
 	const transcript = join(REPO_ROOT, "packages/client-core/src/components/transcript/transcript.css");
-	const extra = existsSync(transcript) ? readFileSync(transcript, "utf8") : "";
+	const dictation = join(STYLES, "dictation.css");
+	const extra = [transcript, dictation]
+		.filter(file => existsSync(file))
+		.map(file => readFileSync(file, "utf8"))
+		.join("\n");
 	return [...parts.map(file => readFileSync(file, "utf8")), gui, extra].join("\n");
 }
 
