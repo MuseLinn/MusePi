@@ -1133,20 +1133,26 @@ function AppInner(): ReactNode {
 			setNarrowSidebarOpen(true);
 			return;
 		}
+		// A destination click must be inert when the panel is already open. The
+		// wrapper below used to run unconditionally, and with `expanding` false it
+		// received `undefined` — which means the browser's DEFAULT scope, i.e. a
+		// whole-window cross-fade. That is the flicker: every destination that
+		// reveals this panel (sessions / task center / capability center) flashed
+		// on click, while board and issues, which never reveal it, did not.
+		if (!sideCollapsedRef.current) {
+			setSideCollapsed(false);
+			localStorage.setItem("musepi-gui-side", "1");
+			return;
+		}
 		// Folding → docked is the one transition in this column that changes a
 		// card's RECT: the 52px icon strip becomes (or makes room for) a 256px
-		// panel, while the peek card is already the docked card at the docked x
-		// (measured identical, so morphing that pair would animate nothing). The
-		// browser pairs the two snapshots, so the column widens in one continuous
-		// move instead of the rail staying put while the panel slides in beside it.
-		// `surfaceOnly` keeps the rest of the window from cross-fading.
-		const expanding = sideCollapsedRef.current;
+		// panel. `surfaceOnly` keeps the rest of the window out of it.
 		withViewTransition(
 			() => {
 				setSideCollapsed(false);
 				localStorage.setItem("musepi-gui-side", "1");
 			},
-			expanding ? { surfaceOnly: true, extraClass: "gui-vt-left-col" } : undefined,
+			{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
 		);
 	}, []);
 	// Side-rail width drag. (The right panel has its own drag on the normalized

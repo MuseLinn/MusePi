@@ -1214,7 +1214,7 @@ function InstalledSkillsPane({
 							className={`gui-cap-viewbtn${view === "grid" ? " gui-cap-viewbtn--on" : ""}`}
 							aria-label={t("tools.skillViewGrid")}
 							aria-pressed={view === "grid"}
-							onClick={() => withViewTransition(() => setView("grid"))}
+							onClick={() => withViewTransition(() => setView("grid"), { surfaceOnly: true })}
 						>
 							<Icon name="split-cells-horizontal" className="h-4 w-4" />
 						</button>
@@ -1223,7 +1223,7 @@ function InstalledSkillsPane({
 							className={`gui-cap-viewbtn${view === "list" ? " gui-cap-viewbtn--on" : ""}`}
 							aria-label={t("tools.skillViewList")}
 							aria-pressed={view === "list"}
-							onClick={() => withViewTransition(() => setView("list"))}
+							onClick={() => withViewTransition(() => setView("list"), { surfaceOnly: true })}
 						>
 							<Icon name="list-check-2" className="h-4 w-4" />
 						</button>
