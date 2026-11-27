@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { UnifiedKeyLockedError, unifiedKeyPath, unifiedWrappedKeyPath } from "@musepi/pi-utils/unified-master-key";
 import { AgentSecretStore } from "../src/secrets/agent-store";
 import {
 	clearUnlockedMasterKeysForTests,
 	MASTER_KEY_PASSPHRASE_ENV,
 	MASTER_KEY_PASSPHRASE_FILE_ENV,
-	SecretStoreLockedError,
 } from "../src/secrets/encrypted-store";
 
 const PASSPHRASE = "correct horse battery";
@@ -19,8 +19,8 @@ function makeAgentDir(): string {
 
 function keyPaths(agentDir: string): { plain: string; wrapped: string } {
 	return {
-		plain: join(agentDir, "agent-secrets", ".master.key"),
-		wrapped: join(agentDir, "agent-secrets", ".master.key.wrapped"),
+		plain: unifiedKeyPath(agentDir),
+		wrapped: unifiedWrappedKeyPath(agentDir),
 	};
 }
 
@@ -59,9 +59,9 @@ describe("agent secret store passphrase", () => {
 		// Metadata stays readable so the page can still show what is stored.
 		expect((await locked.list()).map(entry => entry.name)).toEqual(["API_TOKEN"]);
 		expect(await locked.getValue("API_TOKEN")).toBeUndefined();
-		await expect(locked.set("OTHER_TOKEN", "another-value-123")).rejects.toBeInstanceOf(SecretStoreLockedError);
+		await expect(locked.set("OTHER_TOKEN", "another-value-123")).rejects.toBeInstanceOf(UnifiedKeyLockedError);
 
-		await expect(locked.unlock("not the passphrase")).rejects.toBeInstanceOf(SecretStoreLockedError);
+		await expect(locked.unlock("not the passphrase")).rejects.toBeInstanceOf(UnifiedKeyLockedError);
 		await expect(locked.unlock(PASSPHRASE)).resolves.toBeUndefined();
 		expect(await locked.getValue("API_TOKEN")).toBe(VALUE);
 		expect(await locked.status()).toMatchObject({ locked: false });
@@ -126,7 +126,7 @@ describe("agent secret store passphrase", () => {
 
 		const locked = lockedStore(agentDir);
 		await expect(locked.rephrase("not the passphrase", "another passphrase")).rejects.toBeInstanceOf(
-			SecretStoreLockedError,
+			UnifiedKeyLockedError,
 		);
 		await expect(locked.rephrase(PASSPHRASE, "another passphrase")).resolves.toBeUndefined();
 		// The two-step alternative would leave the key unprotected here.
@@ -135,7 +135,7 @@ describe("agent secret store passphrase", () => {
 
 		const next = lockedStore(agentDir);
 		expect(await next.status()).toMatchObject({ protectedBy: "passphrase", locked: true });
-		await expect(next.unlock(PASSPHRASE)).rejects.toBeInstanceOf(SecretStoreLockedError);
+		await expect(next.unlock(PASSPHRASE)).rejects.toBeInstanceOf(UnifiedKeyLockedError);
 		await next.unlock("another passphrase");
 		expect(await next.getValue("API_TOKEN")).toBe(VALUE);
 	});

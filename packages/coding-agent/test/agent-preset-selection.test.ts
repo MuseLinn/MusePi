@@ -1,9 +1,8 @@
 /**
  * dsh-shaped agent preset selection.
  *
- * `agentPreset` is stored in the session header as `modeId` (the field resume
- * readers already use), and selection dispatches `agent-preset/selected` on the
- * session's Cordis bus.
+ * `agentPreset` is stored in the session header under the same name, and
+ * selection dispatches `agent-preset/selected` on the session's Cordis bus.
  */
 
 import { beforeEach, describe, expect, it } from "bun:test";
@@ -43,12 +42,13 @@ describe("agent preset selection", () => {
 		});
 
 		manager.setModeId("chat");
-		expect(manager.getHeader()?.modeId).toBe("chat");
+		expect(manager.getHeader()?.agentPreset).toBe("chat");
+		expect(manager.getHeader()?.modeId).toBeUndefined();
 
 		const reopened = await SessionManager.open(manager.getSessionFile()!, sessionDir, undefined, {
 			suppressBreadcrumb: true,
 		});
-		expect(reopened.getHeader()?.modeId).toBe("chat");
+		expect(reopened.getHeader()?.agentPreset).toBe("chat");
 
 		reopened.setModeId(null);
 		const cleared = await SessionManager.open(reopened.getSessionFile()!, sessionDir, undefined, {

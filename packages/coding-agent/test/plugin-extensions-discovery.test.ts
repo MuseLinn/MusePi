@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { discoverAndLoadExtensions } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
 import { getAgentDir, getPluginsDir, removeSyncWithRetries, setAgentDir, TempDir } from "@musepi/pi-utils";
+import { filterUserScoped } from "./utils/filter-user-extensions";
 
 const currentPiCodingAgentPath = Bun.resolveSync("@musepi/pi-coding-agent", import.meta.dir);
 const currentPiExtensionsPath = Bun.resolveSync("@musepi/pi-coding-agent/extensibility/extensions", import.meta.dir);
@@ -84,8 +85,18 @@ describe("plugin extension discovery", () => {
 		removeSyncWithRetries(tempHome);
 	});
 
-	it("loads installed plugin extensions declared in package.json", async () => {
+	const discoverForTest = async () => {
 		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const roots = [projectDir.path(), tempHome];
+		return {
+			...result,
+			extensions: filterUserScoped(result.extensions, roots),
+			errors: filterUserScoped(result.errors, roots),
+		};
+	};
+
+	it("loads installed plugin extensions declared in package.json", async () => {
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path.endsWith(path.join("dist", "extension.ts")));
 
 		expect(result.errors).toHaveLength(0);
@@ -145,7 +156,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 
 		if (process.platform === "win32") {
@@ -206,7 +217,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 
 		expect(result.errors).toHaveLength(0);
@@ -267,7 +278,7 @@ describe("plugin extension discovery", () => {
 			'export const commandName = "import-conditional-ext";',
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 
 		expect(result.errors).toHaveLength(0);
@@ -317,7 +328,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 
 		expect(result.errors).toHaveLength(0);
@@ -367,7 +378,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 		const pluginError = result.errors.find(err => err.path === extensionPath);
 
@@ -419,7 +430,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 		const pluginError = result.errors.find(err => err.path === extensionPath);
 
@@ -493,7 +504,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 
 		expect(result.errors).toHaveLength(0);
@@ -543,7 +554,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 		const pluginError = result.errors.find(err => err.path.includes(path.join("dir-entry-plugin", ".pi")));
 
@@ -590,7 +601,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === extensionPath);
 		const pluginError = result.errors.find(err => err.path.includes("subdir-entry-plugin"));
 
@@ -647,7 +658,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === realEntry);
 		const decoy = result.extensions.find(ext => ext.commands.has("decoy-index-ext"));
 		const pluginError = result.errors.find(err => err.path.includes("nested-manifest-plugin"));
@@ -697,7 +708,7 @@ describe("plugin extension discovery", () => {
 			].join("\n"),
 		);
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const decoy = result.extensions.find(ext => ext.commands.has("decoy-index-ext"));
 
 		expect(decoy).toBeUndefined();
@@ -737,7 +748,7 @@ describe("plugin extension discovery", () => {
 		// A sibling declaration file must be ignored — importing it would fail.
 		fs.writeFileSync(path.join(extensionsDir, "ext.d.ts"), "export default function (pi: unknown): void;\n");
 
-		const result = await discoverAndLoadExtensions([], projectDir.path());
+		const result = await discoverForTest();
 		const extension = result.extensions.find(ext => ext.path === moduleEntry);
 		const declaration = result.extensions.find(ext => ext.path.endsWith("ext.d.ts"));
 

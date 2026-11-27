@@ -53,9 +53,16 @@ import { PluginRuntime } from "../../plugin-runtime/plugin-api";
 import type { HmrRestartRequirement, HmrService } from "../hmr/service";
 import { HOST_SERVICES, providedServices, type ServiceRegistry } from "./cordis-entry";
 import { disposePluginPrimitives, registerEffect } from "./cordis-primitives";
+import { validateDeclaredPluginConfig, wrapVolatileConfig } from "./declared-config";
 import { FIBER_STATE_FAILED, fiberStateName } from "./fiber-state";
 import { getHostService, hasHostService, provideHostService } from "./host-services";
-import { importPluginEntry, type MountContext, type MountedPlugin, mountPlugin } from "./mount";
+import {
+	importPluginEntry,
+	type MountContext,
+	type MountedPlugin,
+	mountPlugin,
+	pluginEntryAcceptsConfig,
+} from "./mount";
 import { defaultSessionConfigReader } from "./session-loader";
 
 /** One mounted host package, with what a reload needs to replace it. */
@@ -503,8 +510,13 @@ async function selectConfigAffected(
 	const affected: HostPluginRecord[] = [];
 	for (const record of records) {
 		try {
+			if (!pluginEntryAcceptsConfig(record.mounted.entry)) continue;
 			const { values } = await readConfig(record.entryPath);
-			if (!Bun.deepEquals(values, record.mounted.config)) affected.push(record);
+			const effective = wrapVolatileConfig(
+				record.mounted.entry,
+				await validateDeclaredPluginConfig(record.mounted.entry, values),
+			);
+			if (!Bun.deepEquals(effective, record.mounted.config)) affected.push(record);
 		} catch {
 			affected.push(record);
 		}

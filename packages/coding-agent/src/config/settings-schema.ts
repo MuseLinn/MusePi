@@ -6208,7 +6208,7 @@ export const SETTINGS_SCHEMA = {
 		default: ONLINE_MEMORY_MODEL_KEY,
 		ui: {
 			tab: "memory",
-			group: "General",
+			group: "Mnemopi",
 			label: "Memory Model",
 			description:
 				"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model",

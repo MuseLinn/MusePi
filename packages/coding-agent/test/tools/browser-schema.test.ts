@@ -141,6 +141,7 @@ describe("browser tool schema", () => {
 				value: null,
 				checked: null,
 				replace: null,
+				login: null,
 				selector: null,
 				fullPage: null,
 				region: null,

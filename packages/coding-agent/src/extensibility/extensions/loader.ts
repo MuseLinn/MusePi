@@ -134,6 +134,7 @@ async function importExtensionModule(
 /** Whether an extension entry lives under the host's bundled plugin tree. */
 function isBundledPluginPath(resolvedPath: string): boolean {
 	const normalized = resolvedPath.replaceAll("\\", "/");
+	if (normalized.includes("/node_modules/")) return false;
 	return normalized.includes("/src/plugins/") || normalized.includes("/plugins/");
 }
 

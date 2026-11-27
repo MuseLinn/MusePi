@@ -1,0 +1,5 @@
+# Consistency record for request_login.md / request_login.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/tools/request_login
+request_login.md: 5c8bba6a1dc6a071be12c479500854eca4de54e5
+request_login.zh-CN.md: f36cdf4df06e6f3f1380bf99e5f6a0b8da1387b2

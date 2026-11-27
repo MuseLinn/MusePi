@@ -365,6 +365,8 @@ export async function unlockMasterKey(store: EncryptedStore, passphrase: unknown
 /** Wrap the current plain master key under a passphrase, then remove the plain key file. */
 export async function encryptMasterKey(store: EncryptedStore, passphrase: unknown): Promise<void> {
 	if (store.sharedKeyAgentDir) {
+		if (unifiedKeyState(store.sharedKeyAgentDir).mode === "passphrase")
+			throw new Error("The secret store is already protected by a passphrase.");
 		// The shared key is the profile's one key; wrapping it here covers every
 		// store that derives from it, including this one.
 		wrapSharedMasterKey(store.sharedKeyAgentDir, passphrase);

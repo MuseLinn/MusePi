@@ -13,7 +13,9 @@ import { createMockConnection, createMockTransport } from "./mcp-test-utils";
 
 type CapturedRequest = { method: string; params: Record<string, unknown> | undefined };
 
-const unusedContext = {} as CustomToolContext;
+const unusedContext = {
+	sessionManager: { getSessionId: () => "test-session" },
+} as CustomToolContext;
 
 /** Strict MCP tool: `additionalProperties:false`, one required + one optional field. */
 const STRICT_TOOL: MCPToolDefinition = {

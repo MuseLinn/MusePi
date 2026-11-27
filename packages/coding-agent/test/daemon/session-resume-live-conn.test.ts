@@ -37,6 +37,7 @@ function makeHost(liveIds: string[]) {
 		snapshot: async (sessionId: string) => ({ entries: [], header: { id: sessionId } }),
 		get: (sessionId: string) => liveById.get(sessionId),
 		checkpointSeq: async () => 0,
+		projectionsSnapshot: () => undefined,
 		catchup: async (sessionId: string, _cursor: number, conn: DaemonConnection) => {
 			caughtUp.push([sessionId, conn.id]);
 		},

@@ -42,6 +42,7 @@ impl DictationKeyMonitor {
 	}
 
 	#[napi]
+	#[cfg_attr(not(windows), allow(clippy::missing_const_for_fn))]
 	pub fn close(&self) {
 		#[cfg(windows)]
 		self.monitor.lock().take();

@@ -17,10 +17,14 @@ describe("approval bridge", () => {
 		const bridge = createApprovalBridge(record => {
 			requests.push({ requestId: record.requestId, tool: record.tool });
 		}, noop);
-		const pending = bridge.uiContext.select("Allow tool: bash\nReason: write-tier", [
-			{ label: "Approve", description: "Run once" },
-			{ label: "Deny", description: "Block" },
-		]);
+		const pending = bridge.uiContext.select(
+			"Allow tool: bash\nReason: write-tier",
+			[
+				{ label: "Approve", description: "Run once" },
+				{ label: "Deny", description: "Block" },
+			],
+			{ purpose: "approval" },
+		);
 		// Synchronously registered + notified.
 		expect(requests).toHaveLength(1);
 		expect(requests[0]!.tool).toBe("bash");
@@ -35,7 +39,9 @@ describe("approval bridge", () => {
 
 	test("resolve(false) returns Deny and clears pending", async () => {
 		const bridge = createApprovalBridge(noop, noop);
-		const pending = bridge.uiContext.select("Allow tool: edit", [{ label: "Approve" }, { label: "Deny" }]);
+		const pending = bridge.uiContext.select("Allow tool: edit", [{ label: "Approve" }, { label: "Deny" }], {
+			purpose: "approval",
+		});
 		const requestId = [...bridge.pending.keys()][0]!;
 		expect(bridge.resolve(requestId, false)).toBe(true);
 		expect(await pending).toBe("Deny");
@@ -49,7 +55,9 @@ describe("approval bridge", () => {
 
 	test("double resolve is idempotent — second call refused", async () => {
 		const bridge = createApprovalBridge(noop, noop);
-		const pending = bridge.uiContext.select("Allow tool: bash", [{ label: "Approve" }, { label: "Deny" }]);
+		const pending = bridge.uiContext.select("Allow tool: bash", [{ label: "Approve" }, { label: "Deny" }], {
+			purpose: "approval",
+		});
 		const requestId = [...bridge.pending.keys()][0]!;
 		expect(bridge.resolve(requestId, true)).toBe(true);
 		expect(bridge.resolve(requestId, false)).toBe(false);
@@ -60,7 +68,7 @@ describe("approval bridge", () => {
 		const bridge = createApprovalBridge(noop, noop);
 		let changes = 0;
 		const unsubscribe = bridge.subscribe(() => changes++);
-		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"], { purpose: "approval" });
 		expect(changes).toBe(1);
 		const requestId = [...bridge.pending.keys()][0]!;
 		expect(bridge.resolve(requestId, true)).toBe(true);
@@ -102,7 +110,9 @@ describe("approval bridge", () => {
 
 	test("tool name parsed from the Allow tool: prefix (fallback unknown)", async () => {
 		const bridge = createApprovalBridge(noop, noop);
-		const pending = bridge.uiContext.select("Something else", [{ label: "Approve" }, { label: "Deny" }]);
+		const pending = bridge.uiContext.select("Something else", [{ label: "Approve" }, { label: "Deny" }], {
+			purpose: "approval",
+		});
 		expect([...bridge.pending.values()][0]!.tool).toBe("unknown");
 		bridge.resolve([...bridge.pending.keys()][0]!, true);
 		await pending;
@@ -117,7 +127,7 @@ describe("approval bridge", () => {
 			noop,
 			{ timeoutMs: 10 },
 		);
-		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"], { purpose: "approval" });
 		const requestId = [...bridge.pending.keys()][0]!;
 		await expect(pending).rejects.toThrow(/timed out/i);
 		expect(bridge.pending.size).toBe(0);
@@ -138,7 +148,7 @@ describe("approval bridge", () => {
 
 	test("recentResolutions retains settled cards for snapshot-to-subscribe replay", async () => {
 		const bridge = createApprovalBridge(noop, noop);
-		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"], { purpose: "approval" });
 		const requestId = [...bridge.pending.keys()][0]!;
 		expect(bridge.resolve(requestId, true, "ok")).toBe(true);
 		await pending;
@@ -167,7 +177,7 @@ describe("approval bridge", () => {
 			(requestId, approved, note) => resolved.push({ requestId, approved, ...(note ? { note } : {}) }),
 			requestId => asksResolved.push(requestId),
 		);
-		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const pending = bridge.uiContext.select("Allow tool: bash", ["Approve", "Deny"], { purpose: "approval" });
 		const requestId = [...bridge.pending.keys()][0]!;
 		expect(bridge.resolve(requestId, true, "checked")).toBe(true);
 		expect(resolved).toEqual([{ requestId, approved: true, note: "checked" }]);

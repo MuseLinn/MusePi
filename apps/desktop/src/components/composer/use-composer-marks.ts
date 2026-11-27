@@ -29,10 +29,11 @@ interface SessionTreeNode {
  * demand. Until the fetch lands the chip falls back to the id slice, so the
  * text never renders as a raw `history://` URL while titles load.
  */
-function useSessionTitles(rpc: TitleRpc | null | undefined): (sessionId: string) => string | undefined {
+function useSessionTitles(rpc: TitleRpc | null | undefined, text: string): (sessionId: string) => string | undefined {
 	const [version, setVersion] = useState(0);
+	const enabled = text.includes("history://");
 	useEffect(() => {
-		if (!rpc) return;
+		if (!rpc || !enabled) return;
 		let cancelled = false;
 		void Promise.all([
 			rpc.request<SessionListRow[]>("session.list", {}).catch(() => []),
@@ -47,8 +48,8 @@ function useSessionTitles(rpc: TitleRpc | null | undefined): (sessionId: string)
 					walk(node.children ?? []);
 				}
 			};
-			walk(tree ?? []);
-			for (const row of list ?? []) {
+			walk(Array.isArray(tree) ? tree : []);
+			for (const row of Array.isArray(list) ? list : []) {
 				const label = labels.get(row.id) ?? row.cwd?.split("/").filter(Boolean).at(-1);
 				if (label) sessionTitles.set(row.id, label);
 			}
@@ -57,7 +58,7 @@ function useSessionTitles(rpc: TitleRpc | null | undefined): (sessionId: string)
 		return () => {
 			cancelled = true;
 		};
-	}, [rpc]);
+	}, [rpc, enabled]);
 	return useCallback((sessionId: string) => sessionTitles.get(sessionId), [version]);
 }
 
@@ -72,7 +73,7 @@ export function useComposerMarks(
 	attachments: readonly ComposerAttachment[],
 	rpc?: TitleRpc | null,
 ): { marks: EditorMark[]; resolveMention(name: string): MentionPreview | null } {
-	const sessionTitle = useSessionTitles(rpc);
+	const sessionTitle = useSessionTitles(rpc, text);
 	const resolveMention = useCallback(
 		(name: string): MentionPreview | null => {
 			const hit = resolveMentionChip(name, attachments);

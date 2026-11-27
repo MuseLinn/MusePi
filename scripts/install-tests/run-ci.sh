@@ -152,9 +152,9 @@ for pkg in utils wire hashline catalog ai mnemopi snapcompact agent tui stats cl
    )
 done
 
-# `client-core` composes three private sub-packages; they live under
+# `client-core` composes four private sub-packages; they live under
 # `packages/client/` rather than `packages/<name>`.
-for sub in ui-primitives locale ui-plugin-market; do
+for sub in ui-primitives locale ui-plugin-market markdown; do
    (
       cd "$ROOT_DIR/packages/client/$sub"
       bun pm pack --destination "$TARBALL_DIR" --quiet >/dev/null
@@ -198,6 +198,7 @@ tool_select_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-tool-select-*.tgz)"
 client_primitives_tgz="$(find_tarball "$TARBALL_DIR"/musepi-client-ui-primitives-*.tgz)"
 client_locale_tgz="$(find_tarball "$TARBALL_DIR"/musepi-client-locale-*.tgz)"
 client_market_tgz="$(find_tarball "$TARBALL_DIR"/musepi-client-ui-plugin-market-*.tgz)"
+client_markdown_tgz="$(find_tarball "$TARBALL_DIR"/musepi-client-markdown-*.tgz)"
 
 TARBALL_APP_DIR="$WORK_DIR/tarball-install"
 mkdir -p "$TARBALL_APP_DIR"
@@ -227,6 +228,7 @@ mkdir -p "$TARBALL_APP_DIR"
 			'@musepi/client-ui-primitives': '$client_primitives_tgz',
 			'@musepi/client-locale': '$client_locale_tgz',
 			'@musepi/client-ui-plugin-market': '$client_market_tgz',
+			'@musepi/client-markdown': '$client_markdown_tgz',
 			'@musepi/musepi-type': '$musepi_type_tgz',
 			'@musepi/collab-proto': '$collab_proto_tgz',
 			'@musepi/sdk': '$sdk_tgz',
@@ -235,7 +237,7 @@ mkdir -p "$TARBALL_APP_DIR"
 		require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
 	"
 
-   bun add "$utils_tgz" "$wire_tgz" "$natives_tgz" "$hashline_tgz" "$catalog_tgz" "$ai_tgz" "$mnemopi_tgz" "$snapcompact_tgz" "$agent_tgz" "$tui_tgz" "$stats_tgz" "$coding_agent_tgz" "$desktop_web_tgz" "$client_primitives_tgz" "$client_locale_tgz" "$client_market_tgz" "$musepi_type_tgz" "$collab_proto_tgz" "$sdk_tgz" "$tool_select_tgz"
+   bun add "$utils_tgz" "$wire_tgz" "$natives_tgz" "$hashline_tgz" "$catalog_tgz" "$ai_tgz" "$mnemopi_tgz" "$snapcompact_tgz" "$agent_tgz" "$tui_tgz" "$stats_tgz" "$coding_agent_tgz" "$desktop_web_tgz" "$client_primitives_tgz" "$client_locale_tgz" "$client_market_tgz" "$client_markdown_tgz" "$musepi_type_tgz" "$collab_proto_tgz" "$sdk_tgz" "$tool_select_tgz"
    # The platform leaf must arrive through the core's optionalDependencies +
    # override, not as a direct dependency — assert it landed before smoking so a
    # resolution regression is distinguishable from a runtime loader bug.

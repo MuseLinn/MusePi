@@ -20,7 +20,7 @@ import {
 	validateProviderMaxInFlightRequests,
 } from "../config/settings";
 import { settingsRegistry } from "../config/settings-registry";
-import { ensureHostHalfPluginsLoaded } from "../plugins-runtime/loader";
+import { ensureHostHalfPluginsLoaded, resetHostHalfPluginsLoaded } from "../plugins-runtime/loader";
 import { theme } from "../render/theme/theme";
 import { initXdg } from "./commands/init-xdg";
 
@@ -255,29 +255,33 @@ export async function runConfigCommand(cmd: ConfigCommandArgs): Promise<void> {
 	// address `hindsight.*`, `mnemopi.*` and any other plugin-declared key.
 	const settings = Settings.instance;
 	const cwd = settings.getCwd();
-	await ensureHostHalfPluginsLoaded(cwd, settings).catch(error => {
-		logger.debug("config: host plugins were not mounted", { error: String(error) });
-	});
+	try {
+		await ensureHostHalfPluginsLoaded(cwd, settings).catch(error => {
+			logger.debug("config: host plugins were not mounted", { error: String(error) });
+		});
 
-	switch (cmd.action) {
-		case "list":
-			await handleList(cmd.flags);
-			break;
-		case "get":
-			handleGet(cmd.key, cmd.flags);
-			break;
-		case "set":
-			await handleSet(cmd.key, cmd.value, cmd.flags);
-			break;
-		case "reset":
-			await handleReset(cmd.key, cmd.flags);
-			break;
-		case "path":
-			handlePath();
-			break;
-		case "init-xdg":
-			await initXdg();
-			break;
+		switch (cmd.action) {
+			case "list":
+				await handleList(cmd.flags);
+				break;
+			case "get":
+				handleGet(cmd.key, cmd.flags);
+				break;
+			case "set":
+				await handleSet(cmd.key, cmd.value, cmd.flags);
+				break;
+			case "reset":
+				await handleReset(cmd.key, cmd.flags);
+				break;
+			case "path":
+				handlePath();
+				break;
+			case "init-xdg":
+				await initXdg();
+				break;
+		}
+	} finally {
+		await resetHostHalfPluginsLoaded();
 	}
 }
 

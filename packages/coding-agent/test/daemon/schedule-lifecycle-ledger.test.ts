@@ -17,6 +17,7 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { type CronTask, saveCronTasks } from "../../src/daemon/crons";
 import { DaemonServer, type DaemonSessionHost } from "../../src/daemon/server";
+import { SessionProjectionRegistry } from "../../src/session/session-projections";
 import {
 	isolateAgentDirForTest,
 	isolateConfigRootForTest,
@@ -33,6 +34,7 @@ type ClearableHandle = Parameters<typeof clearInterval>[0];
 function makeServer(): DaemonServer {
 	const host = {
 		cwd: () => process.cwd(),
+		projectionRegistry: new SessionProjectionRegistry(),
 		get: () => undefined,
 		snapshot: async () => ({ entries: [], state: {} }),
 		setCollabToolProvider: () => {},

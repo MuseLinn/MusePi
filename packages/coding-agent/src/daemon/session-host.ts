@@ -1663,7 +1663,7 @@ export class DaemonSessionHost {
 				...(projectMetadata ? { projectMetadata } : {}),
 				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
-				...(params.agentPreset ? { agentPreset: params.agentPreset } : {}),
+				...(params.agentPreset ? { modeId: params.agentPreset } : {}),
 				...(params.memoryMode ? { memoryMode: params.memoryMode } : {}),
 			}),
 		);
@@ -1820,7 +1820,7 @@ export class DaemonSessionHost {
 				},
 				...(await desktopSessionPromptInputs(resumeCwd)),
 				...(projectMetadata ? { projectMetadata } : {}),
-				...(resumeModeId ? { agentPreset: resumeModeId } : {}),
+				...(resumeModeId ? { modeId: resumeModeId } : {}),
 			}),
 		);
 		// The resumed manager adopts the transcript's header id; a mismatch

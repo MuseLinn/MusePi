@@ -410,6 +410,12 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 				"connector_catalog",
 				"request_secret",
 				"list_secrets",
+				"present",
+				"office_render",
+				"office_convert",
+				"office_recalculate",
+				"workflow",
+				"request_login",
 			],
 		},
 	},
@@ -430,7 +436,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 12;
+export const BUILTIN_TEMPLATE_REVISION = 13;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -834,6 +840,58 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 					"learn",
 					"manage_skill",
 					"connector_catalog",
+				],
+			},
+		},
+	},
+	// v12: chat 已 deny 凭据工具，但尚未覆盖后续加入的内置工具。
+	12: {
+		chat: {
+			id: "chat",
+			label: "Chat",
+			description: "极简对话:仅核心对话工具 + 固定 prompt + 无压缩",
+			modelRole: "fast",
+			extensions: [],
+			promptComplete: true,
+			runtimeContext: false,
+			plugins: [{ name: "musepi-preset-chat" }],
+			settings: {
+				"compaction.enabled": false,
+				"tools.disabled": [
+					"read",
+					"edit",
+					"ast_grep",
+					"ast_edit",
+					"debug",
+					"eval",
+					"github",
+					"glob",
+					"grep",
+					"lsp",
+					"inspect_image",
+					"browser",
+					"computer",
+					"checkpoint",
+					"rewind",
+					"security_scan",
+					"task",
+					"hub",
+					"knowledge",
+					"notify_user",
+					"todo",
+					"web_search",
+					"write",
+					"board",
+					"widget",
+					"memory_edit",
+					"retain",
+					"recall",
+					"reflect",
+					"learn",
+					"manage_skill",
+					"connector_catalog",
+					"request_secret",
+					"list_secrets",
 				],
 			},
 		},

@@ -290,6 +290,13 @@ export async function importPluginEntry(entryPath: string, fresh: boolean): Prom
 	});
 }
 
+export function pluginEntryAcceptsConfig(entry: unknown): boolean {
+	return (
+		(entry as { Config?: unknown } | null)?.Config !== undefined ||
+		(isCordisPluginEntry(entry) && entry.apply.length >= 2)
+	);
+}
+
 /**
  * Import one plugin entry and bind it.
  *
@@ -354,10 +361,8 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 	// that reads the argument; an `apply(ctx)` uses `pi.config.get()` and must
 	// not pay for a manifest read it cannot use. A bare legacy factory always
 	// skips the read.
-	const declaresConfig = (entry as { Config?: unknown } | null)?.Config !== undefined;
-	const acceptsConfigArgument = isCordisPluginEntry(entry) && entry.apply.length >= 2;
 	let values: Record<string, unknown> = {};
-	if (declaresConfig || acceptsConfigArgument) {
+	if (pluginEntryAcceptsConfig(entry)) {
 		const read = await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }));
 		try {
 			values = wrapVolatileConfig(entry, await validateDeclaredPluginConfig(entry, read.values));
