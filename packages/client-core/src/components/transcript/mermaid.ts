@@ -1,5 +1,36 @@
-import { type DiagramColors, renderMermaidASCII, renderMermaidSVG } from "beautiful-mermaid";
+import type { DiagramColors } from "beautiful-mermaid";
 import { escapeHtml } from "./highlight";
+
+/**
+ * beautiful-mermaid is loaded lazily: it statically imports `elkjs` (1.4 MB of
+ * the entry bundle) for graph layout, which every first paint would otherwise
+ * pay for even when a session contains no diagram at all.
+ *
+ * The synchronous helpers below keep their signatures — markdown rendering
+ * wants a diagram inline, not a placeholder — but a call made before the
+ * module resolves returns "not usable" so the caller falls back to the async
+ * path it already has (`renderMermaidAsyncHtml`). Loading starts on the first
+ * diagram encountered, so a transcript without diagrams never pays for it.
+ */
+type MermaidLib = typeof import("beautiful-mermaid");
+let beautifulPromise: Promise<MermaidLib> | null = null;
+let beautifulLib: MermaidLib | null = null;
+
+/** Await the lazy renderer. Callers that must draw in the same tick (and the
+ *  tests that pin the sync contract) wait here first; the transcript's own
+ *  path does not — it takes the async render already available to it. */
+export function preloadDiagramRenderer(): Promise<MermaidLib> {
+	return loadBeautifulMermaid();
+}
+
+function loadBeautifulMermaid(): Promise<MermaidLib> {
+	if (beautifulLib) return Promise.resolve(beautifulLib);
+	beautifulPromise ??= import("beautiful-mermaid").then(lib => {
+		beautifulLib = lib;
+		return lib;
+	});
+	return beautifulPromise;
+}
 
 export type MermaidMode = "svg" | "ascii";
 
@@ -77,10 +108,14 @@ export function emitDiagramBlock(source: string, mode: MermaidMode): string {
 	return `<div data-diagram-block="${hash}"></div>`;
 }
 
-/** Whether beautiful-mermaid can draw this source synchronously, and its SVG. */
+/** Whether beautiful-mermaid can draw this source synchronously, and its SVG.
+ *  Returns `usable: false` until the lazily imported renderer has loaded, which
+ *  makes the caller take its async path instead of waiting. */
 export function renderDiagramSync(source: string): { svg: string | null; usable: boolean } {
+	void loadBeautifulMermaid();
+	if (!beautifulLib) return { svg: null, usable: false };
 	try {
-		const svg = renderMermaidSVG(source, MERMAID_COLORS);
+		const svg = beautifulLib.renderMermaidSVG(source, MERMAID_COLORS);
 		return { svg, usable: isUsableSvg(svg) };
 	} catch {
 		return { svg: null, usable: false };
@@ -89,8 +124,10 @@ export function renderDiagramSync(source: string): { svg: string | null; usable:
 
 /** ASCII mode: the text rendering wrapped in a `<pre>`, or null when it fails. */
 export function renderDiagramAscii(source: string): string | null {
+	void loadBeautifulMermaid();
+	if (!beautifulLib) return null;
 	try {
-		return `<pre class="tr-mermaid-ascii">${escapeHtml(renderMermaidASCII(source, { colorMode: "none" }))}</pre>`;
+		return `<pre class="tr-mermaid-ascii">${escapeHtml(beautifulLib.renderMermaidASCII(source, { colorMode: "none" }))}</pre>`;
 	} catch {
 		return null;
 	}

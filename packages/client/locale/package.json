@@ -17,6 +17,6 @@
 		"./locale/en-US": "./src/client/en-US/index.ts"
 	},
 	"dependencies": {
-		"react": "19.2.7"
+		"react": "catalog:"
 	}
 }

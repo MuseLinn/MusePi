@@ -16,8 +16,8 @@
 		"@musepi/pi-utils": "workspace:*",
 		"lucide": "^1.29.0",
 		"morphicons": "^1.7.1",
-		"react": "19.2.7",
-		"react-dom": "19.2.7"
+		"react": "catalog:",
+		"react-dom": "catalog:"
 	},
 	"devDependencies": {
 		"@types/react": "^19.0.0",

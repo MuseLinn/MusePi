@@ -6,6 +6,7 @@ import {
 	diagramBlockSource,
 	mermaidFallbackHtml,
 	namesDiagramType,
+	preloadDiagramRenderer,
 	renderDiagramAscii,
 	renderDiagramSync,
 } from "../src/components/transcript/mermaid";
@@ -168,7 +169,10 @@ describe("Transcript mermaid", () => {
 		expect(stored?.mode).toBe("svg");
 	});
 
-	it("draws the diagram synchronously when the sync renderer covers it", () => {
+	it("draws the diagram synchronously when the sync renderer covers it", async () => {
+		// The sync helpers answer "not usable" until the lazy import lands
+		// (it drags in elkjs); wait explicitly instead of relying on test order.
+		await preloadDiagramRenderer();
 		const sync = renderDiagramSync("flowchart LR\nA-->B");
 		expect(sync.usable).toBe(true);
 		expect(sync.svg).toContain("<svg");
@@ -214,7 +218,8 @@ describe("diagram renderers for non-transcript hosts", () => {
 	// The file pane's mermaid preview renders a diagram outside the transcript
 	// (no card, no toolbar), so it calls the renderers directly instead of the
 	// block component. These are the contract it depends on.
-	it("renders a supported diagram synchronously", () => {
+	it("renders a supported diagram synchronously", async () => {
+		await preloadDiagramRenderer();
 		const sample = ["graph TD", "  A --> B"].join(String.fromCharCode(10));
 		const sync = renderDiagramSync(sample);
 		expect(sync.usable).toBe(true);
@@ -226,7 +231,8 @@ describe("diagram renderers for non-transcript hosts", () => {
 		expect(fallback).toContain("tr-mermaid-fallback");
 	});
 
-	it("renders the ascii variant as text, not svg", () => {
+	it("renders the ascii variant as text, not svg", async () => {
+		await preloadDiagramRenderer();
 		const ascii = renderDiagramAscii(["graph TD", "  A --> B"].join(String.fromCharCode(10)));
 		expect(ascii).toContain("tr-mermaid-ascii");
 		expect(ascii).not.toContain("<svg");
