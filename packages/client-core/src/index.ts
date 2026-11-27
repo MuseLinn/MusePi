@@ -33,7 +33,7 @@ export type {
 	EditorMark,
 	MentionPreview,
 } from "./components/composer/composer-editor-types";
-export { dictationSplice, mergeDictationFinal } from "./components/composer/dictation-splice";
+export { dictationSplice } from "./components/composer/dictation-splice";
 export { ImageLightbox } from "./components/image-lightbox";
 export {
 	clampImageScale,

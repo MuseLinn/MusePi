@@ -50,8 +50,8 @@ describe("STTController speaker modes", () => {
 		vi.spyOn(downloader, "downloadSttModel").mockResolvedValue();
 		vi.spyOn(asrClient.sttClient, "startStream").mockReturnValue({
 			pushAudio: vi.fn(),
-		pushUtterance: vi.fn(),
-		pushPreview: vi.fn(),
+			pushUtterance: vi.fn(),
+			pushPreview: vi.fn(),
 			stop: vi.fn().mockResolvedValue(""),
 			cancel: vi.fn(),
 		});
@@ -62,7 +62,7 @@ describe("STTController speaker modes", () => {
 				return "voice-test";
 			}),
 			streamAudio: vi.fn(),
-			streamStop: vi.fn(async () => []),
+			streamStop: vi.fn(async () => ({ results: [], text: "" })),
 			streamCancel: vi.fn(),
 		};
 		vi.spyOn(frontendService, "getVoiceFrontendService").mockReturnValue(service as unknown as VoiceFrontendService);
@@ -84,8 +84,8 @@ describe("STTController speaker modes", () => {
 		settings.set("stt.speakerMode", "off");
 		const startStream = vi.spyOn(asrClient.sttClient, "startStream").mockReturnValue({
 			pushAudio: vi.fn(),
-		pushUtterance: vi.fn(),
-		pushPreview: vi.fn(),
+			pushUtterance: vi.fn(),
+			pushPreview: vi.fn(),
 			stop: vi.fn().mockResolvedValue("hello world"),
 			cancel: vi.fn(),
 		});
@@ -100,7 +100,7 @@ describe("STTController speaker modes", () => {
 
 	it("keeps uncertain prefer-mode text as a draft and disables auto-submit", async () => {
 		settings.set("stt.speakerMode", "prefer");
-		service.streamStop.mockResolvedValue([result("maybe later", "uncertain")]);
+		service.streamStop.mockResolvedValue({ results: [result("maybe later", "uncertain")], text: "maybe later" });
 		const input = editor();
 		await controller!.toggle(input, options());
 		onAudio?.(null, new Float32Array(480));
@@ -113,7 +113,7 @@ describe("STTController speaker modes", () => {
 
 	it("drops rejected strict-mode audio without transcription or submission", async () => {
 		settings.set("stt.speakerMode", "strict");
-		service.streamStop.mockResolvedValue([result("other person", "reject")]);
+		service.streamStop.mockResolvedValue({ results: [result("other person", "reject")], text: "" });
 		const input = editor();
 		await controller!.toggle(input, options());
 		onAudio?.(null, new Float32Array(480));

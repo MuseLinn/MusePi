@@ -1,4 +1,3 @@
-import { mergeDictationFinal } from "@musepi/client-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import {
@@ -142,15 +141,14 @@ export function useDictation(opts: {
 			optsRef.current.editor?.current?.writeDictation(spoken.committed, spoken.hypothesis, !started);
 			started = true;
 		};
-		// The dictation's ending. `transcript` is the recognizer's final answer;
-		// it replaces a still-provisional tail so the last words are not lost
-		// between "the stream stopped" and "the region is retired".
+		// The dictation's ending. `transcript` is the recognizer's final answer for
+		// the whole utterance — several segments re-decoded as one, so it can differ
+		// from the streamed text in punctuation and wording. It replaces the region
+		// outright; merging it with the streamed text would duplicate the sentence.
 		const finish = (transcript: string, maySubmit: boolean): void => {
 			const finalText = transcript.trim();
 			if (finalText) {
-				// The final is authoritative for the run still in flight, so the
-				// provisional copy is dropped rather than kept beside it.
-				spoken.committed = mergeDictationFinal(spoken.committed, finalText);
+				spoken.committed = finalText;
 				spoken.hypothesis = "";
 				write();
 			}

@@ -3,7 +3,12 @@ import { getAgentDir } from "@musepi/pi-utils";
 import { createVoiceFrontendClient, type VoiceFrontendClient } from "./client";
 import type { GateState, SpeakerMode } from "./gate";
 import { createSpeakerProfileStore, type SpeakerProfileStore } from "./profile";
-import type { FrontendProcessResult, FrontendStreamResult, VoiceFrontendStreamHandle } from "./protocol";
+import type {
+	FrontendProcessResult,
+	FrontendStreamOutcome,
+	FrontendStreamResult,
+	VoiceFrontendStreamHandle,
+} from "./protocol";
 
 export interface VoiceSpeakerStatus {
 	hasProfile: boolean;
@@ -111,7 +116,7 @@ export class VoiceFrontendService {
 		this.#stream(sessionId).pushAudio(samples);
 	}
 
-	async streamStop(sessionId: string): Promise<FrontendStreamResult[]> {
+	async streamStop(sessionId: string): Promise<FrontendStreamOutcome> {
 		const stream = this.#stream(sessionId);
 		this.#streams.delete(sessionId);
 		return stream.stop();

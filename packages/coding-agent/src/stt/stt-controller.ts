@@ -230,13 +230,9 @@ export class STTController {
 			stream = {
 				pushAudio: samples => frontend.streamAudio(sessionId, samples),
 				stop: async () => {
-					const results = await frontend.streamStop(sessionId);
+					const { results, text } = await frontend.streamStop(sessionId);
 					if (results.some(result => result.state === "uncertain")) this.#streamNeedsReview = true;
-					return results
-						.filter(result => result.state !== "reject")
-						.map(result => result.text.trim())
-						.filter(Boolean)
-						.join(" ");
+					return text;
 				},
 				cancel: () => frontend.streamCancel(sessionId),
 			};

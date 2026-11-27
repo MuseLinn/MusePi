@@ -51,7 +51,8 @@ export type SttWorkerOutbound =
 	// `partial` is the volatile transcript of the in-progress speech segment
 	// (refreshed as more audio arrives, never appended verbatim); `segment` is a
 	// finalized segment committed once at an endpoint; `stream_done` carries the
-	// full transcript (all committed segments joined) when the session ends.
+	// final transcript when the session ends — multiple segments re-decoded as one
+	// utterance, so it supersedes the committed segment texts rather than extending them.
 	| { type: "partial"; id: string; text: string }
 	| { type: "segment"; id: string; index: number; text: string }
 	| { type: "stream_done"; id: string; text: string };

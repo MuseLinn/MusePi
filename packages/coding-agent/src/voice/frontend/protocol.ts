@@ -31,9 +31,15 @@ export interface VoiceFrontendStreamOptions extends Omit<FrontendProcessInput, "
 	onSegment?(result: FrontendStreamResult): void;
 }
 
+export interface FrontendStreamOutcome {
+	results: FrontendStreamResult[];
+	/** Final transcript of the non-rejected speech; supersedes the joined segment texts. */
+	text: string;
+}
+
 export interface VoiceFrontendStreamHandle {
 	pushAudio(samples: Float32Array): void;
-	stop(): Promise<FrontendStreamResult[]>;
+	stop(): Promise<FrontendStreamOutcome>;
 	cancel(): void;
 }
 

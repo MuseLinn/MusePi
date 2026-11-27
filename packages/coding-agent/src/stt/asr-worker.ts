@@ -46,6 +46,11 @@ const STRIDE_LENGTH_S = 5;
 // The client always resamples to 16 kHz mono float32 before sending; sherpa-onnx
 // is told the true input rate (it resamples internally to its feature config).
 const ASR_SAMPLE_RATE = 16_000;
+// On stop, committed segments are re-decoded as one utterance so the model sees
+// full sentence context (punctuation, word boundaries, homophones). Segments are
+// separated by a short silence gap; past the cap the per-segment texts are used.
+const FINAL_REDECODE_GAP_SAMPLES = ASR_SAMPLE_RATE / 5;
+const FINAL_REDECODE_MAX_SAMPLES = ASR_SAMPLE_RATE * 60;
 // Hub origins for raw sherpa-onnx model files (encoder/decoder/joiner/tokens):
 // upstream + mainland-China mirror fallback, probe-ordered per process
 // (tiny/hub-mirrors). Previously a hardcoded huggingface.co — unreachable
@@ -477,8 +482,10 @@ interface StreamingSession {
 	segmentQueue: Float32Array[];
 	/** Latest in-progress segment audio awaiting a volatile partial decode (coalesced). */
 	pendingPartial: Float32Array | null;
-	/** Committed segment transcripts, joined for the final result. */
+	/** Committed segment transcripts; the fallback final result when re-decode is skipped. */
 	committed: string[];
+	/** Audio of each committed segment, re-decoded as one utterance on stop. */
+	committedAudio: Float32Array[];
 	segmentIndex: number;
 	pumping: boolean;
 	cancelled: boolean;
@@ -505,6 +512,7 @@ function startStreamingSession(
 		segmentQueue: [],
 		pendingPartial: null,
 		committed: [],
+		committedAudio: [],
 		segmentIndex: 0,
 		pumping: false,
 		cancelled: false,
@@ -517,6 +525,49 @@ function ingestStreamEvents(session: StreamingSession, events: EndpointerEvent[]
 		if (event.kind === "segment") session.segmentQueue.push(event.audio);
 		else session.pendingPartial = event.audio;
 	}
+}
+
+const CJK_CHAR = /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uffef]/u;
+
+/** Join per-segment texts, without a separating space across a CJK boundary. */
+export function joinSegmentTexts(texts: readonly string[]): string {
+	let out = "";
+	for (const text of texts) {
+		if (text.length === 0) continue;
+		if (out.length > 0 && !CJK_CHAR.test(out.at(-1)!) && !CJK_CHAR.test(text[0]!)) out += " ";
+		out += text;
+	}
+	return out;
+}
+
+/** Concatenate segments with a silence gap between each, or `null` past the re-decode cap. */
+export function concatSegmentsForRedecode(segments: readonly Float32Array[]): Float32Array | null {
+	const total =
+		segments.reduce((sum, segment) => sum + segment.length, 0) +
+		FINAL_REDECODE_GAP_SAMPLES * Math.max(0, segments.length - 1);
+	if (total > FINAL_REDECODE_MAX_SAMPLES) return null;
+	const out = new Float32Array(total);
+	let offset = 0;
+	for (const [index, segment] of segments.entries()) {
+		if (index > 0) offset += FINAL_REDECODE_GAP_SAMPLES;
+		out.set(segment, offset);
+		offset += segment.length;
+	}
+	return out;
+}
+
+/**
+ * The session's final transcript: a single segment stands as committed; several
+ * are re-decoded as one utterance for full-sentence context, falling back to the
+ * joined segment texts when the audio exceeds the cap or the re-decode is empty.
+ */
+async function finalTranscript(session: StreamingSession, model: LoadedModel): Promise<string> {
+	const fallback = joinSegmentTexts(session.committed);
+	if (session.committedAudio.length < 2) return fallback;
+	const audio = concatSegmentsForRedecode(session.committedAudio);
+	if (!audio) return fallback;
+	const text = await runOnModel(() => decodeSegment(model, session.spec, audio, session.language));
+	return text.length > 0 ? text : fallback;
 }
 
 /**
@@ -538,6 +589,7 @@ async function pumpSession(session: StreamingSession, transport: SttTransport): 
 				if (session.cancelled) return;
 				if (text.length > 0) {
 					session.committed.push(text);
+					session.committedAudio.push(audio);
 					transport.send({ type: "segment", id: session.id, index: session.segmentIndex++, text });
 				}
 				continue;
@@ -556,7 +608,9 @@ async function pumpSession(session: StreamingSession, transport: SttTransport): 
 			break;
 		}
 		if (session.ended && !session.cancelled && session.segmentQueue.length === 0 && !session.pendingPartial) {
-			transport.send({ type: "stream_done", id: session.id, text: session.committed.join(" ") });
+			const text = await finalTranscript(session, model);
+			if (session.cancelled) return;
+			transport.send({ type: "stream_done", id: session.id, text });
 			sessions.delete(session.id);
 		}
 	} catch (error) {

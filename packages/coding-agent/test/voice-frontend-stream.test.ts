@@ -116,8 +116,9 @@ describe("voice frontend streaming", () => {
 		}));
 		const stream = start(client, "off", { onSegment: text => segments.push(text) });
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
-		const results = await stream.stop();
+		const { results, text } = await stream.stop();
 		expect(segments).toEqual(["first", "second"]);
+		expect(text).toBe("first second");
 		expect(results.map(result => result.text)).toEqual(["first", "second"]);
 		client.close();
 	});
@@ -142,7 +143,7 @@ describe("voice frontend streaming", () => {
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
 		stream.pushAudio(new Float32Array(11_200));
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
-		const results = await stream.stop();
+		const { results } = await stream.stop();
 		expect(results.map(result => result.text)).toEqual(["first", "second"]);
 		client.close();
 	});
@@ -162,7 +163,7 @@ describe("voice frontend streaming", () => {
 		}));
 		const stream = start(client, "strict");
 		stream.pushAudio(new Float32Array(16_000).fill(0.1));
-		const results = await stream.stop();
+		const { results } = await stream.stop();
 		expect(pushes).toBe(0);
 		expect(results.map(result => result.state)).toEqual(["reject"]);
 		client.close();
@@ -189,7 +190,7 @@ describe("voice frontend streaming", () => {
 		stream.cancel();
 		callbacks?.onPartial?.("late");
 		callbacks?.onSegment?.("late", 0);
-		expect(await stream.stop()).toEqual([]);
+		expect(await stream.stop()).toEqual({ results: [], text: "" });
 		expect(partials).toEqual([]);
 		expect(segments).toEqual([]);
 		client.close();

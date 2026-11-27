@@ -350,7 +350,7 @@ export async function openFrontendDictation(opts: FrontendDictationOptions): Pro
 				if (!active) return;
 				await queue;
 				if (!active) return;
-				const response = await rpc.request<{ results: { text: string; state: VoiceGateState }[] }>(
+				const response = await rpc.request<{ results: { text: string; state: VoiceGateState }[]; text?: string }>(
 					"voice.frontendStreamStop",
 					{ sessionId },
 				);
@@ -362,10 +362,12 @@ export async function openFrontendDictation(opts: FrontendDictationOptions): Pro
 						segments.set(segmentId, { text: result.text, state: result.state });
 				}
 				const ordered = [...segments.entries()].sort(([a], [b]) => a - b).map(([, segment]) => segment);
-				const text = ordered
-					.map(segment => segment.text.trim())
-					.filter(Boolean)
-					.join(" ");
+				const text =
+					response.text?.trim() ||
+					ordered
+						.map(segment => segment.text.trim())
+						.filter(Boolean)
+						.join(" ");
 				if (!text) {
 					opts.onEmpty();
 					return;

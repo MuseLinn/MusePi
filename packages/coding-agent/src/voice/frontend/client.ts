@@ -172,9 +172,9 @@ export class VoiceFrontendClient {
 					await queue;
 					if (failure) throw failure;
 				}
-				await asr.stop();
+				const text = (await asr.stop()).trim();
 				if (failure) throw failure;
-				return results;
+				return { results, text: cancelled ? "" : text };
 			},
 			cancel: () => {
 				cancelled = true;
