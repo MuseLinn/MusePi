@@ -23,7 +23,10 @@ async function harness(options: HarnessOptions = {}) {
 	let releaseStop: (() => void) | null = null;
 	const dictation = new GlobalDictation({
 		app: { on: () => {} },
-		BrowserWindow: class {},
+		BrowserWindow: {
+			getAllWindows: () => [],
+			getFocusedWindow: () => null,
+		},
 		globalShortcut: { register: () => true, unregister: () => {} },
 		screen: {},
 		clipboard: { writeText: () => {} },
@@ -138,5 +141,106 @@ describe("global streaming dictation", () => {
 		expect(h.dictation.displayTranscript()).toBe("");
 		expect(h.states.filter(state => state.partialText === "迟到")).toHaveLength(0);
 		expect(h.typed).toEqual([]);
+	});
+});
+
+interface TriggerHarnessOptions {
+	trigger?: "toggle" | "hold";
+	failMonitor?: boolean;
+}
+
+function triggerHarness(options: TriggerHarnessOptions = {}) {
+	const registrations: { accelerator: string; callback: () => void }[] = [];
+	const monitors: { callback: (event: "press" | "release") => void; close: () => void; closed: () => boolean }[] = [];
+	const dictation = new GlobalDictation({
+		app: {},
+		BrowserWindow: {
+			getAllWindows: () => [],
+			getFocusedWindow: () => null,
+		},
+		globalShortcut: {
+			register: (accelerator: string, callback: () => void) => {
+				registrations.push({ accelerator, callback });
+				return true;
+			},
+			unregister: () => {},
+		},
+		screen: {},
+		clipboard: {},
+		shell: {},
+		path: {},
+		request: async (method: string) => {
+			if (method === "settings.get") {
+				return {
+					"dictation.globalEnabled": true,
+					"dictation.globalShortcut": "CommandOrControl+Alt+Space",
+					"dictation.globalTrigger": options.trigger ?? "toggle",
+				};
+			}
+			return {};
+		},
+		subscribe: () => {},
+		ensureDaemon: async () => true,
+		createKeyMonitor: (_accelerator: string, callback: (event: "press" | "release") => void) => {
+			if (options.failMonitor) throw new Error("hook unavailable");
+			let closed = false;
+			const monitor = {
+				callback,
+				close: () => {
+					closed = true;
+				},
+				closed: () => closed,
+			};
+			monitors.push(monitor);
+			return monitor;
+		},
+	});
+	return { dictation, registrations, monitors };
+}
+
+describe("global dictation trigger modes", () => {
+	test("toggle uses Electron without constructing a native monitor", async () => {
+		const h = triggerHarness({ trigger: "toggle" });
+		await h.dictation.syncSettings();
+		expect(h.registrations.map(entry => entry.accelerator)).toEqual(["CommandOrControl+Alt+Space"]);
+		expect(h.monitors).toHaveLength(0);
+	});
+
+	test("hold starts once, releases to stop, and closes on dispose", async () => {
+		const h = triggerHarness({ trigger: "hold" });
+		await h.dictation.syncSettings();
+		expect(h.registrations).toHaveLength(0);
+		expect(h.monitors).toHaveLength(1);
+		let starts = 0;
+		let stops = 0;
+		h.dictation.begin = async () => {
+			starts += 1;
+			h.dictation.capture = { stop: () => {} };
+		};
+		h.dictation.finishRecording = () => {
+			stops += 1;
+			h.dictation.capture = null;
+		};
+		await h.monitors[0]!.callback("press");
+		await h.monitors[0]!.callback("press");
+		expect(starts).toBe(1);
+		await h.monitors[0]!.callback("release");
+		expect(stops).toBe(1);
+		h.dictation.dispose();
+		expect(h.monitors[0]!.closed()).toBe(true);
+	});
+
+	test("monitor installation failure leaves one working toggle fallback", async () => {
+		const h = triggerHarness({ trigger: "hold", failMonitor: true });
+		await h.dictation.syncSettings();
+		expect(h.monitors).toHaveLength(0);
+		expect(h.registrations).toHaveLength(1);
+		expect(h.dictation.registered).toBe(false);
+		let starts = 0;
+		h.dictation.begin = async () => {
+			starts += 1;
+		};
+		await h.registrations[0]!.callback();
+		expect(starts).toBe(1);
 	});
 });

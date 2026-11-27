@@ -2797,6 +2797,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"dictation.globalTrigger": {
+		type: "string",
+		enum: ["toggle", "hold"],
+		default: "toggle",
+		ui: {
+			tab: "voice",
+			group: "Speech",
+			label: "Global dictation trigger",
+			description: "Press the shortcut twice to start/stop, or hold it while speaking (Windows)",
+		},
+	},
+
 	"stt.language": {
 		type: "string",
 		// "" (auto-detect) — the shipped tiers are multilingual Whisper

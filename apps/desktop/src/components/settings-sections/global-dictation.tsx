@@ -8,7 +8,7 @@
  * The main process polls these keys every ten seconds and (re)registers the
  * shortcut, so a change here takes effect without restarting the app.
  */
-import { t } from "@musepi/client-core";
+import { Segmented, t } from "@musepi/client-core";
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 
@@ -40,6 +40,7 @@ function acceleratorKey(key: string): string | null {
 export function GlobalDictationSettings({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [enabled, setEnabled] = useState(false);
 	const [shortcut, setShortcut] = useState("CommandOrControl+Alt+Space");
+	const [trigger, setTrigger] = useState<"toggle" | "hold">("toggle");
 	const [capturing, setCapturing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [registered, setRegistered] = useState<boolean | null>(null);
@@ -48,12 +49,13 @@ export function GlobalDictationSettings({ rpc }: { rpc: RpcClient | null }): Rea
 		if (!rpc) return;
 		void rpc
 			.request<Record<string, unknown> | null>("settings.get", {
-				keys: ["dictation.globalEnabled", "dictation.globalShortcut"],
+				keys: ["dictation.globalEnabled", "dictation.globalShortcut", "dictation.globalTrigger"],
 			})
 			.then(values => {
 				setEnabled(values?.["dictation.globalEnabled"] === true);
 				const saved = values?.["dictation.globalShortcut"];
 				if (typeof saved === "string" && saved.trim()) setShortcut(saved.trim());
+				setTrigger(values?.["dictation.globalTrigger"] === "hold" ? "hold" : "toggle");
 			})
 			.catch(() => {});
 	}, [rpc]);
@@ -157,6 +159,31 @@ export function GlobalDictationSettings({ rpc }: { rpc: RpcClient | null }): Rea
 				>
 					{capturing ? t("settings.globalDictationPressKeys") : shortcutDisplay(shortcut)}
 				</button>
+			</div>
+			<div className="gui-settings-row">
+				<div className="min-w-0 flex-1">
+					<div className="gui-settings-row-label">{t("Trigger mode" as never)}</div>
+					<div className="gui-settings-row-desc">
+						{t("Start and stop with separate presses, or hold the shortcut while speaking (Windows)." as never)}
+					</div>
+				</div>
+				<Segmented
+					ariaLabel={t("Trigger mode" as never)}
+					value={trigger}
+					options={[
+						{ value: "toggle", label: t("Press twice" as never) },
+						{ value: "hold", label: t("Hold to talk" as never) },
+					]}
+					onChange={next => {
+						if (next === "hold" && window.electronAPI?.platform !== "win32") {
+							setError(t("Hold-to-talk is only supported on Windows." as never));
+							return;
+						}
+						setError(null);
+						setTrigger(next);
+						commit("dictation.globalTrigger", next);
+					}}
+				/>
 			</div>
 			{enabled && registered === false && (
 				<div className="gui-settings-row-desc gui-settings-row-desc--warn">

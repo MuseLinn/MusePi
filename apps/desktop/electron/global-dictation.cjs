@@ -63,6 +63,11 @@ class GlobalDictation {
 		this.app = deps.app;
 
 		this.dictationTargets = new Map();
+		this.createKeyMonitor = deps.createKeyMonitor;
+		this.keyMonitor = null;
+		this.trigger = "toggle";
+		this.holdActive = false;
+		this.holdInternalTarget = null;
 		this.enabled = false;
 		this.accelerator = "";
 		this.settingsTimer = null;
@@ -115,7 +120,7 @@ class GlobalDictation {
 		if (!(await this.ensureDaemon())) return;
 		const values = await this.request(
 			"settings.get",
-			{ keys: ["dictation.globalEnabled", "dictation.globalShortcut", "stt.enabled", "stt.language", "stt.modelName", "stt.speakerMode", "stt.enhanceAudio", "settings.locale"] },
+			{ keys: ["dictation.globalEnabled", "dictation.globalShortcut", "dictation.globalTrigger", "stt.enabled", "stt.language", "stt.modelName", "stt.speakerMode", "stt.enhanceAudio", "settings.locale"] },
 			4000,
 		);
 		if (!values) return;
@@ -129,11 +134,38 @@ class GlobalDictation {
 			typeof values["dictation.globalShortcut"] === "string" && values["dictation.globalShortcut"].trim()
 				? values["dictation.globalShortcut"].trim()
 				: "CommandOrControl+Alt+Space";
-		if (enabled === this.enabled && accelerator === this.accelerator) return;
+		const trigger = values["dictation.globalTrigger"] === "hold" ? "hold" : "toggle";
+		if (enabled === this.enabled && accelerator === this.accelerator && trigger === this.trigger) return;
 		this.unregisterShortcut();
 		this.enabled = enabled;
 		this.accelerator = accelerator;
-		if (!enabled) return;
+		this.trigger = trigger;
+		if (!enabled) {
+			this.registered = null;
+			return;
+		}
+		if (trigger === "hold") {
+			try {
+				if (process.platform !== "win32") throw new Error("hold-to-talk is only supported on Windows");
+				const monitor = await this.createHoldMonitor(accelerator);
+				if (!this.enabled || this.trigger !== "hold" || this.accelerator !== accelerator) {
+					monitor.close();
+					return;
+				}
+				this.keyMonitor = monitor;
+				this.registered = true;
+			} catch (err) {
+				this.registered = false;
+				this.log(`global dictation hold shortcut failed: ${err?.message ?? err}; using toggle fallback`);
+				this.registerToggleShortcut(accelerator);
+				this.registered = false;
+			}
+			return;
+		}
+		this.registerToggleShortcut(accelerator);
+	}
+
+	registerToggleShortcut(accelerator) {
 		try {
 			const ok = this.globalShortcut.register(accelerator, () => void this.toggle());
 			this.registered = ok;
@@ -144,7 +176,45 @@ class GlobalDictation {
 		}
 	}
 
+	async createHoldMonitor(accelerator) {
+		const callback = event => this.handleHoldEvent(event, accelerator);
+		if (this.createKeyMonitor) return this.createKeyMonitor(accelerator, callback);
+		const native = await this.loadNative();
+		if (!native?.DictationKeyMonitor) throw new Error("native hold-to-talk monitor unavailable");
+		return new native.DictationKeyMonitor(accelerator, callback);
+	}
+
+	async handleHoldEvent(event, accelerator) {
+		if (!this.enabled || this.trigger !== "hold" || this.accelerator !== accelerator) return;
+		if (event === "press") {
+			if (this.holdActive || this.loading || this.finishing || this.downloadKey || this.capture) return;
+			this.holdActive = true;
+			const target = this.routeInternalShortcut();
+			if (target) {
+				this.holdInternalTarget = target;
+				return;
+			}
+			await this.begin();
+			return;
+		}
+		if (event === "release") {
+			if (!this.holdActive) return;
+			this.holdActive = false;
+			const target = this.holdInternalTarget;
+			this.holdInternalTarget = null;
+			if (target) {
+				this.sendInternalTarget(target);
+				return;
+			}
+			if (this.capture) this.finishRecording();
+		}
+	}
+
 	unregisterShortcut() {
+		this.keyMonitor?.close();
+		this.keyMonitor = null;
+		this.holdActive = false;
+		this.holdInternalTarget = null;
 		if (!this.accelerator) return;
 		try {
 			this.globalShortcut.unregister(this.accelerator);
@@ -167,20 +237,21 @@ class GlobalDictation {
 		this.dictationTargets.set(id, state);
 	}
 
+	sendInternalTarget(id) {
+		const win = this.BrowserWindow.getAllWindows().find(candidate => candidate.webContents.id === id);
+		if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return false;
+		win.webContents.send("dictation:toggle");
+		return true;
+	}
+
 	routeInternalShortcut() {
-		const windows = this.BrowserWindow.getAllWindows();
-		const send = win => {
-			if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return false;
-			win.webContents.send("dictation:toggle");
-			return true;
-		};
 		for (const [id, state] of this.dictationTargets) {
-			if (state.active && send(windows.find(win => win.webContents.id === id))) return true;
+			if (state.active && this.sendInternalTarget(id)) return id;
 		}
 		const focused = this.BrowserWindow.getFocusedWindow();
-		if (!focused) return false;
+		if (!focused) return null;
 		const state = this.dictationTargets.get(focused.webContents.id);
-		return state?.focused === true && send(focused);
+		return state?.focused === true && this.sendInternalTarget(focused.webContents.id) ? focused.webContents.id : null;
 	}
 
 	async toggle() {
@@ -203,7 +274,7 @@ class GlobalDictation {
 		try {
 			const status = await this.request("stt.modelStatus", {}, 6000);
 			const key = status?.defaultKey ?? status?.models?.[0]?.key;
-		this.modelKey = key || this.modelKey;
+			this.modelKey = key || this.modelKey;
 			const cached = status?.models?.find(model => model.key === key)?.cached ?? status?.defaultCached ?? false;
 			if (!key) {
 				this.fail("globalDictation.failed", { sticky: true });
@@ -273,6 +344,9 @@ class GlobalDictation {
 		}
 		this.show({ phase: "recording", level: 0, seconds: 0, partialText: "" });
 		this.recordTimer = setInterval(() => this.pushRecordingState(), 100);
+		if (this.trigger === "hold" && !this.holdActive && generation === this.generation) {
+			queueMicrotask(() => this.finishRecording());
+		}
 	}
 
 	queueStreamAudio(samples, generation) {
