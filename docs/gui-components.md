@@ -101,6 +101,7 @@ The desktop host re-exports the moved seat constants from `slot-host.tsx` during
 | `.gui-side-panel-row` | Dense list-row geometry (gap, height, radius, hover/`--active`) | Every dense labelled row; add trailing furniture, never re-declare it |
 | `PrChecksList` | A PR's CI, itemised, on demand | `pr-center.tsx`; gh `bucket` decides (`cancel` = failure) |
 | `.gui-rail-btn--wide` | The rail row, expanded | Same button, one state wider: rows transition their own width/height/padding/gap, and `.gui-rail--wide .gui-rail-group` stretches the footer so its controls stay rows instead of centred squares |
+| `gui-brand-mark` | The product mark (`π` badge) | One brand glyph: welcome header, error boundary, rail header. The rail scales and tilts it on hover |
 
 **Desktop stylesheets have one home: `apps/desktop/src/styles/`.** Every sheet is a `gui-*` family file there; a component that needs one imports it from that directory (`../styles/gui-<name>.css`) and never ships a sibling `.css` of its own. The last holdout, the marketplace detail sheet, moved in from `components/` so the cascade has no section without an owner.
 

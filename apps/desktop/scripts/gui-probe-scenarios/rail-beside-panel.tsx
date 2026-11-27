@@ -140,6 +140,8 @@ const scenarios = {
 			);
 			const head = body.querySelector(".gui-rail-head");
 			const brand = body.querySelector(".gui-rail-brand");
+			const mark = body.querySelector<HTMLElement>(".gui-brand-mark");
+			const arrow = body.querySelector<HTMLElement>(".gui-rail-brand-arrow");
 			return {
 				elements,
 				labels,
@@ -147,6 +149,13 @@ const scenarios = {
 				headWidth: head ? Math.round(head.getBoundingClientRect().width) : null,
 				brandExpanded: brand?.getAttribute("aria-expanded") ?? null,
 				hasTopBand: body.querySelector(".gui-rail-top") !== null,
+				// The product mark, not a generic glyph.
+				markGlyph: mark?.textContent ?? null,
+				markTransition: mark ? getComputedStyle(mark.parentElement as Element).transitionProperty : null,
+				// The arrow must be OUT of flow, or it reserves width and squeezes
+				// the mark while the rail is still narrow.
+				arrowPosition: arrow ? getComputedStyle(arrow).position : null,
+				arrowAnimation: arrow ? getComputedStyle(arrow).animationName : null,
 			};
 		},
 		expect: {

@@ -201,6 +201,8 @@
 }
 
 .gui-rail-brand {
+	/* Anchors the collapse arrow, which sits out of flow at the trailing edge. */
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -234,6 +236,70 @@
 	width: 24px;
 	height: 24px;
 	flex-shrink: 0;
+	/* The mark tilts on hover — the one piece of motion in the header, and it is
+	 * feedback for pointing at a control rather than a state change. Rotation is
+	 * a transform, so it never affects the header's layout height; the rail's
+	 * own `overflow: clip` and rounded card clip the few pixels that paint past
+	 * the box. */
+	transition: transform 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gui-rail-brand:hover .gui-rail-brand-mark {
+	transform: rotate(-8deg);
+}
+
+/* The collapsed rail is only 52px wide, so the mark takes the slot's full
+ * weight there and steps back once the label has room to speak. Both sizes
+ * animate together with the rail's width transition. */
+.gui-rail:not(.gui-rail--wide) .gui-rail-brand-mark .gui-brand-mark {
+	width: 26px;
+	height: 26px;
+	font-size: var(--ui-font-size-md, 15px);
+}
+
+/* Collapse arrow: out of flow and pinned to the header's trailing edge. In the
+ * flex line it would reserve ~16px from the first frame of expanding — while
+ * the rail is still narrow — and cram the mark (KiroCrew's documented blink).
+ * It arrives after the row has room, hence the delay. */
+.gui-rail-brand-arrow {
+	position: absolute;
+	inset-inline-end: 4px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-text-faint);
+	pointer-events: none;
+	animation: gui-rail-arrow-in 160ms ease-out 110ms both;
+}
+
+@keyframes gui-rail-arrow-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.gui-motion-off .gui-rail-brand-mark,
+.gui-motion-off .gui-rail-brand-arrow {
+	transition: none;
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-rail-brand-mark {
+		transition: none;
+	}
+
+	.gui-rail-brand:hover .gui-rail-brand-mark {
+		transform: none;
+	}
+
+	.gui-rail-brand-arrow {
+		animation: none;
+	}
 }
 
 .gui-rail-brand-text {

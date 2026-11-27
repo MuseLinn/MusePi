@@ -359,10 +359,25 @@ export function AppRail({
 						aria-label={expanded ? t("transcript.closeSidebar") : t("transcript.openSidebar")}
 						aria-expanded={expanded}
 					>
+						{/* The product mark, not a generic panel glyph: this button is
+						 * the one control present in both rail widths, so it carries the
+						 * identity. `gui-brand-mark` is the same π badge the welcome
+						 * header and error boundary render — one mark, one component —
+						 * and the rail only scales it up for this slot. */}
 						<span className="gui-rail-brand-mark" aria-hidden="true">
-							<Icon name="layout-left" className="gui-rail-icon" />
+							<span className="gui-brand-mark">π</span>
 						</span>
 						{expanded ? <span className="gui-rail-brand-text">MusePi</span> : null}
+						{/* Collapse affordance: an arrow to the edge, not a hide-panel
+						 * glyph, because the rail folds rather than disappears. It
+						 * fades in LAST (see the CSS delay) and sits out of flow, so it
+						 * never reserves width and squeezes the mark while the rail is
+						 * still narrow — the blink KiroCrew's header documents. */}
+						{expanded ? (
+							<span className="gui-rail-brand-arrow" aria-hidden="true">
+								<Icon name="arrow-left-s" className="gui-rail-icon" />
+							</span>
+						) : null}
 					</button>
 				</div>
 			) : (
