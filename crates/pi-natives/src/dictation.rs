@@ -1,3 +1,51 @@
+use napi::{
+	bindgen_prelude::Result,
+	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode, UnknownReturnValue},
+};
+use napi_derive::napi;
+#[cfg(windows)]
+use parking_lot::Mutex;
+
+type DictationCallback = ThreadsafeFunction<String, UnknownReturnValue>;
+
+#[napi]
+pub struct DictationKeyMonitor {
+	#[cfg(windows)]
+	monitor: Mutex<Option<windows_hook::WindowsDictationMonitor>>,
+}
+
+#[napi]
+impl DictationKeyMonitor {
+	#[napi(constructor)]
+	pub fn new(
+		accelerator: String,
+		#[napi(ts_arg_type = "(event: \"press\" | \"release\") => void")] callback: DictationCallback,
+	) -> Result<Self> {
+		let chord = HoldChord::parse(&accelerator).map_err(napi::Error::from_reason)?;
+		#[cfg(windows)]
+		{
+			Ok(Self {
+				monitor: Mutex::new(Some(windows_hook::WindowsDictationMonitor::start(
+					chord, callback,
+				)?)),
+			})
+		}
+		#[cfg(not(windows))]
+		{
+			let _ = (chord, callback);
+			Err(napi::Error::from_reason(
+				"Hold-to-talk keyboard monitoring is only supported on Windows",
+			))
+		}
+	}
+
+	#[napi]
+	pub fn close(&self) {
+		#[cfg(windows)]
+		self.monitor.lock().take();
+	}
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DictationTransition {
 	Press,
@@ -11,7 +59,7 @@ pub struct HoldChord {
 }
 
 impl HoldChord {
-	pub fn parse(accelerator: &str) -> Result<Self, String> {
+	pub fn parse(accelerator: &str) -> std::result::Result<Self, String> {
 		let mut modifiers = Vec::new();
 		let mut key = None;
 		for token in accelerator.split('+').map(str::trim) {
@@ -39,7 +87,7 @@ impl HoldChord {
 		Ok(Self { key: key.ok_or_else(|| "hold chord requires a main key".to_string())?, modifiers })
 	}
 
-	pub fn key(&self) -> u32 {
+	pub const fn key(&self) -> u32 {
 		self.key
 	}
 
@@ -48,7 +96,7 @@ impl HoldChord {
 	}
 }
 
-fn parse_key(token: &str) -> Result<u32, String> {
+fn parse_key(token: &str) -> std::result::Result<u32, String> {
 	let named = match token {
 		"Space" => 0x20,
 		"Enter" => 0x0d,
@@ -106,8 +154,12 @@ pub struct HoldChordMonitor {
 }
 
 impl HoldChordMonitor {
-	pub fn new(chord: HoldChord) -> Self {
+	pub const fn new(chord: HoldChord) -> Self {
 		Self { chord, active: false }
+	}
+
+	pub const fn chord(&self) -> &HoldChord {
+		&self.chord
 	}
 
 	pub fn reduce(&mut self, event: KeyEvent) -> Option<DictationTransition> {
@@ -131,6 +183,146 @@ impl HoldChordMonitor {
 			},
 		}
 		None
+	}
+}
+
+#[cfg(windows)]
+mod windows_hook {
+	use std::{
+		cell::RefCell,
+		thread::{self, JoinHandle},
+	};
+
+	use napi::bindgen_prelude::Result;
+	use windows_sys::Win32::{
+		Foundation::{LPARAM, LRESULT, WPARAM},
+		System::Threading::GetCurrentThreadId,
+		UI::{
+			Input::KeyboardAndMouse::GetAsyncKeyState,
+			WindowsAndMessaging::{
+				CallNextHookEx, GetMessageW, KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, PM_NOREMOVE,
+				PeekMessageW, PostThreadMessageW, SetWindowsHookExW, UnhookWindowsHookEx,
+				WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_QUIT, WM_SYSKEYDOWN, WM_SYSKEYUP,
+			},
+		},
+	};
+
+	use super::{
+		DictationCallback, DictationTransition, HoldChord, HoldChordMonitor, KeyEvent, KeyEventKind,
+		ThreadsafeFunctionCallMode,
+	};
+
+	struct ActiveMonitor {
+		monitor:  HoldChordMonitor,
+		callback: DictationCallback,
+	}
+
+	thread_local! { static ACTIVE: RefCell<Option<ActiveMonitor>> = const { RefCell::new(None) }; }
+
+	unsafe extern "system" fn observe(code: i32, message: WPARAM, data: LPARAM) -> LRESULT {
+		if code >= 0 {
+			let kind = match message as u32 {
+				WM_KEYDOWN | WM_SYSKEYDOWN => Some(KeyEventKind::Down),
+				WM_KEYUP | WM_SYSKEYUP => Some(KeyEventKind::Up),
+				_ => None,
+			};
+			if let Some(kind) = kind {
+				// SAFETY: a nonnegative keyboard hook callback provides this structure.
+				let key = unsafe { &*(data as *const KBDLLHOOKSTRUCT) };
+				ACTIVE.with_borrow_mut(|active| {
+					if let Some(active) = active {
+						let modifiers_held = active.monitor.chord().modifiers().iter().all(|modifier| {
+							// SAFETY: this only reads the asynchronous state of a virtual key.
+							(unsafe { GetAsyncKeyState(*modifier as i32) }) < 0
+						});
+						let transition = active.monitor.reduce(KeyEvent {
+							key: key.vkCode,
+							kind,
+							injected: key.flags & LLKHF_INJECTED != 0,
+							modifiers_held,
+						});
+						let event = match transition {
+							Some(DictationTransition::Press) => Some("press"),
+							Some(DictationTransition::Release) => Some("release"),
+							None => None,
+						};
+						if let Some(event) = event {
+							active
+								.callback
+								.call(Ok(event.to_string()), ThreadsafeFunctionCallMode::NonBlocking);
+						}
+					}
+				});
+			}
+		}
+		// SAFETY: forward every original event unchanged.
+		unsafe { CallNextHookEx(std::ptr::null_mut(), code, message, data) }
+	}
+
+	pub(super) struct WindowsDictationMonitor {
+		thread: Option<JoinHandle<()>>,
+		id:     u32,
+	}
+
+	impl WindowsDictationMonitor {
+		pub(super) fn start(chord: HoldChord, callback: DictationCallback) -> Result<Self> {
+			let (ready, receive) = flume::bounded(1);
+			let worker = thread::Builder::new()
+				.name("dictation-hotkey".into())
+				.spawn(move || {
+					ACTIVE.with_borrow_mut(|slot| {
+						*slot = Some(ActiveMonitor { monitor: HoldChordMonitor::new(chord), callback });
+					});
+					// SAFETY: this process-local hook is owned by its dedicated thread.
+					let hook = unsafe {
+						SetWindowsHookExW(WH_KEYBOARD_LL, Some(observe), std::ptr::null_mut(), 0)
+					};
+					if hook.is_null() {
+						let _ = ready.send(None);
+						ACTIVE.with_borrow_mut(|slot| *slot = None);
+						return;
+					}
+					// SAFETY: create this thread's message queue before publishing its id.
+					let mut message: MSG = unsafe { std::mem::zeroed() };
+					// SAFETY: message is writable storage owned by this thread.
+					unsafe { PeekMessageW(&raw mut message, std::ptr::null_mut(), 0, 0, PM_NOREMOVE) };
+					// SAFETY: GetCurrentThreadId has no preconditions.
+					let _ = ready.send(Some(unsafe { GetCurrentThreadId() }));
+					loop {
+						// SAFETY: message remains writable until this thread exits its loop.
+						let status = unsafe { GetMessageW(&raw mut message, std::ptr::null_mut(), 0, 0) };
+						if status <= 0 {
+							break;
+						}
+					}
+					// SAFETY: this thread installed and still owns the hook.
+					unsafe { UnhookWindowsHookEx(hook) };
+					ACTIVE.with_borrow_mut(|slot| *slot = None);
+				})
+				.map_err(|error| {
+					napi::Error::from_reason(format!("cannot start dictation keyboard monitor: {error}"))
+				})?;
+			let Some(id) = receive.recv().ok().flatten() else {
+				let _ = worker.join();
+				return Err(napi::Error::from_reason(
+					"cannot install the global hold-to-talk keyboard monitor",
+				));
+			};
+			Ok(Self { thread: Some(worker), id })
+		}
+	}
+
+	impl Drop for WindowsDictationMonitor {
+		fn drop(&mut self) {
+			// SAFETY: id names the dedicated live monitor thread; teardown does not retain
+			// input.
+			unsafe { PostThreadMessageW(self.id, WM_QUIT, 0, 0) };
+			if let Some(worker) = self.thread.take()
+				&& worker.thread().id() != thread::current().id()
+			{
+				let _ = worker.join();
+			}
+		}
 	}
 }
 

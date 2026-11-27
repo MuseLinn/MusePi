@@ -105,6 +105,11 @@ export declare class DesktopSession {
   close(): Promise<undefined>
 }
 
+export declare class DictationKeyMonitor {
+  constructor(accelerator: string, callback: (event: "press" | "release") => void)
+  close(): void
+}
+
 /**
  * Process-owned cross-platform advisory lock.
  *
@@ -1613,6 +1618,12 @@ export interface MacOSPowerAssertionOptions {
   user?: boolean
   /** `caffeinate -d`: prevent the display from idle-sleeping. */
   display?: boolean
+  /**
+   * Seconds until the assertion lapses on its own. The shell re-takes the
+   * assertion before it expires, so a shell that dies stops holding the
+   * machine awake instead of leaving an assertion behind.
+   */
+  timeoutSeconds?: number
 }
 
 /** A single match in the content. */
