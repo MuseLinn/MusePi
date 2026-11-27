@@ -52,7 +52,7 @@ async function mountCreator(): Promise<HTMLElement> {
 				onSubmit={() => {}}
 				rpc={rpc}
 				modes={MODES}
-				modeId="creator"
+				agentPreset="creator"
 				onModeChange={() => {}}
 				onProject={() => {}}
 			/>,

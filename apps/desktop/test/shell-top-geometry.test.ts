@@ -240,13 +240,14 @@ describe("shell top geometry", () => {
 		expect(keeper.top).toBe(0);
 		// The draggable strip is exactly the window top down to the card.
 		expect(pane.top - keeper.top).toBe(56);
-		expect(rail.right).toBe(keeper.left);
+		// Cards keep one gutter between the rail and sidebar keeper.
+		expect(keeper.left - rail.right).toBe(8);
 		expect(stripHit).toBe("keeper");
 	});
 
 	it("keeps the rail, panel rows and header controls out of the drag band", async () => {
 		const { railTop, railButtonRegion, rowRegion, rowHit, columnAppRegion } = await readGeometry();
-		expect(railTop.height).toBe(48);
+		expect(railTop.height).toBe(12);
 		expect(railButtonRegion).toBe("no-drag");
 		// The card subtree is excluded from the keeper's drag region.
 		expect(rowRegion).toBe("no-drag");

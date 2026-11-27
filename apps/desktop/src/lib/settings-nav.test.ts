@@ -14,7 +14,7 @@ import { DEFAULT_SECTION, resolveActiveSection, SECTION_ALIAS } from "./settings
  *  here, so this reflects the built-in rows. */
 function navIds(): Set<string> {
 	const ids = new Set<string>();
-	for (const group of navGroups([])) {
+	for (const group of navGroups([], { contributionsKnown: false })) {
 		for (const item of group.items) ids.add(item.id);
 	}
 	return ids;

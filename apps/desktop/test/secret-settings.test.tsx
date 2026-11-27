@@ -143,8 +143,8 @@ describe("设置页密钥", () => {
 
 		// 状态本身就是标题：页面说的是「现在由什么保护主密钥」，不是一张并列三行的说明卡。
 		expect(scope.textContent).toContain("本机密钥文件");
-		expect(scope.textContent).toContain("主密钥保存在仅本人可读的本机文件里");
-		expect(scope.textContent).toContain("连接器凭据使用独立的本机密钥文件");
+		expect(scope.textContent).toContain("保险库、连接器凭据与 MCP 登录共用本机一个密钥文件");
+		expect(scope.textContent).not.toContain("连接器凭据使用独立的本机密钥文件");
 		// 「静态加密」是恒为真的性质，不再冒充一个可选状态。
 		expect(scope.textContent).not.toContain("静态加密");
 		expect(buttonByText(scope, "用口令保护").type).toBe("button");
@@ -287,18 +287,18 @@ describe("设置页密钥", () => {
 		const scope = await mount(fake);
 		await act(async () => buttonByText(scope, "添加密钥").click());
 
-		// 每一行都是共享原语：标签 / 提示挂在 grid area，控件在 control 格里。
+		// 每一行都是共享原语；输入与交付方式有控件，范围只陈述当前事实。
 		// 名称、值、用途，再加上范围（只读）与交付方式（Segmented）：五行各一件事。
 		const fields = [...scope.querySelectorAll(".gui-secret-form .gui-settings-field")];
 		expect(fields.length).toBe(5);
 		for (const field of fields) {
 			expect(field.querySelector(".gui-settings-field-label") !== null).toBe(true);
-			const control = field.querySelector(".gui-settings-field-control");
-			expect(control !== null).toBe(true);
 		}
+		expect(fields.filter(field => field.querySelector(".gui-settings-field-control") !== null).length).toBe(4);
 		// 前 3 行是真输入框；范围是只读事实，交付方式是分段控件。
 		expect(scope.querySelectorAll(".gui-secret-form .gui-settings-field-control input").length).toBe(3);
-		expect(scope.querySelector(".gui-secret-form .gui-secret-readonly")?.textContent).toContain("所有会话");
+		const scopeField = fields.find(field => field.textContent?.includes("所有会话"));
+		expect(scopeField?.querySelector("input, button, [role='radiogroup']") === null).toBe(true);
 		// 交付方式此前只是一行不可编辑的文字，而 daemon 一直支持这个参数。
 		const delivery = scope.querySelector('.gui-secret-form [role="radiogroup"]');
 		expect(delivery?.querySelectorAll('[role="radio"]').length).toBe(2);

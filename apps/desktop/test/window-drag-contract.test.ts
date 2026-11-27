@@ -349,7 +349,7 @@ describe("window drag — main workspace", () => {
 	it("drags every point of the band above the sidebar card", async () => {
 		await load(MAIN_SHELL);
 		const probes = await probe([
-			[26, 24], // rail band
+			[26, 60], // rail's compact in-card band
 			[150, 24], // sidebar band, above the card
 			[150, 50], // sidebar band, just above the card
 			[700, 24], // chat header

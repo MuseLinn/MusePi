@@ -78,7 +78,7 @@ describe("every color theme supplies its own accent", () => {
 		expect(ACCENT_PRESETS.map(p => p.id)).toEqual(["theme", "brand", "mono", "ocean", "jade"]);
 		const ts = read(THEME_TS);
 		expect(ts).toContain('"theme" | "brand" | "mono" | "ocean" | "jade" | "custom"');
-		expect(ts).toContain(': "theme";');
+		expect(ts).toContain('?? "theme"');
 		expect(ts).toContain('() => "theme" as AccentPreference');
 	});
 

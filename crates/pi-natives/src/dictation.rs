@@ -42,7 +42,13 @@ impl DictationKeyMonitor {
 	}
 
 	#[napi]
-	#[cfg_attr(not(windows), allow(clippy::missing_const_for_fn))]
+	#[cfg_attr(
+		not(windows),
+		allow(
+			clippy::missing_const_for_fn,
+			reason = "the Windows implementation locks a mutex-backed monitor"
+		)
+	)]
 	pub fn close(&self) {
 		#[cfg(windows)]
 		self.monitor.lock().take();

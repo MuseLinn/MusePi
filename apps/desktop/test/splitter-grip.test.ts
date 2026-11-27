@@ -172,14 +172,10 @@ describe("sidebar seam geometry", () => {
 		const band = rule(read(SETTINGS), ".gui-resize-x--side {");
 		expect(band, ".gui-resize-x--side rule missing").not.toBeNull();
 
-		// The sidebar card's right edge sits at rail + side + one gutter and the
-		// chat card's left edge at rail + side + three gutters, so the gap's
-		// midpoint is rail + side + two gutters (the old `* 1.5` was 4px off).
+		// The keeper's right edge is the panel card's right edge. The chat card
+		// adds one gutter, so the midpoint is half a gutter beyond the keeper.
 		const left = band?.match(/left:\s*([^;]+);/)?.[1] ?? "";
-		expect(left).toContain("calc(");
-		expect(left).toContain("var(--gui-rail-w)");
-		expect(left).toContain("var(--gui-side-w)");
-		expect(left).toMatch(/var\(--gui-card-gutter\)\s*\*\s*2/);
+		expect(left).toBe("calc(100% + var(--gui-card-gutter) / 2)");
 	});
 
 	test("the right-panel band escapes the clip and sits ON the seam", () => {

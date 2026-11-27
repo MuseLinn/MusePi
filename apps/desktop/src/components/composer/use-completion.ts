@@ -118,9 +118,10 @@ export function useCompletion({
 	const [atIdx, setAtIdx] = useState(0);
 	// A session switch invalidates the merged root scan; the generation guard
 	// drops a scan that resolves after the switch.
-	const atRequestRef = useRef(0);
+	const atEntriesRequestRef = useRef(0);
+	const atSessionsRequestRef = useRef(0);
 	useEffect(() => {
-		atRequestRef.current += 1;
+		atEntriesRequestRef.current += 1;
 		setAtEntries(null);
 	}, [sessionId, cwd, extraRoots]);
 	/** Session candidates for the "@" menu — loaded on first open, so a
@@ -230,14 +231,14 @@ export function useCompletion({
 			setAtOpen(true);
 			setAtIdx(0);
 			if (!atEntries && rpc) {
-				const request = ++atRequestRef.current;
+				const request = ++atEntriesRequestRef.current;
 				void loadAtCompletionEntries({ rpc, cwd, sessionId, extraRoots })
 					.then(entries => {
-						if (atRequestRef.current !== request) return;
+						if (atEntriesRequestRef.current !== request) return;
 						setAtEntries(atMaxDepth === undefined ? entries : entries.filter(e => e.depth <= atMaxDepth));
 					})
 					.catch(() => {
-						if (atRequestRef.current === request) setAtEntries([]);
+						if (atEntriesRequestRef.current === request) setAtEntries([]);
 					});
 			}
 			// Sessions join the same menu: "@" is one gesture ("pull that thing
@@ -245,15 +246,15 @@ export function useCompletion({
 			// reader remember which reaches which. Loaded alongside the tree so
 			// the list never shows one kind and then the other.
 			if (!atSessions && rpc) {
-				const request = ++atRequestRef.current;
+				const request = ++atSessionsRequestRef.current;
 				void rpc
 					.request<SessionCompletionEntry[]>("session.list", {})
 					.then(list => {
-						if (atRequestRef.current !== request) return;
-						setAtSessions(list ?? []);
+						if (atSessionsRequestRef.current !== request) return;
+						setAtSessions(Array.isArray(list) ? list : []);
 					})
 					.catch(() => {
-						if (atRequestRef.current === request) setAtSessions([]);
+						if (atSessionsRequestRef.current === request) setAtSessions([]);
 					});
 				// Titles live in the session tree rather than the list, and a
 				// row that only says an id slice is not something a reader can
@@ -261,16 +262,16 @@ export function useCompletion({
 				void rpc
 					.request<SessionListNode[]>("session.tree", {})
 					.then(nodes => {
-						if (atRequestRef.current !== request) return;
+						if (atSessionsRequestRef.current !== request) return;
 						const labels = new Map<string, string>();
 						const walk = (ns: SessionListNode[]): void => {
 							for (const n of ns) {
 								const label = n.entry.label ?? n.label;
 								if (label) labels.set(n.entry.id, label);
-								walk(n.children);
+								walk(n.children ?? []);
 							}
 						};
-						walk(nodes ?? []);
+						walk(Array.isArray(nodes) ? nodes : []);
 						setSessionLabels(labels);
 					})
 					.catch(() => {});

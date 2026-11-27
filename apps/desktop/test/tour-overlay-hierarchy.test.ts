@@ -119,7 +119,7 @@ describe("the appearance step exposes every theme axis", () => {
 		const labels = read("apps/desktop/src/lib/theme-preset-labels.ts");
 		expect(labels).toContain("THEME_PRESET_LABEL");
 		// Both surfaces import the shared table instead of keeping a copy.
-		for (const file of [ONBOARDING_TSX, "apps/desktop/src/components/settings-sections/appearance.tsx"]) {
+		for (const file of [ONBOARDING_TSX, "apps/desktop/src/plugins/ui-settings-appearance/page.tsx"]) {
 			expect(read(file), `${file} must use the shared label table`).toContain("THEME_PRESET_LABEL");
 		}
 	});

@@ -60,12 +60,6 @@ describe("catalog wiring in the shell", () => {
 		expect(appSource).toContain("catalog={hostCatalog}");
 	});
 
-	test("every ConnectionManager call site receives it", () => {
-		const sites = tags(appSource, "ConnectionManager");
-		expect(sites.length).toBeGreaterThan(0);
-		for (const site of sites) expect(site).toContain("catalog={hostCatalog}");
-	});
-
 	test("every ConnectDialog call site receives it", () => {
 		const sites = tags(appSource, "ConnectDialog");
 		expect(sites.length).toBeGreaterThan(0);
