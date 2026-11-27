@@ -313,7 +313,7 @@ export function ChatView({
 	onReloadSession,
 	onForkSession,
 	modes,
-	modeId,
+	agentPreset,
 	onModeChange,
 	/** M3.7a(v2 修订):design 模式内联形态的发送管线 —— 透传给欢迎页 composer。 */
 	onDesignSubmit,
@@ -394,7 +394,7 @@ export function ChatView({
 	presetModelId?: string | null;
 	/** Welcome 预设(mode)chip(welcome 场景;modes 未传则不渲染,见 Composer)。 */
 	modes?: { id: string; label: string }[] | null;
-	modeId?: string | null;
+	agentPreset?: string | null;
 	onModeChange?(id: string | null): void;
 	/** M3.7a design 模式内联形态(§2.4):session.create + projectMetadata 管线。 */
 	onDesignSubmit?(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
@@ -3362,7 +3362,7 @@ export function ChatView({
 		onSelectReminder,
 		onMarkAllRead,
 		modes,
-		modeId,
+		agentPreset,
 		onModeChange,
 		designSubmit: onDesignSubmit,
 		onAddProvider,

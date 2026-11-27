@@ -186,7 +186,7 @@ export function HeroComposer({
 	onMarkAllRead,
 	/** 预设(mode)chip(项目行旁):欢迎页选择,新会话创建时应用。 */
 	modes,
-	modeId,
+	agentPreset,
 	onModeChange,
 	designSubmit,
 	placeholder,
@@ -254,7 +254,7 @@ export function HeroComposer({
 	onMarkAllRead?(): void;
 	/** 预设(mode)chip 选项(项目行旁)。 */
 	modes?: ModeLabelEntry[] | null;
-	modeId?: string | null;
+	agentPreset?: string | null;
 	onModeChange?(id: string | null): void;
 	/** M3.7a design 模式内联形态(v2 修订,§2.4):mode chip 选中「设计」时
 	 *  类型 chip 排直接渲染在本 composer 上方一行,发送走
@@ -685,7 +685,7 @@ export function HeroComposer({
 	// — there is no "no preset" state anymore, so null never
 	// reaches the UI (chip label / active check / session create all use
 	// this normalized id).
-	const activeModeId = modeId ?? "work";
+	const activeModeId = agentPreset ?? "work";
 	useEffect(() => {
 		const reload = (): void => setSuggestions(loadSuggestions());
 		window.addEventListener(SUGGESTIONS_CHANGED_EVENT, reload);
@@ -1478,7 +1478,7 @@ export function HeroComposer({
 										</button>
 										{renderPresetMenu(
 											<>
-												{/* 无"默认(无预设)":modeId 恒非 null(默认 work),
+												{/* 无"默认(无预设)":agentPreset 恒非 null(默认 work),
 												 * 每次新建都带一个预设。 */}
 												{modes.map(m => {
 													const desc = resolveModeDescription(m.id);

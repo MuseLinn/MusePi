@@ -3379,8 +3379,8 @@ function AppInner(): ReactNode {
 					// role exactly like the old swallowed setModel error.
 					...(opts?.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
 					...(opts?.modelId ? { modelPattern: opts.modelId } : {}),
-					// Welcome 预设 chip 选择 / 创作流覆盖:modeId 随 create 一次应用
-					// (daemon 侧白名单/提示词/settings 覆盖);显式 modeId(创作流
+					// Welcome 预设 chip 选择 / 创作流覆盖:agentPreset 随 create 一次应用
+					// (daemon 侧白名单/提示词/settings 覆盖);显式 agentPreset(创作流
 					// creator)优先,否则用 welcome chip 选择;无选择 = 默认(Standard)。
 					...((opts?.agentPreset ?? welcomeModeIdRef.current)
 						? { agentPreset: opts?.agentPreset ?? welcomeModeIdRef.current }
@@ -3806,7 +3806,7 @@ function AppInner(): ReactNode {
 		};
 	}, [sendPrompt]);
 
-	/** Creation flow: open a chat session under the given modeId
+	/** Creation flow: open a chat session under the given agentPreset
 	 *  (creation contexts pass "creator") and send the first prompt right
 	 *  away — used by the board and settings-preset 新建输入框, where the
 	 *  agent designs & saves the artifact (board / preset) in a chat. */
@@ -5142,7 +5142,7 @@ function AppInner(): ReactNode {
 							},
 							presetModelId,
 							modes: welcomeModes,
-							modeId: welcomeModeId,
+							agentPreset: welcomeModeId,
 							onModeChange: setWelcomeModeId,
 							onDesignSubmit: submitCreationSession,
 							defaultModelId,
@@ -5615,7 +5615,7 @@ function AppInner(): ReactNode {
 												},
 												presetModelId,
 												modes: welcomeModes,
-												modeId: welcomeModeId,
+												agentPreset: welcomeModeId,
 												onModeChange: id => setWelcomeModeId(id),
 												onDesignSubmit: submitCreationSession,
 												defaultModelId,
