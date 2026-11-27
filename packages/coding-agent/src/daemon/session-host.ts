@@ -308,8 +308,10 @@ import type {
 import type { AgentSession } from "../session/agent-session";
 import { RunRecorder } from "../task/run-record";
 import {
+	type SubagentEventPayload,
 	type SubagentLifecyclePayload,
 	type SubagentProgressPayload,
+	TASK_SUBAGENT_EVENT_CHANNEL,
 	TASK_SUBAGENT_LIFECYCLE_CHANNEL,
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 } from "../task/types";
@@ -807,7 +809,9 @@ export class SessionScopedEventBus extends EventBus {
 	}
 	override emit(channel: string, data: unknown): void {
 		if (
-			(channel === TASK_SUBAGENT_PROGRESS_CHANNEL || channel === TASK_SUBAGENT_LIFECYCLE_CHANNEL) &&
+			(channel === TASK_SUBAGENT_PROGRESS_CHANNEL ||
+				channel === TASK_SUBAGENT_LIFECYCLE_CHANNEL ||
+				channel === TASK_SUBAGENT_EVENT_CHANNEL) &&
 			taggedSessionIdOf(data) === undefined
 		) {
 			this.#parent.emit(channel, { ...(data as Record<string, unknown>), sessionId: this.#sessionId });
@@ -2123,6 +2127,7 @@ export class DaemonSessionHost {
 				unsubscribeName();
 				unsubscribeProgress();
 				unsubscribeLifecycle();
+				unsubscribeEvent();
 				unsubscribePauseGate();
 				if (persistTimer) {
 					clearTimeout(persistTimer);
@@ -2268,6 +2273,29 @@ export class DaemonSessionHost {
 		};
 		const unsubscribeProgress = this.#eventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, onSubagentProgress);
 		const unsubscribeLifecycle = this.#eventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, onSubagentLifecycle);
+		// Subagent CONVERSATION frames (assistant text, thinking, tool cards)
+		// used to stop at the daemon: only progress/lifecycle rode the GUI
+		// stream, so the subagent panel had to poll the child's JSONL file.
+		// The executor already emits every frame on this channel; forwarding
+		// the wire shape lets the GUI project them with the same
+		// MaterializedView the main transcript uses, instead of re-parsing
+		// bytes on a timer.
+		const onSubagentEvent = (raw: unknown): void => {
+			if (!ownsSubagentPayload(raw)) return;
+			const payload = raw as SubagentEventPayload;
+			if (typeof payload.id !== "string") return;
+			const wireEvent = toWireAgentEvent(payload.event);
+			if (!wireEvent) return;
+			const seq = 0;
+			for (const send of live.subscribers.values()) {
+				try {
+					send({ kind: "agent-event", seq, payload: { agentId: payload.id, event: wireEvent } });
+				} catch {
+					// subscriber socket died; removed on close
+				}
+			}
+		};
+		const unsubscribeEvent = this.#eventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, onSubagentEvent);
 		// Auto-generated titles land async after the first user message (TUI
 		// parity, see maybeStartTitleGeneration in session.send). The GUI has
 		// no other way to learn the tree label changed, so broadcast a

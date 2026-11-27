@@ -164,6 +164,13 @@ export type SessionStreamEvent =
 	// Daemon forwards the EventBus wrapper (SubagentProgressPayload), not the
 	// bare AgentProgress — the AgentProgress lives at `payload.progress`.
 	| { kind: "agent-progress"; seq: number; payload: SubagentProgressPayload }
+	// A subagent's own conversation frames (assistant text, thinking, tool
+	// cards), forwarded so a subagent view can project a live transcript with
+	// the same MaterializedView the main chat uses instead of re-reading the
+	// child's JSONL on a timer. `seq` stays 0: these ride the parent session's
+	// stream but are not that session's journal records, so they must never
+	// touch its watermark.
+	| { kind: "agent-event"; seq: number; payload: { agentId: string; event: AgentEvent } }
 	| { kind: "pause-state"; seq: number; payload: { paused: boolean; pausedAt: number | null } }
 	| { kind: "global-pause-state"; seq: number; payload: { paused: boolean; pausedAt: number | null } }
 	| { kind: "stream-end"; seq: number; payload: { reason: string } }

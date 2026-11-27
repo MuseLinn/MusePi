@@ -9,7 +9,13 @@ import {
 	archiveSession as writeArchivedSession,
 } from "@musepi/client-core";
 import { createChatQuoteContext, createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
-import type { MessageDisplayContext, SessionEntry, SessionPresence, SubagentProgressPayload } from "@musepi/pi-wire";
+import type {
+	AgentEvent,
+	MessageDisplayContext,
+	SessionEntry,
+	SessionPresence,
+	SubagentProgressPayload,
+} from "@musepi/pi-wire";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
@@ -64,6 +70,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
 import { type AgentSignalSource, agentSignalsFromSnapshot } from "./lib/agent-signals";
+import { applyAgentEvent } from "./lib/agent-transcripts";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { writeBrowserSettingsTab } from "./lib/browser-preferences";
 import type { CompanionSessionCard, CompanionState } from "./lib/companion";
@@ -1982,6 +1989,18 @@ function AppInner(): ReactNode {
 			// Route subscription envelopes to the active session store; provider
 			// auth/prompt envelopes surface through the settings dialog instead.
 			client.onEvent = (event: StreamEvent) => {
+				// A subagent's own conversation frames ride the parent session's
+				// stream but belong to no store: project them per agent id. Handled
+				// before every session guard because this envelope is not that
+				// session's journal record (seq 0) and would otherwise be read as a
+				// gap by the watermark gate.
+				if (event.kind === "agent-event") {
+					const payload = event.payload as { agentId?: unknown; event?: unknown } | null;
+					if (typeof payload?.agentId === "string" && payload.event && typeof payload.event === "object") {
+						applyAgentEvent(payload.agentId, payload.event as AgentEvent);
+					}
+					return;
+				}
 				// A session open beside the active chat owns its own store: route
 				// its envelopes there before the active-store cross-session guard
 				// drops them. Global/provider envelopes have no session owner.

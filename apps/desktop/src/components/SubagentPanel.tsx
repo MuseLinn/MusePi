@@ -7,13 +7,26 @@ import { decideTranscriptPoll } from "@musepi/client-core/src/lib/transcript-pol
 import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { ExternalLink, OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+	agentTranscriptEntries,
+	isAgentTranscriptSeeded,
+	retainAgentTranscript,
+	seedAgentTranscript,
+	subscribeAgentTranscripts,
+} from "../lib/agent-transcripts";
 import type { RpcClient } from "../lib/rpc";
 import { useFocusTrap } from "../lib/use-focus-trap";
 import { AgentAvatar } from "./AgentAvatar";
 
 const EMPTY_TOOLS: TranscriptProps["activeTools"] = new Map();
-const POLL_MS = 1200;
+/** A stable empty list: useSyncExternalStore compares by reference, and a fresh
+ *  array per call would re-render forever. */
+const EMPTY_ENTRIES: readonly SessionEntry[] = [];
+/** A just-spawned subagent may have no file yet; retry a few times, then stop.
+ *  This is a seed, not a poll — a live agent streams through events alone. */
+const SEED_RETRY_MS = 700;
+const SEED_MAX_ATTEMPTS = 6;
 
 /** Keep the tail of a model id — the variant suffix is what tells models
  *  apart — instead of letting the chip clip it off. */
@@ -80,46 +93,56 @@ export function SubagentSessionView(props: {
 		onClose,
 		pollEnabled = true,
 	} = props;
-	const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
 
 	/**
-	 * The live poll, hoisted so the session dock's no-reply check can re-read the
-	 * transcript on demand. It is the same reader the interval uses, so the check
-	 * cannot disagree with what the view is showing.
+	 * The session dock's no-reply check re-reads the transcript on demand. The
+	 * rows now stream in through `agent-event`, so there is no reader to hand it
+	 * — the check sees whatever has already been projected.
 	 */
-	const pollRef = useRef<(() => Promise<void>) | null>(null);
-	const verifyTranscript = useCallback(async (): Promise<void> => {
-		await pollRef.current?.();
-	}, []);
+	const verifyTranscript = useCallback(async (): Promise<void> => {}, []);
 
-	// Live transcript: poll the daemon's agents.transcript RPC while the view
-	// is enabled, appending parsed JSONL entries. Same cursor semantics as the
-	// collab drawer — a terminal `error` reply stops polling and surfaces the
-	// message (retrying would loop hot). Disabling keeps the entries: clearing
-	// them here would blank the drawer's exit animation.
+	// Live transcript: the daemon forwards the subagent's own conversation
+	// frames (`agent-event`) and lib/agent-transcripts projects them, so rows
+	// arrive as they are produced instead of on a timer. History is read once
+	// through the same RPC the old poll used — it seeds the view so a finished
+	// or already-running agent opens with its earlier turns. The read is not a
+	// poll: one attempt, retried only if it failed transiently while the view
+	// is still open.
 	const agentId = agent.id;
 	const hasSessionFile = agent.hasSessionFile;
+	// Subscribing to the projected rows directly (rather than to a version
+	// counter) is what makes a streamed frame re-render: snapshot() hands back
+	// the same array reference while nothing changed, so an unrelated agent's
+	// frame cannot churn this view.
+	const entries = useSyncExternalStore(
+		subscribeAgentTranscripts,
+		() => agentTranscriptEntries(agentId),
+		() => EMPTY_ENTRIES,
+	);
+
+	useEffect(() => {
+		if (!pollEnabled) return;
+		// Retain before the first frame can arrive: an un-retained agent drops
+		// its frames, and those are exactly the ones a just-opened view needs.
+		return retainAgentTranscript(agentId);
+	}, [agentId, pollEnabled]);
+
 	useEffect(() => {
 		if (!pollEnabled || !hasSessionFile) return;
-		setEntries([]);
-		setFetchError(null);
+		if (isAgentTranscriptSeeded(agentId)) return;
 		let disposed = false;
-		let inFlight = false;
 		let cursor = 0;
 		let carry = "";
-		let acc: readonly SessionEntry[] = [];
-		let timer: Timer | null = null;
-		const stopPolling = () => {
-			if (timer !== null) {
-				clearInterval(timer);
-				timer = null;
-			}
-		};
-		const poll = async (): Promise<void> => {
-			if (disposed || inFlight) return;
-			inFlight = true;
+		let acc: SessionEntry[] = [];
+		let retry: Timer | null = null;
+		let attempts = 0;
+		setFetchError(null);
+
+		const read = async (): Promise<void> => {
+			if (disposed) return;
+			attempts += 1;
 			try {
 				const res = await rpc.request<{ text: string; newSize: number; error?: string }>("agents.transcript", {
 					agentId,
@@ -135,36 +158,46 @@ export function SubagentSessionView(props: {
 				const decision = decideTranscriptPoll(reply, carry);
 				switch (decision.action) {
 					case "retry":
-						return; // transient (missing file / race) → keep polling
-					case "stop":
-						stopPolling();
-						setFetchError(decision.message);
+						// Transient (file not written yet / a race with the child):
+						// a fresh subagent legitimately has nothing on disk. Back off
+						// instead of polling flat out.
+						if (disposed) return;
+						if (attempts < SEED_MAX_ATTEMPTS) retry = setTimeout(() => void read(), SEED_RETRY_MS);
 						return;
-					case "advance":
-						cursor = decision.newSize;
-						carry = decision.carry;
-						if (decision.fresh.length > 0) {
-							acc = [...acc, ...decision.fresh];
-							setEntries(acc);
+					case "stop":
+						// A terminal refusal (no transcript available) is not a
+						// failure: a live agent streams through events alone.
+						if (entries.length === 0 && decision.message !== "no transcript available") {
+							setFetchError(decision.message);
 						}
 						return;
+					case "advance": {
+						cursor = decision.newSize;
+						carry = decision.carry;
+						if (decision.fresh.length > 0) acc = [...acc, ...decision.fresh];
+						// A short read means the file is not done growing yet; keep
+						// reading until it returns nothing new.
+						if (decision.fresh.length > 0 && attempts < SEED_MAX_ATTEMPTS) {
+							retry = setTimeout(() => void read(), 0);
+							return;
+						}
+						seedAgentTranscript(agentId, acc);
+						return;
+					}
 				}
-			} finally {
-				inFlight = false;
+			} catch (error) {
+				if (disposed) return;
+				setFetchError(error instanceof Error ? error.message : String(error));
 			}
 		};
-		// The poll is the only reader of this transcript, so the session dock's
-		// no-reply check re-runs it rather than opening a second reader on the same
-		// file. Held in a ref because the poll's lifetime is the effect's.
-		pollRef.current = poll;
-		void poll();
-		timer = setInterval(() => {
-			void poll();
-		}, POLL_MS);
+		void read();
 		return () => {
 			disposed = true;
-			stopPolling();
+			if (retry !== null) clearTimeout(retry);
 		};
+		// `entries.length` is read for the empty-guard only; reseeding is gated
+		// by isAgentTranscriptSeeded, not by this effect re-running.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [pollEnabled, agentId, hasSessionFile, rpc, parentSessionId]);
 
 	const sendChat = (): void => {
