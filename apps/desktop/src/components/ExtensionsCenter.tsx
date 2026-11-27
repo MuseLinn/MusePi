@@ -202,7 +202,7 @@ function OverviewView({
 			</div>
 			<div className="gui-ext-overview-section">
 				<div className="gui-ext-overview-head">
-					<span className="gui-group-label">{t("tools.extNeedsAttention")}</span>
+					<span className="gui-ext-overview-section-label">{t("tools.extNeedsAttention")}</span>
 					<button type="button" className="gui-btn" onClick={onOpenDiagnostics}>
 						{t("tools.extOpenDiagnostics")}
 					</button>
@@ -223,14 +223,18 @@ function OverviewView({
 								{e.loadError ? (
 									<>
 										<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("tools.extLoadFailed")}</span>
-										<button type="button" className="gui-btn" onClick={onOpenDiagnostics}>
+										<button type="button" className="gui-ext-overview-row-action" onClick={onOpenDiagnostics}>
 											{t("tools.extViewDetails")}
 										</button>
 									</>
 								) : (
 									<>
 										<span className="gui-ext-item-tag">{t("tools.extShadowed")}</span>
-										<button type="button" className="gui-btn" onClick={() => onForceEnable(e)}>
+										<button
+											type="button"
+											className="gui-ext-overview-row-action"
+											onClick={() => onForceEnable(e)}
+										>
 											{t("tools.forceEnable")}
 										</button>
 									</>
@@ -242,7 +246,7 @@ function OverviewView({
 			</div>
 			<div className="gui-ext-overview-section">
 				<div className="gui-ext-overview-head">
-					<span className="gui-group-label">{t("tools.extProviderHealth")}</span>
+					<span className="gui-ext-overview-section-label">{t("tools.extProviderHealth")}</span>
 				</div>
 				<div className="gui-ext-overview-rows">
 					{managedProviders.map(p => (

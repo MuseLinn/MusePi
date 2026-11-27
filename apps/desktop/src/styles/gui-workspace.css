@@ -4850,6 +4850,21 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+	min-height: 28px;
+}
+
+/* Section heading on a full page, not a chip.
+ *
+ * `.gui-group-label` is a pill because it labels a collapsed group inside a
+ * compact rail; on this page it labeled a whole section and competed with the
+ * cards it introduced — a filled 999px capsule above a card reads as a control
+ * that was turned on. A section heading states its name and steps back: no
+ * fill, no radius, and a weight above the rows but below the card values. */
+.gui-ext-overview-section-label {
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	color: var(--color-text-muted);
 }
 
 .gui-ext-overview-rows {
@@ -4865,11 +4880,46 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 8px 12px;
+	/* Both sections list one thing per row, so both rows share one height.
+	 * The source rows carry a second line (the item count) and the attention
+	 * rows a title only; letting each size to its content made the two lists
+	 * read as different components and left the shorter one looking unfinished.
+	 * The row's minimum accommodates the two-line case. */
+	min-height: 48px;
+	padding: 6px 12px;
 }
 
 .gui-ext-overview-row + .gui-ext-overview-row {
 	border-top: 1px solid var(--border);
+}
+
+/* The action on an attention row.
+ *
+ * Six bordered, filled buttons stacked down the right edge of the page carried
+ * more weight than the six names they belonged to: the eye landed on the
+ * repeats instead of on what needs attention. A row action is the consequence
+ * of the row, so it stays reachable and legible without a box of its own —
+ * underline on hover is the affordance, the row is the target. */
+.gui-ext-overview-row-action {
+	flex: none;
+	padding: 2px 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: 12px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: color 120ms ease;
+}
+.gui-ext-overview-row-action:hover {
+	color: var(--color-accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.gui-ext-overview-row-action:focus-visible {
+	outline: 1px solid var(--accent);
+	outline-offset: 3px;
+	border-radius: 3px;
 }
 
 .gui-ext-overview-cta {
