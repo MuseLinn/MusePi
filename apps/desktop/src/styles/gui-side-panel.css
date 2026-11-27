@@ -77,6 +77,75 @@
 	pointer-events: auto;
 }
 
+.gui-sidebar-toggle-seat {
+	height: 26px;
+	margin: 0 var(--gui-side-panel-inset) var(--gui-card-gutter);
+	flex-shrink: 0;
+}
+
+.gui-sidebar-toggle {
+	--panel-nudge: -2px;
+	position: absolute;
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	left: calc(var(--gui-card-gutter) + var(--gui-side-w) - var(--gui-side-panel-inset) - 26px);
+	z-index: 43;
+	display: flex;
+	height: 26px;
+	width: 26px;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: background 140ms ease, color 140ms ease;
+}
+
+.gui-sidebar-toggle[data-collapsed="true"] {
+	--panel-nudge: 2px;
+}
+
+.gui-sidebar-toggle:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-sidebar-toggle svg {
+	transition: transform 180ms var(--spring-snappy, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+.gui-sidebar-toggle:hover svg,
+.gui-sidebar-toggle:focus-visible svg {
+	transform: translateX(var(--panel-nudge));
+}
+
+.gui-sidebar-toggle:active svg {
+	transform: translateX(var(--panel-nudge)) scale(0.92);
+}
+
+.gui-motion-off .gui-sidebar-toggle svg {
+	transition: none;
+}
+
+.gui-motion-off .gui-sidebar-toggle:hover svg,
+.gui-motion-off .gui-sidebar-toggle:focus-visible svg,
+.gui-motion-off .gui-sidebar-toggle:active svg {
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-sidebar-toggle svg {
+		transition: none;
+	}
+
+	.gui-sidebar-toggle:hover svg,
+	.gui-sidebar-toggle:focus-visible svg,
+	.gui-sidebar-toggle:active svg {
+		transform: none;
+	}
+}
+
 /* ── Rounded card surface: same tokens as .gui-chat-column / .gui-page-card
  * The card opts out of the keeper's band (gui-window-drag.css), so every click
  * inside it lands while the empty strip above moves the window; the card's own
@@ -93,6 +162,49 @@
 .gui-side-keeper > .gui-pane-side .gui-pane-drag {
 	height: var(--gui-card-gutter);
 	min-height: var(--gui-card-gutter);
+}
+
+html.gui-vt-clip-from-anchor .gui-side-keeper > .gui-pane-side,
+html.gui-vt-clip-to-anchor .gui-side-keeper > .gui-pane-side {
+	transition: none !important;
+}
+
+::view-transition-group(gui-sidebar-surface) {
+	animation: none;
+}
+
+html.gui-vt-clip-from-anchor::view-transition-new(gui-sidebar-surface) {
+	animation: gui-sidebar-clip-from-anchor var(--duration-one-take) var(--ease-one-take) both;
+	mix-blend-mode: normal;
+}
+
+html.gui-vt-clip-to-anchor::view-transition-old(gui-sidebar-surface) {
+	animation: gui-sidebar-clip-to-anchor var(--duration-one-take) var(--ease-one-take) both;
+	mix-blend-mode: normal;
+}
+
+html.gui-vt-clip-from-anchor::view-transition-old(gui-sidebar-surface),
+html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
+	animation: none;
+	opacity: 0;
+}
+
+@keyframes gui-sidebar-clip-from-anchor {
+	from {
+		clip-path: var(--gui-vt-anchor-clip);
+	}
+	to {
+		clip-path: inset(0 round var(--radius-lg));
+	}
+}
+
+@keyframes gui-sidebar-clip-to-anchor {
+	from {
+		clip-path: inset(0 round var(--radius-lg));
+	}
+	to {
+		clip-path: var(--gui-vt-anchor-clip);
+	}
 }
 
 /* ── Drawer mode (narrow workspace) ──────────────────────────────────────
@@ -134,7 +246,7 @@
 	/* The docked active-pane selector is more specific; these geometry
 	 * overrides must win or the floating card keeps its in-flow box. */
 	position: fixed !important;
-	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
+	top: var(--gui-peek-top, calc(var(--gui-header-h) + var(--gui-card-gutter)));
 	bottom: calc(var(--gui-card-gutter) * 2);
 	/* The rail is a card now, so three gutters sit between its right edge and
 	 * the pane's card: the rail's own side margin, the pane's side margin, and
@@ -143,7 +255,7 @@
 	 * grows into (measured 88 vs 96 with the old two-gutter formula). */
 	/* Follows the rail wherever it is: a wide rail must not leave the floating
 	 * card computing from the collapsed strip. */
-	left: calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3);
+	left: var(--gui-peek-left, calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3));
 	z-index: 42;
 	height: auto !important;
 	margin: 0 !important;

@@ -75,6 +75,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
+import { SidebarToggleButton } from "./components/SidebarToggleButton";
 import { SplitterGrip } from "./components/SplitterGrip";
 import { type BootPhase, StartupSplash, useBootStatus, useSplashHold } from "./components/StartupSplash";
 import { useSessionInfoCardVisibility } from "./components/session-info-card";
@@ -212,7 +213,7 @@ import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surface
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
-import { withViewTransition } from "./lib/view-transition";
+import { morphSurfaceClip, withViewTransition } from "./lib/view-transition";
 import { createProject, type WorkspaceMutationResult } from "./lib/workspace-projects";
 import {
 	applyScrollbarSkin,
@@ -1027,10 +1028,27 @@ function AppInner(): ReactNode {
 	 *  panel id is cleared, so opacity/transform can play a real fade-out. */
 	const [peekHovered, setPeekHovered] = useState(false);
 	const peekTimerRef = useRef<number | null>(null);
-	const openPeek = useCallback((panelId: string): void => {
+	const peekAnchorRef = useRef<HTMLElement | null>(null);
+	const openPeek = useCallback((panelId: string, anchor?: HTMLElement): void => {
 		if (peekTimerRef.current !== null) {
 			clearTimeout(peekTimerRef.current);
 			peekTimerRef.current = null;
+		}
+		peekAnchorRef.current = anchor ?? null;
+		const keeper = document.querySelector<HTMLElement>(".gui-side-keeper");
+		if (keeper && anchor) {
+			const styles = getComputedStyle(anchor);
+			const rect = anchor.getBoundingClientRect();
+			const width = Number.parseFloat(styles.getPropertyValue("--gui-side-w"));
+			const inset = Number.parseFloat(styles.getPropertyValue("--gui-side-panel-inset"));
+			const gutter = Number.parseFloat(styles.getPropertyValue("--gui-card-gutter"));
+			if (Number.isFinite(width) && Number.isFinite(inset)) {
+				keeper.style.setProperty("--gui-peek-left", `${rect.right + inset - width}px`);
+			}
+			if (Number.isFinite(gutter)) keeper.style.setProperty("--gui-peek-top", `${rect.top - gutter}px`);
+		} else {
+			keeper?.style.removeProperty("--gui-peek-left");
+			keeper?.style.removeProperty("--gui-peek-top");
 		}
 		setPeekPanel(panelId);
 		setPeekHovered(true);
@@ -1049,8 +1067,32 @@ function AppInner(): ReactNode {
 		// Fade out immediately; keep the panel id for the 140ms exit so the
 		// pane stays mounted and its CSS transition can finish.
 		setPeekHovered(false);
-		peekTimerRef.current = window.setTimeout(() => setPeekPanel(null), 140);
+		peekTimerRef.current = window.setTimeout(() => {
+			setPeekPanel(null);
+			peekAnchorRef.current = null;
+		}, 140);
 	}, []);
+	const dismissPeek = useCallback((restoreFocus = false): void => {
+		if (peekTimerRef.current !== null) {
+			clearTimeout(peekTimerRef.current);
+			peekTimerRef.current = null;
+		}
+		setPeekHovered(false);
+		setPeekPanel(null);
+		if (restoreFocus) peekAnchorRef.current?.focus();
+		peekAnchorRef.current = null;
+	}, []);
+	useEffect(() => {
+		if (peekPanel === null) return;
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			dismissPeek(true);
+		};
+		document.addEventListener("keydown", onKeyDown, true);
+		return () => document.removeEventListener("keydown", onKeyDown, true);
+	}, [peekPanel, dismissPeek]);
 	/** Geometry hold for the peek: the floating panel can be covered by
 	 *  page-level chrome on 任务中心 / 能力中心, so `pointerenter` on the keeper
 	 *  never fires for those destinations and the peek closed the moment the
@@ -1098,27 +1140,42 @@ function AppInner(): ReactNode {
 	const [sideWidth, setSideWidth] = useState<number>(() =>
 		Number(localStorage.getItem(SIDE_WIDTH_STORAGE_KEY) ?? SIDE_WIDTH_DEFAULT),
 	);
-	const toggleSidebar = useCallback((): void => {
-		if (sidebarDrawerRef.current) {
-			setNarrowSidebarOpen(open => !open);
-			return;
-		}
-		// Tier two folding in / out is the column's other rect change: the pane's
-		// card collapses to zero while the header's toggle takes its place as the
-		// only remaining affordance (KiroCrew's behaviour — the list morphs into
-		// the button). Wrapping the flip lets the browser pair the pane's old box
-		// with the button's new one instead of one vanishing and the other
-		// appearing. `surfaceOnly` keeps the window's root snapshot out of it.
-		withViewTransition(
-			() => {
-				setSideCollapsed(collapsed => {
-					localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
-					return !collapsed;
-				});
-			},
-			{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
-		);
-	}, []);
+	const toggleSidebar = useCallback(
+		(_anchor?: HTMLButtonElement): void => {
+			dismissPeek();
+			if (sidebarDrawerRef.current) {
+				setNarrowSidebarOpen(open => !open);
+				return;
+			}
+			const anchor = _anchor ?? document.querySelector<HTMLButtonElement>(".gui-sidebar-toggle");
+			const keeper =
+				anchor?.closest<HTMLElement>(".gui-side-keeper") ?? document.querySelector<HTMLElement>(".gui-side-keeper");
+			const panelId = keeper?.dataset.dockedPanel;
+			const surface =
+				panelId === "scheduled"
+					? keeper?.querySelector<HTMLElement>(".gui-scheduled-slot")
+					: panelId === "capability"
+						? keeper?.querySelector<HTMLElement>(".gui-capability-slot")
+						: keeper?.querySelector<HTMLElement>(
+								".gui-pane-side:not(.gui-scheduled-slot):not(.gui-capability-slot)",
+							);
+			morphSurfaceClip(
+				surface ?? null,
+				anchor,
+				"gui-sidebar-surface",
+				() => {
+					setSideCollapsed(!sideCollapsed);
+					localStorage.setItem("musepi-gui-side", sideCollapsed ? "1" : "0");
+				},
+				{
+					direction: sideCollapsed ? "from-anchor" : "to-anchor",
+					surfaceOnly: true,
+					extraClass: "gui-vt-left-col",
+				},
+			);
+		},
+		[dismissPeek, sideCollapsed],
+	);
 	/** Hover only previews a collapsed panel; clicking a destination owns the
 	 *  commit, so the destination arrives WITH the panel its interaction lives
 	 *  in instead of dropping the pane as soon as the pointer leaves the rail. */
@@ -1629,6 +1686,14 @@ function AppInner(): ReactNode {
 		settingsActive,
 		sideCollapsed,
 		peekPanel,
+		scheduledActive,
+		capabilityActive,
+		pageDestinationActive,
+	});
+	const togglePanelId = resolveSidebarPanel({
+		settingsActive,
+		sideCollapsed: false,
+		peekPanel: null,
 		scheduledActive,
 		capabilityActive,
 		pageDestinationActive,
@@ -5504,6 +5569,7 @@ function AppInner(): ReactNode {
 					 * survive the settings round-trip. Narrow windows use the same
 					 * mounted sidebar as a drawer instead of deleting its content. */}
 					<div
+						id="gui-sidebar-list-region"
 						className={[
 							"gui-side-keeper",
 							shell.sideKeeperHidden ? "gui-side-keeper--hidden" : "",
@@ -5516,6 +5582,7 @@ function AppInner(): ReactNode {
 						// docked destination, or the panel owned by the hovered
 						// rail button. CSS never guesses from destination flags.
 						data-panel={activePanelId ?? undefined}
+						data-docked-panel={togglePanelId ?? undefined}
 						data-peek={peekEligible ? "true" : undefined}
 						data-peek-open={peekOpen ? "true" : undefined}
 						onPointerEnter={peekEligible ? holdPeek : undefined}
@@ -5524,6 +5591,7 @@ function AppInner(): ReactNode {
 							if (narrowSidebarOpen && event.target instanceof Element && event.target.closest("button")) {
 								setNarrowSidebarOpen(false);
 							}
+							if (event.target instanceof Element && event.target.closest(".gui-sidebar-toggle")) return;
 							// Using a hover-peeked pane IS the commit gesture: the
 							// floating pane belongs to a destination whose page is not
 							// mounted, so the row's nav action would reach no subscriber
@@ -5533,8 +5601,10 @@ function AppInner(): ReactNode {
 							if (!peekOpen || activePanelId === null) return;
 							const peeked = railDestinations.find(item => item.panelId === activePanelId);
 							if (!peeked) return;
-							if (peeked.active) revealSidePanel();
-							else peeked.onSelect();
+							if (peeked.active) {
+								if (peekAnchorRef.current) dismissPeek();
+								else revealSidePanel();
+							} else peeked.onSelect();
 						}}
 					>
 						{/* The side resizer lives INSIDE the keeper, so it is positioned
@@ -5562,6 +5632,16 @@ function AppInner(): ReactNode {
 							>
 								<SplitterGrip />
 							</div>
+						)}
+						{(!pageDestinationActive || secondTierPanelVisible) && (
+							<SidebarToggleButton
+								collapsed={sideCollapsed}
+								onToggle={toggleSidebar}
+								onPeekOpen={
+									peekEligible && togglePanelId ? anchor => openPeek(togglePanelId, anchor) : undefined
+								}
+								onPeekClose={peekEligible ? closePeek : undefined}
+							/>
 						)}
 						<SessionSidebar
 							nodes={tree}
@@ -5678,7 +5758,6 @@ function AppInner(): ReactNode {
 											: sideCollapsed
 								}
 								panelAvailable={!pageDestinationActive || secondTierPanelVisible}
-								onToggleSidebar={toggleSidebar}
 								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
 								onTogglePause={() => void togglePause()}

@@ -1103,6 +1103,7 @@ export function SessionSidebar({
 			<div className="flex h-full min-h-0 w-full flex-col">
 				{/* Traffic-light clearance (macOS overlay title bar, y=14). */}
 				<div className="gui-pane-drag flex h-9 flex-shrink-0 items-center justify-end pr-2" />
+				<div className="gui-sidebar-toggle-seat" aria-hidden="true" />
 				{/* Menu: new session is the primary action; others are placeholders. */}
 				<div className="gui-side-menu flex flex-col gap-0.5 px-2.5">
 					<button type="button" className="gui-menu-item" onClick={onNewSession}>

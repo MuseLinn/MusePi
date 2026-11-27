@@ -1812,53 +1812,6 @@ html.gui-vt-surface-only::view-transition-new(root),
 	width: calc(68px + var(--gui-float-controls-width, 86px) - var(--gui-rail-w, 52px) + 8px);
 }
 
-.gui-sidebar-toggle {
-	display: flex;
-	height: 26px;
-	width: 26px;
-	align-items: center;
-	justify-content: center;
-	border-radius: var(--radius-lg);
-	border: 1px solid transparent;
-	background: transparent;
-	color: var(--color-text-muted);
-	transition: background 140ms ease, color 140ms ease;
-}
-
-.gui-sidebar-toggle:hover {
-	background: var(--color-hover);
-	color: var(--color-text);
-}
-
-/* Panel-toggle state matrix: the glyph morphs on toggle (MorphIcon), and hover
- * nudges it toward the direction the panel will move — the nudge flips with the
- * state, so hover-before and hover-after read differently, and the press adds a
- * little scale. Reduced motion keeps the color change only. */
-.gui-sidebar-toggle {
-	--panel-nudge: -2px;
-}
-.gui-sidebar-toggle[data-collapsed="true"] {
-	--panel-nudge: 2px;
-}
-.gui-sidebar-toggle svg {
-	transition: transform 180ms var(--spring-snappy, cubic-bezier(0.34, 1.56, 0.64, 1));
-}
-.gui-sidebar-toggle:hover svg,
-.gui-sidebar-toggle:focus-visible svg {
-	transform: translateX(var(--panel-nudge));
-}
-.gui-sidebar-toggle:active svg {
-	transform: translateX(var(--panel-nudge)) scale(0.92);
-}
-.gui-motion-off .gui-sidebar-toggle svg {
-	transition: none;
-}
-.gui-motion-off .gui-sidebar-toggle:hover svg,
-.gui-motion-off .gui-sidebar-toggle:focus-visible svg,
-.gui-motion-off .gui-sidebar-toggle:active svg {
-	transform: none;
-}
-
 /* ── Account control (rail + sidebar footer) ───────────────────────────
  * The user's picture IS the account entry: it replaced the rail's settings
  * gear and absorbed the shortcut / remote-control buttons that used to sit
