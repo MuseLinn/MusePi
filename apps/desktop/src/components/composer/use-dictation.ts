@@ -141,10 +141,8 @@ export function useDictation(opts: {
 			optsRef.current.editor?.current?.writeDictation(spoken.committed, spoken.hypothesis, !started);
 			started = true;
 		};
-		// The dictation's ending. `transcript` is the recognizer's final answer for
-		// the whole utterance — several segments re-decoded as one, so it can differ
-		// from the streamed text in punctuation and wording. It replaces the region
-		// outright; merging it with the streamed text would duplicate the sentence.
+		// The dictation's ending. `transcript` joins the finalized sentences and
+		// replaces the whole dictation region, including the last live preview.
 		const finish = (transcript: string, maySubmit: boolean): void => {
 			const finalText = transcript.trim();
 			if (finalText) {
