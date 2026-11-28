@@ -1,9 +1,11 @@
 import "./happy-dom-shim"; // MUST be first: component module graphs touch DOM globals at evaluation time.
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { setLocale } from "@musepi/client-core";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AppRail, type RailItem, UserAccountButton } from "../src/components/AppRail";
+import { InstanceButton } from "../src/components/InstanceButton";
+import { InstanceManagerDialog } from "../src/components/InstanceManagerDialog";
 import type { RpcClient } from "../src/lib/rpc";
 
 /**
@@ -110,6 +112,61 @@ function renderRail(
 	return { nav, calls, button, openMenu };
 }
 
+function InstanceAccountFixture(): React.ReactNode {
+	const [managerOpen, setManagerOpen] = useState(false);
+	return (
+		<>
+			<AppRail
+				destinations={[destination("home")]}
+				panelAvailable
+				onTogglePanel={() => {}}
+				account={
+					<UserAccountButton
+						rpc={rpc}
+						cwd="C:/workspace"
+						connected
+						onOpenSettings={() => {}}
+						onDisconnect={() => {}}
+						instanceMenu={close => (
+							<InstanceButton
+								embedded
+								rpc={rpc}
+								connected
+								daemonUrl="ws://127.0.0.1:8300"
+								hosts={[]}
+								onSwitchHost={() => {}}
+								onAddTarget={() => {}}
+								onRemoveHost={() => {}}
+								onReconnect={() => {}}
+								onDisconnect={() => {}}
+								onOpenWorkspace={() => {}}
+								onOpenManager={() => {
+									close();
+									setManagerOpen(true);
+								}}
+								onOpenDisclaimer={() => {}}
+							/>
+						)}
+					/>
+				}
+			/>
+			<InstanceManagerDialog
+				open={managerOpen}
+				onClose={() => setManagerOpen(false)}
+				rpc={rpc}
+				connected
+				daemonUrl="ws://127.0.0.1:8300"
+				hosts={[]}
+				onSwitchHost={() => {}}
+				onAddTarget={() => {}}
+				onRemoveHost={() => {}}
+				onDisconnect={() => {}}
+				onOpenDisclaimer={() => {}}
+			/>
+		</>
+	);
+}
+
 describe("rail account control", () => {
 	test("the user picture is the only bottom entry — no settings gear remains", () => {
 		const rail = renderRail();
@@ -172,7 +229,30 @@ describe("rail account control", () => {
 		await act(async () => {
 			await new Promise(resolve => setTimeout(resolve, 200));
 		});
-		expect(document.querySelector(".gui-account-menu")).toBeNull();
+		expect(document.querySelector(".gui-account-menu") === null).toBe(true);
+	});
+
+	test("instance management closes its source menu and keeps the dialog interactive", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.push(root);
+		await act(async () => root.render(<InstanceAccountFixture />));
+		const menuButton = host.querySelector<HTMLButtonElement>(".gui-account-btn")!;
+		await act(async () => menuButton.click());
+		const menu = document.querySelector<HTMLElement>(".gui-account-menu")!;
+		const manage = [...menu.querySelectorAll("button")].find(el => el.textContent?.includes("实例管理"));
+		expect(manage !== undefined).toBe(true);
+		await act(async () => manage?.click());
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 200));
+		});
+		expect(document.querySelector(".gui-account-menu") === null).toBe(true);
+		const dialog = document.querySelector<HTMLElement>(".gui-dialog--instance-manager");
+		expect(dialog !== null).toBe(true);
+		const add = dialog?.querySelector<HTMLButtonElement>(".gui-loc-add");
+		await act(async () => add?.click());
+		expect(dialog?.querySelector(".gui-conn-form") !== null).toBe(true);
 	});
 
 	test("disconnect is disabled while nothing is connected", () => {

@@ -74,7 +74,7 @@ export const settings = {
 	"settings.instanceListEmpty": "目前只有本机。添加一台后，会话可以交给那台机器运行。",
 	"settings.connectionWhereSsh": "ssh {host}",
 	"settings.connectionWhereForwarded": "经隧道转发",
-	"settings.connectionLocations": "连接位置",
+	"settings.connectionLocations": "实例管理",
 	"settings.connectionHostSaved": "已登记",
 	"settings.connectionHostLocalOnly": "仅本机配置",
 	"settings.intfloatMultilingualE5.info": "intfloat/multilingual-e5-large（1024 维），跨语言回忆",

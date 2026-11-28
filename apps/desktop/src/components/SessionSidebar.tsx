@@ -207,7 +207,7 @@ export function SessionSidebar({
 	/** 添加项目 — native directory picker, then the project dialog. */
 	onAddProject?(): void;
 	/** Open the collab remote-control dialog. */
-	onOpenInstanceManager(open: () => void): void;
+	onOpenInstanceManager(): void;
 	/** The shared connection manager. Distinct from the instance menu: the
 	 *  host routes it to the one manager component, so this footer never grows
 	 *  a second implementation of the endpoint list. */

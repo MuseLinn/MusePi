@@ -81,7 +81,7 @@ export const settings = {
 	"settings.instanceListEmpty": "This computer is the only instance. Add one to run a session on another machine.",
 	"settings.connectionWhereSsh": "ssh {host}",
 	"settings.connectionWhereForwarded": "Reached through a tunnel",
-	"settings.connectionLocations": "Connection locations",
+	"settings.connectionLocations": "Instance management",
 	"settings.connectionHostSaved": "Saved",
 	"settings.connectionHostLocalOnly": "Local config only",
 	"settings.intfloatMultilingualE5.info": "intfloat/multilingual-e5-large (1024d), cross-language recall",

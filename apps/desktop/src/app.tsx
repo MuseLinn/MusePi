@@ -55,6 +55,7 @@ import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { InstanceButton } from "./components/InstanceButton";
+import { InstanceManagerDialog } from "./components/InstanceManagerDialog";
 import type { McpAuthRequest } from "./components/McpAuthCard";
 import type { SessionMemoryMode } from "./components/MemoryModePicker";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
@@ -1241,6 +1242,7 @@ function AppInner(): ReactNode {
 	 *  entrance. The disconnected and failure surfaces render the same
 	 *  component full-page, so there is one implementation, three entrances. */
 	const [collabOpen, setCollabOpen] = useState(false);
+	const [instanceManagerOpen, setInstanceManagerOpen] = useState(false);
 	const [collabScope, setCollabScope] = useState<"workspace" | "session">("workspace");
 	const [remoteDisclaimerOpen, setRemoteDisclaimerOpen] = useState(false);
 	const [remoteAccessConsented, setRemoteAccessConsented] = useState(() => hasRemoteAccessConsent());
@@ -5462,7 +5464,7 @@ function AppInner(): ReactNode {
 			// menu now: they were a second trigger directly above the avatar, and
 			// two adjacent popovers listing the same hosts is exactly the
 			// duplication this menu exists to remove.
-			instanceMenu={
+			instanceMenu={close => (
 				<InstanceButton
 					embedded
 					rpc={rpc ?? null}
@@ -5475,10 +5477,13 @@ function AppInner(): ReactNode {
 					onReconnect={() => void boot()}
 					onDisconnect={disconnect}
 					onOpenWorkspace={handleOpenRemoteWorkspace}
-					onOpenManager={requestRemoteAccess}
+					onOpenManager={() => {
+						close();
+						requestRemoteAccess(() => setInstanceManagerOpen(true));
+					}}
 					onOpenDisclaimer={viewRemoteDisclaimer}
 				/>
-			}
+			)}
 		/>
 	);
 	/** The rail's footer keeps no trigger of its own: the instance entry moved
@@ -5648,7 +5653,7 @@ function AppInner(): ReactNode {
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenWorkspace={handleOpenRemoteWorkspace}
 							onOpenSettings={openSettings}
-							onOpenInstanceManager={requestRemoteAccess}
+							onOpenInstanceManager={() => requestRemoteAccess(() => setInstanceManagerOpen(true))}
 							onOpenRemoteDisclaimer={viewRemoteDisclaimer}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
 							onRenameSession={renameSession}
@@ -6081,6 +6086,19 @@ function AppInner(): ReactNode {
 				initialScope={collabScope}
 				open={collabOpen}
 				onClose={() => setCollabOpen(false)}
+				onOpenDisclaimer={viewRemoteDisclaimer}
+			/>
+			<InstanceManagerDialog
+				open={instanceManagerOpen}
+				onClose={() => setInstanceManagerOpen(false)}
+				rpc={rpc}
+				connected={status === "open"}
+				daemonUrl={url}
+				hosts={hosts}
+				onSwitchHost={switchHost}
+				onAddTarget={addTarget}
+				onRemoveHost={removeHost}
+				onDisconnect={disconnect}
 				onOpenDisclaimer={viewRemoteDisclaimer}
 			/>
 			<RemoteAccessDisclaimerDialog

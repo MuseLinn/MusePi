@@ -219,7 +219,7 @@ export function UserAccountButton({
 	/** Rail geometry (36px square) vs the sidebar footer's inline control. */
 	compact?: boolean;
 	/** The instance section, rendered inside this menu. */
-	instanceMenu?: ReactNode;
+	instanceMenu?: (close: () => void) => ReactNode;
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
@@ -264,7 +264,7 @@ export function UserAccountButton({
 				 * and the connection manager were a second trigger sitting directly
 				 * above this one, and two adjacent popovers listing the same hosts is
 				 * the duplication this menu exists to avoid. */}
-				{instanceMenu}
+				{instanceMenu?.(close)}
 				<button
 					type="button"
 					className="gui-menu-item"

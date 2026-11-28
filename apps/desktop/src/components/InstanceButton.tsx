@@ -15,7 +15,6 @@ import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
-import { InstanceManagerDialog } from "./InstanceManagerDialog";
 import { MenuPopup } from "./MenuPopup";
 
 export function InstanceButton({
@@ -47,7 +46,7 @@ export function InstanceButton({
 	onReconnect(): void;
 	onDisconnect(): void;
 	onOpenWorkspace(cwd: string): void;
-	onOpenManager(open: () => void): void;
+	onOpenManager(): void;
 	onOpenDisclaimer(): void;
 	compact?: boolean;
 	/** Contents only: no trigger, no popover. The rail folded this entry into the
@@ -57,7 +56,6 @@ export function InstanceButton({
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
-	const [managerOpen, setManagerOpen] = useState(false);
 	const browserHost = useSyncExternalStore(subscribeHost, getHostState, getHostState);
 
 	// Shell and daemon facts remain separate; only the shell drives app updates.
@@ -267,7 +265,7 @@ export function InstanceButton({
 					// pair, and it is the control the user actually pressed to
 					// reach this dialog.
 					setOpen(false);
-					onOpenManager(() => setManagerOpen(true));
+					onOpenManager();
 				}}
 			>
 				<Icon name="settings-3" className="h-3.5 w-3.5" />
@@ -313,24 +311,7 @@ export function InstanceButton({
 	);
 
 	if (embedded) {
-		return (
-			<div className="gui-instance gui-instance--embedded">
-				{instanceMenuBody}
-				<InstanceManagerDialog
-					open={managerOpen}
-					onClose={() => setManagerOpen(false)}
-					rpc={rpc}
-					connected={connected}
-					daemonUrl={daemonUrl}
-					hosts={hosts}
-					onSwitchHost={onSwitchHost}
-					onAddTarget={onAddTarget}
-					onRemoveHost={onRemoveHost}
-					onDisconnect={onDisconnect}
-					onOpenDisclaimer={onOpenDisclaimer}
-				/>
-			</div>
-		);
+		return <div className="gui-instance gui-instance--embedded">{instanceMenuBody}</div>;
 	}
 
 	return (
@@ -363,19 +344,6 @@ export function InstanceButton({
 			>
 				{instanceMenuBody}
 			</MenuPopup>
-			<InstanceManagerDialog
-				open={managerOpen}
-				onClose={() => setManagerOpen(false)}
-				rpc={rpc}
-				connected={connected}
-				daemonUrl={daemonUrl}
-				hosts={hosts}
-				onSwitchHost={onSwitchHost}
-				onAddTarget={onAddTarget}
-				onRemoveHost={onRemoveHost}
-				onDisconnect={onDisconnect}
-				onOpenDisclaimer={onOpenDisclaimer}
-			/>
 		</div>
 	);
 }
