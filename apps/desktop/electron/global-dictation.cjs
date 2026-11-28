@@ -148,7 +148,6 @@ class GlobalDictation {
 		}
 		if (trigger === "hold") {
 			try {
-				if (process.platform !== "win32") throw new Error("hold-to-talk is only supported on Windows");
 				const monitor = await this.createHoldMonitor(accelerator);
 				if (!this.enabled || this.trigger !== "hold" || this.accelerator !== accelerator) {
 					monitor.close();
@@ -182,6 +181,7 @@ class GlobalDictation {
 	async createHoldMonitor(accelerator) {
 		const callback = event => this.handleHoldEvent(event, accelerator);
 		if (this.createKeyMonitor) return this.createKeyMonitor(accelerator, callback);
+		if (process.platform !== "win32") throw new Error("hold-to-talk is only supported on Windows");
 		const native = await this.loadNative();
 		if (!native?.DictationKeyMonitor) throw new Error("native hold-to-talk monitor unavailable");
 		return new native.DictationKeyMonitor(accelerator, callback);
