@@ -27,7 +27,7 @@ Sources: [`packages/stats/README.md`](../packages/stats/README.html), [`packages
 
 Sources: [`packages/musepi-type/README.md`](../packages/musepi-type/README.html), [`packages/musepi-type/package.json`](../packages/musepi-type/package.json), and the repository [musepi-type authoring guide](./musepi-type-guide.html).
 
-- Package: public `@musepi/musepi-type`; install with `bun add @musepi/musepi-type`; requires Bun 1.4.4 or newer.
+- Package: public `@musepi/musepi-type`; install with `bun add @musepi/musepi-type`; requires Bun 1.4.5 or newer.
 - Feature: callable ArkType-compatible schemas with cheap interpreted startup, lazy hot-path compilation, validation errors, defaults and morphs, and JSON Schema emission.
 - Public surfaces: `@musepi/musepi-type` for native authoring, `/typebox` and `/zod` for compatibility builders, and `/ark` for the alias-free ArkType compatibility facade.
 - Runtime behavior: schema calls return the validated value or `type.errors`; `.assert()` returns the value or throws; `.allows()` performs a boolean check.

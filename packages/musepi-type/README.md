@@ -13,7 +13,7 @@ bun add @musepi/musepi-type
 ```
 
 Runs on Node 20+ (published as compiled ESM with bundled type declarations)
-and Bun 1.4.4+ (which resolves the TypeScript source directly via the `bun`
+and Bun 1.4.5+ (which resolves the TypeScript source directly via the `bun`
 export condition). No runtime dependencies.
 
 ## Usage

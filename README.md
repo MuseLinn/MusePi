@@ -60,7 +60,7 @@ bun run musepi
 
 The `sh` installer accepts `--ref <tag|commit|branch>` to select a release or checkout and `--source` to build instead of downloading the prebuilt binary. The PowerShell installer runs through `irm | iex`, which passes no arguments: set `$env:PI_REF` to select a version and `$env:PI_SOURCE=1` to build from source before running it.
 
-Prebuilt binaries carry their own runtime; only a from-source install needs Bun 1.4.4 or newer.
+Prebuilt binaries carry their own runtime; only a from-source install needs Bun 1.4.5 or newer.
 
 ## What is included
 
@@ -128,7 +128,7 @@ Contracts and extension boundaries: [`docs/capability-seams.md`](docs/capability
 
 ## Development
 
-Use **Bun 1.4.4 or newer within the project compatibility policy**. Package scripts are the command source of truth.
+Use **Bun 1.4.5 or newer within the project compatibility policy**. Package scripts are the command source of truth.
 
 ```sh
 bun run setup            # install dependencies, build natives, link the CLI

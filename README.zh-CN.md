@@ -60,7 +60,7 @@ bun run musepi
 
 `sh` 安装脚本支持 `--ref <tag|commit|branch>` 选择指定版本，支持 `--source` 从源码构建而非下载预编译二进制。Windows 的 PowerShell 脚本通过 `irm | iex` 运行、没有命令行参数：运行前设置 `$env:PI_REF` 选择版本、`$env:PI_SOURCE=1` 从源码构建。
 
-预编译二进制自带运行时；只有源码安装需要 Bun 1.4.4 或更新版本。
+预编译二进制自带运行时；只有源码安装需要 Bun 1.4.5 或更新版本。
 
 ## 主要能力
 
@@ -128,7 +128,7 @@ flowchart LR
 
 ## 开发
 
-使用 **Bun 1.4.4 或项目兼容策略允许的新版本**。各包的 `package.json` scripts 是命令依据。
+使用 **Bun 1.4.5 或项目兼容策略允许的新版本**。各包的 `package.json` scripts 是命令依据。
 
 ```sh
 bun run setup            # 安装依赖、构建 natives、链接 CLI

@@ -1035,7 +1035,7 @@ function repoBunVersion(): string {
 		const pm = (raw as Record<string, unknown>).packageManager;
 		if (typeof pm === "string" && pm.startsWith("bun@")) return pm.slice("bun@".length);
 	}
-	return "1.4.4";
+	return "1.4.5";
 }
 
 /** Native arch of the docker daemon (what non-emulated task containers run as). */

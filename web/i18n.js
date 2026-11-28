@@ -212,7 +212,7 @@
       "MusePi is an AI workspace: the desktop GUI, the terminal and the resident desktop pet share one background service, with the mobile companion still in development; models, tools and surfaces are all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work. The project is open source under Apache-2.0 and retains the upstream MIT notice; the MusePi name and logo are not licensed under Apache-2.0.",
     "faq.q6": "How do I get started?",
     "faq.a6":
-      "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Prebuilt binaries need no extra runtime; a from-source install needs Bun 1.4.4 or newer. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
+      "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Prebuilt binaries need no extra runtime; a from-source install needs Bun 1.4.5 or newer. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
 
     /* CTA band */
     "cta.h2": "Connect it to the machines you have",

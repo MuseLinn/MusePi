@@ -94,7 +94,7 @@
         "@musepi/pi-wire": "workspace:*",
         "@musepi/sdk": "workspace:*",
         "@tailwindcss/cli": "catalog:",
-        "@types/bun": "^1.4.4",
+        "@types/bun": "catalog:",
         "@types/chroma-js": "^3.1.2",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
@@ -229,7 +229,7 @@
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.12.0",
-        "@types/bun": "^1.4.4",
+        "@types/bun": "catalog:",
         "@types/chroma-js": "^3.1.2",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
@@ -1013,7 +1013,7 @@
       "name": "@musepi/pi-tool-select",
       "version": "0.7.9",
       "devDependencies": {
-        "@types/bun": "^1.4.4",
+        "@types/bun": "catalog:",
       },
     },
     "packages/tui": {
@@ -1069,7 +1069,7 @@
         "react-dom": "^19.1.0",
       },
       "devDependencies": {
-        "@types/bun": "^1.4.4",
+        "@types/bun": "catalog:",
         "@types/react": "^19.1.0",
         "@types/react-dom": "^19.1.0",
         "react-refresh": "^0.18.0",
@@ -1097,7 +1097,7 @@
       "devDependencies": {
         "@types/babel__generator": "^7.27.0",
         "@types/babel__traverse": "^7.28.0",
-        "@types/bun": "^1.4.4",
+        "@types/bun": "catalog:",
       },
     },
   },
