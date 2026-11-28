@@ -149,9 +149,7 @@ describe("renderReleaseNotes", () => {
 
 	test("links the full changelog and the previous release comparison", () => {
 		const body = renderReleaseNotes({ changelog: CHANGELOG, version: "1.2.0", tag: "v1.2.0" });
-		expect(body).toContain(
-			`[完整更新日志](https://github.com/${DEFAULT_REPO}/blob/main/packages/coding-agent/CHANGELOG.musepi.md)`,
-		);
+		expect(body).toContain("[完整更新日志](https://muselinn.github.io/MusePi/changelog.html)");
 		expect(body).toContain(`[对比 v1.1.0…v1.2.0](https://github.com/${DEFAULT_REPO}/compare/v1.1.0...v1.2.0)`);
 	});
 
@@ -255,6 +253,7 @@ describe("building blocks", () => {
 	test("release links honour a custom repository", () => {
 		const links = buildReleaseLinks({ version: "1.2.0", tag: "v1.2.0", previousVersion: "1.1.0", repo: "o/r" });
 		expect(links).toContain("https://github.com/o/r/compare/v1.1.0...v1.2.0");
+		expect(links).toContain("https://github.com/o/r/blob/main/packages/coding-agent/CHANGELOG.musepi.md");
 	});
 });
 

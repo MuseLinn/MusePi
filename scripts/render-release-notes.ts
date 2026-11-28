@@ -476,7 +476,10 @@ export function buildReleaseLinks(input: {
 	repo?: string;
 }): string {
 	const repo = input.repo ?? DEFAULT_REPO;
-	const changelog = `[完整更新日志](https://github.com/${repo}/blob/main/${CHANGELOG_PATH})`;
+	const changelog =
+		repo === DEFAULT_REPO
+			? "[完整更新日志](https://muselinn.github.io/MusePi/changelog.html)"
+			: `[完整更新日志](https://github.com/${repo}/blob/main/${CHANGELOG_PATH})`;
 	const previous = input.previousVersion;
 	const comparison = previous
 		? `[对比 v${previous}…v${input.version}](https://github.com/${repo}/compare/v${previous}...${input.tag})`

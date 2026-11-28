@@ -11,8 +11,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 - **空态 chip 同行左对齐，输入框去掉额外背景**：工作区、模式、分支、记忆与连接器统一在输入框上方同一行左对齐，窄容器允许换行，全部使用共享 `gui-liquid-glass` 材质。输入框填充改为透明，不再叠加主题色或静止 Spotlight 背景，玻璃边缘、折射与悬停反馈保持不变。
   - EN: Workspace, mode, branch, memory and connector chips now share one left-aligned, wrapping row above the empty-state composer and use the shared `gui-liquid-glass` material. The composer tint is transparent, with no extra theme-colored or resting Spotlight background, while the shared glass edges, refraction and hover feedback remain unchanged.
 
-- **GitHub Pages 更新日志按版本折叠并由生成器维护**：站内更新日志直接由唯一 changelog 生成，最新版本默认展开，旧版本按需展开，也可一键全部展开或收起；支持中英文、浏览器页内查找和移动端布局，不再跳到难以通读的长 Markdown 文件。
-  - EN: The GitHub Pages changelog is now generated from the single changelog source and grouped into per-version disclosures. The latest release starts open, older releases can be opened individually or all at once, and the page supports Chinese and English, browser find-in-page and mobile layouts instead of sending readers to one long Markdown file.
+- **GitHub Pages 更新日志按版本折叠并由生成器维护**：站内更新日志直接由唯一 changelog 生成，最新版本默认展开，旧版本按需展开，也可一键全部展开或收起；支持中英文、浏览器页内查找和移动端布局，GitHub Release 的完整日志入口也指向该页，不再跳到难以通读的长 Markdown 文件。
+  - EN: The GitHub Pages changelog is now generated from the single changelog source and grouped into per-version disclosures. The latest release starts open, older releases can be opened individually or all at once, and the page supports Chinese and English, browser find-in-page and mobile layouts. GitHub Releases link to this page instead of sending readers to one long Markdown file.
 
 - **安装与开发文档统一到 Bun 1.4.5**：README、GitHub Pages、开发指南、包说明和发布 manifest 不再要求旧的 Bun 1.4.4；`engines.bun` 与根 `packageManager` 保持一致，`@types/bun` 继续由根 catalog 固定。
   - EN: Installation and development guidance now consistently requires Bun 1.4.5 across the README, GitHub Pages, development guides, package documentation and release manifests. `engines.bun` matches the root `packageManager`, while `@types/bun` remains pinned through the root catalog.
