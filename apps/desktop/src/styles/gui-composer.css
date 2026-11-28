@@ -197,9 +197,9 @@
 	padding: 8px 10px 8px;
 	border: none;
 	border-radius: var(--radius-xl);
-	/* Layout only. The fill, blur, edges, spill and lift are the
-	 * `.gui-liquid-glass` material (gui-base.css); this element declares
-	 * none of them. */
+	--glass-pane-tint: transparent;
+	/* The composer keeps the shared glass edges and refraction without the
+	 * tint used by the smaller floating chips. */
 	/* Container-query context for the model/thinking capsule: the pill's
 	 * icon-only collapse resolves against THIS frame's inline size (the
 	 * frame's width is driven by the surface, unlike the pill whose width

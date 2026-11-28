@@ -33,6 +33,7 @@ const CASCADE = [
 	.join("\n");
 
 const MARKUP = `
+	<div id="pane" class="gui-liquid-glass"></div>
 	<div id="frame" class="gui-composer-frame gui-liquid-glass"></div>
 	<div id="probe"></div>`;
 
@@ -54,7 +55,7 @@ let page: Page;
 
 async function readPane(): Promise<PaneRead> {
 	return page.evaluate(() => {
-		const frame = document.getElementById("frame") as HTMLElement;
+		const frame = document.getElementById("pane") as HTMLElement;
 		const probe = document.getElementById("probe") as HTMLElement;
 		const edge = getComputedStyle(frame, "::after");
 		const color = (token: string): string => {
@@ -95,6 +96,20 @@ afterAll(async () => {
 });
 
 describe("floating-glass pane", () => {
+	test("keeps the composer tint-free without removing its glass layers", async () => {
+		const composer = await page.evaluate(() => {
+			const frame = document.getElementById("frame")!;
+			return {
+				fill: getComputedStyle(frame).backgroundColor,
+				warp: getComputedStyle(frame, "::before").backdropFilter,
+				edge: getComputedStyle(frame, "::after").backgroundImage,
+			};
+		});
+		expect(composer.fill).toBe("rgba(0, 0, 0, 0)");
+		expect(composer.warp).toContain("blur");
+		expect(composer.edge).toContain("linear-gradient");
+	});
+
 	test("paints the tint once", async () => {
 		const { fill, warpBackground } = await readPane();
 		expect(fill).toContain("/ 0.4)");

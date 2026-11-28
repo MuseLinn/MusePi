@@ -55,7 +55,7 @@ The floating pane is one primitive. `gui-base.css` paints it, `tokens.css` owns 
 - **States.** Focus changes nothing. An interactive or hue-tinted pane swaps `--glass-pane-tint` (hue variants also `--glass-pane-band`) on the host. A thicker surface overrides only the tint — the recap row sets 84% to stay readable over moving text.
 - **Thickness.** Tint alpha and blur move together; never raise one alone. There is no public step ladder yet — add one to the token family before a call site picks a number.
 - **Fallbacks.** The tint, edges and lift paint without `backdrop-filter`, so the pane stays delimited; win32/linux take the blur from the window material. Reduced transparency keeps the solid surface and edges.
-- **Consumers.** Composer and welcome composer, top-bar capsules, settings preview and session recap; capability toolbars keep the class with fill, shadow and `::after` zeroed.
+- **Consumers.** Tint-free composers, top-bar capsules, settings preview and session recap; capability toolbars keep the class with fill, shadow and `::after` zeroed.
 - **Contract.** `apps/desktop/test/glass-pane.test.ts` reads the real Chromium cascade: one tint, lit bands, dark sides, spill above the warp, light polarity, one offset-free shadow.
 - **Decision record.** `docs/adr/0005-floating-glass-pane.md` holds rationale and rejected alternatives; this section states the contract.
 

@@ -152,7 +152,7 @@ const scenarios = {
 				sharedMaterial: true,
 				liquidChipCount: 5,
 			},
-			layers: { spotlightOpacity: "0" },
+			layers: { frameTint: "rgba(0, 0, 0, 0)", spotlightOpacity: "0" },
 		},
 	},
 } satisfies Record<string, GuiScenario>;
