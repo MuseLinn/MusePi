@@ -5012,32 +5012,6 @@
 	white-space: nowrap;
 }
 
-.gui-memory-chip-row {
-	display: flex;
-	justify-content: flex-end;
-	padding: 0 2px 6px;
-}
-
-.gui-memory-chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 4px 6px;
-	border: 0;
-	border-radius: var(--radius-lg);
-	background: transparent;
-	color: var(--color-text-muted);
-	font: inherit;
-	font-size: var(--ui-font-size-xs);
-	cursor: pointer;
-}
-
-.gui-memory-chip:hover,
-.gui-memory-chip[aria-expanded="true"] {
-	background: var(--color-hover);
-	color: var(--color-text);
-}
-
 .gui-memory-mode-menu {
 	width: 340px;
 	padding: 4px;

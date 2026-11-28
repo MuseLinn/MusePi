@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { SessionSidebar } from "../../src/components/SessionSidebar";
 import { SidebarToggleButton } from "../../src/components/SidebarToggleButton";
-import { MemoryModeChip } from "../../src/components/MemoryModePicker";
+import { HeroComposer } from "../../src/components/HeroComposer";
 import type { GuiScenario } from "../gui-probe-helpers";
 import { mount, readElement, sleep } from "../gui-probe-helpers";
 
@@ -77,20 +77,82 @@ const scenarios = {
 		},
 	},
 	"welcome-memory-mode-menu": {
-		capture: "body",
+		capture: ".gui-welcome-inner",
 		async render(root: HTMLElement) {
+			const rpc = {
+				request: async (method: string) => {
+					if (method === "connectors.list") return { servers: [{ name: "workspace" }], selected: null };
+					if (method === "git.branches") return { current: "main", branches: ["main"] };
+					return null;
+				},
+				addEventListener: () => () => {},
+			};
 			await mount(
-				<div style={{ width: 720, padding: 24 }}>
-					<div className="gui-memory-chip-row"><MemoryModeChip value="persistent" onChange={() => {}} /></div>
-					<div className="gui-welcome-input" style={{ height: 100 }} />
-				</div>,
+				<HeroComposer
+					onSubmit={() => {}}
+					rpc={rpc as never}
+					project="/workspace"
+					onProject={() => {}}
+					modes={[{ id: "work", label: "Work" }]}
+					memoryMode="persistent"
+					onMemoryModeChange={() => {}}
+				/>,
 				root,
 			);
 		},
 		async measure(body: ParentNode) {
-			body.querySelector<HTMLButtonElement>(".gui-memory-chip")?.click();
-			await sleep(100);
-			return measurements(body);
+			const elements = {
+				row: readElement(body.querySelector(".gui-project-row")),
+				memory: readElement(body.querySelector(".gui-memory-chip")),
+				connector: readElement(body.querySelector(".gui-connector-chip")),
+				project: readElement(body.querySelector(".gui-project-chip")),
+				frame: readElement(body.querySelector(".gui-composer-frame")),
+				beam: readElement(body.querySelector(".gui-border-beam")),
+			};
+			const chips = [
+				...Array.from(body.querySelectorAll(".gui-project-chip")),
+				body.querySelector(".gui-memory-chip"),
+				body.querySelector(".gui-connector-chip"),
+			].filter((chip): chip is Element => chip !== null);
+			const chipReadings = chips.map(chip => readElement(chip));
+			const row = {
+				...elements.row,
+				direction: getComputedStyle(body.querySelector(".gui-project-row")!).flexDirection,
+				sameRow: chipReadings.every(chip => chip?.box.top === chipReadings[0]?.box.top),
+				leftAligned: ["normal", "flex-start"].includes(getComputedStyle(body.querySelector(".gui-project-row")!).justifyContent),
+				sharedMaterial: new Set(chipReadings.map(chip => chip?.background)).size === 1,
+				liquidChipCount: chips.filter(chip => chip.classList.contains("gui-liquid-glass")).length,
+			};
+			const frame = body.querySelector(".gui-composer-frame")!;
+			const beam = body.querySelector(".gui-border-beam")!;
+			const glow = body.querySelector(".gui-spotlight-glow")!;
+			return {
+				elements: {
+					...elements,
+					row,
+					layers: {
+						text: "",
+						box: { w: 0, h: 0, top: 0, left: 0 },
+						frameTint: getComputedStyle(frame).backgroundColor,
+						frameWarp: getComputedStyle(frame, "::before").backdropFilter,
+						frameEdge: getComputedStyle(frame, "::after").backgroundImage,
+						beamEdge: getComputedStyle(beam, "::after").backgroundImage,
+						spotlight: getComputedStyle(glow).backgroundImage,
+						spotlightOpacity: getComputedStyle(glow).opacity,
+					},
+				},
+			};
+		},
+		expect: {
+			row: {
+				display: "flex",
+				direction: "row",
+				sameRow: true,
+				leftAligned: true,
+				sharedMaterial: true,
+				liquidChipCount: 5,
+			},
+			layers: { spotlightOpacity: "0" },
 		},
 	},
 } satisfies Record<string, GuiScenario>;

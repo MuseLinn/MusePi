@@ -3348,9 +3348,9 @@ button.gui-stats-pill {
  * so the surfaces feel fluid rather than linear.
  *
  * Members: approval + design-style selects, the round icon buttons
- * (attach/voice/retry), the focus/enhance pills, the welcome workspace &
- * preset chips, the session mode toggles, the model/thinking capsule, the
- * welcome suggestion chips, the welcome send CTA, the in-input token
+ * (attach/voice/retry), the focus/enhance pills, the session mode toggles,
+ * the model/thinking capsule, the welcome suggestion chips, the welcome
+ * send CTA, the in-input token
  * pills (`gui-ta-hl-*` — hover/active stay OFF for them: the highlight
  * overlay is pointer-events none, those states can never fire), and the
  * status-dock chips (mode/goal/todo/swarm/queue — 2026-09-29 批次 C1:
@@ -3368,13 +3368,11 @@ button.gui-stats-pill {
 .gui-style-select-btn,
 .gui-composer-pill,
 .gui-composer-ico,
-.gui-project-chip,
 .gui-mode-toggle-arm,
 .gui-mode-chip,
 .gui-todo-chip,
 .gui-swarm-chip,
 .gui-queue-chip,
-.gui-connector-chip,
 .gui-stats-pill,
 .gui-model-capsule,
 .gui-suggest-chip,
@@ -3417,13 +3415,11 @@ button.gui-stats-pill {
 .gui-style-select-btn::before,
 .gui-composer-pill::before,
 .gui-composer-ico::before,
-.gui-project-chip::before,
 .gui-mode-toggle-arm::before,
 .gui-mode-chip::before,
 .gui-todo-chip::before,
 .gui-swarm-chip::before,
 .gui-queue-chip::before,
-.gui-connector-chip::before,
 .gui-stats-pill::before,
 .gui-model-capsule::before,
 .gui-suggest-chip::before,
@@ -3441,13 +3437,11 @@ button.gui-stats-pill {
 .gui-style-select-btn > *,
 .gui-composer-pill > *,
 .gui-composer-ico > *,
-.gui-project-chip > *,
 .gui-mode-toggle-arm > *,
 .gui-mode-chip > *,
 .gui-todo-chip > *,
 .gui-swarm-chip > *,
 .gui-queue-chip > *,
-.gui-connector-chip > *,
 .gui-stats-pill > *,
 .gui-model-capsule > *,
 .gui-suggest-chip > *,
@@ -3465,7 +3459,6 @@ button.gui-stats-pill {
 .gui-style-select-btn--open,
 .gui-composer-pill:hover,
 .gui-composer-ico:hover:not(:disabled),
-.gui-project-chip:hover,
 .gui-mode-toggle-arm:hover,
 .gui-mode-chip:hover,
 .gui-todo-chip:hover,
@@ -3474,8 +3467,6 @@ button.gui-stats-pill {
 .gui-swarm-chip--open,
 .gui-queue-chip:hover,
 .gui-queue-chip--open,
-.gui-connector-chip:hover,
-.gui-connector-chip--open,
 .gui-stats-pill:hover,
 .gui-suggest-chip:hover,
 .gui-send-btn:hover:not(:disabled) {
@@ -3491,13 +3482,11 @@ button.gui-stats-pill {
 .gui-style-select-btn:active,
 .gui-composer-pill:active,
 .gui-composer-ico:active,
-.gui-project-chip:active,
 .gui-mode-toggle-arm:active,
 .gui-mode-chip:active,
 .gui-todo-chip:active,
 .gui-swarm-chip:active,
 .gui-queue-chip:active,
-.gui-connector-chip:active,
 .gui-stats-pill:active,
 .gui-suggest-chip:active,
 .gui-send-btn:active {
@@ -3894,16 +3883,37 @@ button.gui-stats-pill {
  * A chip above the input listing how many connectors this session may use, and
  * a floating panel for choosing which. It appears only once the daemon has
  * reported at least one server — an empty list has nothing to pick from. */
-.gui-connector-chip {
+/* Welcome project, memory and connector chips share the liquid-glass pane;
+ * only their common geometry lives here. The material, refraction and edges
+ * belong to gui-base.css, never to a second footer-specific glass recipe. */
+.gui-project-chip,
+.gui-connector-chip,
+.gui-memory-chip {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	padding: 3px 9px;
+	min-height: 26px;
+	padding: 3px 10px;
 	border-radius: 999px;
-	font-size: 11.5px;
-	font-family: inherit;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	line-height: 16px;
 	cursor: pointer;
-	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
+}
+
+.gui-project-chip:hover,
+.gui-connector-chip:hover,
+.gui-connector-chip--open,
+.gui-memory-chip:hover,
+.gui-memory-chip[aria-expanded="true"] {
+	color: var(--color-text);
+}
+
+.gui-project-chip:active,
+.gui-connector-chip:active,
+.gui-memory-chip:active {
+	transform: scale(0.97);
 }
 
 /* A narrowed selection reads as armed: the label already carries the count, so

@@ -495,6 +495,7 @@ export function ComposerFrame({
 	const frame = (
 		<SpotlightCard
 			className={`${className} gui-composer-frame gui-liquid-glass gui-composer-spotlight`}
+			restingOpacity={0}
 			data-enhancing={enhancing || undefined}
 			data-chat-input={chatInput ? "true" : undefined}
 			data-pet={pet ? "true" : undefined}

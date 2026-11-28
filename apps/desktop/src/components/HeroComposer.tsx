@@ -1372,7 +1372,7 @@ export function HeroComposer({
 								<div className="relative z-20" ref={projAnchorRef}>
 									<button
 										type="button"
-										className="gui-project-chip"
+										className="gui-project-chip gui-liquid-glass"
 										onClick={() => setProjOpen(v => !v)}
 										aria-label={t("settings.currentProject")}
 									>
@@ -1478,7 +1478,7 @@ export function HeroComposer({
 									<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
 										<button
 											type="button"
-											className="gui-project-chip"
+											className="gui-project-chip gui-liquid-glass"
 											onClick={() => setPresetOpen(v => !v)}
 											aria-label={t("settings.modesTitle")}
 										>
@@ -1522,7 +1522,7 @@ export function HeroComposer({
 							<div className="relative z-20" ref={branchAnchorRef}>
 								<button
 									type="button"
-									className="gui-project-chip"
+									className="gui-project-chip gui-liquid-glass"
 									onClick={() => setBranchOpen(v => !v)}
 									aria-label={t("general.gitBranch")}
 									title={t("general.gitBranch")}
@@ -1554,6 +1554,32 @@ export function HeroComposer({
 								)}
 							</div>
 						)}
+						{onMemoryModeChange && <MemoryModeChip value={memoryMode} onChange={onMemoryModeChange} />}
+						{connectorServers.length > 0 && (
+							<ConnectorChip
+								open={connectorsOpen}
+								onToggle={() => setConnectorsOpen(v => !v)}
+								anchorRef={connectorsAnchorRef}
+								serverCount={connectorServers.length}
+								chosenCount={connectorChosen}
+								menu={renderConnectorsMenu(
+									<ConnectorPanel
+										snapshot={connectorSnapshot}
+										loadFailed={connectorsLoadFailed}
+										onToggleServer={name =>
+											connectorSnapshot && setConnectorSelection(nextSelection(connectorSnapshot, name))
+										}
+										onToggleServers={names =>
+											setConnectorSelection(
+												names.length === connectorSnapshot?.servers.length ? null : names,
+											)
+										}
+										onSelectAll={() => setConnectorSelection([])}
+										onUseAll={() => setConnectorSelection(null)}
+									/>,
+								)}
+							/>
+						)}
 					</div>
 				)}
 				{/* composer 是创建页的永久锚点(opendesign 铁律):任何 chip
@@ -1577,11 +1603,6 @@ export function HeroComposer({
 						/>
 					</div>
 				) : null}
-				{onMemoryModeChange && (
-					<div className="gui-memory-chip-row">
-						<MemoryModeChip value={memoryMode} onChange={onMemoryModeChange} />
-					</div>
-				)}
 				<form ref={formRef} className="gui-welcome-form relative w-full" onSubmit={submit}>
 					<ComposerFrame
 						className="gui-welcome-input"
@@ -1603,42 +1624,7 @@ export function HeroComposer({
 								: null
 						}
 						attachments={attachments}
-						aboveRow={
-							<>
-								{/* conversation.input.dock 座位槽：输入卡上方整行（队列/待办）。 */}
-								<SlotComponentHost rpc={rpc} slot={COMPOSER_INPUT_DOCK_SLOT} cwd={project ?? undefined} />
-								{connectorServers.length > 0 ? (
-									<div className="gui-composer-above">
-										<div className="gui-composer-dock">
-											<ConnectorChip
-												open={connectorsOpen}
-												onToggle={() => setConnectorsOpen(v => !v)}
-												anchorRef={connectorsAnchorRef}
-												serverCount={connectorServers.length}
-												chosenCount={connectorChosen}
-												menu={renderConnectorsMenu(
-													<ConnectorPanel
-														snapshot={connectorSnapshot}
-														loadFailed={connectorsLoadFailed}
-														onToggleServer={name =>
-															connectorSnapshot &&
-															setConnectorSelection(nextSelection(connectorSnapshot, name))
-														}
-														onToggleServers={names =>
-															setConnectorSelection(
-																names.length === connectorSnapshot?.servers.length ? null : names,
-															)
-														}
-														onSelectAll={() => setConnectorSelection([])}
-														onUseAll={() => setConnectorSelection(null)}
-													/>,
-												)}
-											/>
-										</div>
-									</div>
-								) : null}
-							</>
-						}
+						aboveRow={<SlotComponentHost rpc={rpc} slot={COMPOSER_INPUT_DOCK_SLOT} cwd={project ?? undefined} />}
 						{...attachmentChipActions({
 							attachments,
 							setAttachments,

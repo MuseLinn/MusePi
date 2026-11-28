@@ -13,6 +13,7 @@ export function SpotlightCard({
 	className,
 	spotlightColor = "rgba(255, 255, 255, 0.12)",
 	glowSize = 240,
+	restingOpacity = 0.25,
 	...props
 }: HTMLAttributes<HTMLDivElement> & {
 	children: ReactNode;
@@ -20,6 +21,8 @@ export function SpotlightCard({
 	spotlightColor?: string;
 	/** Glow radius, px. */
 	glowSize?: number;
+	/** Opacity while the pointer is outside the card. */
+	restingOpacity?: number;
 }): ReactNode {
 	const ref = useRef<HTMLDivElement | null>(null);
 	const glowRef = useRef<HTMLDivElement | null>(null);
@@ -36,7 +39,7 @@ export function SpotlightCard({
 
 	// Touch: pointer events cover mouse + touch. No pointermove on tap-only
 	// screens, so keep a faint center glow by default (opacity starts low).
-	const style: CSSProperties = { background: background(0, 0), opacity: 0.25 };
+	const style: CSSProperties = { background: background(0, 0), opacity: restingOpacity };
 
 	return (
 		<div
@@ -48,7 +51,7 @@ export function SpotlightCard({
 				if (glowRef.current) glowRef.current.style.opacity = "1";
 			}}
 			onPointerLeave={() => {
-				if (glowRef.current) glowRef.current.style.opacity = "0.25";
+				if (glowRef.current) glowRef.current.style.opacity = String(restingOpacity);
 			}}
 		>
 			<div ref={glowRef} className="gui-spotlight-glow" aria-hidden="true" style={style} />

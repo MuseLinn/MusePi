@@ -2018,19 +2018,6 @@
 	flex-shrink: 0;
 }
 
-/* ZCode welcome project chip (workspace picker): material from the shared
- * footer-pill glass recipe in gui-composer.css (this file loads AFTER it —
- * border/background here would override the group; keep layout only). */
-.gui-project-chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 3px 12px;
-	border-radius: 999px;
-	font-size: var(--ui-font-size-sm);
-	cursor: pointer;
-}
-
 /* Add-project menu (projects tab): floating card under the connect button. */
 .gui-add-project-menu {
 	position: absolute;

@@ -66,7 +66,7 @@ export function MemoryModeChip({
 			<button
 				type="button"
 				ref={anchorRef}
-				className="gui-memory-chip"
+				className="gui-memory-chip gui-liquid-glass"
 				aria-label={t("general.chooseMemoryMode")}
 				aria-expanded={open}
 				onClick={() => setOpen(current => !current)}

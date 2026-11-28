@@ -231,7 +231,7 @@ export function ConnectorChip({
 			<button
 				type="button"
 				ref={anchorRef}
-				className={`gui-connector-chip${open ? " gui-connector-chip--open" : ""}${
+				className={`gui-connector-chip gui-liquid-glass${open ? " gui-connector-chip--open" : ""}${
 					narrowed ? " gui-connector-chip--narrowed" : ""
 				}`}
 				title={t("tools.connectorsChipTitle")}
