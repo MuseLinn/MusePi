@@ -357,15 +357,18 @@ describe("agent capsule geometry", () => {
 					expanded: capsule.getAttribute("aria-expanded"),
 				};
 			});
-		// Resting: muted, pulled back.
-		const resting = await read();
-		expect(Number(resting.opacity)).toBeLessThan(0.5);
-
 		/** The arrow fades in 160ms; read after the transition, not on its frame. */
 		const settle = () =>
 			page.evaluate(() =>
 				Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))).then(() => {}),
 			);
+
+		await page.mouse.move(0, 0);
+		await page.evaluate(() => document.querySelector<HTMLElement>(".gui-agent-capsule")!.blur());
+		await settle();
+		// Resting: muted, pulled back.
+		const resting = await read();
+		expect(Number(resting.opacity)).toBeLessThan(0.5);
 
 		await page.hover(".gui-agent-capsule");
 		await settle();

@@ -25,6 +25,14 @@ interface FakeSessionDeps {
 	settings?: Settings;
 }
 
+async function waitFor(condition: () => boolean, description: string): Promise<void> {
+	for (let attempt = 0; attempt < 1_000; attempt += 1) {
+		if (condition()) return;
+		await Bun.sleep(5);
+	}
+	throw new Error(`Timed out waiting for ${description}`);
+}
+
 function makeFakeSession(deps: FakeSessionDeps) {
 	const listeners = new Set<AgentSessionEventListener>();
 	const entries = deps.entries ?? [];
@@ -792,14 +800,17 @@ describe("hindsightBackend live bank routing", () => {
 		settings.setExtension("hindsight.bankIdPrefix", "live");
 		settings.setExtension("hindsight.bankId", "Minigames");
 		settings.setExtension("hindsight.scoping", "per-project");
-		await Bun.sleep(10);
+		await waitFor(
+			() => session.getHindsightSessionState()?.bankId === "live-Minigames-proj",
+			"the coalesced Hindsight routing rebuild",
+		);
 
 		const next = session.getHindsightSessionState();
 		expect(next?.bankId).toBe("live-Minigames-proj");
 		expect(session.listenerCount()).toBe(1);
 
 		session.emit({ type: "agent_end", messages: [] });
-		await Bun.sleep(10);
+		await waitFor(() => retainSpy.mock.calls.length === 1, "the rebuilt Hindsight state to retain");
 
 		expect(retainSpy).toHaveBeenCalledTimes(1);
 		expect(retainSpy.mock.calls[0][0]).toBe("live-Minigames-proj");
