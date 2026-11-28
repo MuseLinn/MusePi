@@ -88,6 +88,7 @@ packages/coding-agent/bench/boot-baseline.json
 # copy would only ever be as fresh as the last commit that touched it.
 web/sitemap.xml
 web/robots.txt
+web/changelog.html
 
 # Bazel
 /bazel-bin

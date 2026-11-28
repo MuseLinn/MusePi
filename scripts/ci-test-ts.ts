@@ -129,6 +129,7 @@ const ciScriptTests = [
 	"./scripts/prune-caches.test.ts",
 	"./scripts/check-peer-compat.test.ts",
 	"./scripts/check-rpc-method-names.test.ts",
+	"./scripts/build-site-changelog.test.ts",
 	"./scripts/check-overflow-axis.test.ts",
 	"./scripts/rpc-commands.test.ts",
 ];

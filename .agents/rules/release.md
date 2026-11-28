@@ -4,7 +4,7 @@ Load before editing release notes, versioning, publishing, or committing a user-
 
 ## Changelog ownership
 
-`packages/coding-agent/CHANGELOG.musepi.md` is the only changelog and the release source for the GUI what's-new panel, `/changelog`, OTA notes, and GitHub release body. Do not create per-package changelog files.
+`packages/coding-agent/CHANGELOG.musepi.md` is the only changelog and the release source for the GUI what's-new panel, `/changelog`, OTA notes, GitHub release body, and the generated GitHub Pages changelog. Do not create per-package changelog files.
 
 New entries go under `## [Unreleased]`, filed under one of three category headings in this order:
 
@@ -19,6 +19,8 @@ New entries go under `## [Unreleased]`, filed under one of three category headin
 Consumers recognize both languages: the what's-new cards, the startup summary and the OTA notes read the Chinese `### 新功能` / `### 改进` / `### 修复` headings above as well as the English `### Added` / `### Changed` / `### Fixed` headings older sections already ship with. Author new entries under the Chinese headings; leave a released section's existing English headings untouched.
 
 `scripts/render-release-notes.ts` is the single source of the GitHub release body. For the tagged version it keeps the platform download table, drops the duplicated `## [version] - date` heading, adds the counts line `本次发布：N 项新功能 · M 项改进 · K 项修复`, then the categorized entries and links to the full changelog and to the comparison against the next older release. The renderer requires the tag's `## [version]` section and refuses a tag that does not equal `v<version>` (`--tag` alone derives the version, and the workflow passes the app package version so a mismatched tag fails the job), so finalize the changelog before tagging instead of publishing another release's notes. The OTA `update-manifest.json` notes come from the same script as the version heading, counts line and categorized entries; the update dialog clamps to about 200 characters, so that head must name the release and its category breakdown. The download table and the footer links belong to the release page only.
+
+`scripts/build-site-changelog.ts` renders every released section through `listReleaseSections` into the ignored `web/changelog.html`; do not commit that output or hand-maintain a second page. The Pages workflow runs the generator before overlaying `web/`. The newest release starts open, all versions use independent native `details` disclosures, and the expand/collapse-all button keeps `aria-expanded` synchronized. Preserve the nested English entries when changing the renderer.
 
 The what's-new panel counts every top-level bullet in a version and turns the first three bold bullets into highlight cards, so the bold title is the card heading and must stay meaningful on its own. Release tooling normalizes section order and formatting.
 

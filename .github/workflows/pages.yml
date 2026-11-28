@@ -26,8 +26,10 @@ jobs:
       # than committing it keeps it in step with whatever is in docs/ right
       # now, and keeps the repository free of a file that would go stale.
       - uses: ./.github/actions/bun-install
-      - name: Generate sitemap and robots.txt
-        run: bun scripts/build-site-sitemap.ts
+      - name: Generate the changelog, sitemap and robots.txt
+        run: |
+          bun scripts/build-site-changelog.ts
+          bun scripts/build-site-sitemap.ts
       # docs/ keeps the Jekyll layout; the landing itself is the standalone
       # site in web/, so its files replace the generated root pages here.
       - name: Build the interactive preview from this tree
