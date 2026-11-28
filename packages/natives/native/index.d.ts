@@ -349,7 +349,7 @@ export declare function __musepiInstallTokioRuntime(): void
  * `packages/natives/native/index.js` (which derives the name from
  * `package.json#version`).
  */
-export declare function __piNativesV0_7_7(): void
+export declare function __piNativesV0_7_8(): void
 
 /** One launch target the platform advertises. */
 export interface Application {
