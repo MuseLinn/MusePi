@@ -4,6 +4,18 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+### 改进
+
+- **空态 chip 同行左对齐，输入框去掉额外背景**：工作区、模式、分支、记忆与连接器统一在输入框上方同一行左对齐，窄容器允许换行，全部使用共享 `gui-liquid-glass` 材质。输入框未悬停时不再叠加 Spotlight 径向背景，保留液态玻璃与悬停反馈，菜单和选择行为不变。
+  - EN: Workspace, mode, branch, memory and connector chips now share one left-aligned, wrapping row above the empty-state composer and use the shared `gui-liquid-glass` material. The composer no longer paints a resting Spotlight glow over that material, while hover feedback and every menu and selection behavior remain unchanged.
+
+### 修复
+
+- **实例管理弹窗不再被来源菜单连带关闭**：账户菜单入口改名为「实例管理」，打开弹窗即关闭菜单，弹窗改由应用顶层持有；点击添加实例、表单字段和弹窗按钮不会被误判为菜单外点击。顶部品牌球去掉额外线框，悬停或键盘聚焦时倾斜 16°。
+  - EN: The instance manager no longer unmounts with its source menu. The entry is renamed Instance management, opening the dialog closes that menu, and the application shell now owns the dialog, so Add instance, form fields and dialog actions all remain clickable. The brand orb drops its extra ring and tilts 16 degrees on hover or keyboard focus.
+- **折叠按钮与面板内容和间距对齐**：任务中心与能力中心头部为 26px 折叠按钮预留位置，不再与新建等主操作重叠。折叠后侧栏与聊天卡只保留一个 8px gutter，按钮在两种状态下的屏幕矩形保持一致。
+  - EN: Task and capability panel heads now reserve the 26px fold control's rect, so it no longer overlaps New and other primary actions. Folding leaves a single 8px gutter between the rail and chat card while keeping the button at the same screen rectangle in both states.
+
 ## [0.7.8] - 2026-11-28
 
 ### 新功能

@@ -89,8 +89,8 @@ scope:
 | `WorkspacePageHeader` | 页面级标题头（图标/标题/描述/动作） | 看板、任务中心、能力中心等页面 |
 | `RightRail` | 右边缘 44px 图标栏 | 右面板的入口；**面板收起时也必须渲染** |
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
-| `SidebarToggleButton` | 常驻左上折叠、随目的地变化的小菜单与 clip 锚点 | `.gui-side-keeper` 内只挂一个按钮；悬停按当前停靠面板显示会话、任务或能力目的地，绝不显示完整面板 |
-| `MemoryModePicker` | 共享 persistent / incognito / temporary 选项与空态 chip | 所有会话记忆模式创建入口复用，不另写文案或隐私规则 |
+| `SidebarToggleButton` | 常驻左上折叠、随目的地变化的小菜单与 clip 锚点 | `.gui-side-keeper` 只挂一个按钮；头部预留 26px 按钮位，折叠保留一个 8px rail/聊天卡间距；小菜单跟随当前面板 |
+| `MemoryModePicker` | 共享 persistent / incognito / temporary 选项与空态 chip | 所有创建入口；不另写文案、隐私规则或与连接器、项目 chip 共用居中可换行 `gui-liquid-glass` 行的约定 |
 | `NotificationCenter` | toast 历史铃铛、未读徽标与浮层 | 桌面头部右侧动作组；历史只读 `notification-history.ts` |
 | `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选。标题行只有一行（「思考强度」+ 当前档位），轨道下方没有任何标签行 |
 | `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；松手与方向键只能落在已声明档位。与思考阶梯共用同一条轨道，只有标题行不同 |
