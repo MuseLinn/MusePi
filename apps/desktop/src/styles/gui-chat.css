@@ -5647,11 +5647,11 @@ body.gui-resizing .gui-pane-right {
 
 /* Material (liquid glass) from the shared footer-pill recipe in
  * gui-composer.css — this file loads AFTER it, so any border/background
- * here would override the group; keep layout/typography only (same
- * contract as .gui-project-chip in gui-settings.css). Hover/press
- * feedback comes from the group's :hover/:active lists — a local
- * transform here (a 1px lift) would also out-rank the group's press
- * spring in the cascade, so transforms stay off this class. */
+ * here would override the group; keep layout/typography only. Project,
+ * memory and connector chips instead use the shared `gui-liquid-glass`
+ * pane. Hover/press feedback comes from the group's :hover/:active lists
+ * — a local transform here (a 1px lift) would also out-rank the group's
+ * press spring in the cascade, so transforms stay off this class. */
 .gui-suggest-chip {
 	display: inline-flex;
 	align-items: center;
@@ -6979,6 +6979,12 @@ body.gui-resizing .gui-pane-right {
  * has to win the cascade explicitly rather than by source order. */
 .gui-chat-surface {
 	margin-top: 0 !important;
+}
+
+/* Folding removes only the panel-to-chat gap. The persistent toggle keeps
+ * its own rect; the rail and chat card retain their normal single gutter. */
+.gui-main:has(.gui-pane-side--collapsed) .gui-chat-surface {
+	margin-left: 0 !important;
 }
 
 /* Sidebar seam handle: its band starts at the card's top edge, so it follows

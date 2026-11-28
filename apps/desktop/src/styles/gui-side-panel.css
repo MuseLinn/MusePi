@@ -426,6 +426,13 @@ html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
 	padding: 0 var(--gui-side-panel-inset) var(--gui-side-panel-inset);
 }
 
+/* The persistent fold control is absolute, but its 26px box plus the 6px
+ * rhythm is reserved in the head rather than painted over the primary action. */
+.gui-scheduled-slot .gui-side-panel-head,
+.gui-capability-slot .gui-side-panel-head {
+	padding-left: calc(var(--gui-side-panel-inset) + 32px);
+}
+
 .gui-side-panel-count {
 	flex-shrink: 0;
 	min-width: 20px;

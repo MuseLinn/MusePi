@@ -182,6 +182,7 @@ async function readGeometry() {
 			railButtonRegion: getComputedStyle(select(".gui-rail-btn")).webkitAppRegion,
 			pane: box(select(".gui-pane-side")),
 			toggle: box(select(".gui-sidebar-toggle")),
+			primaryAction: box(select(".gui-side-panel-head button")),
 			header: box(select(".gui-header")),
 			surface: box(select(".gui-chat-surface")),
 			surfaceMargin: {
@@ -308,6 +309,31 @@ describe("shell top geometry", () => {
 			};
 		});
 		expect(collapsed).toEqual({ pane: 0, keeper: 0 });
+	});
+	it("reserves the toggle's rect inside every panel head", async () => {
+		await page.evaluate(() => {
+			document.querySelector(".gui-side-keeper")!.setAttribute("data-panel", "scheduled");
+			document.querySelector(".gui-pane-side")!.classList.add("gui-scheduled-slot");
+		});
+		const { toggle, primaryAction } = await readGeometry();
+		expect(primaryAction.left).toBeGreaterThanOrEqual(toggle.right);
+	});
+
+	it("keeps one card gutter between the rail and chat after folding", async () => {
+		const expanded = (await readGeometry()).toggle;
+		await page.evaluate(() => {
+			const keeper = document.querySelector(".gui-side-keeper")!;
+			keeper.removeAttribute("data-panel");
+			const pane = document.querySelector(".gui-pane-side")!;
+			pane.classList.add("gui-pane-side--collapsed");
+			pane.style.width = "0px";
+		});
+		await page.evaluate(() =>
+			Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))),
+		);
+		const { rail, surface, toggle } = await readGeometry();
+		expect(surface.left - rail.right).toBe(8);
+		expect({ left: toggle.left, top: toggle.top }).toEqual({ left: expanded.left, top: expanded.top });
 	});
 });
 

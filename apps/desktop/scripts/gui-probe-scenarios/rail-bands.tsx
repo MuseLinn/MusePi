@@ -13,7 +13,7 @@ import { AppRail, RailCommunityLinks } from "../../src/components/AppRail";
 import { InstanceButton } from "../../src/components/InstanceButton";
 import { UserAccountButton } from "../../src/components/AppRail";
 import type { GuiScenario } from "../gui-probe-helpers";
-import { mount } from "../gui-probe-helpers";
+import { mount, sleep } from "../gui-probe-helpers";
 
 const rail = (expanded: boolean): ReactNode => (
 	<AppRail
@@ -46,7 +46,7 @@ const rail = (expanded: boolean): ReactNode => (
 				connected
 				onOpenSettings={() => {}}
 				onDisconnect={() => {}}
-				instanceMenu={
+				instanceMenu={() => (
 					<InstanceButton
 						embedded
 						rpc={null}
@@ -62,7 +62,7 @@ const rail = (expanded: boolean): ReactNode => (
 						onOpenManager={() => {}}
 						onOpenDisclaimer={() => {}}
 					/>
-				}
+				)}
 			/>
 		}
 	/>
@@ -119,7 +119,7 @@ function bandEdges(body: ParentNode) {
 			const n = body.querySelector<HTMLElement>(".gui-rail-brand");
 			return n ? getComputedStyle(n).paddingLeft : null;
 		})(),
-		// The mark: square box, hairline ring, and a hover scale rather than a tilt.
+		// The mark: square box, no ring, and a hover tilt rather than a scale.
 		markBox: (() => {
 			const n = body.querySelector<HTMLElement>(".gui-rail-brand-mark");
 			if (!n) return null;
@@ -202,6 +202,32 @@ const scenarios = {
 		},
 		async measure(body: ParentNode) {
 			return { edges: bandEdges(body) };
+		},
+	},
+	"brand-hover": {
+		capture: ".gui-rail-head",
+		async render(root: HTMLElement) {
+			await mount(shell(false), root);
+		},
+		async measure(body: ParentNode) {
+			const brand = body.querySelector<HTMLElement>(".gui-rail-brand")!;
+			const mark = body.querySelector<HTMLElement>(".gui-rail-brand-mark")!;
+			brand.focus();
+			await sleep(350);
+			const matrix = new DOMMatrixReadOnly(getComputedStyle(mark.firstElementChild!).transform);
+			return {
+				elements: {
+					brand: {
+						text: "",
+						box: { w: 0, h: 0, top: 0, left: 0 },
+						shadow: getComputedStyle(mark).boxShadow,
+						tilt: Math.round((Math.atan2(matrix.b, matrix.a) * 180) / Math.PI),
+					},
+				},
+			};
+		},
+		expect: {
+			brand: { shadow: "none", tilt: -16 },
 		},
 	},
 } satisfies Record<string, GuiScenario>;

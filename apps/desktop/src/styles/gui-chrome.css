@@ -280,10 +280,7 @@
 	 * "looks shifted" report. The box is square and the art is centred in it. */
 	border-radius: 999px;
 	overflow: hidden;
-	/* A hairline ring gives the gold sphere a defined edge against the card. The
-	 * art is a soft gradient with no outline, so on the dark card its bottom
-	 * third dissolved and the mark read as drifting. */
-	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-text) 18%, transparent);
+	/* The orb carries its own shading; no extra ring around the mark. */
 	/* Scale is the STATE's signal; hover belongs to the art inside, so the two
 	 * gestures never compete — the box changes size on fold, the mark tilts on
 	 * hover. */
@@ -295,7 +292,7 @@
 
 .gui-rail-brand:hover .gui-rail-brand-mark > *,
 .gui-rail-brand:focus-visible .gui-rail-brand-mark > * {
-	transform: rotate(-8deg);
+	transform: rotate(-16deg);
 }
 
 /* Open: the mark carries the identity, so it takes the size the header's own
