@@ -11,8 +11,10 @@ import type {
 import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema, VideoContent } from "@musepi/pi-ai";
 import { sanitizeText, untilAborted } from "@musepi/pi-utils";
 import type { Settings } from "../../config/settings";
+import { t } from "../../i18n";
 import type { Theme } from "../../render/theme/theme";
-import { type ApprovalMode, formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
+import { formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
+import { resolveApprovalMode, resolveApprovalPolicies } from "../../tools/approval-mode";
 import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import { withFileMutationSession } from "../../tools/file-write-fallback";
 import { normalizeToolEventInput, resolveToolEventInput } from "../tool-event-input";
@@ -188,9 +190,8 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 		// newly prompt-gated command and have it run unapproved.
 		const cliAutoApprove = context?.autoApprove === true;
 		const settings: Settings | undefined = context?.settings;
-		const configuredMode = (settings?.get("tools.approvalMode") ?? "yolo") as ApprovalMode;
-		const approvalMode: ApprovalMode = cliAutoApprove ? "yolo" : configuredMode;
-		const userPolicies = (settings?.get("tools.approval") ?? {}) as Record<string, unknown>;
+		const approvalMode = resolveApprovalMode(settings, { autoApprove: cliAutoApprove }).mode;
+		const userPolicies = resolveApprovalPolicies(settings);
 		const preResolved = resolveApproval(this.tool, approvalArgs(params, context), approvalMode, userPolicies);
 		if (preResolved.policy === "deny") {
 			throw new Error(
@@ -327,14 +328,20 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 				pendingSafetyChecks.length > 0
 					? `${basePrompt}\nProvider safety checks:\n${safetyCheckLines(pendingSafetyChecks).join("\n")}`
 					: basePrompt;
+			// The two answers are display text, so they follow the interface language.
+			// The host learns what this dialog is from `purpose`, not from the labels —
+			// it used to sniff "Approve"/"Deny", which would have turned every
+			// translated approval into an ordinary ask.
+			const approveLabel = t("Approve");
+			const denyLabel = t("Deny");
 			let choice: string | undefined;
 			try {
-				choice = await uiContext.select(safetyPrompt, ["Approve", "Deny"]);
+				choice = await uiContext.select(safetyPrompt, [approveLabel, denyLabel], { purpose: "approval" });
 			} catch (err) {
 				await emitApprovalResolved(false, err instanceof Error ? err.message : "approval aborted");
 				throw err;
 			}
-			const approved = choice === "Approve";
+			const approved = choice === approveLabel;
 			await emitApprovalResolved(approved, approved ? undefined : "denied by user");
 			if (!approved) {
 				throw new Error(`Tool call denied by user: ${this.tool.name}`);

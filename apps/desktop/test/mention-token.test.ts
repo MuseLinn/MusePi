@@ -128,8 +128,15 @@ describe("parseHighlightSpans × mention", () => {
 		expect(parseHighlightSpans("@someone", resolver("a.png"))).toEqual([]);
 	});
 
-	test("a path after the @ never paints even when a segment names a chip", () => {
-		expect(parseHighlightSpans("@src/a.png", resolver("a.png", "src"))).toEqual([]);
+	test("a path after @ paints as a file reference, not an attachment mention", () => {
+		expect(parseHighlightSpans("@src/a.png", resolver("a.png", "src"))).toEqual([
+			{
+				start: 0,
+				end: 10,
+				kind: "reference",
+				reference: { kind: "file", label: "a.png" },
+			},
+		]);
 	});
 
 	test("slash/bang/magic coexist on one line without bleeding into the token", () => {

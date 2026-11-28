@@ -69,7 +69,7 @@ export async function scanSkillRoot(root: string): Promise<ExtensionSkillDeclara
 		return [];
 	}
 	const out: ExtensionSkillDeclaration[] = [];
-	for (const entry of entries) {
+	for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
 		const entryPath = path.join(root, entry.name);
 		if (entry.isDirectory()) {
 			const skill = await readSkillFile(path.join(entryPath, "SKILL.md"), entry.name).catch(() => null);

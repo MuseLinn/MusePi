@@ -6,7 +6,7 @@ summary: The declarative, line-oriented block syntax an assistant reply may carr
 scope:
   - packages/client-core/src/ui-blocks
   - packages/coding-agent/src/prompts/system/system-prompt.md
-  - packages/coding-agent/src/bundled-plugins/visuals
+  - packages/coding-agent/src/plugins/media/visuals
 ---
 
 # UI blocks

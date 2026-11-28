@@ -49,6 +49,8 @@ describe("voice frontend client", () => {
 			receiver = this;
 			return {
 				pushAudio() {},
+				pushUtterance() {},
+				pushPreview() {},
 				async stop() {
 					return "";
 				},

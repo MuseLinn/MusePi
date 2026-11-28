@@ -4,7 +4,7 @@ title: 声明式装配与启动验证
 status: living
 summary: 产品面、managed 扩展、可选择缝和 fail-loud 装配验证契约。
 scope:
-  - musepi.assembly.toml
+  - packages/coding-agent/src/assembly
   - packages/coding-agent/src
 lang: zh-CN
 ---
@@ -13,7 +13,7 @@ lang: zh-CN
 
 [English](assembly.md) | 中文
 
-`musepi.assembly.toml` 是 musepi 的产品装配清单，声明：
+`assembly.toml` 是 musepi 的产品装配清单，声明：
 - **面**（TUI / daemon / headless）——控制扩展加载的范围
 - **managed 扩展**——声明后的扩展加载失败会 **fail-loud**（默认），避免静默回退
 - **seams**——可显式选择的可换核心实现（terminal provider、compaction 方法）

@@ -27,6 +27,16 @@ interface WireMessage {
 	role: string;
 	timestamp: number;
 	content: { type: "text"; text: string }[];
+	model?: string;
+	stopReason?: string;
+	usage?: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		totalTokens: number;
+		cost: { total: number };
+	};
 }
 
 type RpcCall = (method: string, params?: unknown) => Promise<unknown>;

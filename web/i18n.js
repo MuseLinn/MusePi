@@ -64,6 +64,7 @@
     "demo.fallback.body": "A network or browser restriction got in the way. Retry, or open it in a new tab.",
     "demo.fallback.retry": "Retry",
     "demo.guide.next": "Next step",
+    "demo.guide.welcome": "Start here: destinations and sessions on the left, memory modes above the composer, and context and tools on the right.",
     "demo.caption": "Real desktop renderer with local demo data — nothing here talks to a daemon.",
 
     /* 工作台能力浏览 */
@@ -123,7 +124,7 @@
     "feat.f1.title": "Sessions are a tree, not a log",
     "feat.f1.body":
       "Every message carries its parent, so history is a tree you can walk — fork, rewind, or re-answer from any node. Context usage stays visible in real time, so long sessions never lose their bearings.",
-    "feat.f1.p1": "The canvas map draws the full session DAG",
+    "feat.f1.p1": "The turn-level map shows parent/child and branch relationships",
     "feat.f1.p2": "The trajectory panel projects the same tree as a timeline or branch view",
     "feat.f2.title": "Desktop, terminal, phone — one brain",
     "feat.f2.body":
@@ -145,15 +146,15 @@
     "mom.stat2": "Shipped platforms",
     "mom.stat3": "Extension hubs",
     "mom.stat4": "Shared background service",
-    "mom.log1.tag": "Interface",
+    "mom.log1.tag": "Voice",
     "mom.log1.body":
-      "The thinking slider is now one embedded row: the label and the current rung no longer take a second line above the track, Auto names the level this turn actually resolved to on the line below, and the value stops wrapping in a narrow panel.",
-    "mom.log2.tag": "Navigation",
+      "Dictation now writes as you speak: finalized sentences enter the draft while the current fragment stays previewed at the caret. The global shortcut writes into the focused MusePi composer and uses a non-focusable HUD in other apps; Windows also offers hold to talk.",
+    "mom.log2.tag": "Memory",
     "mom.log2.body":
-      "The session map is redesigned: each turn is a 66px index row instead of an expanding card, connections use orthogonal paths with arrowheads to show parent/child direction, and a selection only updates the inspector on the right. It is keyboard-traversable, and branches off the active path stay dimmed but readable.",
-    "mom.log3.tag": "Remote",
+      "New sessions can use persistent, incognito or temporary memory. Incognito reads existing experience without learning; temporary neither recalls nor learns. Both private modes preserve transcript history and disable goal loops, and the choice survives session resume.",
+    "mom.log3.tag": "Workspace",
     "mom.log3.body":
-      "Instances and remote workspaces now say two different things: which machine runs the daemon, and which machine holds the files. Endpoints are local / WSL / SSH / Docker / manual; SSH-managed tunnels and docker and WSL process lifecycles are owned by MusePi.",
+      "Folded session, task and capability panels now show their own compact hover menus instead of sharing the session list, and still grow from the button rectangle. The header notification center keeps this application session's toasts and marks them read when opened.",
     "mom.changelog": "Read the full changelog",
 
     /* 价格 */
@@ -199,7 +200,7 @@
       "It's a free test during the feature-polishing phase — all core capabilities are open, with no limit on sessions or messages. The community edition stays free forever; Pro and Team are a farther-off consideration that only comes up once the existing capabilities mature — MusePi won't quietly turn what's already free behind a paywall.",
     "faq.q2": "Which platforms are supported?",
     "faq.a2":
-      "Desktop covers macOS (Apple silicon), Windows 10/11 (x64 and ARM64) and Linux (.AppImage and .deb, x64 and ARM64); the terminal TUI runs on all three plus WSL; both are ready to download. The mobile companion and the HarmonyOS NEXT shell are still in development: the Android arm64 .apk and the HarmonyOS project ship as test builds in the repository, with no availability promise yet. They all connect to the same background service, with identical sessions and settings.",
+      "Desktop covers macOS (Apple silicon), Windows 10/11 (x64 and ARM64) and Linux (.AppImage and .deb, x64 and ARM64). An AppImage needs libfuse.so.2 (FUSE 2) to mount; with only FUSE 3, start it with APPIMAGE_EXTRACT_AND_RUN=1, or install the published .deb. The terminal TUI runs on all three plus WSL; both are ready to download. The mobile companion and the HarmonyOS NEXT shell are still in development: the Android arm64 .apk and the HarmonyOS project ship as test builds in the repository, with no availability promise yet. They all connect to the same background service, with identical sessions and settings.",
     "faq.q3": "Do I need my own model API keys?",
     "faq.a3":
       "Yes. MusePi supports 60+ model providers; just enter your own keys in settings and model costs are billed directly with the provider you choose. MusePi doesn't proxy or take a cut. You can also connect local models.",
@@ -208,7 +209,7 @@
       "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion (in development) is designed to pair over the LAN by QR code, with end-to-end encrypted remote control — no third-party server in between. Everything else that leaves the machine follows what you turn on: model requests go to the provider you configure; the desktop app reads the GitHub release manifest at launch to surface new versions (set MUSEPI_NO_AUTO_UPDATE=1 to skip the automatic check); and only when you start a public tunnel does collaboration traffic pass through cloudflared.",
     "faq.q5": "Where does MusePi come from?",
     "faq.a5":
-      "MusePi is an AI workspace: the desktop GUI, the terminal and the resident desktop pet share one background service, with the mobile companion still in development; models, tools and surfaces are all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; everything is MIT-licensed.",
+      "MusePi is an AI workspace: the desktop GUI, the terminal and the resident desktop pet share one background service, with the mobile companion still in development; models, tools and surfaces are all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work. The project is open source under Apache-2.0 and retains the upstream MIT notice; the MusePi name and logo are not licensed under Apache-2.0.",
     "faq.q6": "How do I get started?",
     "faq.a6":
       "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Prebuilt binaries need no extra runtime; a from-source install needs Bun 1.4.4 or newer. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
@@ -237,9 +238,9 @@
     "footer.issues": "Issues",
     "footer.faq": "FAQ",
     "footer.get": "Get the installer",
-    "footer.rights": " · MIT License",
+    "footer.rights": " · Apache-2.0",
     "footer.fine":
-      "Runs locally, MIT open source — your code and your keys stay on your machine.",
+      "Runs locally, open source under Apache-2.0 — your code and your keys stay on your machine.",
   };
 
   var HEAD_EN = {
@@ -258,8 +259,8 @@
     "demo.status.ready": { zh: "运行中", en: "Running" },
     "demo.status.error": { zh: "载入失败", en: "Failed" },
     "demo.guide.welcome": {
-      zh: "先看首屏：左侧是实例与分组，顶部胶囊里是模型与思考档位，右下是上下文与工具入口。",
-      en: "Start here: instances and groups on the left, the capsule above holds the model and thinking rung, and the right side lists context and tools.",
+      zh: "先看首屏：左侧是目的地与会话导航，输入框上方可选择记忆模式，右侧保留上下文与工具入口。",
+      en: "Start here: destinations and sessions on the left, memory modes above the composer, and context and tools on the right.",
     },
     "demo.guide.chat": {
       zh: "点开会话后：左侧是会话树，中间是回复与工具调用，右侧是文件与 Agent 面板。",

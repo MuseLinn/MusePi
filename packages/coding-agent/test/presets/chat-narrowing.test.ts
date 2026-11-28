@@ -48,7 +48,7 @@ describe("chat preset tool narrowing", () => {
 		expect(denylist).toContain("list_secrets");
 	});
 
-	it("upgrades revision-5, 6, and 11 chat files but keeps edited ones", () => {
+	it("tracks the legacy chat snapshots and current revision", () => {
 		// The upgrade chain is what puts the narrowing in front of existing users
 		// without trampling their edits: a file still matching a snapshot moves up;
 		// anything else stays as the person wrote it.
@@ -64,16 +64,21 @@ describe("chat preset tool narrowing", () => {
 		expect(rev11?.settings?.["tools.disabled"]).not.toContain("request_secret");
 		expect(rev11?.settings?.["tools.disabled"]).not.toContain("list_secrets");
 		// And the current template stamps the new revision.
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(12);
+		const rev12 = LEGACY_TEMPLATES[12]?.chat;
+		expect(rev12).toBeDefined();
+		expect(rev12?.settings?.["tools.disabled"]).toContain("request_secret");
+		expect(rev12?.settings?.["tools.disabled"]).not.toContain("present");
+		expect(rev12?.settings?.["tools.disabled"]).not.toContain("request_login");
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(13);
 	});
 
-	it("upgrades an unedited revision-11 chat file and denies the secret tools", () => {
-		const rev11 = LEGACY_TEMPLATES[11]?.chat;
-		if (!rev11) throw new Error("revision 11 chat snapshot is missing");
+	it("upgrades an unedited revision-12 chat file and denies recently added tools", () => {
+		const rev12 = LEGACY_TEMPLATES[12]?.chat;
+		if (!rev12) throw new Error("revision 12 chat snapshot is missing");
 		const dir = mkdtempSync(path.join(os.tmpdir(), "musepi-chat-preset-"));
 		try {
 			const file = modeFilePath(dir, "chat");
-			writeFileSync(file, `${JSON.stringify({ ...rev11, builtinRevision: 11 }, null, 2)}\n`, "utf8");
+			writeFileSync(file, `${JSON.stringify({ ...rev12, builtinRevision: 12 }, null, 2)}\n`, "utf8");
 
 			ensureModeTemplates(dir);
 
@@ -82,8 +87,8 @@ describe("chat preset tool narrowing", () => {
 				settings: Record<string, unknown>;
 			};
 			expect(upgraded.builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
-			expect(upgraded.settings["tools.disabled"]).toContain("request_secret");
-			expect(upgraded.settings["tools.disabled"]).toContain("list_secrets");
+			expect(upgraded.settings["tools.disabled"]).toContain("present");
+			expect(upgraded.settings["tools.disabled"]).toContain("request_login");
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

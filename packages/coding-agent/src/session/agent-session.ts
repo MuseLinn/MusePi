@@ -315,6 +315,7 @@ import {
 	LAUNCH_COMPLETION_MESSAGE_TYPE,
 	type LaunchCompletionEntry,
 } from "./launch-completion";
+import { normalizeMemoryMode, type SessionMemoryMode } from "./memory-mode";
 import {
 	type BashExecutionMessage,
 	buildReplanTitleContext,
@@ -361,6 +362,7 @@ import type { BuildSessionContextOptions, SessionContext } from "./session-conte
 import { getRestorableSessionModels } from "./session-context";
 import { formatSessionDumpText } from "./session-dump-format";
 import type { BranchSummaryEntry, NewSessionOptions } from "./session-entries";
+import { sessionHeaderPreset } from "./session-entries";
 import { SessionHandoff, type SessionHandoffHost } from "./session-handoff";
 import {
 	COMPACTION_CHECK_NONE,
@@ -1139,6 +1141,10 @@ export class AgentSession {
 		return listPlanFiles({ localProtocolOptions: this.#localProtocolOptions() });
 	}
 
+	get memoryMode(): SessionMemoryMode {
+		return normalizeMemoryMode(this.sessionManager.getHeader()?.memoryMode);
+	}
+
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
@@ -1368,6 +1374,7 @@ export class AgentSession {
 			},
 			refreshBaseSystemPrompt: () => this.#tools.refreshBaseSystemPrompt(),
 			replaceMemoryTools: tools => this.#tools.replaceMemoryTools(tools),
+			memoryMode: () => this.memoryMode,
 		};
 		this.#memory = new SessionMemory(memoryHost, {
 			memoryAgentDir: config.memoryAgentDir,
@@ -5344,7 +5351,7 @@ export class AgentSession {
 	 */
 	/** The selected agent preset (dsh's `agentPreset`); persisted as header `modeId`. */
 	getAgentPreset(): string | null {
-		return this.sessionManager.getHeader()?.modeId ?? null;
+		return sessionHeaderPreset(this.sessionManager.getHeader()) ?? null;
 	}
 
 	/** dsh-shaped alias: select (or clear) the session's agent preset. */

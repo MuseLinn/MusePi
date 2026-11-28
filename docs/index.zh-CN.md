@@ -23,7 +23,7 @@ lang: zh-CN
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 ```
 
-安装脚本默认下载预编译二进制（`musepi-<os>-<arch>` + `SHA256SUMS.txt`，来自 GitHub Release）。`--source` 强制从源码克隆构建；`--ref <tag>` 固定版本。
+安装脚本默认下载预编译二进制（`musepi-<os>-<arch>` + `SHA256SUMS.txt`，来自 GitHub Release）。发布里缺了其中任一文件时，脚本会停下并指出仍带这份终端包的版本，或改用 `--source`。`--source` 从源码克隆构建；`--ref <tag>` 固定版本。
 
 
 ## GUI 与桌面

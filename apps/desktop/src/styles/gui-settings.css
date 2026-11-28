@@ -4898,6 +4898,48 @@
  *
  * States are rest / hover+`:focus-visible` / drag. `:focus-visible` rather
  * than `:focus-within`: a pointer grab must not leave a lit grip behind. */
+/* ── Seam hint line ────────────────────────────────────────────────────
+ * A hairline running the band's full height, hidden at rest and revealed on
+ * hover/focus/drag. It is a gradient that FADES at both ends rather than a
+ * solid rule: a line that stopped abruptly read as a divider between two
+ * regions, while a line that dissolves reads as "this edge is grabbable" and
+ * does not compete with the seam it marks. `::before` on the band keeps it from
+ * needing extra markup in every host.
+ *
+ * Only the three vertical seams get it — the terminal dock's horizontal band is
+ * a different affordance and keeps its own pill. */
+:is(.gui-resize-x--side, .gui-pane-resize-x)::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	transform: translateX(-50%);
+	background: linear-gradient(
+		to bottom,
+		transparent,
+		var(--gui-grip-hover) 12%,
+		var(--gui-grip-hover) 88%,
+		transparent
+	);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--gui-grip-transition);
+}
+
+:is(.gui-resize-x--side, .gui-pane-resize-x):hover::before,
+:is(.gui-resize-x--side, .gui-pane-resize-x):focus-visible::before,
+:is(.gui-resize-x--side, .gui-pane-resize-x)[data-resizing]::before {
+	opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is(.gui-resize-x--side, .gui-pane-resize-x)::before {
+		transition: none;
+	}
+}
+
 .gui-split-grip {
 	position: absolute;
 	top: 50%;
@@ -4989,10 +5031,47 @@
  * insets itself by header + two gutters at the top and two at the bottom,
  * so a workspace-relative 50% rode ~24px above the seam. */
 .gui-resize-x--side {
-	left: calc(var(--gui-rail-w) + var(--gui-side-w) + var(--gui-card-gutter) * 2 - 6px);
+	/* The seam is the GAP between the panel card and the chat card.
+	 *
+	 * The band is a child of `.gui-side-keeper`, whose right edge IS the panel
+	 * card's right edge (the docked pane keeps its left gutter and drops its
+	 * right one, see gui-side-panel.css), and the chat card adds one gutter on
+	 * its left. So the gap's midpoint is `100% + gutter / 2` of the keeper — no
+	 * rail width, no side width, no constant. The earlier shell-level formula
+	 * re-derived that edge from tokens and needed a "+10px" fudge, which is
+	 * exactly what kept it off-centre. */
+	left: calc(100% + var(--gui-card-gutter) / 2);
+	transform: translateX(-50%);
 	width: 12px;
-	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	/* Same vertical box as the docked pane card (its margins). */
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
 	bottom: calc(var(--gui-card-gutter) * 2);
+	/* Hidden unless a pane is actually docked: switching to a page without a
+	 * panel (or into hover-peek) fades the pane out, and the grip follows on
+	 * the pane's own 160ms timing instead of lingering over an empty seam. */
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity 160ms ease-out,
+		visibility 0s linear 160ms;
+}
+
+.gui-side-keeper:not([data-peek="true"])[data-panel="home"] > .gui-resize-x--side,
+.gui-side-keeper:not([data-peek="true"])[data-panel="scheduled"] > .gui-resize-x--side,
+.gui-side-keeper:not([data-peek="true"])[data-panel="capability"] > .gui-resize-x--side {
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+	transition:
+		opacity 160ms ease-out,
+		visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-resize-x--side {
+		transition: none;
+	}
 }
 
 body.gui-resizing {
@@ -6239,7 +6318,15 @@ body.gui-resizing {
 /* Recording: the icon button expands into a capsule (mic + inline seconds),
  * not a 30px square with counters overflowing below it. The live level meter
  * rides the capsule's inner bottom edge — absolutely positioned INSIDE, so
- * nothing spills over neighbouring controls. */
+ * nothing spills over neighbouring controls.
+ *
+ * This capsule belongs to the SETTINGS-PAGE mic test, which has no status
+ * strip of its own; the composer mic deliberately stays a plain 26px icon and
+ * puts the clock and meter in its dictation strip (see gui-composer.css).
+ * The icon does NOT pulse: `gui-mic-pulse` here made the glyph breathe forever
+ * next to a meter that was already moving, which read as a control stuck in
+ * animation rather than one recording. Shape and tint carry the state; the
+ * strip carries the motion. */
 .gui-composer-ico--dictating {
 	position: relative;
 	width: auto;
@@ -6253,7 +6340,12 @@ body.gui-resizing {
 }
 
 .gui-composer-ico--dictating > svg {
-	animation: gui-mic-pulse 1s ease-in-out infinite;
+	animation: none;
+}
+
+/* Composer mic: plain icon, tinted by state, no loop. */
+.gui-composer-ico[data-state="recording"] {
+	color: var(--color-danger);
 }
 
 .gui-voice-seconds {
@@ -9615,16 +9707,44 @@ body.gui-resizing {
 	color: var(--color-text);
 }
 
-/* 保险库页的操作行：搜索靠右，两个动作成组；窄宽度时动作整组换行。 */
+/* 保险库页的操作行：计数在左，搜索与两个动作作为一组贴右。搜索自己不再
+ * 带 `margin-left: auto`——两个 auto 会把它推到两股弹性空间的正中间，读起来
+ * 像一条悬空的控制条，而不是「这一组动作」。
+ *
+ * 搜索是这一行里的次级控件：它排在计数旁边时曾用 `gui-input` 的完整字段面
+ * （34px、边框、内阴影），在 12px 的计数旁读成一个输入表单。收成与动作按钮
+ * 同高的小尺寸，只保留 hover/focus 的边框提示。 */
 .gui-secret-listhead .gui-secret-search {
-	flex: 1 1 180px;
-	max-width: 240px;
-	margin-left: auto;
+	flex: 0 1 220px;
+	height: var(--control-height-sm);
+	min-width: 0;
+	margin-left: var(--space-3);
+	padding: 0 8px;
+	border-radius: var(--radius-md);
+	border: 1px solid transparent;
+	background: transparent;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+	transition:
+		border-color 140ms ease,
+		background-color 140ms ease;
+}
+
+.gui-secret-listhead .gui-secret-search:hover {
+	border-color: var(--control-hairline);
+	background: var(--control-fill);
+}
+
+.gui-secret-listhead .gui-secret-search:focus-visible {
+	outline: none;
+	border-color: var(--control-focus-border);
+	box-shadow: var(--control-focus-ring);
 }
 
 .gui-secret-listhead-actions {
 	display: flex;
 	flex: none;
+	align-items: center;
 	gap: var(--space-2);
 	margin-left: auto;
 }
@@ -9705,13 +9825,22 @@ body.gui-resizing {
 	cursor: default;
 }
 
-/* 底部：作用域提示在左、取消/保存在右，右侧成组而不是两个落单按钮。 */
+/* 底部：动作成组靠右，上方一条细线把它与字段分开。这条线替代了原来那两行
+ * 散落在左下的「范围 / 交付方式」文字——它们已经变成真正的字段行，页脚只剩
+ * 决定动作。 */
 .gui-secret-form-foot {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-end;
 	gap: var(--space-3);
-	padding-top: var(--space-1);
+	margin-top: var(--space-1);
+	padding-top: var(--space-3);
+	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+/* 保护卡的口令表单：提示在左，动作用右，与主体同一条基线。 */
+.gui-secret-protection-form .gui-secret-form-foot {
+	justify-content: space-between;
 }
 
 .gui-secret-form-actions {
@@ -9748,6 +9877,37 @@ body.gui-resizing {
 	gap: var(--space-3);
 	margin-bottom: 0;
 	padding: 10px var(--space-4);
+	/* Hover and keyboard focus share one state set: the row lifts its hairline
+	 * together with the pointer. `:focus-within` is deliberately not used — it
+	 * stays lit after a mouse click on one of the row's actions, which reads as
+	 * "this row is still active". `:has(:focus-visible)` follows the keyboard
+	 * only, per the hover-plus-`:focus-visible` contract in docs/gui-design.md. */
+	transition:
+		border-color 140ms ease,
+		background-color 140ms ease;
+}
+
+.gui-secret-section .gui-secret-row:hover,
+.gui-secret-section .gui-secret-row:has(:focus-visible) {
+	border-color: color-mix(in oklab, var(--border) 60%, var(--color-text) 18%);
+}
+
+/* 授权情况：比元信息更弱一档——它是「谁能用」，不是「这是什么」。 */
+.gui-secret-row-grants {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+/* 只读字段的本体：与同行的输入框保持同一行高与左缘，但不带可编辑外观。 */
+.gui-secret-readonly {
+	display: inline-flex;
+	align-items: center;
+	height: var(--control-height-field);
+	font-size: var(--control-font-size);
+	color: var(--color-text-muted);
 }
 
 .gui-secret-row-icon {
@@ -10056,7 +10216,7 @@ body.gui-resizing {
 .gui-at-root {
 	flex: none;
 	padding: 0 4px;
-	border-radius: var(--radius-xs, 4px);
+	border-radius: var(--radius-xs);
 	background: var(--color-surface-sunken);
 	color: var(--color-text-faint);
 	font-size: var(--ui-font-size-xs);

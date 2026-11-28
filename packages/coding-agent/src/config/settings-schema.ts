@@ -2797,6 +2797,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"dictation.globalTrigger": {
+		type: "string",
+		enum: ["toggle", "hold"],
+		default: "toggle",
+		ui: {
+			tab: "voice",
+			group: "Speech",
+			label: "Global dictation trigger",
+			description: "Press the shortcut twice to start/stop, or hold it while speaking (Windows)",
+		},
+	},
+
 	"stt.language": {
 		type: "string",
 		// "" (auto-detect) — the shipped tiers are multilingual Whisper
@@ -6196,7 +6208,7 @@ export const SETTINGS_SCHEMA = {
 		default: ONLINE_MEMORY_MODEL_KEY,
 		ui: {
 			tab: "memory",
-			group: "General",
+			group: "Mnemopi",
 			label: "Memory Model",
 			description:
 				"Mnemopi LLM for fact extraction + consolidation: online (the TINY role from /models, else smol/remote) by default, or a local on-device model",

@@ -337,6 +337,8 @@ export class HindsightSessionState {
 
 	/** Queues a tool-initiated retain; `scope: "global"` retains it untagged (see {@link assertGlobalRetainAvailable}). */
 	async enqueueRetain(toolCallId: string, items: RetainInput[]): Promise<void> {
+		if ((this.session.memoryMode ?? "persistent") !== "persistent")
+			throw new Error("Memory writes are disabled for this session.");
 		await this.retainQueue.enqueue(toolCallId, items);
 	}
 
@@ -368,6 +370,7 @@ export class HindsightSessionState {
 	}
 
 	async retainSession(messages: HindsightMessage[]): Promise<void> {
+		if ((this.session.memoryMode ?? "persistent") !== "persistent") return;
 		const retainedAt = new Date();
 		const retainFullWindow = this.config.retainMode === "full-session";
 		let documentId: string;

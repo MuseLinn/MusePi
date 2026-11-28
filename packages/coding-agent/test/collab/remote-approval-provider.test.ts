@@ -17,7 +17,9 @@ describe("remote approval provider", () => {
 		let changes = 0;
 		provider.subscribe(() => changes++);
 
-		const firstPending = first.approvals.uiContext.select("Allow tool: bash", ["Approve", "Deny"]);
+		const firstPending = first.approvals.uiContext.select("Allow tool: bash", ["Approve", "Deny"], {
+			purpose: "approval",
+		});
 		const firstId = [...first.approvals.pending.keys()][0]!;
 		expect(provider.list().map(request => request.requestId)).toEqual([firstId]);
 		expect(changes).toBe(2);
@@ -27,7 +29,9 @@ describe("remote approval provider", () => {
 		expect(provider.list()).toEqual([]);
 		expect(provider.resolve(firstId, true)).toBe(false);
 
-		const secondPending = second.approvals.uiContext.select("Allow tool: edit", ["Approve", "Deny"]);
+		const secondPending = second.approvals.uiContext.select("Allow tool: edit", ["Approve", "Deny"], {
+			purpose: "approval",
+		});
 		const secondId = [...second.approvals.pending.keys()][0]!;
 		expect(provider.list().map(request => request.requestId)).toEqual([secondId]);
 		expect(provider.resolve(secondId, false)).toBe(true);

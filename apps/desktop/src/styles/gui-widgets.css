@@ -219,16 +219,19 @@
 	}
 }
 
+/* A surface replacing another must not ALSO change size while the outgoing one
+ * fades: the two frames overlap for the length of the swap, so a 0.985 → 1 scale
+ * on the incoming surface read as the whole window flashing — the reported
+ * flicker when a destination was clicked. Blur and opacity carry the transition;
+ * geometry stays put. */
 @keyframes gui-view-blur-in {
 	from {
 		opacity: 0;
 		filter: blur(10px);
-		transform: scale(0.985);
 	}
 	to {
 		opacity: 1;
 		filter: blur(0);
-		transform: scale(1);
 	}
 }
 
@@ -4872,4 +4875,225 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
+}
+
+.gui-notification-trigger {
+	position: relative;
+	width: 28px;
+	height: 28px;
+}
+
+.gui-notification-badge {
+	position: absolute;
+	top: -3px;
+	right: -5px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: var(--radius-full);
+	background: var(--color-danger-soft);
+	box-shadow: inset 0 0 0 1px var(--color-danger-bd);
+	color: var(--color-danger);
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1;
+	pointer-events: none;
+}
+
+.gui-notification-center {
+	width: min(360px, calc(100vw - 16px));
+	padding: 0;
+	overflow-y: auto;
+	overflow-x: clip;
+}
+
+.gui-notification-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 42px;
+	padding: 0 12px;
+	background: var(--color-surface-raised);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-notification-clear {
+	border: 0;
+	padding: 4px;
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-notification-clear:hover {
+	color: var(--color-accent);
+}
+
+.gui-notification-empty {
+	padding: 32px 12px;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	text-align: center;
+}
+
+.gui-notification-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 4px;
+	list-style: none;
+}
+
+.gui-notification-row {
+	display: grid;
+	grid-template-columns: 16px minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 8px;
+	padding: 8px;
+	border-radius: var(--radius-lg);
+}
+
+.gui-notification-row:hover {
+	background: var(--color-hover);
+}
+
+.gui-notification-kind {
+	width: 14px;
+	height: 14px;
+	margin-top: 2px;
+	color: var(--color-text-muted);
+}
+
+.gui-notification-row[data-kind="success"] .gui-notification-kind {
+	color: var(--color-success);
+}
+
+.gui-notification-row[data-kind="warning"] .gui-notification-kind {
+	color: var(--color-warning);
+}
+
+.gui-notification-row[data-kind="error"] .gui-notification-kind {
+	color: var(--color-danger);
+}
+
+.gui-notification-copy {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.gui-notification-title {
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.gui-notification-message {
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.45;
+}
+
+.gui-notification-time {
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	white-space: nowrap;
+}
+
+.gui-memory-chip-row {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0 2px 6px;
+}
+
+.gui-memory-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 6px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-memory-chip:hover,
+.gui-memory-chip[aria-expanded="true"] {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-memory-mode-menu {
+	width: 340px;
+	padding: 4px;
+}
+
+.gui-memory-mode-options {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.gui-memory-mode-option {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	width: 100%;
+	padding: 9px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-memory-mode-option:hover,
+.gui-memory-mode-option[aria-pressed="true"] {
+	border-color: var(--color-accent-bd);
+	background: color-mix(in oklab, var(--color-accent) 9%, transparent);
+	color: var(--color-text);
+}
+
+.gui-memory-mode-icon {
+	width: 15px;
+	height: 15px;
+	margin-top: 2px;
+	flex-shrink: 0;
+	color: var(--color-accent);
+}
+
+.gui-memory-mode-copy {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.gui-memory-mode-copy strong {
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-memory-mode-copy span {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
 }

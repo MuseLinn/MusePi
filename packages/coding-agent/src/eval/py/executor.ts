@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { getProjectDir, logger } from "@musepi/pi-utils";
 import type { ToolSession } from "../../tools";
 import {
@@ -91,6 +92,8 @@ export interface PythonExecutorOptions {
 	 * not injected and any `tool.foo(...)` raises in Python.
 	 */
 	toolSession?: ToolSession;
+	/** Authorization context of the enclosing `eval` call, applied to nested tools. */
+	context?: AgentToolContext;
 	/** Callback for status events emitted by tool bridge invocations. */
 	emitStatus?: (event: JsStatusEvent) => void;
 	/**

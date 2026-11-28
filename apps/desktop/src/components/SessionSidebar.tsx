@@ -12,6 +12,7 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import type { ConnectionTarget } from "../lib/connection/targets";
 import { isElectron, openPathInFileManager, pickDirectory } from "../lib/electron";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { pathBaseName, projectLabel, projectLabels } from "../lib/project-label";
@@ -40,8 +41,8 @@ import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { DialogFrame } from "./DialogFrame";
 import { GroupedSessionList } from "./GroupedSessionList";
-import type { ConnectionTarget } from "../lib/connection/targets";
 import { InstanceButton } from "./InstanceButton";
+import { MemoryModeOptions, type SessionMemoryMode } from "./MemoryModePicker";
 import { MenuPopup } from "./MenuPopup";
 import { ProjectDialog, type ProjectDialogTarget } from "./ProjectDialog";
 import { firstCardFocusable, lastFocusable, ProjectHoverCard } from "./ProjectHoverCard";
@@ -188,15 +189,15 @@ export function SessionSidebar({
 			paused?: boolean;
 			working?: boolean;
 			status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
-			/** 会话预设 id — 悬浮卡的模式行(app 侧 SessionMetaRow 的子集)。 */
-			modeId?: string;
+			/** 会话预设 id — 悬浮卡的预设行(app 侧 SessionMetaRow 的子集)。 */
+			agentPreset?: string;
 			/** 子代理数（session.list agentCount）—— >0 的会话行出现展开 chevron。 */
 			agentCount?: number;
 		}
 	>;
 	selectedId: string | null;
 	onSelect(id: string): void;
-	onNewSession(): void;
+	onNewSession(memoryMode?: SessionMemoryMode): void;
 	/** Create a session rooted at one project row (hover "+"). */
 	onNewSessionInProject?(cwd: string): void;
 	onDisconnect(): void;
@@ -341,6 +342,8 @@ export function SessionSidebar({
 		return () => observer.disconnect();
 	}, [syncTabstrip]);
 	const [projMenu, setProjMenu] = useState(false);
+	const [newMenuOpen, setNewMenuOpen] = useState(false);
+	const newMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
 	// Tab-row quick toggle: null = per-group state, true = all open, false = all closed.
 	const [groupsAll, setGroupsAll] = useState<boolean | null>(null);
 	const [pinned, setPinned] = useState<string[]>(() => {
@@ -1095,6 +1098,17 @@ export function SessionSidebar({
 		setGroupCtx(null);
 		setGroupEditIdx(index);
 	};
+	const createGroup = (): void => {
+		setTab("groups");
+		setGroups(groups => [
+			...groups,
+			{
+				name: t("settings.newGroup"),
+				sessions: [],
+				color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
+			},
+		]);
+	};
 	return (
 		<aside
 			className={`gui-pane-side gui-pane-side--immersive flex h-full flex-shrink-0 flex-col overflow-hidden${collapsed ? " gui-pane-side--collapsed" : ""}`}
@@ -1103,13 +1117,80 @@ export function SessionSidebar({
 			<div className="flex h-full min-h-0 w-full flex-col">
 				{/* Traffic-light clearance (macOS overlay title bar, y=14). */}
 				<div className="gui-pane-drag flex h-9 flex-shrink-0 items-center justify-end pr-2" />
-				{/* Menu: new session is the primary action; others are placeholders. */}
+				<div className="gui-sidebar-header">
+					<span className="gui-sidebar-toggle-seat" aria-hidden="true" />
+					<span className="gui-sidebar-title">{t("general.sessions")}</span>
+					<div className="gui-sidebar-new">
+						<button type="button" className="gui-sidebar-new-main" onClick={() => onNewSession()}>
+							<Icon name="add" className="h-3.5 w-3.5" />
+							{t("general.newSession")}
+						</button>
+						<button
+							type="button"
+							ref={newMenuAnchorRef}
+							className="gui-sidebar-new-more"
+							aria-label={t("general.newSession")}
+							aria-expanded={newMenuOpen}
+							onClick={() => setNewMenuOpen(open => !open)}
+						>
+							<Icon name="arrow-down-s" className="h-3 w-3" />
+						</button>
+					</div>
+					<MenuPopup
+						open={newMenuOpen}
+						className="gui-sidebar-new-menu"
+						anchor={newMenuAnchorRef.current}
+						align="right"
+						onOpenChange={setNewMenuOpen}
+					>
+						<button
+							type="button"
+							className="gui-view-opt"
+							onClick={() => {
+								setNewMenuOpen(false);
+								onNewSession();
+							}}
+						>
+							<Icon name="add-circle" className="h-3.5 w-3.5" />
+							{t("general.newSession")}
+						</button>
+						<button
+							type="button"
+							className="gui-view-opt"
+							onClick={() => {
+								setNewMenuOpen(false);
+								createGroup();
+							}}
+						>
+							<Icon name="folder" className="h-3.5 w-3.5" />
+							{t("settings.newGroup")}
+						</button>
+						<div className="gui-sidebar-new-memory">
+							<MemoryModeOptions
+								value="persistent"
+								modes={["incognito", "temporary"]}
+								onChange={mode => {
+									setNewMenuOpen(false);
+									onNewSession(mode);
+								}}
+							/>
+						</div>
+						{onImportSessions && (
+							<button
+								type="button"
+								className="gui-view-opt"
+								onClick={() => {
+									setNewMenuOpen(false);
+									onImportSessions();
+								}}
+							>
+								<Icon name="download" className="h-3.5 w-3.5" />
+								{t("settings.importSessions")}
+							</button>
+						)}
+					</MenuPopup>
+				</div>
 				<div className="gui-side-menu flex flex-col gap-0.5 px-2.5">
-					<button type="button" className="gui-menu-item" onClick={onNewSession}>
-						<Icon name="add-circle" className="h-4 w-4" />
-						<span>{t("settings.newTask")}</span>
-						<span className="gui-menu-kbd">{shortcutLabel("⌘N")}</span>
-					</button>
 					<button type="button" className="gui-menu-item" onClick={onOpenSearch} title={t("settings.search")}>
 						<Icon name="search" className="h-4 w-4" />
 						<span>{t("settings.search")}</span>
@@ -1229,16 +1310,7 @@ export function SessionSidebar({
 								className="gui-tab-action"
 								title={t("settings.newGroup")}
 								aria-label={t("settings.newGroup")}
-								onClick={() =>
-									setGroups(g => [
-										...g,
-										{
-											name: t("settings.newGroup"),
-											sessions: [],
-											color: GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
-										},
-									])
-								}
+								onClick={createGroup}
 							>
 								<Icon name="add-circle" className="h-3.5 w-3.5" />
 							</button>

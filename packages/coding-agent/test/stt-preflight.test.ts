@@ -95,6 +95,8 @@ describe("STTController preflight", () => {
 		settings.set("stt.modelName", "fast");
 		vi.spyOn(asrClient.sttClient, "startStream").mockReturnValue({
 			pushAudio: vi.fn(),
+			pushUtterance: vi.fn(),
+			pushPreview: vi.fn(),
 			stop: vi.fn().mockResolvedValue(""),
 			cancel: vi.fn(),
 		});

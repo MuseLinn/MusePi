@@ -17,10 +17,16 @@ const listSecretsSchema = arkType({});
 export interface ListedSecret {
 	name: string;
 	purpose: string;
+	/** `login` entries are filled into a page; they never become a value. */
+	kind: "secret" | "login";
 	scope: SecretScope;
 	delivery: SecretDelivery;
 	available: boolean;
 	usable: boolean;
+	/** For a login: the site it belongs to, so the agent can pick by page. */
+	site?: string;
+	username?: string;
+	hasTotp?: boolean;
 }
 
 export interface ListSecretsDetails {
@@ -46,10 +52,18 @@ export class ListSecretsTool implements AgentTool<typeof listSecretsSchema, List
 			({ entry, available, usable }) => ({
 				name: entry.name,
 				purpose: entry.purpose,
+				kind: entry.kind,
 				scope: entry.scope,
 				delivery: entry.delivery,
 				available,
 				usable,
+				...(entry.kind === "login" && entry.login
+					? {
+							site: entry.login.site,
+							username: entry.login.username,
+							hasTotp: entry.login.hasTotp,
+						}
+					: {}),
 			}),
 		);
 		if (entries.length === 0) {
@@ -59,6 +73,18 @@ export class ListSecretsTool implements AgentTool<typeof listSecretsSchema, List
 		}
 		const lines = entries.map(entry => {
 			const scope = entry.scope === "all" ? "every session" : `${entry.scope.length} workspace(s)`;
+			if (entry.kind === "login") {
+				// A login has no value to reach the agent; what matters is which page
+				// it belongs to and whether the agent may fill it here.
+				const who = entry.username ? ` for ${entry.username}` : "";
+				const totp = entry.hasTotp ? ", with a 2FA code" : "";
+				const reach = !entry.available
+					? "unavailable: vault locked or unreadable"
+					: entry.usable
+						? `fill with browser action "fill_login", login "${entry.name}"`
+						: "stored, but not usable in this workspace; ask with request_login";
+				return `- ${entry.name} — login${who} on ${entry.site || "(no site)"}${totp} [scope: ${scope}; ${reach}]`;
+			}
 			const reach = !entry.available
 				? "unavailable: value unreadable"
 				: entry.usable

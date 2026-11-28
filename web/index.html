@@ -168,7 +168,7 @@
             </div>
           </div>
 
-          <p class="mp-demo-guide" data-demo-guide>先看首屏：左侧是实例与分组，顶部胶囊里是模型与思考档位，右下是上下文与工具入口。</p>
+          <p class="mp-demo-guide" data-demo-guide data-i18n="demo.guide.welcome">先看首屏：左侧是目的地与会话导航，输入框上方可选择记忆模式，右侧保留上下文与工具入口。</p>
 
           <div class="mp-demo-frame" id="demo-stage" role="tabpanel" aria-labelledby="demo-tab-welcome" data-demo-stage>
             <div class="mp-demo-screen" data-demo-screen>
@@ -186,7 +186,7 @@
               </div>
             </div>
           </div>
-          <p class="mp-demo-guide" data-demo-guide>先看首屏：左侧是实例与分组，顶部胶囊里是模型与思考档位，右下是上下文与工具入口。</p>
+          <p class="mp-demo-guide" data-demo-guide data-i18n="demo.guide.welcome">先看首屏：左侧是目的地与会话导航，输入框上方可选择记忆模式，右侧保留上下文与工具入口。</p>
         </div>
 
       </div>
@@ -301,7 +301,7 @@
             <h3 class="mp-h3" data-i18n="feat.f1.title">会话即树，不是日志</h3>
             <p data-i18n="feat.f1.body">每条消息都带着父节点，历史是一棵可以走的树——从任意节点分叉、回退、重新回答。上下文占用实时可见，长会话也不会迷失方向。</p>
             <ul class="mp-feature-points">
-              <li data-i18n="feat.f1.p1">画布地图画出完整的会话 DAG</li>
+              <li data-i18n="feat.f1.p1">轮级地图展示每一轮的父子与分支关系</li>
               <li data-i18n="feat.f1.p2">轨迹面板把同一棵树投影成时间线或分支视图</li>
             </ul>
           </article>
@@ -345,16 +345,16 @@
 
         <ul class="mp-log">
           <li class="mp-log-item mp-reveal">
-            <span class="mp-log-tag" data-i18n="mom.log1.tag">界面</span>
-            <p data-i18n="mom.log1.body">思考强度滑块收成内嵌的一行：名称与档位不再分两行占高度，轨道下方没有标签行，Auto 在下方另起一行写清本轮实际采用的档位；窄面板里数值不再折行。</p>
+            <span class="mp-log-tag" data-i18n="mom.log1.tag">语音</span>
+            <p data-i18n="mom.log1.body">听写现在边说边出字：已定稿的句子进入草稿，正在说的半句留在光标处预览。全局快捷键在 MusePi 内写入当前输入框，在其他应用中通过不抢焦点的悬浮窗反馈；Windows 还可选择按住说话。</p>
           </li>
           <li class="mp-log-item mp-reveal">
-            <span class="mp-log-tag" data-i18n="mom.log2.tag">导航</span>
-            <p data-i18n="mom.log2.body">会话地图重新设计：每一轮从一张会展开的大卡变成 66px 索引行，连线用正交路径和箭头说明父子方向，点选只更新右侧检视器；键盘可遍历，离路径的分支压暗但仍可读。</p>
+            <span class="mp-log-tag" data-i18n="mom.log2.tag">记忆</span>
+            <p data-i18n="mom.log2.body">新建会话可选择普通、隐身或临时记忆模式：隐身读取已有经验但不学习，临时既不召回也不学习。两种非普通模式都保留聊天记录并禁用目标循环，选择随会话保存并在恢复后保留。</p>
           </li>
           <li class="mp-log-item mp-reveal">
-            <span class="mp-log-tag" data-i18n="mom.log3.tag">远程</span>
-            <p data-i18n="mom.log3.body">实例与远程工作区说清两件事：守护进程在哪台机器、文件在哪台机器。端点分成本机 / WSL / SSH / Docker / 手填，SSH 托管隧道与 docker、WSL 的进程生命周期都归 MusePi 所有。</p>
+            <span class="mp-log-tag" data-i18n="mom.log3.tag">工作台</span>
+            <p data-i18n="mom.log3.body">会话、任务中心与能力中心折叠后，悬停按钮会显示各自的小菜单，不再共用会话列表；面板仍从按钮矩形展开。头部通知中心保留本次应用会话中的 toast，打开即全部已读。</p>
           </li>
         </ul>
         <a class="mp-arrow-link mp-reveal" href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md" target="_blank" rel="noopener"><span data-i18n="mom.changelog">阅读完整更新日志</span>
@@ -447,7 +447,7 @@
               <span data-i18n="faq.q2">支持哪些平台？</span>
               <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div class="mp-faq-a" id="faq-a2" role="region" aria-hidden="true" aria-labelledby="faq-q2"><div class="mp-faq-a-inner"><p data-i18n="faq.a2">桌面版覆盖 macOS（Apple Silicon）、Windows 10/11（x64 与 ARM64）、Linux（.AppImage 与 .deb，x64 与 ARM64）；终端 TUI 三平台加 WSL 通用；这两类已经可以下载使用。移动伴侣与鸿蒙（HarmonyOS NEXT）壳仍在开发中：Android arm64 的 .apk 与鸿蒙工程随仓库提供测试构建，暂不承诺可用性。它们连的是同一个后台服务，会话与设置完全一致。</p></div></div>
+            <div class="mp-faq-a" id="faq-a2" role="region" aria-hidden="true" aria-labelledby="faq-q2"><div class="mp-faq-a-inner"><p data-i18n="faq.a2">桌面版覆盖 macOS（Apple Silicon）、Windows 10/11（x64 与 ARM64）、Linux（.AppImage 与 .deb，x64 与 ARM64）。AppImage 需要 libfuse.so.2（FUSE 2）才能挂载；只有 FUSE 3 时用 APPIMAGE_EXTRACT_AND_RUN=1 启动，或安装已经发布的 .deb。终端 TUI 三平台加 WSL 通用；这两类已经可以下载使用。移动伴侣与鸿蒙（HarmonyOS NEXT）壳仍在开发中：Android arm64 的 .apk 与鸿蒙工程随仓库提供测试构建，暂不承诺可用性。它们连的是同一个后台服务，会话与设置完全一致。</p></div></div>
           </div>
           <div class="mp-faq-item">
             <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a3" id="faq-q3">
@@ -468,7 +468,7 @@
               <span data-i18n="faq.q5">MusePi 是怎么来的？</span>
               <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div class="mp-faq-a" id="faq-a5" role="region" aria-hidden="true" aria-labelledby="faq-q5"><div class="mp-faq-a-inner"><p data-i18n="faq.a5">MusePi 是一个 AI 工作台：桌面 GUI、终端、常驻桌宠共享同一个后台，移动伴侣仍在开发中；模型、工具、界面皆可替换。桌面端、移动端、扩展系统与协作面都是我们自己做的，整体以 MIT 许可开源。</p></div></div>
+            <div class="mp-faq-a" id="faq-a5" role="region" aria-hidden="true" aria-labelledby="faq-q5"><div class="mp-faq-a-inner"><p data-i18n="faq.a5">MusePi 是一个 AI 工作台：桌面 GUI、终端、常驻桌宠共享同一个后台，移动伴侣仍在开发中；模型、工具、界面皆可替换。桌面端、移动端、扩展系统与协作面都是我们自己做的，整体以 Apache-2.0 许可开源，并保留上游 MIT 声明；MusePi 名称与标识不在 Apache-2.0 授权范围内。</p></div></div>
           </div>
           <div class="mp-faq-item">
             <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a6" id="faq-q6">
@@ -534,8 +534,8 @@
         </nav>
       </div>
       <div class="mp-footer-bottom">
-        <span>© <span data-year>2026</span> MusePi<span data-i18n="footer.rights"> · MIT 许可</span></span>
-        <span class="mp-footer-fine" data-i18n="footer.fine">本地运行，MIT 开源——你的代码与密钥始终留在自己的机器上。</span>
+        <span>© <span data-year>2026</span> MusePi<span data-i18n="footer.rights"> · Apache-2.0</span></span>
+        <span class="mp-footer-fine" data-i18n="footer.fine">本地运行，Apache-2.0 开源——你的代码与密钥始终留在自己的机器上。</span>
       </div>
     </div>
   </footer>

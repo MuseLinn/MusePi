@@ -111,11 +111,11 @@ describe("desktop daemon staging", () => {
 				path.join(options.outputDir, "node_modules", "node-pty", "prebuilds", "win32-x64", "pty.node"),
 			).text(),
 		).toBe("node native asset");
-		expect(
-			await Bun.file(path.join(options.outputDir, "plugins", "shell", "terminal", "pty-bridge.cjs")).text(),
-		).toBe("// staged PTY bridge\n");
+		expect(await Bun.file(path.join(options.outputDir, "plugins", "terminal", "pty-bridge.cjs")).text()).toBe(
+			"// staged PTY bridge\n",
+		);
 		for (const [root, name] of [
-			["bundled-plugins", "daemon-plugin"],
+			["plugins", "daemon-plugin"],
 			["desktop-plugins", "desktop-plugin"],
 		] as const) {
 			const pluginDir = path.join(options.outputDir, root, name);
@@ -170,14 +170,7 @@ describe("desktop daemon staging", () => {
 
 	it("refuses a staged tree that carries development artifacts", async () => {
 		const options = await fixture();
-		const pluginDir = path.join(
-			options.repoRoot,
-			"packages",
-			"coding-agent",
-			"src",
-			"bundled-plugins",
-			"daemon-plugin",
-		);
+		const pluginDir = path.join(options.repoRoot, "packages", "coding-agent", "src", "plugins", "daemon-plugin");
 		await Bun.write(path.join(pluginDir, "skills", "fixture-skill", "scripts", "debug.test.ts"), "export {};\n");
 
 		await expect(stageDaemon(options)).rejects.toThrow("development artifacts");
@@ -207,15 +200,7 @@ describe("desktop daemon staging", () => {
 
 		await stageDaemon(options);
 
-		const staged = path.join(
-			options.outputDir,
-			"plugins",
-			"prompt",
-			"product-skills",
-			"skills",
-			"ui-ux-pro-max",
-			"scripts",
-		);
+		const staged = path.join(options.outputDir, "plugins", "product-skills", "skills", "ui-ux-pro-max", "scripts");
 		expect(await Bun.file(path.join(staged, "validate_data.py")).exists()).toBe(false);
 		expect(await Bun.file(path.join(staged, "search.py")).exists()).toBe(true);
 	});

@@ -3,6 +3,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { GlobalDictationSettings } from "../src/components/settings-sections/global-dictation";
+import "../src/i18n/voice";
 import { MockAssistantRow, MockConversationPreview, MockUserRow } from "../src/components/MockConversationPreview";
 import {
 	SpeakAction,
@@ -308,6 +310,12 @@ describe("voice settings schema", () => {
 		fake.responses.set("settings.schema", {
 			voice: [
 				{ key: "stt.enabled", type: "boolean", default: true, ui: { group: "Speech", label: "Speech-to-Text" } },
+				{
+					key: "dictation.globalTrigger",
+					type: "enum",
+					default: "toggle",
+					ui: { group: "Speech", label: "Global dictation trigger" },
+				},
 			],
 		});
 		fake.responses.set("settings.get", {});
@@ -322,6 +330,7 @@ describe("voice settings schema", () => {
 			await new Promise(resolve => setTimeout(resolve, 20));
 		});
 		expect(host.textContent).toContain("语音转文字");
+		expect(host.textContent).not.toContain("Global dictation trigger");
 		const schemaCalls = fake.calls("settings.schema") as { tabs?: string[] }[];
 		expect(schemaCalls.length).toBeGreaterThan(0);
 		expect(schemaCalls.every(call => call.tabs?.includes("voice"))).toBe(true);
@@ -439,5 +448,36 @@ describe("streaming read-aloud preview", () => {
 		expect(fake.calls("tts.synthesize").length).toBeGreaterThan(0);
 		act(() => root.unmount());
 		host.remove();
+	});
+});
+
+describe("global dictation trigger setting", () => {
+	test("selects hold-to-talk through the shared dictation.globalTrigger key", async () => {
+		const previous = window.electronAPI;
+		window.electronAPI = {
+			platform: "win32",
+			dictationStatus: async () => ({ registered: true }),
+		} as unknown as Window["electronAPI"];
+		const fake = new FakeRpc();
+		fake.responses.set("settings.get", {
+			"dictation.globalEnabled": true,
+			"dictation.globalShortcut": "CommandOrControl+Alt+Space",
+			"dictation.globalTrigger": "toggle",
+		});
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		await act(async () => {
+			root.render(createElement(GlobalDictationSettings, { rpc: asRpc(fake) }));
+			await new Promise(resolve => setTimeout(resolve, 20));
+		});
+		const options = host.querySelectorAll<HTMLButtonElement>('[role="radio"]');
+		expect(options.length).toBe(2);
+		expect(options[1]!.textContent).toBe("按住说话");
+		await act(async () => options[1]!.click());
+		expect(fake.calls("settings.set")).toContainEqual({ key: "dictation.globalTrigger", value: "hold" });
+		act(() => root.unmount());
+		host.remove();
+		window.electronAPI = previous;
 	});
 });

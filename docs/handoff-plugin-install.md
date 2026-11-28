@@ -6,7 +6,7 @@
 
 ## 0. 一句话状态
 
-GUI 里原本**没有插件安装入口**（`PluginManager` 只在 CLI 可用）。安装面补齐到 DSH 对标水平并追加了拖入安装；后续一轮在其上修了七处健壮性缺陷（关闭时孤儿进程、刷新丢状态、manifest 字段读取、回滚半换树等）并补了 registry 回退链。当前 82 测试全绿、三包类型检查通过、工作区干净。
+GUI 里原本**没有插件安装入口**（`PluginManager` 只在 CLI 可用）。安装面补齐到同类产品的水平并追加了拖入安装；后续一轮在其上修了七处健壮性缺陷（关闭时孤儿进程、刷新丢状态、manifest 字段读取、回滚半换树等）并补了 registry 回退链。当前 82 测试全绿、三包类型检查通过、工作区干净。
 
 ---
 
@@ -77,7 +77,7 @@ bunx biome check --write packages/ docs/
 - 拖一个 `.tgz` 或插件文件夹进对话框
 - `https://example.com/some/page` → 应报 "must point at a git repository or a tarball"（这条有测试兜底）
 
-**必看的两个行为**：取消后插件目录还原（不留半装依赖）；装完显示能力报告（装一个 DSH 插件会显示 `incompatible` 并列出缺哪些 `@deepseek-ai/*`）。
+**必看的两个行为**：取消后插件目录还原（不留半装依赖）；装完显示能力报告（装一个面向其他 harness 的插件会显示 `incompatible` 并列出缺哪些 `@deepseek-ai/*`）。
 
 ---
 
@@ -104,20 +104,18 @@ bunx biome check --write packages/ docs/
 
 早期设计讨论过「完整探测」（ping 取快者），**最终不做**，理由见下。
 
-### 与 DSH 的差异（有意为之，不是遗漏）
+### 源选择的设计取舍
 
-| | DSH | musepi |
+| 维度 | 选择 | 理由 |
 |---|---|---|
-| 首选源 | `Config.registry` **必填**，部署方在 cordis.yml 配 | 用户设置，默认官方源 |
-| 回退 | `fallbackRegistries` 默认 `[NPMMIRROR_REGISTRY]` | 同 |
-| 换源判据 | `attributeFailure()` 三值归因 | 同（移植） |
-| 延迟探测 | **无** | 无 |
-| 粘性回退（记住上次走通的源） | **无** | 无 |
-| `registry` 可否省略 | 否 | 是（`bun` 模式） |
+| 首选源 | 用户设置，默认官方源 | MusePi 是桌面应用，用户自己知道有没有内网源，不需要部署方在配置里指定 |
+| 回退 | `fallbackRegistries` 默认 `[NPMMIRROR_REGISTRY]` | 覆盖超时/不通这类真正会变成用户困扰的形态 |
+| 换源判据 | `attributeFailure()` 三值归因 | 区分网络、认证与包不存在，避免把登录失败当成源不可用 |
+| 延迟探测 | 不做 | 能快速应答小请求的源不代表拉 tarball 也快，延迟不是值得测量的信号 |
+| 粘性回退 | 不做 | 要引入持久化 + TTL，而回退链已经覆盖真实故障形态，复杂度不划算 |
+| `registry` 可否省略 | 是（`bun` 模式） | 省略时走 bun 自身解析 |
 
-差异的根因是部署模型不同：DSH 服务企业部署，部署方知道该用哪个源；MusePi 是桌面应用，用户自己知道有没有内网源。`custom` 已覆盖 DSH 必填的场景。
-
-**探测与粘性回退都不做的理由**：延迟不是值得测量的信号——能快速应答小请求的源不代表拉 tarball 也快。而真正会变成用户困扰的形态（超时/不通）由回退链覆盖，不需要预先测量。粘性回退要引入持久化 + TTL，DSH 这个做了多年的产品明确没要，复杂度不划算。
+**探测与粘性回退都不做的理由**：延迟不是值得测量的信号——能快速应答小请求的源不代表拉 tarball 也快。而真正会变成用户困扰的形态（超时/不通）由回退链覆盖，不需要预先测量。粘性回退要引入持久化 + TTL，复杂度不划算。
 
 ### 已核实的环境事实
 
@@ -136,13 +134,13 @@ bunx biome check --write packages/ docs/
 
 调研过程中有四个方向被查证后否掉，理由记录在此，避免下一轮重复：
 
-**P3 Claude Code 兼容层 —— 不做。** 最初以为 DSH 的兼容面很宽，实测相反：DSH 只桥接 `hooks.json` 的 7 个 command 型钩子（`hooks-claude-code/src/config.ts:11-19`），`configPath` 必填无自动发现（挂着 `TODO(per-session-hook-config)`），**不读** `.claude-plugin/plugin.json` / marketplace / commands / agents / skills / `.mcp.json`。而 musepi 这些**全都有**：`discovery/claude-plugins.ts`（读 `~/.claude/plugins/` + `.claude-plugin/plugin.json`）、`discovery/claude.ts`（9 个能力面）、`marketplace/fetcher.ts`（`.claude-plugin/marketplace.json`）、CLAUDE.md 含 `@import` 展开、MCP 从 `.claude.json` 读、LSP 从 `.claude/lsp.*` 读。补 P3 是把强项改窄。详见 §16。
+**P3 Claude Code 兼容层 —— 不做。** musepi 已覆盖 Claude Code 的全部兼容面：`discovery/claude-plugins.ts`（读 `~/.claude/plugins/` + `.claude-plugin/plugin.json`）、`discovery/claude.ts`（9 个能力面）、`marketplace/fetcher.ts`（`.claude-plugin/marketplace.json`）、CLAUDE.md 含 `@import` 展开、MCP 从 `.claude.json` 读、LSP 从 `.claude/lsp.*` 读。补 P3 是把强项改窄。详见 §16。
 
 **拖入的脚本批准闸门 —— 不做。** 原计划照技能市场加 `awaiting-approval`。实测 `bun install --help`：dependency scripts are never run（除非该包进了 `trustedDependencies`，我们不传 `--trust`）。所以拖入的包执行不了自己的 `postinstall`，闸门没有可拦的东西。**注意：早先写在状态机注释里的相反陈述已改正**，别照旧版本改回去。
 
-**用户 patch 层（DSH 的 `cordis.patch.yml`）—— 不做。** 两条能力其实都已有：`discoverExtensionPaths` 第 4 类来源 `configuredPaths` 等价于"插自定义行"（`loader.ts:1017-1043`）；"按行单独开关"就是 `extensions.setComponentEnabled`（粒度 `<plugin>/<component>`）。且我们粒度更细——`Extension` 接口为每个注册面各持一个独立贡献通道（`extensibility/extensions/types.ts` 的 `Extension`），DSH 的"行"不可再分。真实差异只有"不能用一段配置声明一个插件"，场景极少。详见 §15。
+**独立用户 patch 层 —— 不做。** 两条能力其实都已有：`discoverExtensionPaths` 第 4 类来源 `configuredPaths` 等价于"插自定义行"（`loader.ts:1017-1043`）；"按行单独开关"就是 `extensions.setComponentEnabled`（粒度 `<plugin>/<component>`）。且我们粒度更细——`Extension` 接口为每个注册面各持一个独立贡献通道（`extensibility/extensions/types.ts` 的 `Extension`）。真实差异只有"不能用一段配置声明一个插件"，场景极少。详见 §15。
 
-**bundle 概念 —— 不引入。** DSH 的 bundle = 包 + 一份 Loader 配置 patch。我们不需要：插件由 `pi.extensions` 运行时发现，`package.json` 的 `musepi` 块声明它提供什么，装上即用。
+**bundle 概念 —— 不引入。** 别家的 bundle 是「包 + 一份 Loader 配置 patch」的组合。我们不需要：插件由 `pi.extensions` 运行时发现，`package.json` 的 `musepi` 块声明它提供什么，装上即用。
 
 ---
 
@@ -163,10 +161,10 @@ bunx biome check --write packages/ docs/
 
 这一轮我犯了两次同类错误，都是**没查就断言**：
 
-1. 说"DSH 的 Claude Code 兼容只有 hooks.json"时，读的是 **rc.1 源码 checkout**，而本机跑的是 rc.2——且完全没查 musepi 自己已经有一整套 Claude Code 兼容。
-2. 说"我们没有 DSH 的用户 patch 层能力"，实际那两条能力一条已有一条有等价机制。写进文档后被指出才回头查装载链。
+1. 断言某产品「Claude Code 兼容只有 hooks.json」时，读的是旧版本源码 checkout，且完全没查 musePi 自己已经有一整套 Claude Code 兼容。
+2. 断言「我们没有用户 patch 层能力」，实际那两条能力一条已有一条有等价机制。写进文档后被指出才回头查装载链。
 
-共同点：**拿 DSH 的形状去推断 musepi 的缺口，而没先读 musepi 的装载链**。所以文档里凡是"DSH 有 X / 我们没有 Y"的句式，都要有 file:line 依据；没有依据就别写。
+共同点：**拿外部产品的形状去推断 musePi 的缺口，而没先读 musePi 的装载链**。所以文档里凡是「别家有 X / 我们没有 Y」的句式，都要有 file:line 依据；没有依据就别写。
 
 后续一轮又犯了同一类错误的另一个方向：设置文案写的是**打算做的**行为（探测），实现做的是**实际该做的**（不探测）。文案超前于实现与文档滞后于代码一样有害——读设置的人会期待一个不存在的测量。
 

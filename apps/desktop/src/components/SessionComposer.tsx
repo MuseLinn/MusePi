@@ -15,7 +15,7 @@ import {
 	messageDisplayContext,
 	normalizeDisplayContexts,
 } from "@musepi/client-core/src/messages/display-context";
-import type { ContextUsageProjection, SessionEntry } from "@musepi/pi-wire";
+import type { ContextUsageProjection, SessionEntry, SessionModeProjection } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../i18n/index.js";
@@ -149,6 +149,8 @@ export interface SessionComposerProps {
 	working: boolean;
 	/** Host-computed context/usage projection; pushed per committed event. */
 	contextUsage?: ContextUsageProjection | null;
+	/** Goal/plan switches, pushed by the daemon's `sessionMode` projection. */
+	sessionMode?: SessionModeProjection | null;
 	/** Agent companion mood (伙伴) — derived by ChatView from the session
 	 *  snapshot; the pet renders only when enabled + input mode. */
 	companionMood?: CompanionMood;
@@ -276,6 +278,7 @@ async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: s
 export function SessionComposer({
 	working,
 	contextUsage = null,
+	sessionMode = null,
 	companionMood,
 	companionState,
 	onSend,
@@ -584,14 +587,14 @@ export function SessionComposer({
 		setTodoOpen,
 		appendText,
 		setAppendText,
-	} = useModes(rpc, sessionId);
+	} = useModes(rpc, sessionId, entries ?? [], sessionMode);
 	// ── Design-session style select（M3.7b §3 生效链路）──────────────────
-	// session.modes.modeId === "design" gates the row; the pick writes via
+	// session.modes.agentPreset === "design" gates the row; the pick writes via
 	// session.setDesignSystem RPC (null = 跟随既有/清除) and the initial
 	// value hydrates from the session header's projectMetadata — the
 	// brief-update-sentence path (设计稿 08) is retired: the daemon injects
 	// the resolved system's promptSection on rebuild.
-	const isDesignSession = modes?.modeId === "design";
+	const isDesignSession = modes?.agentPreset === "design";
 	const designSystems = useDesignSystems(rpc);
 	const { designStyle, pickDesignStyle } = useSessionDesignSystem(rpc, sessionId, isDesignSession);
 
@@ -1053,11 +1056,8 @@ export function SessionComposer({
 		rpc,
 		sttSubmitTrigger,
 		enabled: sttEnabled,
+		editor: taRef,
 		onSubmit: onSend,
-		onInsert: transcript => {
-			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-			requestAnimationFrame(() => autosize(taRef.current));
-		},
 	});
 	// First-use voice guide (快赢包 A3): mic clicks pass through this gate —
 	// model cached ⇒ straight into dictation; missing ⇒ the liquid-glass setup
@@ -2403,8 +2403,8 @@ export function SessionComposer({
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}
-						{/* Compact motion-only mic control; the live waveform, clock
-						 * and phase copy live in the in-input VoiceStatusStrip. */}
+						{/* Mic: a state icon only. The clock, the level and the phase
+						 * all live in the in-input dictation strip. */}
 						<VoiceButton
 							state={dictation.phase}
 							disabled={!sttEnabled}
@@ -2491,15 +2491,20 @@ export function SessionComposer({
 					focused={focused}
 					className="gui-composer-editor gui-composer-editor--session"
 					placeholder={
-						shownSuggestion !== null
+						// While dictating, the composer's job is "speak" — the state line
+						// already says so, and a "what you could type" hint underneath it
+						// is a second instruction competing with the first.
+						dictation.phase !== "idle"
 							? ""
-							: composerPlaceholder({
-									surface: "session",
-									working,
-									attachmentCount: attachments.length,
-									hasConversation: (entries?.length ?? 0) > 0,
-									designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
-								})
+							: shownSuggestion !== null
+								? ""
+								: composerPlaceholder({
+										surface: "session",
+										working,
+										attachmentCount: attachments.length,
+										hasConversation: (entries?.length ?? 0) > 0,
+										designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
+									})
 					}
 					spellCheck={spellcheckEnabled()}
 					composingRef={composingRef}

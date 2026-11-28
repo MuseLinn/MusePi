@@ -82,7 +82,7 @@
 | 1 | capability API — `extensionModuleCapability`，provider 限 `["native", "musepi-extensions"]` | `loader.ts:984-990` | ambient：`.omp`/`.pi` 原生扩展 + `~/.musepi/agent/extensions` 自有扩展。**刻意跳过 claude/codex/gemini/opencode 外部扩展目录**（注释见 `loader.ts:977-983`，引用 #4198） |
 | 2 | `hookCapability` 的 JS/TS hook factory | `loader.ts:997-1005` | ambient 钩子；非 ambient 时只扫本次 configuredPaths 的包内 `hooks/{pre,post}`（`loader.ts:1006-1010`） |
 | 3 | 已安装插件入口 `getAllPluginExtensionPaths(cwd)` | `loader.ts:1013-1015` | `~/.musepi/plugins/` 装出来的插件 |
-| 4 | **显式 configuredPaths** | `loader.ts:1017-1043` | 用户手写：目录走 manifest/index/一层扫描（`loader.ts:1028-1039`），否则当单文件直接收（`loader.ts:1042`）。等价 DSH 的「用户 patch 层插自定义行」 |
+| 4 | **显式 configuredPaths** | `loader.ts:1017-1043` | 用户手写：目录走 manifest/index/一层扫描（`loader.ts:1028-1039`），否则当单文件直接收（`loader.ts:1042`）。等价于「用户 patch 层插自定义行」 |
 
 - 去重：`loader.ts:960-966`（`seen` Set 按 resolved path）
 - 禁用过滤：`loader.ts:958` — 只按 `extension-module:<name>` 前缀 id 过滤
@@ -457,7 +457,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 ### 6.2 兼容性预检（另一条独立通道：semver peer 判定）
 
 `packages/coding-agent/src/extensibility/plugins/compat/plugin-compatibility.ts`：
-- 头部文档把与 DSH 的差异逐条写明 — `plugin-compatibility.ts:7-26`
+- 头部文档逐条写明兼容性差异 — `plugin-compatibility.ts:7-26`
 - 参与判定的 peer 前缀 `@musepi/`（单版本线，全部对照宿主运行时版本）— `plugin-compatibility.ts:35`, 注释 `:8-10`
 - workspace 协议 — `plugin-compatibility.ts:38`
 - 区间语法双探针校验（`Bun.semver.satisfies` 对非法区间返回 true 不抛错）— `plugin-compatibility.ts:60-71`
@@ -617,7 +617,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 - `extensibility/plugins/marketplace/manager.ts:307` —— 「尚未 import」（指某条依赖尚未被 import，属设计说明非 TODO）
 
 **已知明确否掉的方向**（记录在 `docs/handoff-plugin-install.md §5`，非代码 TODO）：
-- P3 Claude Code 兼容层不做（DSH 覆盖面更窄）— `handoff-plugin-install.md:123`
+- P3 Claude Code 兼容层不做（外部实现的覆盖面更窄）— `handoff-plugin-install.md:123`
 - 拖入的脚本批准闸门不做（bun 不执行依赖脚本，无可拦物）— `handoff-plugin-install.md:125`
 - 用户 patch 层（`cordis.patch.yml`）不做（能力已有等价物）— `handoff-plugin-install.md:127`
 - bundle 概念不引入 — `handoff-plugin-install.md:129`

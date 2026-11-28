@@ -606,6 +606,7 @@ describe("autoresearch tool-call hook", () => {
 
 	it("does not register a tool_call hook (post-hoc accountability replaces edit guards)", () => {
 		const handlers = new Map<string, unknown>();
+		const activeTools: string[] = [];
 		const api = {
 			appendEntry(): void {},
 			on(event: string, handler: unknown): void {

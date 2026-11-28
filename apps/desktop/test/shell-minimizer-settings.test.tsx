@@ -5,7 +5,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { hasUi, SETTINGS_SCHEMA } from "../../../packages/coding-agent/src/config/settings-schema";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
-import ShellSettingsPage from "../src/plugins/settings-shell/page";
+import ShellSettingsPage from "../src/plugins/ui-settings-shell/page";
 
 setLocale("zh-CN");
 afterAll(() => setLocale("en-US"));

@@ -49,16 +49,18 @@ import type { Skill } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
 import { GoalContinuationController } from "../goals/continuation-controller";
+import { goalFromModeData } from "../goals/state";
 import type { MCPManager, MCPServerConfig } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { initializeExtensions } from "../modes/runtime-init";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { previewLine, TRUNCATE_LENGTHS } from "../render/render-utils";
 import type { AuthStorage } from "../session/auth-storage";
+import type { SessionMemoryMode } from "../session/memory-mode";
+import { sessionHeaderPreset } from "../session/session-entries";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
 import {
-	contextUsageProjectionDefinition,
 	type ProjectionEvent,
 	type ProjectionSampleSource,
 	SessionProjectionRegistry,
@@ -307,8 +309,10 @@ import type {
 import type { AgentSession } from "../session/agent-session";
 import { RunRecorder } from "../task/run-record";
 import {
+	type SubagentEventPayload,
 	type SubagentLifecyclePayload,
 	type SubagentProgressPayload,
+	TASK_SUBAGENT_EVENT_CHANNEL,
 	TASK_SUBAGENT_LIFECYCLE_CHANNEL,
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 } from "../task/types";
@@ -806,7 +810,9 @@ export class SessionScopedEventBus extends EventBus {
 	}
 	override emit(channel: string, data: unknown): void {
 		if (
-			(channel === TASK_SUBAGENT_PROGRESS_CHANNEL || channel === TASK_SUBAGENT_LIFECYCLE_CHANNEL) &&
+			(channel === TASK_SUBAGENT_PROGRESS_CHANNEL ||
+				channel === TASK_SUBAGENT_LIFECYCLE_CHANNEL ||
+				channel === TASK_SUBAGENT_EVENT_CHANNEL) &&
 			taggedSessionIdOf(data) === undefined
 		) {
 			this.#parent.emit(channel, { ...(data as Record<string, unknown>), sessionId: this.#sessionId });
@@ -855,10 +861,10 @@ export interface LiveSession {
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
 	autoTitle: boolean;
-	/** 会话预设(mode)id:adopt 时取 SDK 会话 header,缺失回落守护进程快照头;
+	/** 会话预设 id:adopt 时取 SDK 会话 header,缺失回落守护进程快照头;
 	 *  创建路径由 createSession 显式补写(SDK 的 create 不写 header)。
-	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板模式名。 */
-	modeId?: string;
+	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板预设名。 */
+	agentPreset?: string;
 	/** Journal tail is the only sequence space. Non-journaled stream kinds
 	 *  (approval/ask, agent progress, title, recap, pause) carry seq 0 and
 	 *  apply in arrival order; clients gate catchup only on kind:"event". */
@@ -1038,6 +1044,42 @@ export function discoverySettingsFingerprint(settings: Settings): string {
  * SessionStreamEvent envelopes (kind+seq, payload by reference — see
  * @musepi/sdk events).
  */
+/**
+ * Restore goal/plan mode from the session journal.
+ *
+ * The switches live only on the live `AgentSession`, so a resumed session
+ * starts with both off even when the journal records otherwise. Folding the
+ * last `mode_change` entry back onto the session keeps a reload honest — and
+ * matches what the TUI does on its own reconcile.
+ *
+ * Every value is treated as untrusted: session files are user-editable and
+ * survive across versions, so a malformed record degrades to "mode off" rather
+ * than restoring something half-built.
+ */
+export function restoreModeFromJournal(session: AgentSession): void {
+	let context: { mode?: unknown; modeData?: Record<string, unknown> };
+	try {
+		context = session.sessionManager.buildSessionContext();
+	} catch {
+		return;
+	}
+	const mode = typeof context.mode === "string" ? context.mode : "none";
+	if (mode === "plan" || mode === "plan_paused") {
+		const planFilePath = context.modeData?.planFilePath;
+		// A path is required for the proposal/approve flow; without one the mode
+		// could be entered but never completed, so leave it off.
+		if (typeof planFilePath === "string" && planFilePath !== "") {
+			session.setPlanModeState({ enabled: mode === "plan", planFilePath });
+		}
+		return;
+	}
+	if (mode === "goal" || mode === "goal_paused") {
+		const goal = goalFromModeData(context.modeData);
+		if (!goal) return;
+		session.setGoalModeState({ enabled: mode === "goal", mode: "active", goal });
+	}
+}
+
 export class DaemonSessionHost {
 	readonly #sessions = new Map<string, LiveSession>();
 	/** Callback invoked when an extension pushes a notification channel message.
@@ -1104,8 +1146,17 @@ export class DaemonSessionHost {
 	readonly #extensionSettings = new Map<string, { setting: ExtensionSetting; extensionPath: string }>();
 	readonly #options: DaemonOptions;
 	readonly #store: ViewStore;
-	/** Host-computed per-session projections (the client reads whole values). */
+	/** Host-computed per-session projections (the client reads whole values).
+	 *  Owned here because the commit path and the snapshot builders read it
+	 *  directly; `SessionProjectionService` wraps this same instance, so the
+	 *  service is the registration/read surface while this stays the storage
+	 *  the hot path touches. */
 	readonly #projections = new SessionProjectionRegistry();
+	/** The registry `SessionProjectionService` drives. Domain services register
+	 *  their units through the service, never through the host. */
+	get projectionRegistry(): SessionProjectionRegistry {
+		return this.#projections;
+	}
 	/** Daemon collab share provider (set by DaemonServer on construction) —
 	 *  lets session.create/activate inject the `collab` tool handle into
 	 *  agent sessions. Absent in host-only tests. */
@@ -1184,7 +1235,11 @@ export class DaemonSessionHost {
 	constructor(options: DaemonOptions = {}) {
 		this.#options = options;
 		this.#store = new ViewStore(viewStorePath(JOURNAL_DIR));
-		this.#projections.register(contextUsageProjectionDefinition);
+		// Projection units are contributed by the session-projection plugin
+		// (`session-projection-plugin.ts`) through {@link projectionRegistry}:
+		// the registry stays host-owned (it holds per-session fold state), the
+		// registration list belongs to the plugin so adding a domain never
+		// touches this constructor.
 		this.#idleScanner = setInterval(() => this.#scanIdle(), IDLE_SCAN_INTERVAL_MS);
 		this.#idleScanner.unref?.();
 		sweepEmptySessionDirs();
@@ -1531,8 +1586,9 @@ export class DaemonSessionHost {
 		autoTitle?: boolean;
 		modelPattern?: string;
 		thinkingLevel?: ConfiguredThinkingLevel;
-		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings)。 */
-		modeId?: string;
+		memoryMode?: SessionMemoryMode;
+		/** 会话预设 id:创建时应用(白名单/提示词/settings)。 */
+		agentPreset?: string;
 		/** M3.2 创作面 project metadata(§4 契约):daemon 会话头为权威
 		 *  (persistHeaderPatch 落 view-store 快照头),并镜像写
 		 *  `<cwd>/.musepi/project.json`。超 16KiB / 缺 version 在此拒绝。 */
@@ -1607,7 +1663,8 @@ export class DaemonSessionHost {
 				...(projectMetadata ? { projectMetadata } : {}),
 				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
-				...(params.modeId ? { modeId: params.modeId } : {}),
+				...(params.agentPreset ? { modeId: params.agentPreset } : {}),
+				...(params.memoryMode ? { memoryMode: params.memoryMode } : {}),
 			}),
 		);
 		const live = await this.#adoptAgentSession(
@@ -1641,9 +1698,10 @@ export class DaemonSessionHost {
 		// 统一先 upsert 一次;modeId 另需补写会话头(persistHeaderPatch 的
 		// load() 依赖该行已存在)。
 		this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
-		if (params.modeId) {
-			live.modeId = params.modeId;
-			this.persistHeaderPatch(live.sessionId, { modeId: params.modeId });
+		if (params.memoryMode) this.persistHeaderPatch(live.sessionId, { memoryMode: params.memoryMode });
+		if (params.agentPreset) {
+			live.agentPreset = params.agentPreset;
+			this.persistHeaderPatch(live.sessionId, { agentPreset: params.agentPreset });
 		}
 		// M3.2 双写:daemon 会话头(权威,经 view-store 列+快照头保留语义) +
 		// `<cwd>/.musepi/project.json` 镜像(恢复/分享/artifact-scan 关联源)。
@@ -1714,9 +1772,11 @@ export class DaemonSessionHost {
 		// see `modeId` at create time. `live.modeId` is display state — without
 		// passing it here a reopened chat/design session ran the default work
 		// prompt and full slate while the GUI chip still showed the preset.
-		const persistedModeId = (persisted?.header as { modeId?: unknown } | undefined)?.modeId;
+		const persistedHeader = persisted?.header as { agentPreset?: unknown; modeId?: unknown } | undefined;
+		const persistedModeId = persistedHeader?.agentPreset ?? persistedHeader?.modeId;
 		const resumeModeId =
-			manager.getHeader()?.modeId ?? (typeof persistedModeId === "string" ? persistedModeId : undefined);
+			sessionHeaderPreset(manager.getHeader()) ??
+			(typeof persistedModeId === "string" ? persistedModeId : undefined);
 		const result = await this.#withSessionBootstrapLock(async () =>
 			createAgentSession({
 				cwd: resumeCwd,
@@ -1775,6 +1835,11 @@ export class DaemonSessionHost {
 		if (manager.getAdditionalDirectories().length > 0) {
 			await result.session.refreshSkills();
 		}
+		// Restore goal/plan mode from the journal before the session goes live:
+		// the switches live on the AgentSession and a fresh resume starts with
+		// them off, so without this a reload silently dropped a mode that was
+		// recorded (the TUI restores them the same way in its own reconcile).
+		restoreModeFromJournal(result.session);
 		const live = await this.#adoptAgentSession(
 			result.session,
 			resumeCwd,
@@ -2046,7 +2111,9 @@ export class DaemonSessionHost {
 			// 守护进程快照头 —— SDK 的 create 只 resolve 提示词/settings,
 			// 从不把 modeId 写进 JSONL 头,所以仅读 SDK 头会让空态 chip 选的
 			// design 会话在重启/重激活后丢掉预设(GUI 的 design 风格 chip 不显示)。
-			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? persisted?.header?.modeId ?? undefined,
+			agentPreset:
+				sessionHeaderPreset(agentSession.sessionManager?.getHeader()) ??
+				sessionHeaderPreset(persisted?.header as never),
 			// Non-journaled envelope kinds carry seq 0; the journal owns the
 			// kind:"event" seq space outright.
 			journal,
@@ -2118,6 +2185,7 @@ export class DaemonSessionHost {
 				unsubscribeName();
 				unsubscribeProgress();
 				unsubscribeLifecycle();
+				unsubscribeEvent();
 				unsubscribePauseGate();
 				if (persistTimer) {
 					clearTimeout(persistTimer);
@@ -2263,6 +2331,29 @@ export class DaemonSessionHost {
 		};
 		const unsubscribeProgress = this.#eventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, onSubagentProgress);
 		const unsubscribeLifecycle = this.#eventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, onSubagentLifecycle);
+		// Subagent CONVERSATION frames (assistant text, thinking, tool cards)
+		// used to stop at the daemon: only progress/lifecycle rode the GUI
+		// stream, so the subagent panel had to poll the child's JSONL file.
+		// The executor already emits every frame on this channel; forwarding
+		// the wire shape lets the GUI project them with the same
+		// MaterializedView the main transcript uses, instead of re-parsing
+		// bytes on a timer.
+		const onSubagentEvent = (raw: unknown): void => {
+			if (!ownsSubagentPayload(raw)) return;
+			const payload = raw as SubagentEventPayload;
+			if (typeof payload.id !== "string") return;
+			const wireEvent = toWireAgentEvent(payload.event);
+			if (!wireEvent) return;
+			const seq = 0;
+			for (const send of live.subscribers.values()) {
+				try {
+					send({ kind: "agent-event", seq, payload: { agentId: payload.id, event: wireEvent } });
+				} catch {
+					// subscriber socket died; removed on close
+				}
+			}
+		};
+		const unsubscribeEvent = this.#eventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, onSubagentEvent);
 		// Auto-generated titles land async after the first user message (TUI
 		// parity, see maybeStartTitleGeneration in session.send). The GUI has
 		// no other way to learn the tree label changed, so broadcast a
@@ -2279,6 +2370,18 @@ export class DaemonSessionHost {
 			}
 		};
 		const unsubscribeName = agentSession.sessionManager.onSessionNameChanged(onSessionNameChanged);
+		// Entries that are not wire events (mode_change among them) still belong
+		// to the read model: feeding them through the projection is what makes
+		// the journal its single source, so a unit derives from persisted
+		// history instead of sampling whatever the live session holds.
+		const sessionManager = agentSession.sessionManager;
+		const previousOnEntryAppended = sessionManager.onEntryAppended;
+		sessionManager.onEntryAppended = entry => {
+			previousOnEntryAppended?.(entry);
+			// The two SessionEntry types differ only in their extra fields; the
+			// projection reads `type`/`mode`/`data`, which both carry.
+			this.#publishProjectionChanges(live, { type: "entry", entry: entry as never }, 0);
+		};
 		agentSession.subscribe(event => {
 			// Goal continuation sees every session event, including the ones the
 			// wire guard drops. It must run before journal/stream handling so the
@@ -2533,6 +2636,10 @@ export class DaemonSessionHost {
 		patch: {
 			model?: string;
 			thinkingLevel?: string;
+			memoryMode?: SessionMemoryMode;
+			/** The session's agent preset; `modeId` is the pre-rename spelling. */
+			agentPreset?: string | null;
+			/** @deprecated Read-only fallback; new writes use `agentPreset`. */
 			modeId?: string | null;
 			projectMetadata?: Record<string, unknown> | null;
 			/** M4 P1 连接器白名单。null = 清除回未配置;数组(可空)= 已配置。 */
@@ -2887,6 +2994,18 @@ export class DaemonSessionHost {
 		});
 	}
 
+	/** Publish the session's goal/plan projection after an RPC wrote it.
+	 *  Called by `session.setGoal` / `session.setPlan` (and the `/goal`
+	 *  lifecycle ops): those switch state on the live AgentSession without a
+	 *  journal record, so without this call the projection never learns and
+	 *  clients would have to poll. Cheap and idempotent — an unchanged sample
+	 *  produces no frame. */
+	publishSessionModeProjection(sessionId: string): void {
+		const live = this.#sessions.get(sessionId);
+		if (!live) return;
+		this.#publishProjectionChanges(live, { type: "session_mode_changed" }, 0);
+	}
+
 	/** Drive every projection unit for one committed event and push only the
 	 *  views that moved. Non-streaming display state; carries the journal seq
 	 *  for diagnostics but clients apply it ungated (projection rows have
@@ -2918,7 +3037,7 @@ export class DaemonSessionHost {
 					todo?: unknown;
 					isStreaming?: boolean;
 					isCompacting?: boolean;
-					modeId?: string;
+					agentPreset?: string;
 					paused?: boolean;
 					pausedAt?: number | null;
 					queuedMessageCount?: number;
@@ -2930,7 +3049,7 @@ export class DaemonSessionHost {
 			snap.state.goalMode = modes.goalMode;
 			snap.state.planMode = modes.planMode;
 			snap.state.todo = modes.todo;
-			snap.state.modeId = live.modeId;
+			snap.state.agentPreset = live.agentPreset;
 			// Compaction state rides along too: the GUI's compaction status
 			// line keys off the live getter (the view has no compaction event).
 			snap.state.isCompacting = modes.isCompacting;
@@ -3300,7 +3419,7 @@ export class DaemonSessionHost {
 				messageCount: h.messageCount,
 				// SDK transcripts never carried a preset header until the
 				// GUI chips landed — no mode to report for these.
-				modeId: null,
+				agentPreset: null,
 				// Nor a connector allowlist (M4 P1): view-store-only state.
 				mcpServers: null,
 				// SDK transcripts record forks under header.parentSession
@@ -3356,7 +3475,7 @@ export class DaemonSessionHost {
 				cwd: h.cwd,
 				model: null,
 				messageCount: h.messageCount,
-				modeId: null,
+				agentPreset: null,
 				mcpServers: null,
 				parentId: derivedParent,
 				projectMetadata: null,
@@ -3408,10 +3527,10 @@ export class DaemonSessionHost {
 			if (!s) continue;
 			const name = s.agentSession.sessionManager.getSessionName();
 			if (name) row.title = name;
-			// Live preset wins: the in-memory modeId is what session.modes
-			// reports, so the sidebar's hover card can never disagree with
-			// the composer chips. The store column covers idle sessions.
-			if (s.modeId) row.modeId = s.modeId;
+			// Live preset wins: the in-memory value is what session.modes reports,
+			// so the sidebar's hover card can never disagree with the composer
+			// chips. The store column covers idle sessions.
+			if (s.agentPreset) row.agentPreset = s.agentPreset;
 		}
 		// Persisted rows win on cursor (authoritative for history); live-only
 		// sessions (pre-first-persist) fall back to the in-memory view.

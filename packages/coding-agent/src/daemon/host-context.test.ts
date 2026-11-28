@@ -81,7 +81,7 @@ describe("DaemonHostContext (P2 cordis 双跑)", () => {
 		await host.dispose();
 		// cordis 侧已拆：服务解析不到，但实例本身完好（P1 注册表仍持有它）。
 		expect(host.get("rollback")).toBeUndefined();
-		svc.start?.();
+		svc.start?.({} as never);
 		expect(log).toEqual(["rollback.start"]);
 	});
 

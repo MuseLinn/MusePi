@@ -159,25 +159,51 @@ export class SecretService implements DaemonService {
 		if (action === "save") {
 			const value = validateSecretValue(p.value);
 			const scope = resolveScopeChoice(p.scope, pending.workspace);
-			// `undefined` keeps what the entry already had; a new entry defaults to
-			// every session, which is the pre-scope behaviour.
-			await store.set(pending.name, value, pending.purpose, scope, p.delivery ?? pending.delivery);
-			notifyAgentSecretSaved(this.#deps.agentDir(), pending.name, value);
+			if (pending.kind === "login") {
+				// A login's password stays in the vault and is only ever typed into a
+				// form; it must never reach the obfuscator's bash env or a file.
+				await store.set(pending.name, value, pending.purpose, scope, "env", {
+					kind: "login",
+					login: {
+						site: p.login?.site ?? pending.site ?? "",
+						...(p.login?.hosts ? { hosts: p.login.hosts } : {}),
+						...(p.login?.exactHost !== undefined ? { exactHost: p.login.exactHost } : {}),
+						username: p.login?.username ?? "",
+						...(p.login?.totp ? { totp: p.login.totp } : {}),
+					},
+				});
+			} else {
+				// `undefined` keeps what the entry already had; a new entry defaults to
+				// every session, which is the pre-scope behaviour.
+				await store.set(pending.name, value, pending.purpose, scope, p.delivery ?? pending.delivery);
+				notifyAgentSecretSaved(this.#deps.agentDir(), pending.name, value);
+			}
 		} else if (action === "allow") {
-			const entry = await store.getEntry(pending.name);
-			if (!entry || !(await store.available(pending.name))) {
-				throw new Error(`No stored value for ${pending.name}; the user must save one first.`);
+			// The user either confirmed the entry the request named, or picked a
+			// different saved one from the card. A pick is authorized exactly the
+			// same way — the scope is extended to this workspace — and the tool is
+			// then told which name to use, so no value is copied between entries.
+			const target = typeof p.picked === "string" && p.picked !== "" ? p.picked : pending.name;
+			const entry = await store.getEntry(target);
+			if (!entry || !(await store.available(target))) {
+				throw new Error(`No stored value for ${target}; the user must save one first.`);
 			}
 			if (entry.scope !== "all") {
 				if (!pending.workspace) throw new Error("This secret request has no workspace to allow.");
-				await store.setScope(pending.name, normalizeSecretScope([...entry.scope, pending.workspace]));
+				await store.setScope(target, normalizeSecretScope([...entry.scope, pending.workspace]));
 			}
-			if (entry.delivery === "file") await store.materializeFile(pending.name);
-			await store.touch(pending.name);
+			if (entry.kind === "secret" && entry.delivery === "file") await store.materializeFile(target);
+			await store.touch(target);
 		}
 		// Resolve only after a save is durable: the tool verifies the entry on
 		// wake and would otherwise see a race with the write.
-		if (!live.approvals.resolveSecret(pending.requestId, action)) {
+		if (
+			!live.approvals.resolveSecret(
+				pending.requestId,
+				action,
+				typeof p.picked === "string" && p.picked !== "" ? p.picked : undefined,
+			)
+		) {
 			throw new Error(`Unknown secret request: ${pending.requestId}`);
 		}
 		return { ok: true };

@@ -6,11 +6,13 @@ class FakeRpc {
 	readonly requests: { method: string; params: unknown }[] = [];
 	readonly #listeners = new Set<(event: StreamEvent) => void>();
 	readonly results: unknown[] = [];
+	finalText = "";
 
 	request<T>(method: string, params?: unknown): Promise<T> {
 		this.requests.push({ method, params });
 		if (method === "voice.frontendStreamStart") return Promise.resolve({ sessionId: "voice-test" } as T);
-		if (method === "voice.frontendStreamStop") return Promise.resolve({ results: this.results } as T);
+		if (method === "voice.frontendStreamStop")
+			return Promise.resolve({ results: this.results, text: this.finalText } as T);
 		return Promise.resolve({ ok: true } as T);
 	}
 
@@ -86,6 +88,18 @@ describe("streaming dictation", () => {
 		expect(seen.segments).toEqual(["hello"]);
 		expect(seen.finals).toEqual(["hello"]);
 		expect(seen.reviews).toEqual([]);
+	});
+
+	test("the re-decoded final transcript replaces the joined segment texts", async () => {
+		const fake = new FakeRpc();
+		fake.finalText = "今天天气很好，我们出去走走。";
+		const seen = callbacks(fake);
+		const stream = await openFrontendDictation(seen.options);
+		for (const [segmentId, text] of ["今天天气很好", "我们出去走走"].entries())
+			fake.emit({ type: "voice.frontendSegment", sessionId: "voice-test", segmentId, text, state: "accept" });
+		await stream.stop();
+		expect(seen.segments).toEqual(["今天天气很好", "我们出去走走"]);
+		expect(seen.finals).toEqual(["今天天气很好，我们出去走走。"]);
 	});
 
 	test("an uncertain segment forces draft review instead of final submission", async () => {

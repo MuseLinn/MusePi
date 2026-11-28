@@ -860,6 +860,7 @@
 	margin: 0;
 	padding: 6px 8px;
 	overflow-y: auto;
+	overflow-x: clip;
 	overscroll-behavior: contain;
 	list-style: none;
 }
@@ -1088,6 +1089,195 @@
 }
 .gui-secret-scope .gui-btn {
 	justify-content: center;
+}
+
+/* The requested name, read-only beside the title: the user must know which
+ * credential is being asked for, and it is the model's choice, not theirs. */
+.gui-secret-name-chip {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 11.5px;
+	line-height: 1.3;
+	padding: 1px 6px;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border);
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+/* Reusable entries offered on a card: chips in a row, exactly the reference's
+ * shape. Picking one answers the request, so there is no second confirm. */
+.gui-secret-alts {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+.gui-secret-alt-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.gui-secret-alt-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 100%;
+	padding: 4px 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: 12px;
+	line-height: 1.35;
+	cursor: pointer;
+}
+.gui-secret-alt-chip:hover:not(:disabled),
+.gui-secret-alt-chip:focus-visible {
+	border-color: var(--color-accent);
+	background: var(--color-surface-raised);
+}
+.gui-secret-alt-chip:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.gui-secret-alt-name {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-secret-alt-provider {
+	font-size: 11px;
+	color: var(--color-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The requested credential, read-only above the copy: the user must know what
+ * is being asked for, and both halves are the model's choice, not theirs. */
+.gui-secret-identity {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.gui-secret-identity-label {
+	font-size: 11.5px;
+	line-height: 1.3;
+	color: var(--color-text-muted);
+}
+.gui-secret-identity-as {
+	font-size: 11.5px;
+	line-height: 1.3;
+	color: var(--color-text-muted);
+}
+
+/* A value crossing plain HTTP: a warning, not an error — it still saves. */
+.gui-secret-insecure {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px;
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-warning, #9a6700);
+}
+
+/* The privacy note above the actions: one line with a lock, the reference's
+ * shape. It replaces a paragraph that grew to three lines and pushed the
+ * buttons away from the fields they belong to. */
+.gui-secret-private-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px;
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+/* A masked field and its hold-to-reveal button share one box: the input keeps
+ * its full width, the button sits inset on the trailing edge. */
+.gui-secret-masked {
+	position: relative;
+	display: block;
+}
+.gui-secret-masked .gui-input {
+	padding-right: 30px;
+}
+.gui-secret-reveal {
+	position: absolute;
+	top: 50%;
+	right: 5px;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	touch-action: none;
+}
+.gui-secret-reveal:hover:not(:disabled),
+.gui-secret-reveal:focus-visible {
+	color: var(--color-text);
+	background: var(--color-surface-sunken, var(--bg-sunken));
+}
+.gui-secret-reveal:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* One labelled field of the login card: label, control, hint. The login form
+ * has four of them, so the label carries the identity and the placeholder only
+ * shows an example — a placeholder alone disappears the moment typing starts. */
+.gui-secret-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.gui-secret-field-label {
+	font-size: 12.5px;
+	font-weight: 500;
+	line-height: 1.3;
+	color: var(--color-text);
+}
+.gui-secret-field-hint {
+	font-size: 11.5px;
+	line-height: 1.35;
+	color: var(--color-text-muted);
+}
+/* An opt-out that narrows matching, sitting right under the field it modifies:
+ * a checkbox on its own line reads as a separate decision. */
+.gui-secret-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	font-size: 12px;
+	line-height: 1.35;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+.gui-secret-check input {
+	margin: 2px 0 0;
+	flex: none;
+}
+/* The scope pick reads as one labelled row, not a bare pair of buttons. */
+.gui-secret-scope-label {
+	font-size: 12.5px;
+	font-weight: 500;
+	line-height: 1.3;
+	color: var(--color-text);
+	margin-top: 2px;
 }
 
 @keyframes gui-ask-pop-out {
@@ -1527,6 +1717,12 @@
 	justify-content: flex-end;
 	gap: 8px;
 	margin-top: 6px;
+}
+
+/* A third answer on the same row: replacing is an alternative to allowing, not
+ * a secondary action, so it keeps the quiet weight and pushes the rest right. */
+.gui-secret-replace {
+	margin-right: auto;
 }
 
 /* Computer-use glow preview (settings 桌面操作提示): a miniature desktop

@@ -142,6 +142,34 @@ export async function addFileToChat(target: AddToChatTarget): Promise<boolean> {
 	return true;
 }
 
+/** Insert literal text into the composer, for an action that contributes words
+ *  rather than a reference chip. Resolves the same surface a file add uses, so
+ *  the two actions land in the composer the person is working in. */
+export function addTextToChat(text: string): boolean {
+	const surface = resolveTextSurface();
+	if (!surface) {
+		toast(t("settings.addToChatUnavailable"));
+		return false;
+	}
+	surface.insertMention(text);
+	return true;
+}
+
+/** The draft that can take literal text: any inserting composer, with or
+ *  without a file intake behind it. */
+function resolveTextSurface(): AddToChatDraftApi | null {
+	const live: { draft: AddToChatDraftApi; lastUsedAt: number }[] = [];
+	for (const surface of surfaces.values()) {
+		if (!surface.draft?.canInsert()) continue;
+		live.push({ draft: surface.draft, lastUsedAt: surface.lastUsedAt });
+	}
+	const focused = live.find(entry => entry.draft.containsFocus?.() === true);
+	if (focused) return focused.draft;
+	let best: (typeof live)[number] | null = null;
+	for (const entry of live) if (!best || entry.lastUsedAt > best.lastUsedAt) best = entry;
+	return best ? best.draft : null;
+}
+
 /** The composer this action belongs to: the one holding focus, else the most
  *  recently used one, and only among surfaces that can take the reference. */
 function resolveSurface(): { files: AddToChatFilesApi; draft: AddToChatDraftApi } | null {

@@ -3,12 +3,12 @@
 > Renders an inline interactive widget card in the transcript (kimi inline-widget parity): calculator, slider panel, live quotes, metrics, todo, clock. The tool result carries `{ type, data, title? }`; the GUI's tool-render pipeline renders the shared registry component as a living card.
 
 ## Source
-- Entry: `packages/coding-agent/src/bundled-plugins/visuals/index.ts` (built-in Cordis plugin `musepi-visuals`)
-- Tool implementation: `packages/coding-agent/src/bundled-plugins/visuals/tool.ts`
-- Model-facing prompt: `packages/coding-agent/src/bundled-plugins/visuals/prompt.md`
-- Trigger rule (single source): `packages/coding-agent/src/bundled-plugins/visuals/when.ts`
+- Entry: `packages/coding-agent/src/plugins/media/visuals/index.ts` (built-in Cordis plugin `musepi-visuals`)
+- Tool implementation: `packages/coding-agent/src/plugins/media/visuals/tool.ts`
+- Model-facing prompt: `packages/coding-agent/src/plugins/media/visuals/prompt.md`
+- Trigger rule (single source): `packages/coding-agent/src/plugins/media/visuals/when.ts`
 - Key collaborators:
-  - `packages/coding-agent/src/tools/board.ts` — `board schema` surfaces the same `WIDGET_TYPES` table.
+  - `packages/coding-agent/src/board/catalog.ts` — owns the static `WIDGET_TYPES` table `board schema` surfaces, plus `widgetTypesWith` for merging extension-declared types.
   - `packages/client-core/src/widgets/registry.ts` — the shared widget registry (components + defaults) the renderer uses.
   - `packages/client-core/src/widgets/page-kit.ts` — the stylesheet and ready-class list every `page` face receives.
   - `packages/client-core/src/tool-render/tools/widget.tsx` — transcript renderer: inline shell, local data state, error boundary degradation.

@@ -162,6 +162,7 @@ import {
 } from "./plugins-runtime/loader";
 import { readAssetPolicy } from "./presets/asset-policy";
 import { readDesignSystemSelection, registerExtensionDesignSystem } from "./presets/design-systems";
+import { presetsDir } from "./presets/locations";
 import {
 	createModeResolver,
 	type ExtraModeLookup,
@@ -198,6 +199,7 @@ import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/
 import type { AuthStorage } from "./session/auth-storage";
 import { CacheWarmer } from "./session/cache-warmer";
 import { createInterruptedTurnAbortMessage } from "./session/exit-diagnostics";
+import { memoryToolNamesForMode, normalizeMemoryMode, type SessionMemoryMode } from "./session/memory-mode";
 import {
 	type CustomMessage,
 	convertToLlm,
@@ -428,6 +430,8 @@ function applyMCPEnvironment(result: { exaApiKeys: string[] }): void {
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: getProjectDir() */
 	cwd?: string;
+	/** Session-scoped long-term memory behavior, persisted in the session header. */
+	memoryMode?: SessionMemoryMode;
 	/** Additional workspace directories beyond cwd (multi-root), absolute or cwd-relative. */
 	additionalDirectories?: string[];
 	/** Global config directory. Default: ~/.musepi/agent */
@@ -1808,6 +1812,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		logger.time("sessionManager", () =>
 			SessionManager.create(cwd, SessionManager.getDefaultSessionDir(cwd, agentDir)),
 		);
+	if (options.memoryMode && !options.sessionManager) sessionManager.setMemoryMode(options.memoryMode);
 	if (configuredDirs.length > 0) {
 		// Merge with any roots restored from the session header (resume/fork), not replace.
 		const existing = sessionManager.getAdditionalDirectories();
@@ -2617,7 +2622,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			ext.modes.map(mode => ({ extensionId: ext.resolvedPath, mode })),
 		);
 		if (options.modeId) {
-			const modeDir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			const modeDir = options.modeDir ?? presetsDir();
 			ensureModeTemplates(modeDir);
 			profileModes = await collectProfilePresetDefinitions(cwd, options.profileHome ?? os.homedir());
 			modeRuntime.resolved = createModeResolver(modeDir, { extraModes: extensionModeLookup }).resolve(
@@ -3591,7 +3596,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					formatAdvisorContextPrompt(contextFiles, sessionManager.getAdditionalDirectories()),
 				);
 			}
-			const memoryBackend = restrictToolNames ? undefined : await resolveMemoryBackend(settings);
+			const memoryBackend =
+				restrictToolNames || normalizeMemoryMode(sessionManager.getHeader()?.memoryMode) === "temporary"
+					? undefined
+					: await resolveMemoryBackend(settings);
 			const memoryInstructions = memoryBackend
 				? await memoryBackend.buildDeveloperInstructions(agentDir, settings.getCwd(), settings, session)
 				: undefined;
@@ -4376,7 +4384,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			let next: ResolvedMode;
 			try {
-				const dir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+				const dir = options.modeDir ?? presetsDir();
 				ensureModeTemplates(dir);
 				next = createModeResolver(dir, { extraModes: extensionModeLookup }).resolve(modeId);
 			} catch (error) {
@@ -4609,8 +4617,15 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			createMemoryTools: restrictToolNames
 				? undefined
 				: async () => {
+						const allowed = new Set(
+							memoryToolNamesForMode(
+								normalizeMemoryMode(session?.memoryMode ?? sessionManager.getHeader()?.memoryMode),
+							),
+						);
 						const tools = await Promise.all(
-							MEMORY_BACKEND_TOOL_NAMES.map(name => BUILTIN_TOOLS[name](toolSession)),
+							MEMORY_BACKEND_TOOL_NAMES.filter(name => allowed.has(name)).map(name =>
+								BUILTIN_TOOLS[name](toolSession),
+							),
 						);
 						return tools.filter((tool): tool is AgentTool => tool !== null);
 					},

@@ -15,6 +15,7 @@ import type { StructuredSubagentSchemaMode } from "../task/types";
 import { ArtifactManager } from "./artifacts";
 import { type BlobPutOptions, type BlobPutResult, BlobStore } from "./blob-store";
 import type { CompactionMethod } from "./compaction-methods";
+import { normalizeMemoryMode, type SessionMemoryMode } from "./memory-mode";
 import {
 	type BashExecutionMessage,
 	type CustomMessage,
@@ -48,6 +49,7 @@ import {
 	type SessionMessageEntry,
 	type SessionTitleSource,
 	type SessionTreeNode,
+	sessionHeaderPreset,
 	type ThinkingLevelChangeEntry,
 	TITLE_CHANGE_ENTRY_TYPE,
 	type TitleChangeEntry,
@@ -1122,6 +1124,7 @@ export class SessionManager {
 			cwd: this.#cwd,
 			parentSession: options?.parentSession,
 			providerPromptCacheKey: options?.providerPromptCacheKey,
+			memoryMode: options?.memoryMode,
 		};
 		const workspace = normalizeSessionWorkspace({
 			cwd: this.#cwd,
@@ -2217,16 +2220,20 @@ export class SessionManager {
 	}
 
 	/**
-	 * Persist the selected agent preset in the session header (dsh's
-	 * `agentPreset`; stored as `modeId`, the field resume readers already use).
-	 * `null` clears it. Rewrites the file so a resumed session sees the change
-	 * without waiting for another append.
+	 * Persist the selected agent preset in the session header under
+	 * `agentPreset`. `null` clears it. Rewrites the file so a resumed session
+	 * sees the change without waiting for another append.
+	 *
+	 * The old `modeId` key is dropped on write: it read as the approval mode
+	 * (`tools.approvalMode`) and only ever held this value. Readers go through
+	 * `sessionHeaderPreset`, so a header that still carries `modeId` is honoured.
 	 */
 	setModeId(modeId: string | null): void {
 		const next = modeId === null ? undefined : modeId;
-		if ((this.#header.modeId ?? undefined) === next) return;
-		if (next === undefined) delete this.#header.modeId;
-		else this.#header.modeId = next;
+		if (sessionHeaderPreset(this.#header) === next && this.#header.modeId === undefined) return;
+		delete this.#header.modeId;
+		if (next === undefined) delete this.#header.agentPreset;
+		else this.#header.agentPreset = next;
 		if (!this.#persist || !this.#sessionFile) return;
 		this.#fileIsCurrent = false;
 		this.#rewriteRequired = true;
@@ -2520,6 +2527,11 @@ export class SessionManager {
 
 	getHeader(): SessionHeader | null {
 		return this.#header;
+	}
+
+	/** Creation-only seed; loaded sessions retain the mode stored in their header. */
+	setMemoryMode(mode: SessionMemoryMode): void {
+		this.#header.memoryMode = normalizeMemoryMode(mode);
 	}
 
 	/** All session entries (excludes header). Returns a shallow copy. */

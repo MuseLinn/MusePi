@@ -10,6 +10,10 @@ import { evaluateSubmitTrigger } from "./submit-trigger";
 
 export type SttState = "idle" | "recording" | "transcribing";
 
+/** What this controller needs from a stream: it only ever feeds raw audio,
+ *  because both backends (the ASR worker and the voice frontend) segment it. */
+type DictationStream = Pick<SttStreamHandle, "pushAudio" | "stop" | "cancel">;
+
 interface ToggleOptions {
 	showWarning(msg: string): void;
 	showStatus(msg: string): void;
@@ -44,7 +48,7 @@ export class STTController {
 	readonly #createCapture: CaptureFactory;
 
 	// Live streaming capture.
-	#stream: SttStreamHandle | null = null;
+	#stream: DictationStream | null = null;
 	#streamRecorder: CaptureHandle | null = null;
 	#streamEditor: Editor | null = null;
 	#streamCommitted = false;
@@ -206,7 +210,7 @@ export class STTController {
 		};
 		const speakerMode = (settings.get("stt.speakerMode") as SpeakerMode | undefined) ?? "off";
 		const enhanceAudio = settings.get("stt.enhanceAudio") === true;
-		let stream: SttStreamHandle;
+		let stream: DictationStream;
 		if (speakerMode === "off" && !enhanceAudio) {
 			stream = sttClient.startStream(modelKey, {
 				language: language || undefined,
@@ -226,13 +230,9 @@ export class STTController {
 			stream = {
 				pushAudio: samples => frontend.streamAudio(sessionId, samples),
 				stop: async () => {
-					const results = await frontend.streamStop(sessionId);
+					const { results, text } = await frontend.streamStop(sessionId);
 					if (results.some(result => result.state === "uncertain")) this.#streamNeedsReview = true;
-					return results
-						.filter(result => result.state !== "reject")
-						.map(result => result.text.trim())
-						.filter(Boolean)
-						.join(" ");
+					return text;
 				},
 				cancel: () => frontend.streamCancel(sessionId),
 			};

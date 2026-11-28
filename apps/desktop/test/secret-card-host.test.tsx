@@ -151,18 +151,18 @@ describe("SecretCard host 会话归属", () => {
 		expect(cards(host)).toHaveLength(0);
 		await emit(emitEvent, requestEvent("session-a", "r1", "A_KEY"));
 		expect(cards(host)).toHaveLength(1);
-		expect(host.textContent).toContain("$MUSEPI_SECRET_A_KEY");
+		expect(host.textContent).toContain("A_KEY");
 
 		// ChatView 在会话间复用：切到 B 时 A 的未决卡必须清空。
 		await act(async () => root.render(view(b, rpc)));
 		await flush();
 		expect(cards(host)).toHaveLength(0);
-		expect(host.textContent).not.toContain("$MUSEPI_SECRET_A_KEY");
+		expect(host.textContent).not.toContain("A_KEY");
 
 		// B 自己的请求照常出现。
 		await emit(emitEvent, requestEvent("session-b", "r2", "B_KEY"));
 		expect(cards(host)).toHaveLength(1);
-		expect(host.textContent).toContain("$MUSEPI_SECRET_B_KEY");
+		expect(host.textContent).toContain("B_KEY");
 	});
 });
 
@@ -180,8 +180,8 @@ describe("SecretCard host 并发请求", () => {
 		await emit(emitEvent, requestEvent("session-a", "r2", "SECOND_KEY"));
 		// 后到的请求不覆盖先到的：两张卡同时存在。
 		expect(cards(host)).toHaveLength(2);
-		expect(host.textContent).toContain("$MUSEPI_SECRET_FIRST_KEY");
-		expect(host.textContent).toContain("$MUSEPI_SECRET_SECOND_KEY");
+		expect(host.textContent).toContain("FIRST_KEY");
+		expect(host.textContent).toContain("SECOND_KEY");
 
 		const first = cards(host)[0]!;
 		await act(async () => buttonIn(first, "允许").click());
@@ -189,7 +189,7 @@ describe("SecretCard host 并发请求", () => {
 		expect(answers).toEqual([{ requestId: "r1", action: "allow" }]);
 		// 第一张已决，第二张仍在等待自己的回答。
 		expect(cards(host)).toHaveLength(2);
-		expect(cards(host)[1]!.textContent).toContain("$MUSEPI_SECRET_SECOND_KEY");
+		expect(cards(host)[1]!.textContent).toContain("SECOND_KEY");
 		expect(buttonIn(cards(host)[1]!, "允许").disabled).toBe(false);
 
 		await act(async () => buttonIn(cards(host)[1]!, "允许").click());
@@ -224,12 +224,12 @@ describe("SecretCard host 本地作答与 end 广播", () => {
 		await emit(emitEvent, endEvent("session-a", "r1"));
 		expect(cards(host)).toHaveLength(2);
 		expect(host.textContent).toContain("已允许 FIRST_KEY");
-		expect(host.textContent).toContain("$MUSEPI_SECRET_SECOND_KEY");
+		expect(host.textContent).toContain("SECOND_KEY");
 
 		// 没有本地作答的 r2：别的设备已答/超时仍要立刻消失。
 		await emit(emitEvent, endEvent("session-a", "r2"));
 		expect(cards(host)).toHaveLength(1);
-		expect(host.textContent).not.toContain("$MUSEPI_SECRET_SECOND_KEY");
+		expect(host.textContent).not.toContain("SECOND_KEY");
 		expect(host.textContent).toContain("已允许 FIRST_KEY");
 	});
 

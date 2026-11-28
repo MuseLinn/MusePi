@@ -25,6 +25,7 @@ import {
 } from "../../extensibility/plugins/compat/compatibility-store";
 import type { PluginManagementPackage } from "../../extensibility/plugins/profile/plugin-management";
 import type { PluginRuntimeTarget } from "../../extensibility/plugins/runtime/mount";
+import { presetsDir } from "../../presets/locations";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { ArtifactServerHandle } from "../artifact-server";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
@@ -668,7 +669,7 @@ export class ExtensionService implements DaemonService {
 				}
 				return out;
 			};
-			const dir = this.#deps.modesDir?.() ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			const dir = this.#deps.modesDir?.() ?? presetsDir();
 			ensureModeTemplates(dir);
 			const definitions = new Map(listModeIds(dir).map(id => [id, loadModeFile(dir, id)]));
 			const { collectProfilePresetDefinitions } = await import(

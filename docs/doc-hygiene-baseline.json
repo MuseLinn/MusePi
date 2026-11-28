@@ -1,11 +1,11 @@
 {
 	"rule": "Dated decision markers in living docs may only fall. New decisions go to one docs/adr/<date>-<topic>.md file; the current-state doc states the resulting contract without dates.",
 	"files": {
-		"docs/extensions-dev.md": 9,
+		"docs/extensions-dev.md": 7,
 		"docs/extensions-dev.zh-CN.md": 3,
-		"docs/gui-design.md": 107,
-		"docs/gui-design.zh-CN.md": 75,
-		"docs/gui-implementation.md": 121,
+		"docs/gui-design.md": 100,
+		"docs/gui-design.zh-CN.md": 74,
+		"docs/gui-implementation.md": 120,
 		"docs/gui-implementation.zh-CN.md": 78,
 		"docs/gui-settings.md": 2,
 		"docs/gui-settings.zh-CN.md": 5,

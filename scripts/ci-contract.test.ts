@@ -127,6 +127,42 @@ describe("CI runtime and delivery contracts", () => {
 		expect(publish?.if).toContain("needs.release_gate.result == 'success'");
 	});
 
+	it("does not start a second CI run from the tag push that release.ts also emits", () => {
+		const push = readYaml(".github/workflows/ci.yml").on?.push as { branches?: string[]; tags?: unknown };
+		expect(push?.branches).toContain("main");
+		expect(push?.tags).toBeUndefined();
+	});
+
+	it("dispatches CI for a tag pushed onto an already published commit", () => {
+		const workflow = readYaml(".github/workflows/tui-release-recover.yml");
+		const push = workflow.on?.push as { tags?: string[] };
+		expect(push?.tags).toEqual(["v*"]);
+		const steps = allSteps(workflow);
+		const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"));
+		expect(checkout?.with?.ref).toBe("${{ github.event.repository.default_branch }}");
+		expect(checkout?.with?.["persist-credentials"]).toBe(false);
+		const dispatch = steps.find(step => step.run?.includes("scripts/ci-tui-release-recover.ts"));
+		expect(dispatch?.run).toBe("bun scripts/ci-tui-release-recover.ts");
+		expect(dispatch?.run).not.toContain("${{");
+		expect(dispatch?.env?.GITHUB_SHA).toBe("${{ github.sha }}");
+		expect(dispatch?.env?.GITHUB_REF_NAME).toBe("${{ github.ref_name }}");
+		expect(dispatch?.env?.RECOVER_BASE_REF).toBe("${{ github.event.repository.default_branch }}");
+		expect(steps.some(step => step.uses?.startsWith("softprops/action-gh-release@"))).toBe(false);
+		const metadata = allSteps(readYaml(".github/workflows/ci.yml").jobs?.release_metadata);
+		expect(metadata.some(step => step.run?.includes("HEAD carries release tag"))).toBe(true);
+	});
+
+	it("adds TUI assets to an existing GitHub release without replacing its notes", () => {
+		const steps = allSteps(readYaml(".github/workflows/ci.yml").jobs?.release_github);
+		const create = steps.find(step => step.with?.body_path === "release-notes.md");
+		const update = steps.find(
+			step => step.uses?.startsWith("softprops/action-gh-release@") && step.with?.generate_release_notes === false,
+		);
+		expect(create?.with?.generate_release_notes).toBe(true);
+		expect(update?.with?.body_path).toBeUndefined();
+		expect(update?.if).toContain("exists == 'true'");
+	});
+
 	it("does not publish GUI assets before main CI succeeds for the tagged commit", () => {
 		const workflow = readYaml(".github/workflows/gui-release.yml");
 		const steps = allSteps(workflow.jobs?.publish);

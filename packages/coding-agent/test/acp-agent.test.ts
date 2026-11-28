@@ -1757,10 +1757,9 @@ describe("ACP agent", () => {
 		expect(names).not.toContain("drop");
 		expect(names).not.toContain("resume");
 		expect(names).not.toContain("agents");
-		// `/extensions` gained a headless ACP handle in #38 Step 2
-		// (activateExtensionMetaTools + text output), so it IS advertised
-		// to ACP clients — the control-center dashboard stays TUI-only.
-		expect(names).toContain("extensions");
+		// `/extensions` opens a TUI dashboard and is deliberately not advertised
+		// to ACP clients, even though it also activates extension meta-tools.
+		expect(names).not.toContain("extensions");
 		expect(names).not.toContain("hotkeys");
 
 		harness.abortController.abort();

@@ -11,6 +11,6 @@
 		"./src/*": "./src/*"
 	},
 	"dependencies": {
-		"react": "19.2.7"
+		"react": "catalog:"
 	}
 }

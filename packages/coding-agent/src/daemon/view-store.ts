@@ -39,10 +39,10 @@ export interface MaterializedRow {
 	messageCount: number;
 	/** Fork source session (session-tree parent); null for roots. */
 	parentId: string | null;
-	/** 会话预设(mode)id — 持久化自快照 header（persistHeaderPatch 落盘），
+	/** 会话预设 id — 持久化自快照 header（persistHeaderPatch 落盘），
 	 *  live 会话在 knownSessions 里以内存值为权威覆盖。侧栏悬浮卡的
-	 *  模式行消费；null = 未设预设。 */
-	modeId: string | null;
+	 *  预设行消费；null = 未设预设。SQLite 列仍叫 `mode_id`（私有存储）。 */
+	agentPreset: string | null;
 	/** M3.2 创作面 project metadata — 持久化自快照 header（创建路径
 	 *  persistHeaderPatch 落盘），保留语义与 modeId 相同（视图重建不携带，
 	 *  依赖本列回注）。null = 非创作会话。 */
@@ -282,13 +282,18 @@ export class ViewStore {
 			typeof snapshot.header === "object" && snapshot.header
 				? (snapshot.header as unknown as Record<string, unknown>)
 				: {};
-		const headerHasModeId = "modeId" in headerObj;
-		let modeId: string | null = headerHasModeId ? ((headerObj.modeId ?? null) as string | null) : null;
+		// The header stores the preset under `agentPreset` now; `modeId` is what an
+		// older build wrote, and both are honoured so a stored session keeps its
+		// preset across the rename. The SQLite column keeps its name — it is a
+		// private store, not part of any contract.
+		const headerPresetKey = "agentPreset" in headerObj ? "agentPreset" : "modeId" in headerObj ? "modeId" : null;
+		const headerHasModeId = headerPresetKey !== null;
+		let agentPreset: string | null = headerPresetKey ? ((headerObj[headerPresetKey] ?? null) as string | null) : null;
 		if (!headerHasModeId) {
 			const prev = this.#db.query("SELECT mode_id FROM sessions WHERE session_id = ?").get(sessionId) as
 				| { mode_id: string | null }
 				| undefined;
-			modeId = prev?.mode_id ?? null;
+			agentPreset = prev?.mode_id ?? null;
 		}
 		// M3.2 project metadata: same preservation contract as modeId — the
 		// view projection never carries it; only persistHeaderPatch (the
@@ -349,7 +354,7 @@ export class ViewStore {
 		// path (adopt) can read persisted.header.<key> back after a restart —
 		// not just the query columns.
 		const headerPatch: Record<string, unknown> = {};
-		if (!headerHasModeId && modeId != null) headerPatch.modeId = modeId;
+		if (!headerHasModeId && agentPreset != null) headerPatch.agentPreset = agentPreset;
 		if (!("projectMetadata" in headerObj) && projectMetadata) headerPatch.projectMetadata = projectMetadata;
 		if (!("mcpServers" in headerObj) && mcpServers !== null) headerPatch.mcpServers = mcpServers;
 		const snapshotToStore: SessionSnapshot =
@@ -448,7 +453,7 @@ export class ViewStore {
 					// view snapshot lacks it, so streaming / idle / compaction
 					// persists never clobber a setMode'd mode (persistHeaderPatch is
 					// the only explicit writer). null = no preset armed.
-					modeId,
+					agentPreset,
 					// M3.2 creation metadata — same preservation contract (see the
 					// headerPatch assembly above). null = not a creation session.
 					projectMetadata ? JSON.stringify(projectMetadata) : null,
@@ -605,7 +610,7 @@ export class ViewStore {
 				model: r.model,
 				messageCount: r.message_count,
 				parentId: r.parent_id ?? null,
-				modeId: r.mode_id ?? null,
+				agentPreset: r.mode_id ?? null,
 				projectMetadata,
 				mcpServers,
 			};

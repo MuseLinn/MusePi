@@ -359,9 +359,6 @@ export function SettingsView({
 								/>
 							) : (
 								<>
-									{activeSection === "media" && (
-										<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
-									)}
 									{activeSection === "session-memory" && (
 										<SessionMemorySection
 											rpc={rpc}
@@ -391,7 +388,6 @@ export function SettingsView({
 									{activeSection === "git" && <GitSection rpc={rpc} />}
 									{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
 									{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
-									{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 									{activeSection.startsWith("ext:")
 										? (() => {
 												const item = extSettingsTabs.find(x => x.id === activeSection.slice("ext:".length));
@@ -447,8 +443,6 @@ import {
 	BrowserSection,
 	GitSection,
 	InteractionSection,
-	MediaSection,
 	SessionMemorySection,
-	SkillsSection,
 	VoiceSection,
 } from "./settings-sections";

@@ -100,8 +100,10 @@ beforeEach(async () => {
 					<button class="gui-rail-btn" type="button">A</button>
 				</div>
 				<div class="gui-side-keeper" data-panel="home">
+					<button class="gui-sidebar-toggle" type="button">T</button>
 					<div class="gui-pane-side gui-pane-side--immersive flex h-full flex-shrink-0 flex-col overflow-hidden">
 						<div class="gui-pane-drag flex h-9 flex-shrink-0 items-center justify-end pr-2"></div>
+						<div class="gui-sidebar-toggle-seat"></div>
 						<div class="gui-side-panel" style="flex: 1; min-height: 0">
 							<div class="gui-side-panel-head"><button type="button">New</button></div>
 							<div class="gui-side-panel-scroll">
@@ -114,7 +116,6 @@ beforeEach(async () => {
 				<div class="gui-chat-col relative flex min-w-0 flex-1 flex-col">
 					<div class="gui-chat-col-keeper">
 						<header class="gui-header flex h-12 flex-shrink-0 items-center gap-2 px-4">
-							<button class="gui-sidebar-toggle" type="button">T</button>
 						</header>
 						<div class="gui-surface-area relative flex min-h-0 flex-1 flex-col">
 							<main class="gui-pane-center relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -180,6 +181,7 @@ async function readGeometry() {
 			paneRegion: getComputedStyle(select(".gui-pane-side")).webkitAppRegion,
 			railButtonRegion: getComputedStyle(select(".gui-rail-btn")).webkitAppRegion,
 			pane: box(select(".gui-pane-side")),
+			toggle: box(select(".gui-sidebar-toggle")),
 			header: box(select(".gui-header")),
 			surface: box(select(".gui-chat-surface")),
 			surfaceMargin: {
@@ -238,13 +240,14 @@ describe("shell top geometry", () => {
 		expect(keeper.top).toBe(0);
 		// The draggable strip is exactly the window top down to the card.
 		expect(pane.top - keeper.top).toBe(56);
-		expect(rail.right).toBe(keeper.left);
+		// Cards keep one gutter between the rail and sidebar keeper.
+		expect(keeper.left - rail.right).toBe(8);
 		expect(stripHit).toBe("keeper");
 	});
 
 	it("keeps the rail, panel rows and header controls out of the drag band", async () => {
 		const { railTop, railButtonRegion, rowRegion, rowHit, columnAppRegion } = await readGeometry();
-		expect(railTop.height).toBe(48);
+		expect(railTop.height).toBe(12);
 		expect(railButtonRegion).toBe("no-drag");
 		// The card subtree is excluded from the keeper's drag region.
 		expect(rowRegion).toBe("no-drag");
@@ -256,6 +259,30 @@ describe("shell top geometry", () => {
 	it("follows the card with the sidebar seam handle", async () => {
 		const { resizer, pane } = await readGeometry();
 		expect(resizer.top).toBe(pane.top);
+	});
+
+	it("keeps the persistent toggle at the same screen position in both panel states", async () => {
+		const expandedGeometry = await readGeometry();
+		const expanded = expandedGeometry.toggle;
+		expect(expanded.top).toBeGreaterThanOrEqual(expandedGeometry.pane.top);
+		expect(expanded.right).toBeLessThanOrEqual(expandedGeometry.pane.right);
+		await page.evaluate(() => {
+			const keeper = document.querySelector<HTMLElement>(".gui-side-keeper")!;
+			keeper.removeAttribute("data-panel");
+			const pane = document.querySelector<HTMLElement>(".gui-pane-side")!;
+			pane.classList.add("gui-pane-side--collapsed");
+			pane.style.width = "0px";
+		});
+		await page.evaluate(() =>
+			Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))),
+		);
+		const folded = (await readGeometry()).toggle;
+		expect({ left: folded.left, top: folded.top, width: folded.width, height: folded.height }).toEqual({
+			left: expanded.left,
+			top: expanded.top,
+			width: expanded.width,
+			height: expanded.height,
+		});
 	});
 
 	it("leaves no drag strip when the sidebar is collapsed", async () => {

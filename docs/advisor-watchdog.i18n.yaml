@@ -2,4 +2,4 @@
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/advisor-watchdog
 advisor-watchdog.md: 0654dcb3bf7d0287f58e3dfb3dabbce10cd59c94
-advisor-watchdog.zh-CN.md: 3bd8219b39f81d9a40d05cdc04fcf657b818d1bc
+advisor-watchdog.zh-CN.md: fb2cf8157306cff1a9fc76b966b9afc5b9703b95

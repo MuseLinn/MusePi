@@ -225,6 +225,15 @@ export function getExtensionUISelectOptionLabel(option: ExtensionUISelectItem): 
 export interface ExtensionUIDialogOptions {
 	signal?: AbortSignal;
 	timeout?: number;
+	/**
+	 * What this dialog is FOR, when the caller knows.
+	 *
+	 * A host used to tell an approval apart from any other select by looking for
+	 * the labels "Approve"/"Deny". That made the localisation of those labels a
+	 * breaking change: the same dialog, translated, became an "ask" and the
+	 * approval never resolved. The purpose is data, not text.
+	 */
+	purpose?: "approval";
 	/** Invoked when the UI times out while waiting for a selection/input */
 	onTimeout?: () => void;
 	/** Invoked when the UI-managed timeout countdown starts */

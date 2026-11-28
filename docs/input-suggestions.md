@@ -4,7 +4,7 @@ title: Next-input suggestions
 status: living
 summary: How MusePi predicts the user's next message after a turn and offers it in an empty composer.
 scope:
-  - packages/coding-agent/src/bundled-plugins/prompt-suggestion
+  - packages/coding-agent/src/plugins/interaction/prompt-suggestion
   - packages/coding-agent/src/session/prompt-suggestion.ts
   - packages/coding-agent/src/daemon/session-host.ts
   - packages/client-core/src/lib/prompt-suggestion.ts
@@ -32,13 +32,13 @@ The model choice is deliberately **not** the side channel's. `runEphemeralTurn` 
 
 ## 2. Request contract
 
-The instruction lives in `packages/coding-agent/src/prompts/system/suggestion-instruction.md`. It states that the app generated the request, asks for the single message the user is most likely to type, requires the user's own voice and language, and demands exactly one line of plain text — or the literal `null` when the conversation offers no grounded next move. JSON, alternatives and explanations are refused explicitly.
+The instruction lives in `packages/coding-agent/src/plugins/interaction/prompt-suggestion/suggestion-instruction.md`. It states that the app generated the request, asks for the single message the user is most likely to type, requires the user's own voice and language, and demands exactly one line of plain text — or the literal `null` when the conversation offers no grounded next move. JSON, alternatives and explanations are refused explicitly.
 
 The response is read as plain text: no output schema, no tool use. `promptSuggestionText` trims the edges and treats an empty string or the bare word `null` as "no suggestion"; anything else is preserved verbatim.
 
 ## 3. When a suggestion is generated
 
-The policy lives in the bundled Cordis plugin `musepi-prompt-suggestion` (`packages/coding-agent/src/bundled-plugins/prompt-suggestion`), not in the daemon. The plugin subscribes to `agent_end` and checks five gates:
+The policy lives in the bundled Cordis plugin `musepi-prompt-suggestion` (`packages/coding-agent/src/plugins/interaction/prompt-suggestion`), not in the daemon. The plugin subscribes to `agent_end` and checks five gates:
 
 | Gate | Rule |
 | --- | --- |

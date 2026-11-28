@@ -327,7 +327,7 @@ export function CommandPalette({
 	const settingItems = useMemo<PaletteItem[]>(() => {
 		if (!queryText || !onOpenSetting) return [];
 		const items: PaletteItem[] = [];
-		const pages = navGroups([]).flatMap(group => group.items);
+		const pages = navGroups([], { contributionsKnown: false }).flatMap(group => group.items);
 		const pageLabels = new Map(pages.map(item => [item.id, item.label] as const));
 		const pageIndex = new TextSearchIndex(pages, item => ({ fuzzy: [item.label, item.id] }));
 		for (const item of pageIndex.search(queryText).slice(0, 6)) {

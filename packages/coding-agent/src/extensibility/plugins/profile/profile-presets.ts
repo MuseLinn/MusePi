@@ -1,10 +1,12 @@
 import * as path from "node:path";
 import { getActiveProfile } from "@musepi/pi-utils";
+import { presetsDir } from "../../../presets/locations";
 import { ensureModeTemplates, listModeIds, type ModeDefinition, type PresetPluginRow } from "../../../presets/resolve";
 import { applyDshProfile, type DshApplication } from "../dsh/dsh-apply";
 import type { DshValue } from "../dsh/dsh-patch";
+import { AGENT_PRESET_ROW_NAME, presetToRowConfig, rowConfigToPreset } from "./preset-row";
 import { profileDirFor, readProfileComposition, resolveBundleDirs, writeProfileBundles } from "./profile-composition";
-import { writeRowConfigValue } from "./profile-patch-edit";
+import { removeRow, writeRowConfig, writeRowConfigValue } from "./profile-patch-edit";
 
 const AGENT_PRESET_PACKAGES = new Set(["@deepseek-ai/dsh-agent-preset", "@musepi/agent-preset"]);
 
@@ -97,8 +99,45 @@ export async function collectProfilePresetDefinitions(
 	if (!projection) return [];
 	return projection.application.composition.rows
 		.filter(row => AGENT_PRESET_PACKAGES.has(row.name) && row.disabled !== true)
-		.map(presetDefinition)
-		.filter(row => row !== null);
+		.map(row => rowConfigToPreset(row.config))
+		.filter((def): def is ModeDefinition => def !== null);
+}
+
+/** The patch a write lands in: the profile's own patch file, created when the
+ *  profile has none yet. */
+async function presetPatchPath(cwd: string, home: string, profileName?: string): Promise<string> {
+	const name = profileName ?? getActiveProfile() ?? "";
+	let projection = await projectProfile(cwd, home, name);
+	if (!projection) {
+		await writeProfileBundles(name, [], home);
+		projection = await projectProfile(cwd, home, name);
+	}
+	if (!projection) throw new Error("No profile composition is available");
+	return projection.profilePatchPath ?? path.join(profileDirFor(name, home), "cordis.patch.yml");
+}
+
+/**
+ * Persist a preset as one declaration row in the profile patch — the same place
+ * any Cordis plugin declaration lives, rather than a directory of its own.
+ *
+ * Writing the whole `config` block (not key by key) is what keeps a save from
+ * leaving a stale field behind when the definition drops one.
+ */
+export async function writeProfilePreset(
+	cwd: string,
+	home: string,
+	def: ModeDefinition,
+	order: number,
+	profileName?: string,
+): Promise<void> {
+	const patchPath = await presetPatchPath(cwd, home, profileName);
+	await writeRowConfig(patchPath, `preset-${def.id}`, AGENT_PRESET_ROW_NAME, presetToRowConfig(def, order));
+}
+
+/** Remove a preset's declaration rows from the profile patch. */
+export async function removeProfilePreset(cwd: string, home: string, id: string, profileName?: string): Promise<void> {
+	const patchPath = await presetPatchPath(cwd, home, profileName);
+	await removeRow(patchPath, `preset-${id}`);
 }
 
 /** Default preset for a subsequently created session. */
@@ -129,9 +168,8 @@ export async function writeDefaultPresetId(
 		.filter(row => AGENT_PRESET_PACKAGES.has(row.name) && row.disabled !== true)
 		.map(presetDefinition)
 		.filter(row => row !== null);
-	const modeDir = path.join(home, ".musepi", "modes");
-	ensureModeTemplates(modeDir);
-	const fileIds = listModeIds(modeDir);
+	ensureModeTemplates(presetsDir(home));
+	const fileIds = listModeIds(presetsDir(home));
 	if (!fileIds.includes(id) && !definitions.some(definition => definition.id === id)) {
 		throw new Error(`Unknown agent preset: ${id}`);
 	}

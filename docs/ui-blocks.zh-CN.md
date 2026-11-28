@@ -6,7 +6,7 @@ summary: 助手回复里可携带的声明式、按行组织的块语法，以�
 scope:
   - packages/client-core/src/ui-blocks
   - packages/coding-agent/src/prompts/system/system-prompt.md
-  - packages/coding-agent/src/bundled-plugins/visuals
+  - packages/coding-agent/src/plugins/media/visuals
 ---
 
 # UI 块

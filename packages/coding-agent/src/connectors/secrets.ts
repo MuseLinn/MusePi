@@ -47,6 +47,8 @@ export function connectorSecretStore(agentDir: string = getAgentDir()): Encrypte
 		file: SECRETS_FILE,
 		masterKeyFile: MASTER_KEY_FILE,
 		masterKeyEnv: MASTER_KEY_ENV,
+		// One passphrase covers connector tokens along with the vault and OAuth.
+		sharedKeyAgentDir: agentDir,
 	});
 }
 
@@ -101,8 +103,22 @@ export async function connectorKeyLocked(agentDir: string = getAgentDir()): Prom
 	return state.mode === "passphrase" && state.locked;
 }
 
+/**
+ * Connector key passphrase operations.
+ *
+ * Connector tokens derive from the profile's shared master key, so these are
+ * no-ops in the sense that matters: the vault already performed the operation
+ * on the same key. They stay callable because a host may drive them directly,
+ * and skipping keeps a second call from proving a passphrase the first just
+ * replaced.
+ */
+async function connectorKeyIsShared(agentDir: string): Promise<boolean> {
+	return connectorSecretStore(agentDir).sharedKeyAgentDir !== undefined;
+}
+
 /** Wrap the connector key under `passphrase`; already-wrapped is a no-op. */
 export async function encryptConnectorKey(passphrase: string, agentDir: string = getAgentDir()): Promise<void> {
+	if (await connectorKeyIsShared(agentDir)) return;
 	const store = connectorSecretStore(agentDir);
 	const state = await masterKeyState(store);
 	if (state.mode === "passphrase") return;
@@ -111,6 +127,7 @@ export async function encryptConnectorKey(passphrase: string, agentDir: string =
 
 /** Restore the connector's plain key file after proving `passphrase`. */
 export async function decryptConnectorKey(passphrase: string, agentDir: string = getAgentDir()): Promise<void> {
+	if (await connectorKeyIsShared(agentDir)) return;
 	const store = connectorSecretStore(agentDir);
 	const state = await masterKeyState(store);
 	if (state.mode !== "passphrase") return;
@@ -119,6 +136,7 @@ export async function decryptConnectorKey(passphrase: string, agentDir: string =
 
 /** Unlock the connector store for this process; nothing is written. */
 export async function unlockConnectorKey(passphrase: string, agentDir: string = getAgentDir()): Promise<void> {
+	if (await connectorKeyIsShared(agentDir)) return;
 	const store = connectorSecretStore(agentDir);
 	const state = await masterKeyState(store);
 	if (state.mode !== "passphrase") return;
@@ -131,6 +149,7 @@ export async function rephraseConnectorKey(
 	next: string,
 	agentDir: string = getAgentDir(),
 ): Promise<void> {
+	if (await connectorKeyIsShared(agentDir)) return;
 	const store = connectorSecretStore(agentDir);
 	const state = await masterKeyState(store);
 	if (state.mode !== "passphrase") return;

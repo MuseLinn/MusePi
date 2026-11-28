@@ -43,6 +43,48 @@
 	cursor: grabbing;
 }
 
+/* Unavailable face: the bytes behind this ref are gone (an expired blob), so
+ * the card keeps its slot and its size but stops looking like a photo. The
+ * dashed hairline and the inset fill are the transcript's pending-placeholder
+ * language (.tr-mermaid-async) — a missing image is an absence, not an error,
+ * so it gets no alarm colour. The hatch runs on its own layer so the icon and
+ * the label stay crisp above it. */
+.tr-img-stack-card--missing {
+	display: grid;
+	place-items: center;
+	border-style: dashed;
+	border-color: var(--border-strong);
+	background: var(--bg-inset);
+	box-shadow: none;
+}
+
+.tr-img-stack-card--missing::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: repeating-linear-gradient(
+		135deg,
+		color-mix(in oklab, var(--fg) 4%, transparent) 0 1px,
+		transparent 1px 9px
+	);
+	pointer-events: none;
+}
+
+.tr-img-stack-missing {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--fg-faint);
+	font-family: var(--font-ui);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.tr-img-stack-missing svg {
+	flex: none;
+}
+
 .tr-img-stack-count {
 	position: absolute;
 	bottom: 8px;

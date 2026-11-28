@@ -353,6 +353,9 @@ export class ExtensionList implements Component {
 				return theme.fg("dim", theme.status.disabled);
 			case "shadowed":
 				return theme.fg("warning", theme.status.shadowed);
+			case "discovered":
+				// Another agent's plugin: present, readable, never mountable here.
+				return theme.fg("muted", theme.status.discovered);
 		}
 	}
 

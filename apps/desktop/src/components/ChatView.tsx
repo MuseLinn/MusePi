@@ -34,6 +34,7 @@ import {
 	type OfficeQuoteAnchor,
 	type PdfQuoteAnchor,
 	type SessionEntry,
+	type SessionModeProjection,
 } from "@musepi/pi-wire";
 import { Info as InfoIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
@@ -132,6 +133,7 @@ import type { CreationMessage } from "./CreationModeRow";
 import { flushPendingConnectorSelection } from "./composer/connector-panel";
 import { DialogFrame } from "./DialogFrame";
 import { McpAuthCard, type McpAuthCardState, type McpAuthRequest } from "./McpAuthCard";
+import type { SessionMemoryMode } from "./MemoryModePicker";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
@@ -310,11 +312,14 @@ export function ChatView({
 	onSend,
 	onStop,
 	onDecideApproval,
+	onAllowApprovalForSession,
 	onReloadSession,
 	onForkSession,
 	modes,
-	modeId,
+	agentPreset,
 	onModeChange,
+	memoryMode,
+	onMemoryModeChange,
 	/** M3.7a(v2 修订):design 模式内联形态的发送管线 —— 透传给欢迎页 composer。 */
 	onDesignSubmit,
 	defaultModelId,
@@ -349,6 +354,7 @@ export function ChatView({
 	onMcpAuthAuthorize,
 	onMcpAuthCancel,
 	onMcpAuthDismiss,
+	onOpenSettingsSection,
 	sessionTitle,
 	sessionInfoOpen = false,
 	onToggleSessionInfo,
@@ -383,6 +389,7 @@ export function ChatView({
 	): void;
 	onStop(): void;
 	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
+	onAllowApprovalForSession?(requestId: string, tool: string, note?: string): void;
 	/** Reload the active session snapshot (revert/edit truncation). */
 	onReloadSession?(): Promise<void> | void;
 	/** Open a forked session (session.forkAt result) — switches the UI to
@@ -394,8 +401,10 @@ export function ChatView({
 	presetModelId?: string | null;
 	/** Welcome 预设(mode)chip(welcome 场景;modes 未传则不渲染,见 Composer)。 */
 	modes?: { id: string; label: string }[] | null;
-	modeId?: string | null;
+	agentPreset?: string | null;
 	onModeChange?(id: string | null): void;
+	memoryMode?: SessionMemoryMode;
+	onMemoryModeChange?(mode: SessionMemoryMode): void;
 	/** M3.7a design 模式内联形态(§2.4):session.create + projectMetadata 管线。 */
 	onDesignSubmit?(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** The DEFAULT-role model (modelRoles.default): the welcome composer's
@@ -479,6 +488,9 @@ export function ChatView({
 	onMcpAuthAuthorize?(request: McpAuthRequest): void;
 	onMcpAuthCancel?(request: McpAuthRequest): void;
 	onMcpAuthDismiss?(request: McpAuthRequest): void;
+	/** Open a settings section from inside the conversation (a saved
+	 *  credential's way into the vault). Absent hides that action. */
+	onOpenSettingsSection?(section: string): void;
 	/** Session title shown in the floating session info card (app.tsx owns the
 	 *  session label; the card is the collapsed right panel's stand-in). */
 	sessionTitle?: string | null;
@@ -535,7 +547,7 @@ export function ChatView({
 					typeof payload.requestId !== "string" ||
 					typeof payload.name !== "string" ||
 					typeof payload.purpose !== "string" ||
-					(payload.kind !== "fill" && payload.kind !== "allow")
+					(payload.kind !== "fill" && payload.kind !== "allow" && payload.kind !== "login")
 				) {
 					return;
 				}
@@ -545,6 +557,10 @@ export function ChatView({
 					purpose: payload.purpose,
 					kind: payload.kind,
 					delivery: payload.delivery === "file" ? "file" : "env",
+					...(typeof payload.site === "string" ? { site: payload.site } : {}),
+					...(Array.isArray(payload.alternatives) && payload.alternatives.length > 0
+						? { alternatives: payload.alternatives }
+						: {}),
 				};
 				// A subscribe replay of a request already on screen keeps one card.
 				setSecretRequests(current =>
@@ -575,6 +591,8 @@ export function ChatView({
 					action: answer.action,
 					...(answer.value !== undefined ? { value: answer.value } : {}),
 					...(answer.scope !== undefined ? { scope: answer.scope } : {}),
+					...(answer.login !== undefined ? { login: answer.login } : {}),
+					...(answer.picked !== undefined ? { picked: answer.picked } : {}),
 				});
 			} catch (err) {
 				answeredSecretRequestsRef.current.delete(answer.requestId);
@@ -3362,8 +3380,10 @@ export function ChatView({
 		onSelectReminder,
 		onMarkAllRead,
 		modes,
-		modeId,
+		agentPreset,
 		onModeChange,
+		memoryMode,
+		onMemoryModeChange,
 		designSubmit: onDesignSubmit,
 		onAddProvider,
 		attachApiRef,
@@ -3372,6 +3392,9 @@ export function ChatView({
 		? {
 				working: snap?.working ?? false,
 				contextUsage: (snap?.projections?.get("contextUsage") as ContextUsageProjection | undefined) ?? null,
+				// Goal/plan switches are pushed (the daemon samples them after the
+				// RPC that writes them), so the badges never wait on a timer.
+				sessionMode: (snap?.projections?.get("sessionMode") as SessionModeProjection | undefined) ?? null,
 				entries: snap?.entries ?? [],
 				companionMood: companionMoodFromSession({
 					working: snap?.working ?? false,
@@ -4298,6 +4321,7 @@ export function ChatView({
 										tool={a.tool}
 										prompt={a.prompt}
 										onDecide={onDecideApproval}
+										onAllowForSession={onAllowApprovalForSession}
 									/>
 								))}
 								{secretRequests.map(request => (
@@ -4305,6 +4329,7 @@ export function ChatView({
 										key={request.requestId}
 										request={request}
 										onAnswer={answerSecret}
+										onOpenVault={onOpenSettingsSection ? () => onOpenSettingsSection("secrets") : undefined}
 										onSettled={requestId => {
 											answeredSecretRequestsRef.current.delete(requestId);
 											setSecretRequests(current => current.filter(item => item.requestId !== requestId));

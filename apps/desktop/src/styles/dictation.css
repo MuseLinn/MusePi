@@ -114,6 +114,18 @@ body {
 	text-overflow: ellipsis;
 }
 
+.hud-sub.hud-sub--transcript {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	white-space: normal;
+	line-height: 1.4;
+}
+
+.hud-inner:has(.hud-sub--transcript) {
+	align-items: flex-start;
+}
+
 .hud-progress {
 	height: 2px;
 	margin-top: 3px;

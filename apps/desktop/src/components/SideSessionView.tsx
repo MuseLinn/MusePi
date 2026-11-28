@@ -207,6 +207,21 @@ function SideSessionBody({
 			.catch(() => {});
 	};
 
+	/** Same scope as the main chat: this session, this tool, until reload. */
+	const allowForSession = (requestId: string, tool: string, note?: string): void => {
+		if (!rpc) return;
+		const trimmed = note?.trim();
+		void rpc
+			.request("tool.allowForSession", {
+				sessionId,
+				requestId,
+				tool,
+				...(trimmed ? { note: trimmed } : {}),
+			})
+			.then(() => store.dismissApproval(requestId))
+			.catch(() => {});
+	};
+
 	const answer = (ask: AskRequest, value: AskAnswer): void => {
 		if (!rpc) return;
 		setAsks(previous => previous.filter(item => item.requestId !== ask.requestId));
@@ -320,6 +335,7 @@ function SideSessionBody({
 							tool={approval.tool}
 							prompt={approval.prompt}
 							onDecide={decide}
+							onAllowForSession={allowForSession}
 						/>
 					))}
 					{asks.map(ask => (

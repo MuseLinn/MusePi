@@ -174,7 +174,7 @@ daemon RPC:
 语义:状态三色点 绿 active / 灰 disabled / 橙 shadowed(详情显 shadowedBy)。provider 关闭后其条目从列表消失(loadCapability 层行为,与 TUI 同源,不是 bug)。内置判定 provider native|omp-managed|builtin-defaults。
 
 - **组件配置态与生效态**：`PluginComponentDesc.enabled` 只表示组件不在自己的黑名单中。详情弹层仅在 `item.state === "active" && !item.loadError && component.enabled` 时显示绿色/开启；父插件停用后保留组件选择，但开关不可操作并显示继承停用原因，不清空黑名单。
-- **profile/bundle 组合**：`bundles.composition` 同时返回组合层/行和 `availableBundles`，已选但缺失的包也在内。`bundles.setEnabled{name,enabled}` 串行写入当前 profile 的 `musepi.profile.bundles`，保留其他清单字段，DSH profile 字段直接忽略；启用要求包已安装且 `dsh.bundle.patch` 可读，缺失的已选项仍可停用。`bundles.rows.setEnabled` 仍把行覆盖写入 `cordis.patch.yml`。读取组合不创建文件。普通插件启停仍归 runtime lock。同一组合中的 Agent preset 声明按文件 > profile > 扩展的顺序进入 `modes.list` 与 SDK；`modes.getDefault`/`modes.setDefault` 读写 `agent-preset-registry.config.selectedDefault`，出现首条消息后拒绝切换 preset。
+- **profile/bundle 组合**：`bundles.composition` 同时返回组合层/行和 `availableBundles`，已选但缺失的包也在内。`bundles.setEnabled{name,enabled}` 串行写入当前 profile 的 `musepi.profile.bundles`，保留其他清单字段，其他 profile 字段直接忽略；启用要求包已安装且 `dsh.bundle.patch` 可读，缺失的已选项仍可停用。`bundles.rows.setEnabled` 仍把行覆盖写入 `cordis.patch.yml`。读取组合不创建文件。普通插件启停仍归 runtime lock。同一组合中的 Agent preset 声明按文件 > profile > 扩展的顺序进入 `presets.list` 与 SDK；`presets.getDefault`/`presets.setDefault` 读写 `agent-preset-registry.config.selectedDefault`，出现首条消息后拒绝切换 preset。
 - **卡片、详情与设备检测**：普通包和模块行共用 `PluginHorizontalCard`：左侧图标，中间垂直排列标题、说明和标签，右侧开关或其他操作。清单中字面值 `experimental: true` 会传到两类卡片并显示本地化「实验性」标签。详情页只展示已声明组件和配置，不再附加通用组件说明。语音包详情与设置「语音」共用 `VoiceInputDevicePicker`；所属界面处于活动状态时枚举设备、监听热插拔、打开所选麦克风并显示真实 RMS 电平，不需要独立检测按钮。关闭或隐藏界面会停止音轨并关闭音频上下文。
 - **市场详情与持久化**：`marketplace.detail {name,marketplace}` 返回卡片字段以及 `displayName`、`longDescription`、`capabilities` 和按名称排序的技能 frontmatter。`MarketplaceManager.getPluginDetail` 与安装共用 `#preparePluginSource`；首次读取生成常规 marketplace 克隆，后续读取复用，不安装或启用插件。`MarketplaceListEntry.enabled` 反映活动安装状态。详情页通过 `plugins.setEnabled` 启停，保留安装/移除/升级确认，并从 `musepi-gui-marketplace-detail-v1` 恢复打开的详情；`musepi-gui-marketplace-view-v1` 保存视图、搜索词和分类。渲染端只保存插件 id 和界面偏好，源码字节由 daemon 缓存持有。
 - **插件即时生效**：安装、卸载、市场升级与包启停会把受影响入口路径交给每个已打开会话，改动不必等新会话才可见。`PluginInstallDialog` 只订阅本次所装包的 `plugins.apply.state`，在能力摘要下显示一行：已生效会话数、回合结束后生效的会话数，或失败数。流式会话报 deferred，这是时机事实而非错误；没有任何会话需要改动时不发事件。
@@ -182,7 +182,7 @@ daemon RPC:
 - **插件页面**：设置里的插件页是超集。四张统计卡（会话 / 全局 / 实验性 / 已安装）概括库存并兼任筛选——点击已选中的卡片即清除筛选，预设选择单独一行标明会话口径。下方管理列表是多卡片网格（内置插件配置 / 实验性插件 / 已安装），带开关、配置与详情。能力中心以紧凑列表显示同一套管理分组，不带概览。单个「添加插件」菜单承载三条路径：市场、spec 安装、让 Agent 创建插件（把欢迎页预设切到 Creator，不创建会话也不发消息）。`enabledInPresets` 仍只是每个条目的「启用于」事实。
 - **Curated 与 Cordis 图标**：两个内置目录按插件版本固定远程 logo URL。`third-party-cordis.ts` 读取 `.codex-plugin/plugin.json` 的 `interface.logo`，仅接受缓存内已存在的路径，并把对应 `file://` URI 写为 `musepi.icon`。`MarketplaceCard` 以 `alt=""` 和 `loading="lazy"` 渲染 http(s)/file 图片；命名图标、emoji 与加载失败仍由 `resolveCardIcon` 回退。
 - **外部子 Agent 配置检测**：五个实验性外部产品包各自通过 `ext.call` 命名空间注册 `probeExecutable`。`PluginManifestSections` 只传当前草稿值，不额外持久化；共享 daemon 探针按调用方 cwd 解析 PATH 或显式路径，并以 5 秒超时运行 `--version`。成功返回 `{ available:true, path, version }`；路径缺失与进程失败保持明确状态，诊断限制为 400 字符。`ext.call` 桥接使用 `item.path`（入口文件），`extensions.setConfig` 则保留 `item.id`，两种身份不可混用。渲染端在详情挂载、路径失焦和手动重检时执行，丢弃过期响应，并在失焦时校验环境变量 JSON。探针不证明原生模型 id、凭据或后续任务可用。
-- **Creator 快捷创建载荷**：设置「预设」只通过 `createAndSend(text, "creator")` 发送去除首尾空白的自然语言需求。Creator 预设的 system prompt 持有操作流程：先用 `modes.save` 保存完整定义，再按已落盘 id 调用 `modes.validate`，修复失败后才可报告完成。操作指令不再拼到可见用户消息后。
+- **Creator 快捷创建载荷**：设置「预设」只通过 `createAndSend(text, "creator")` 发送去除首尾空白的自然语言需求。Creator 预设的 system prompt 持有操作流程：先用 `presets.save` 保存完整定义，再按已落盘 id 调用 `presets.validate`，修复失败后才可报告完成。操作指令不再拼到可见用户消息后。
 
 ## 2b. 连接器设置页(2026-11-08)
 
@@ -506,7 +506,7 @@ daemon RPC:
 - 空 query 保持目录序(裸 `/` 列表不重排);非匹配项沉底保序(skill: 查询的幸存者不被丢弃);
 - 纯函数 + 单测 `lib/slash-rank.test.ts`(tier/GUI 决胜/稳定序/沉底)。
 
-## 14. 轨迹 Overview 时间轴 + 选择检视(2026-08-21,DSH Trajectory 吸收)
+## 14. 轨迹 Overview 时间轴 + 选择检视(2026-08-21)
 
 设计规范见 `gui-design.md` §1(轨迹时间轴与检视)。此处记数据契约与坑。
 
@@ -526,7 +526,7 @@ daemon RPC:
 
 - 拖拽区间:**pointer capture** + 位移 ≥3px 才提交;单击段 = 选中该整轮、单击空白 = 清除;`msAtClientX` 经 `getBoundingClientRect` 反算,零 re-render 依赖。
 - Esc 键:**先清区间、再清选中**(`window` keydown,依赖 [range, selectedId]——与模态键盘契约同序)。
-- 聚焦 = **置灰不裁剪**(`.traj-event--dim` 0.35 + saturate .6),DSH 同款"聚焦而非过滤"。
+- 聚焦 = **置灰不裁剪**(`.traj-event--dim` 0.35 + saturate .6)。
 - 地图数据增长不会强制重新 fit:仅初次适配、显式重置和真正切换横/纵方向会触发 fit。Overview 轮段、地图轮卡、可跳转事件行和独立分支折叠按钮都把单击操作暴露给 Enter/Space,并带可见焦点样式。
 
 ### 坑
@@ -580,7 +580,7 @@ daemon RPC:
 **流式 markdown 时机**(答「是不是结束后才渲染」——**不是**):
 - `Markdown.tsx` `renderStreamingMarkdown`:流式时 head **随流增长**——每帧把「刚刚成立」的平衡 `\n\n` 块提升为 markdown(段落、列表、以及围栏一闭合即成的代码块),内容是边到边成形;**最后一个**平衡边界之后仍是 RAW TEXT(逐字单次入场动画——切点只能停在平衡边界上正因如此,未闭合围栏保持字面量同理)。`streaming:false` 时只把尾块重解析为真 markdown(复用 head 块,避免整条 `md.parse` 的「卡一下才都渲染」)。切点前移由尾段 DOM pass 处理(清空并重挂,已显示字符不会重播)。
 - 思考块按句过 `Markdown`(`tr-think-sentence--live` 入场)。
-- DSH(`deepseek-harness`)同款增量:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
+- 增量渲染:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
 
 ## 17. OTA 更新渠道 + 三合一按钮 run 级 working 语义（2026-08-22）
 
@@ -730,11 +730,13 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ### 两级壳层接线（2026-11-08）
 
-`ScheduledTasksPanel` 与 `CapabilitySidePanel` 由 `app.tsx` 挂在 `.gui-side-keeper` 内、与 `SessionSidebar` 并列。三个面板始终挂载，keeper 上的 `data-panel` 经 `gui-side-panel.css` 选中生效的那一个（**绝不切 `display`**，否则 220ms 折叠会丢），三者状态都不丢失。`computeSettingsShellState` 接收 `scheduledPanelActive` 与 `capabilityPanelActive`，任一目的地激活的整个期间（含 150ms 离场帧）保持 keeper 可见；设置仍隐藏 keeper 并挂出 `.gui-settings-nav-slot`。rail 的折叠控件、`GuiHeader.panelAvailable` 与侧栏拖拽把手把两个二级面板与首页会话列表同等对待，看板 / PR 仍是单列表面。
+`ScheduledTasksPanel` 与 `CapabilitySidePanel` 由 `app.tsx` 挂在 `.gui-side-keeper` 内、与 `SessionSidebar` 并列。三个面板始终挂载，keeper 上的 `data-panel` 经 `gui-side-panel.css` 选中生效的那一个（**绝不切 `display`**，否则折叠会丢），三者状态都不丢失。`computeSettingsShellState` 接收 `scheduledPanelActive` 与 `capabilityPanelActive`，任一目的地激活的整个期间（含 150ms 离场帧）保持 keeper 可见；设置仍隐藏 keeper 并挂出 `.gui-settings-nav-slot`。`SidebarToggleButton` 在折叠前后始终挂载于同一测量矩形；`GuiHeader.panelAvailable` 只保留头部 spacer 规则，侧栏拖拽把手把两个二级面板与首页会话列表同等对待。看板 / PR 仍是单列表面。缩放握柄是 keeper 的子节点，以 `100% + gutter / 2` 居中于卡片接缝，垂直盒跟随面板，并只在面板停靠时显示；它的 `role="separator"` 通过共享所有者样式退出窗口拖拽区。
 
 页面与面板是两个独立 React 子树：`lib/scheduled-task-nav.ts` 把一份 `TaskNavSnapshot`（id/name/enabled/cwd/lastStatus 及 selectedId/view/busy）经 `useSyncExternalStore` 从 `ScheduledTasksPage` 送到面板，面板再用一条 `TaskNavAction` 通道（`select` / `new`）回传。所有 `cron.*` 变更与完整 `CronTask`、运行历史仍归页面所有；页面卸载时 `clearTaskNav()` 防止下次进入闪出旧行。`ScheduledTasksPage` 只渲染详情一列——页面内部的工作区列在空态会消失，也不是 rail 的面板槽。`test/scheduled-panel.test.tsx` 同时挂载两个子树，验证真实桥接链路。
 
-`.gui-side-keeper` 上的 `data-panel` 是「哪个已挂载面板绘制」的唯一权威(`home` / `scheduled` / `capability` / 缺省):`lib/rail-peek.ts`(`resolveSidebarPanel`)解析 docked 目的地,或收起时只解析被悬停 rail 按钮拥有的那个面板。`AppRail` 把 hover 处理挂在声明了 `panelId` 的目的地按钮上,绝不挂在 `<nav>` 上,因此 rail 空白带不浮任何东西,任务中心与能力中心各浮出自己的面板。每个非首页面板自带槽位 class(`.gui-scheduled-slot` / `.gui-capability-slot`),首页选择器据此排除它们;`gui-side-panel.css` 持有共用的二级左栏规范、「默认隐藏」规则与 `data-peek` 下的浮层几何。浮层内的点击是提交手势:`app.tsx` 在 keeper 的捕获阶段找到该面板所属目的地并打开它、展开侧栏;`lib/scheduled-task-nav.ts` / `lib/capability-nav.ts` 保留最后一次未被订阅的动作,150ms 换页期间点的行在页面挂载后仍会打开对应任务/标签,而实时派发不会留下残留动作。自带滚动的面板体(`files`)挂在羽化滚动容器之外:FilePane 的 `height:100%` 根节点放进带内边距的 `overflow-y-auto` 会溢出,在文件列表自己的滚动条旁再画一条。
+`.gui-side-keeper` 上的 `data-panel` 是「哪个已挂载面板绘制」的唯一权威（`home` / `scheduled` / `capability` / 缺省）：`lib/rail-peek.ts`（`resolveSidebarPanel`）解析 docked 目的地，收起时只解析悬停入口对应的面板。`AppRail` 把 hover 挂在声明了 `panelId` 的目的地按钮上，绝不挂在 `<nav>` 上；`SidebarToggleButton` 接收停靠面板的 `togglePanelId`，持有随目的地变化的紧凑 `MenuPopup`，提供 140ms 指针宽限与 Escape 还焦；按钮测量矩形只用于 `morphSurfaceClip` inset，不再决定 rail 面板位置。首页列出最近会话，任务与能力菜单读取和完整面板相同的导航快照，并发出相同的 select / new / add 动作。选择任意小菜单行或主操作只关闭菜单，不展开面板。rail 打开的浮层内点击提交目的地并展开侧栏。`lib/scheduled-task-nav.ts` / `lib/capability-nav.ts` 保留最后一次未被订阅的动作，150ms 换页期间点的行在页面挂载后仍会打开对应任务/标签，而实时派发不会留下残留动作。自带滚动的面板体（`files`）挂在羽化滚动容器之外：FilePane 的 `height:100%` 根节点放进带内边距的 `overflow-y-auto` 会溢出，在文件列表自己的滚动条旁再画一条。每个非首页面板自带槽位 class（`.gui-scheduled-slot` / `.gui-capability-slot`），首页选择器据此排除它们；`gui-side-panel.css` 持有共用的二级左栏规范、「默认隐藏」规则、`data-peek` 浮层几何与两条 clip-path 关键帧。`morphSurfaceClip` 收起时读取旧的可见面板矩形，展开时读取提交后的新矩形；捕获期间关闭面板自己的宽度 transition，并用面板级序号和共享类名引用计数保护快速连点时的清理。减少动效或不支持 View Transition 时直接提交状态。
+
+`session/memory-mode.ts` 持有 persistent / incognito / temporary 策略。`SessionHeader.memoryMode` 通过普通 JSONL 头持久化；`createAgentSession` 在记忆启动前播种，daemon `session.create` 把同一值写入快照头。`SessionMemory` 对临时会话跳过后端启动，对隐身会话跳过文件后端刷新；SDK 提示词装配与逐轮召回对临时会话不返回记忆上下文。工具装配在隐身时排除写入工具、临时时排除全部记忆工具；运行时 save / clear / enqueue 与 Hindsight / Mnemopi 转录保留执行同一守卫。隐身退出不 consolidation 当前转录。`GoalService` 对两种非普通模式拒绝普通与引导目标创建。桌面 `MemoryModeOptions` 由侧栏 split 菜单和空态 chip 共用；`ChatView` 把下一次新建选择传给 HeroComposer，`createSession` 随首条消息提交。契约：`src/session/memory-mode.test.ts`、`test/sidebar-toggle-button.test.tsx`、`test/memory-mode-picker.test.tsx`。
 
 面板本身是 `plugins/scheduled-panel/` 与 `plugins/capability-panel/` 贡献的 Cordis 槽位 `sidebar.panel.scheduled` / `sidebar.panel.capability`。`app.tsx` 用 `selectSidebarPanelComponent` 分别选中,注册表未就绪、插件停用或编译失败时挂载同一份内置组件。前缀声明在 `packages/collab-proto/src/extension-slots.ts`;`EXTENSION_HOST_MODULES` 把 `lib/scheduled-task-nav` 绑定为 `task-nav`、`lib/capability-nav` 绑定为 `capability-nav`,`lib/host-modules.ts` 发布两份宿主实例,编译版子树不会带着第二份 nav store。契约测试:`test/app-rail-peek.test.tsx`、`test/rail-peek.test.ts`、`test/scheduled-panel-plugin.test.tsx`、`test/capability-panel-plugin.test.tsx`。
 
@@ -888,7 +890,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 28c. 原生滚动条 + 皮肤预设
 
-- 决定：[ADR 0008](../adr/0008-native-scrollbars.md)。
+- 决定：[ADR 0008](adr/0008-native-scrollbars.md)。
 - **滚动条回到原生**(`packages/client-core/src/styles/base.css`):尺寸、拖拽、悬停、键盘、减少动效与系统无障碍面都交给引擎。`gui-base.css` 不再全局隐藏系统滚动条;`FloatingScrollbar` 的轨池、探活、意图闸、闲时幽灵、拖拽反解与 `stackZ` 随 `ui-theme/rail.tsx`、`rail.css`、`test/ui-theme-rail.test.tsx` 一并删除。
 - **两条渲染路径互斥**。非 `auto` 的 `scrollbar-width`/`scrollbar-color` 会让 Chromium/Safari 丢弃该元素上所有 `::-webkit-scrollbar*` 规则(含 hover 拇指),所以标准属性放在 `@supports not selector(::-webkit-scrollbar)` 里,伪元素规则留在外面。轨道保持透明,只有拇指带色。
 - **调色板 → tint 间接层**(`base.css`):`--mp-scrollbar-bg-l1`/`-l2` 与 hover 对解析成一个在 `body, body *` 上重新声明的 tint —— 继承值携带的是在 `body` 已替换好的颜色,后代无法重绑。表面通过把 `--mp-scrollbar-tint`/`-hover` 重绑到 l2 对来选择海拔:设置对话框、连接器/设备/导入对话框、提醒列表、音乐队列、OBO 表单、操作提示、BTW 正文与扩展详情。
@@ -941,16 +943,9 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **含糊的 issue 先分诊、不臆测**：不少条目开头只是一句话现象（#7 最初报「第一条消息就 429」，实为 Cloud Code Assist 网关把开场的 `<system-conventions>` XML 块判成滥用；上面那条中文吞字也是同一形态）。先记录假设、补齐能区分根因的事实，再动手——没复现就补补丁，正是把回归带进版本的常见方式。
 - **文件编辑器要点**：预览体必须保持子块所依赖的 flex 列布局（`gui-chrome.css` 的 `.gui-filepane-preview-body` → `display:flex; flex-direction:column; flex:1; min-height:0`），否则自动撑高的 textarea 会把保存工具栏顶出面板；保存按钮还必须接 `FilePane.tsx` 里真实的 `saving` 状态，而不是常量 `false`。
 
-## 35. 语音输入第二轮：中文简繁归一、单相位听写状态机、输入框内波形反馈（2026-09-20）
+## 35. 语音输入第二轮
 
-- **Whisper 中文输出繁体——解码后用 OpenCC 归一**（`packages/coding-agent/src/stt/zh-hans.ts` + `asr-worker.ts`）：内置的 `onnx-community/whisper-small` q8 对 `zh` 偏向繁体（其中文训练语料偏台湾），而 transformers.js 与 sherpa-onnx 都没有 decoder prompt 可偏置文字方向，事后转换是唯一可靠修法。`normalizeChineseScript(text, language)` **仅在 language 钉住 `zh*` 时**执行 OpenCC `t→cn`（zh-CN 界面会自动播种 `language:"zh"`；TW/HK 用户用 auto 可保留繁体），懒加载 `opencc-js`（约 1 MB 词典，首次中文转写时才加载），加载失败降级为原文。调用点包住 `asr-worker.ts` 两条引擎路径的 `decodeSegment` 返回（批量与流式共用同一收敛点）。单测：`packages/coding-agent/test/stt-zh-hans.test.ts`（转换、简体/英文/未钉语言透传、空串安全）。
-- **双布尔失步——听写改单相位状态机**（`components/composer/use-dictation.ts`）：旧的两个 composer 各自维护 `dictating` + `transcribing` 两个布尔，点停止时两个 flag 同时清掉、而 transcribe RPC 这时才开始——整个转录等待期渲染成 idle（「按钮的反馈先结束、文字才凭空出现」）。`useDictation` 建模单相位 `idle → recording → transcribing → idle`；recording 中 toggle 乐观进入 transcribing，而 transcribing 中再 toggle 会真正调 `cancelActiveDictation()`——修掉旧代码「只清 UI、在途转录结果照样落进输入框」的泄漏。Esc 在任意非 idle 相位取消（document 捕获阶段），卸载同样取消，`optsRef` latest-ref 模式让回调始终读到最新 props 而不重建会话。`Composer.tsx` 与 `WelcomeComposer.tsx` 消费同一 hook（重复的 flag 逻辑已删除）。
-- **麦克风按钮只承动效，文案移进输入框**（`composer/action-buttons.tsx`）：`VoiceStatusStrip` 位于 textarea 上方，使用 30px 液态玻璃状态图标、明确阶段、录音计时和弹性临时文本区。录音态显示 13 根真实 RMS 驱动的波形，转写态改为品牌色处理环并移除波形；Esc 键帽保留取消提示。容器宽度不足时依次隐藏辅助波形和取消文字；减少动态效果时停止波形过渡与处理环旋转，保留静态等价信息。样式在 `gui-composer.css`，反馈经 `role="status"` / `aria-live="polite"` 播报。
-- **流式与机主门控共用 daemon 前端**（`lib/voice.ts`、`voice/frontend/*`、`stt/stt-controller.ts`）：桌面 PCM 块经 `voice.frontendStream*` 进入前端；`partial` 只更新预览，接受或灰区分段才插入文本。任一灰区分段都强制审阅并禁止自动提交，拒绝的音频不会进入 ASR。`strict` 只接受已确认语音；`off` 保持原 ASR 与提交触发行为。ASR 回调按分段 id 绑定，待推理队列最多四段，取消后迟到事件失效。TUI 在 `off` 下沿用原 ASR 流，其余模式共用前端。
-- **前端性能与降噪回退**：每段只取前三秒计算机主嵌入，完整音频仍交给 ASR。可选 DPDFNet 仅在估计峰值/噪声底比值低于 6 时运行，高信噪比语音保持原样，避免清晰语音被降噪损伤。真实 win32/x64 验收（18 个逻辑 CPU）记录前端 RTF 0.118、尾部 P95 488ms、干净语音相对 CER/WER 均为 0、旁人自动提交为 0；日志不含转写或声纹向量。
-- **声纹录入与本地模型生命周期**：`voice.speaker*` RPC 在当前 agent 目录只保存归一化向量与阈值，不保存原始录入音频。四段有效录入加独立验证后原子提交档案，取消或失败保留旧档案。渲染端录入弹窗建模 `idle / preparing / recording / processing / accepted / error / complete`，通过 `data-state` 发布状态；单段通过态保留 360ms，计时器会清理。失败只重试当前段，完成后恢复完成主操作。`stt.modelDelete` 与 `tts.modelDelete` 拒绝非法键和下载中的删除，先停止所属 worker，再只删除注册表解析出的缓存目录。设置页使用精确的 `Speech` 分组，缓存行提供确认删除，且当前页面不会立即自动重新下载。
-- **默认 ASR 工厂保留调用接收者**：`voice/frontend/client.ts` 必须以方法形式调用 `sttClient.startStream(...)`。抽离方法会丢失客户端实例，使输入框开始听写时私有 worker 初始化失败。
-- **MeloTTS 下载完整注册清单**：`ensureSherpaTtsFiles` 包含 `spec.ruleFsts` 声明的规则 FST，而非只下载模型和词典。`tts.modelDownload` 返回 `false` 时透传 worker 与下载诊断；仅在没有诊断时使用通用失败消息。
+daemon 语音前端统一持有流式断句、说话人闸门与定稿句文本；桌面全局听写在同一会话上增加内部与外部呈现。完整生命周期与验证记录见 [语音输入 ADR](adr/2026-09-20-voice-input-round-two.md)。
 
 ## 36. 画板：点击 chip 编辑的是 A0，而不是 A1 的粘贴副本（2026-09-20）
 
@@ -1080,6 +1075,8 @@ timestamp** 变化时跳转，而不是随 query 变化，因此打字时不会�
 `useSyncExternalStore`），对齐 `lib/update-ux.ts`。桌面 `lib/action-toast.ts` 只做
 re-export，因此扩展宿主模块与既有 import 保持同一个实例。它**刻意不是**快照字段：
 store 必须同步作答，而且桌面角落与 guest 条带读的是同一份列表。
+
+`notification-history.ts` 是独立的内存历史 store。`pushActionToast` 在更新可见栈之后记录每条 toast，因此所有调用方共用同一写入路径。条目只含 `{ id, kind, title?, message, createdAt, read }`，最新在前；id 不重复，超过 100 条淘汰最旧项，回调和 action 文案都不进入历史。对外接口为 `listNotificationHistory`、`unreadNotificationHistoryCount`、`markAllNotificationHistoryRead`、`clearNotificationHistory` 与 `subscribeNotificationHistory`。桌面 `NotificationCenter` 通过 `useSyncExternalStore` 订阅，在头部右侧动作组渲染铃铛与 `99+` 徽标，并复用 `MenuPopup` 的视口适配与关闭行为。打开面板即全部已读，相对时间使用当前 locale，「全部清除」后面板保留空状态。应用重启不保留历史。契约：`src/lib/notification-history.test.ts` 与 `apps/desktop/test/notification-center.test.tsx`。
 
 **归档是 localStorage 列表编辑**（`client-core/session-archive.ts`：`archiveSession` /
 `unarchiveSession` 是纯列表变换），所以反向操作零成本 —— 无需 RPC 回滚，无需确认对话框。
@@ -1247,29 +1244,7 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
 
 ## 50a. 会话投影：host 计算的读模型
 
-**契约**：需要日志派生状态的界面（上下文占用、花费、计数）读取 host 计算的投影，
-既不轮询 RPC，也不在客户端折叠域事件。
-
-- **单元**（`packages/coding-agent/src/session/session-projections.ts`）：`key`、
-  `init(seed)`、纯函数 `apply(state, event)`、`view(state)`、可选 `viewEquals`，
-  以及由 `sampleOn` 门槛控制的可选 `sample(state, source)`。无关事件必须返回同一
-  state 引用。
-- **驱动**：`SessionProjectionRegistry.applyEvent` 对每个已提交 wire 事件把全部单元
-  折叠一次；只有 view 变化才产出 change。`sampleOn` 是边界集合（`turn_end`、
-  `agent_end`、`auto_compaction_end`、`session_leaf_moved`、`model_changed`），
-  单元只在这些边界读取实时锚定统计，绝不在流式 tick 上采样。
-- **载体**：baseline（`SessionProjectionSnapshot`）随 `session.resume` /
-  `session.subscribe` 下发；之后每个变化走 `kind:"projection"` 流信封，携带整值
-  （`{ changes: [{ key, value }] }`）。
-- **客户端**：`GuiSessionStore` 在 `GuiSessionState.projections` 保存
-  `ReadonlyMap<string, unknown>`；`useSessionProjection(store, key)` 是按键读取器，
-  `undefined` 表示该 key 尚未落地。
-- **取代关系**：`contextUsage` 现在走推送；更宽的 `/context` 字段（阈值、
-  snapcompact、breakdown）仍是用户显式打开时的一次性 RPC。
-
-**验证**：`packages/coding-agent/test/session-projections.test.ts`（折叠、重试替换、
-边界采样）、`apps/desktop/test/session-projection-store.test.tsx`（resume 播种、
-推送变更、按键重渲染）。
+`SessionProjectionService` 统一持有投影注册、隔离与发布；goal、plan 和上下文用量各自注册单元，并在没有 journal 事件的写入后主动发布。完整归属与投递契约见 [会话投影 ADR](adr/2026-11-27-session-projections.md)。
 
 ## 51. HTML 卡片答案回读（2026-10-18）
 
@@ -1405,12 +1380,13 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 - **引用评论**:`SelectionToolbar` 的 `onQuote` 增加第 4 个 `comment` 参数;浮层内输入后由 `ChatView.appendQuote` 传入 `createChatQuoteContext`,引用卡继续用 `withDisplayContextComment` 编辑,发送时 `composeDisplayContextPrompt` 把评论拼进引用正文。文件/PDF/Office 选区的评论同样经 `FilePane.appendFileQuote` 写入 `createFileQuoteContext`。
 - **HTML 本地预览**:`lib/file-workspace.ts` 的 `panelBrowserPreviewUrl()` 生成 `musepi-file://localhost/<path>`;主进程 `normalizeAddressBarUrl` 与协议处理器统一补/去 Windows 盘符前的斜杠,`pathToFileURL` 才不会拼成 `file:///D:/D:/...`。`will-navigate` 允许 `musepi-file:` 同方案导航,页面内相对链接可继续跳转;FilePane 的 HTML 预览头部按钮经 `musepi-open-url` 在受管浏览器中打开。
 - **标注面板**:`annotation/overlay.ts` 在 shadow DOM 内渲染结构化卡片，分区数据直接取自 `AnnotationElementTarget`（tag/classes、selector/path/bounds/center、role/aria/disabled 等语义、data-*、pageUrl/viewport/DPR）；`AnnotationPayload.includeScreenshot` 缺省为 true，关闭时 `attach.ts` 不附截图且 prompt 标记 `Screenshot: not attached`，`runAnnotationSession` 也不会再捕获。网页右键「标注」通过 `elementAt` 预选指针下的元素，直接打开该卡；引用/标注卡为非模态，打开期间聊天与页面可继续滚动。未传 panel 文案的宿主自动回退旧紧凑输入条。
-- **插件分区**:会话信息卡的插件分区是唯一的插件入口——分区头给出运行数/总数,展开后原地列出逐个插件的运行/禁用状态。原先另有一条打开浮层的状态条,与这里的注册表条目重复,已移除。插件状态是 profile 级全局状态,与 DSH 的 `ui-plugin-manager` 一致,不做会话级启停。
+- **插件分区**:会话信息卡的插件分区是唯一的插件入口——分区头给出运行数/总数,展开后原地列出逐个插件的运行/禁用状态。原先另有一条打开浮层的状态条,与这里的注册表条目重复,已移除。插件状态是 profile 级全局状态,不做会话级启停。
 - **AI 重命名**:`retitleSessionById` 成功后先用返回标题写 `session.tree` 的目标行与 `sessionMeta.title`，再后台 `refreshSessions` 对账；失败按 `empty/generation-failed/offline/timeout/unsupported` 映射为不同提示，进行中显示状态条并禁用菜单。
 - **连接器安装 RPC**:`mcp.servers.list/add/remove` 读写用户级 `<agentDir>/mcp.json`，复用 `mcp/config-writer.ts` 的锁与原子写；list 只返回名字/传输/URL/命令与 auth 类型，绝不返回 headers。token 只落在用户本机配置，不进仓库。安装会就地 reconcile live manager：移除或变更的服务器断开、新服务器连接，该工作目录下所有 live 会话收到刷新后的 MCP 工具集，无需重启 daemon。
 - **HTML 卡片标注与宽表**:`widgets/html.tsx` 复用 `annotationOverlayLabels()`，会话内 HTML 卡片与浏览器页面走同一套结构化标注 panel；表格加宽按内容 hash 写入 `musepi-gui-wide-tables`，重新挂载后恢复，超过 200 条裁剪。
 - **MCP OAuth 服务**:`McpOAuthService` 提供 `mcp.oauth.start/status/cancel`，复用 `MCPOAuthFlow`（回调服务器/PKCE/DCR）、`analyzeAuthError`/`discoverOAuthEndpoints` 与 `mcpOAuthCredentialId`；成功后把 credential 写入 `modelRegistry.authStorage`，`reloadMcpConnectors()` 先 `authStorage.reload()` 再 reconcile，多个 workspace 的 manager 才能看到新 grant。只支持浏览器回调，不提供手工 code 输入；5 分钟未回调按错误结束。
 - **MCP 授权卡片**:工具调用收到 MCP 的 `401` 挑战后停在 `MCPManager.reconnectServer`。按 workspace 共享的 manager 通过 auth handler 向 `McpOAuthService` 要一条流程，并只把 `mcp-auth-request`（服务器、flow、授权 URL）推给发起会话——session id 来自工具上下文，同 workspace 的其他标签页拿不到这个 URL。`mcp-auth-request-end` 携带 `success | error | cancelled`。`ChatView` 在输入框上方的 pending 槽位渲染 `McpAuthCard`，位置与审批、ask、密钥卡同属容器决定，卡片本身没有 placement 参数。点授权用系统浏览器打开 URL，grant 落在 daemon 回调上；成功后用新凭证重连并重试那次被暂停的调用，取消走 `mcp.oauth.cancel`，停止本轮会中止流程并清掉卡片。会话 snapshot 带 `pendingMcpAuth`，重连后卡片能恢复。
+- **子代理对话改成推送，不再轮询**：子代理面板原先每 1.2 秒按字节游标读一次子会话的 JSONL（`agents.transcript`），因为只有 progress 与 lifecycle 两种帧会送到 GUI——执行器其实一直在 `TASK_SUBAGENT_EVENT_CHANNEL` 上发出每一帧 assistant 文本、思考块和工具卡，只是到了 daemon 就没有再往下走。现在这条通道以 `agent-event`（`{ agentId, event }`）转发，`SessionScopedEventBus` 会给它打上归属会话，所以一个会话的子代理帧不会漏进另一个会话的流；信封刻意带 `seq: 0`：这些帧不是父会话的 journal 记录，真给它一个 seq 会推进客户端水位，或者引发 catchup/resync 风暴（`global-event` 这个 kind 存在的同一个 P0-1 理由）。`apps/desktop/src/lib/agent-transcripts.ts` 为每个被观察的 agent 维护一个 `MaterializedView`——和主转录同一套投影，因此不需要第二份解析器——由两个不会重复的来源喂入：`fromSnapshot` 恢复历史并原样保留 id，实时帧则以同样的 `role:timestamp` / `toolResult:<id>` 键做 upsert。只有已挂载的视图会保留 agent id，所以一个会话即使 spawn 很多子代理，也不会堆积没人读的投影。剩下的历史读取是一次性播种（带次数上限的重试，刚 spawn 的子代理可能还没有文件），不是轮询。
 - **子代理会话身份（`session.agents` / `agents.transcript`）**：子代理 transcript 有三个 id——文件名（`agents.*` RPC 寻址的 agent id）、`session` 头里的 id（`session.list` 行与 GUI 打开的会话 id）、`session_init.agent`（子代理定义名）。右栏名册改由父会话产物目录的磁盘行（`knownSessions` 的 subagent 行）派生，注册表只补实时 status/activity：一次性子代理跑完即 unregister，纯注册表口径会在用户回头看的时候刚好变空。行上带真实的子会话 id，主名是实例标签（`displayName`），agent 定义名放在 `agentName` 里当类型标签——定义名绝不作为标题，因为同一类型的多个 spawn 共用它。同时过滤 advisor 行以及被打开成主会话的 `Main-*` ref。`session_init` 携带整段 systemPrompt、`agent` 是最后一个字段（生产环境常 >100 KB），因此 agent 名走一次有界、按路径缓存的读取（`session/subagent-agent-name.ts`），而不是列表前缀；`agents.transcript` 在注册表没有 ref 时回退到 `<parentBase>/<agentId>.jsonl`（再按 header id 兜底），已结束子代理的转录因此仍可读。侧栏子会话行标注 agent 名，`agentCount` 按磁盘父子关系统计整份列表——`sessionId` 定向读取的父会话行仍报出子代理数而不是 0（顾问行不计入；`apps/desktop/test/session-list-scope.test.ts`）。
 
 ## 会话导入：身份、标题与工作区都取自源记录（2026-11-18）

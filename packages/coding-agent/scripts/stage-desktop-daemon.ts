@@ -171,7 +171,7 @@ async function stagePlugin(sourceDir: string, destinationDir: string): Promise<v
 		types: undefined,
 		musepi: {
 			...manifest.musepi,
-			extensions: entries.map(entry => `./${javascriptEntry(entry)}`),
+			extensions: entries.map(entry => `./${javascriptEntry(entry).replace(/^\.\//, "")}`),
 			components: Array.isArray(manifest.musepi?.components)
 				? manifest.musepi.components.map((component: unknown) => {
 						if (!component || typeof component !== "object" || Array.isArray(component)) return component;

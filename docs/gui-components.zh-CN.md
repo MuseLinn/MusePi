@@ -89,6 +89,9 @@ scope:
 | `WorkspacePageHeader` | 页面级标题头（图标/标题/描述/动作） | 看板、任务中心、能力中心等页面 |
 | `RightRail` | 右边缘 44px 图标栏 | 右面板的入口；**面板收起时也必须渲染** |
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
+| `SidebarToggleButton` | 常驻左上折叠、随目的地变化的小菜单与 clip 锚点 | `.gui-side-keeper` 内只挂一个按钮；悬停按当前停靠面板显示会话、任务或能力目的地，绝不显示完整面板 |
+| `MemoryModePicker` | 共享 persistent / incognito / temporary 选项与空态 chip | 所有会话记忆模式创建入口复用，不另写文案或隐私规则 |
+| `NotificationCenter` | toast 历史铃铛、未读徽标与浮层 | 桌面头部右侧动作组；历史只读 `notification-history.ts` |
 | `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选。标题行只有一行（「思考强度」+ 当前档位），轨道下方没有任何标签行 |
 | `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；松手与方向键只能落在已声明档位。与思考阶梯共用同一条轨道，只有标题行不同 |
 | `SliderTrack` | 两套阶梯共用的轨道本体 | 由 `components/LadderSlider.tsx` 导出；全仓唯一的轨道标记——新的阶梯只提供标签与标题行，不再画第二条轨道 |
@@ -97,13 +100,9 @@ scope:
 | `MarketplaceDetailDialog` | 插件详情页（版本、描述、技能、底部动作） | `components/MarketplaceDetailDialog.tsx`；样式表在 `styles/gui-marketplace-detail.css` |
 
 **桌面样式表只有一个归属目录：`apps/desktop/src/styles/`。** 那里的每个文件都是 `gui-*` 族的样式表；组件需要样式时从该目录导入（`../styles/gui-<name>.css`），不再自带同级 `.css`。最后一份例外（插件详情样式表）已从 `components/` 迁入，层叠里不再有没有归属的一段。
-| `SecretSettingsSection` | 密钥库设置页 | `settings-sections/secret-settings.tsx`；一张静态状态卡、`密钥 · N` + 添加，随后**只有一块正文**（`form ? 表单 : 空态或行列表`，两者绝不并存）；行用 `gui-agent-card`、控件消费 `--control-*`。**不要**为行添加可用性 chip：`secret.list` 只携带元数据 |
+| `SecretSettingsSection` | 密钥库设置页 | `apps/desktop/src/plugins/ui-secrets/page.tsx`；保护卡的**标题就是状态**（`本机密钥文件` / `口令保护` / `已锁定`），连接器关系作一条副行，`保险库 · N` + 弱化搜索 + 添加，随后**只有一块正文**（`form ? 表单 : 空态或行列表`），正文按状态走 `HeightMorph`。行用 `gui-agent-card`；行第三行说出哪些 MCP server 获了该密钥的授权。`范围` 只读（只有密钥请求卡片能把范围限定到工作区）；`交付方式` 是真正的 `Segmented`——`secret.set` 一直支持 `delivery` |
 
-**滑块视觉契约（`SliderTrack`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都渲染这一个组件，谁也不再自带轨道标记。它画的是紧凑的「内嵌」力道条，而不是表单字段：一条 `--gui-slider-hit`（28px）的命中胶囊，内部凹槽高 `--gui-slider-track`（22px）、上下各内缩 3px，描边用内阴影发丝线而不是 border（轨道的盒子就是指针测量的行程，border 会让指针数学偏移一像素）。它由两层承担：一层不可见、按滑块半径内缩的测量轨道（指针读它的盒子）和一条铺满胶囊、上下各内缩 3px 的可见凹槽——凹槽若只到测量轨道处，就会像一条两头留空的滑轨。档位是落在凹槽**上**的 `--gui-slider-dot-size` 圆点；填充从胶囊左边缘穿过滑块，所以连第一档也在强调色上；滑块是取页面正文墨色的浅色圆盘，悬停与拖动时放大。配色是我们的（`--color-accent` 画轨道与填充；滑块取 `--color-text`，填充内的档位点取不透明的 on-accent 墨色，因为两者都压在强调色上），不是「中性手柄 + 外来蓝」。档位点必须不透明：同样的墨色混到 62% 后，在浅色填充上测得 2.4–3.1:1、深色填充上 3.2–3.4:1，整条带子大部分都低于图形元素 3:1 的下限，填充内的档位会在「已选到这里」的位置上变淡；不透明后浅色 3.7–5.3:1、深色 7.0–8.2:1，每个位置都在下限之上。未到达的档位用 55% 的正文墨色，对凹槽测得浅色 3.2:1、深色 4.1:1，同样在下限之上，又明显弱于已到达的档位，两种状态仍然分得清。由此有两条必须守住的结果：轨道下方**没有标签行**——每一档把名字放在自己圆点的 `title` 上，并配一条加宽的透明悬停带，因为 4px 且 `pointer-events: none` 的圆点根本不可能成为悬停目标；思考阶梯的标题行**只有一行**，分区标签与当前档位并排（选中 Auto 时由 `Auto · <档位>` 取代档位本身），所以数值不会在窄版 Agent 面板里折到标签下面。方向键走的是同一批档位、并和松手走同一条钳制路径，所以模型上限在两条路径上都成立；键盘处理器**故意**只按 `disabled` 拦截，因为顶部档位被上限挡住的阶梯仍然有合法档位，一律拒绝按键会让「正需要解释上限」的那些模型彻底失去键盘操作。设置阶梯共用胶囊、凹槽、圆点和滑块，只有标题行不同：它所在的设置行左侧已经写了设置名，所以数值单独占轨道上方那一行，并保留该行 210px 的宽度。
-
-**滑块拖动契约（`useSliderDrag`，由 `components/LadderSlider.tsx` 导出）。** 两套阶梯都调用这一个 hook，设置阶梯自己不再持有任何指针数学。指针驱动的是**连续的**位置——`--gui-slider-p` 是 `position / last`，从来不是档位序号——所以滑块跟着指针走，而不是在档位之间跳。档位是吸附而不是绑定：最近的**可达**档位就是磁性目标，指针停在两档之间时，数值读数、高亮的档位圆点与 `aria-valuenow`/`aria-valuetext` 都指向这个目标，标签与读屏不会互相矛盾。滑块只在手势结束时落到目标上：松手（或按键步进）恢复 `left` 上的 `--gui-slider-ease` 过渡，档位把滑块吸进去；手势期间 `[data-dragging]` 关掉过渡，滑块不会落后指针。「减弱动效」下过渡被去掉，吸附立即到位、不做动画。滑块从按下的第一帧起就停在指针处——在两档之间按下不会先跳到某一档再回来；没有位移的单击也会落在指针下的档位，因为松手时才解析最后的指针位置。手势期间不写任何值——一次手势只触发一次 `onSettle`，因此设置阶梯不再每个指针事件写一次 `settings.set`，思考阶梯也保持「一次手势一次 RPC」。取消手势不写值，并回到已提交的档位。方向键 / Home / End 仍是逐档步进，但走同一条落位路径，键盘与指针因此共享同一个视觉过渡。模型上限以上的档位在轨道上和提交时一样不可达；指针停在其中时报的是上限档位。
-
-**滑块适用范围。** 该族覆盖两套阶梯与上述两个原生 range。有四处已发布滑块**有意**留在族外，各自属于独立表面：`.gui-sketch-range`（画板笔宽，`gui-composer.css`）、浏览器设备栏的宽高 range（`gui-browser-toolbar.css`）、截图编辑器的描边宽度（`.gui-shot-weight input`，`ScreenshotEditorDialog.tsx`）与 `.tr-ui-range`（`packages/client-core/src/ui-blocks/ui-blocks.css`）；移动端 `VoicePanel` 的语速是第五处。它们可以在各自的 scope 内收敛到该族；在此之前不得手抄族内几何。桌面端语音设置没有滑块——`tts.rate` 是 schema 数值，渲染成滚动数字。
+**滑块契约。** 共享轨道、拖动、可访问性与适用范围见 [gui-slider-spec.md](gui-slider-spec.md)。
 
 ## 共享组件（`packages/client-core/src/components/`）
 

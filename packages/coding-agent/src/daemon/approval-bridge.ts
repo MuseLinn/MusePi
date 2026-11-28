@@ -61,10 +61,14 @@ export interface PendingSecret {
 	requestId: string;
 	name: string;
 	purpose: string;
-	/** `fill` collects a value; `allow` extends an existing entry to `workspace`. */
-	kind: "fill" | "allow";
+	/** `fill` collects a value; `allow` extends scope; `login` collects a sign-in. */
+	kind: "fill" | "allow" | "login";
 	/** Delivery a new save should use. */
 	delivery: "env" | "file";
+	/** For `login`: the site the agent is on. */
+	site?: string;
+	/** Entries the user may reuse instead of retyping a value. */
+	alternatives?: Array<{ name: string; purpose: string; site?: string; username?: string }>;
 	/** Asking session's working directory, in the tool's own form. */
 	workspace?: string;
 	resolve(answer: AgentSecretAnswer): void;
@@ -75,8 +79,10 @@ export function secretRequestPayload(record: PendingSecret): {
 	requestId: string;
 	name: string;
 	purpose: string;
-	kind: "fill" | "allow";
+	kind: "fill" | "allow" | "login";
 	delivery: "env" | "file";
+	site?: string;
+	alternatives?: Array<{ name: string; purpose: string; site?: string; username?: string }>;
 } {
 	return {
 		requestId: record.requestId,
@@ -84,6 +90,8 @@ export function secretRequestPayload(record: PendingSecret): {
 		purpose: record.purpose,
 		kind: record.kind,
 		delivery: record.delivery,
+		...(record.site ? { site: record.site } : {}),
+		...(record.alternatives?.length ? { alternatives: record.alternatives } : {}),
 	};
 }
 
@@ -185,6 +193,13 @@ export interface ApprovalBridge {
 	/** Answer a pending request. Returns false when unknown/already resolved.
 	 *  `note` is the operator's free-text reason. */
 	resolve(requestId: string, approved: boolean, note?: string): boolean;
+	/** Tool names this session has chosen to stop asking about.
+	 *
+	 *  Session-scoped on purpose: "always allow this tool" is a decision about the
+	 *  work in front of the user, not a standing policy — the persistent form of
+	 *  that decision is `tools.approvalMode`, and mixing the two would let one
+	 *  click quietly widen every later session. */
+	allowedTools: Set<string>;
 	/** Observe additions and resolutions of the authoritative pending table. */
 	subscribe(listener: () => void): () => void;
 	/** Active ask requests keyed by requestId. */
@@ -197,7 +212,7 @@ export interface ApprovalBridge {
 	pendingSecrets: Map<string, PendingSecret>;
 	/** Answer a pending secret request. Persistence happens in SecretService
 	 *  before this settlement; the tool only learns which action won. */
-	resolveSecret(requestId: string, action: AgentSecretAnswer["action"]): boolean;
+	resolveSecret(requestId: string, action: AgentSecretAnswer["action"], picked?: string): boolean;
 	/** Active connector requests keyed by requestId. */
 	pendingConnectors: Map<string, PendingConnectorRequest>;
 	/** Answer a pending connector request. The card decides connect-or-decline;
@@ -244,6 +259,8 @@ export function createApprovalBridge(
 	options: ApprovalBridgeOptions = {},
 ): ApprovalBridge {
 	const pending = new Map<string, PendingApproval>();
+	/** Tools allowed for the rest of this session (see `ApprovalBridge`). */
+	const allowedTools = new Set<string>();
 	const pendingAsks = new Map<string, PendingAsk>();
 	const pendingSecrets = new Map<string, PendingSecret>();
 	const pendingConnectors = new Map<string, PendingConnectorRequest>();
@@ -332,9 +349,12 @@ export function createApprovalBridge(
 		widgetAnswers: true,
 		// The approval gate awaits this exact select; any OTHER select (ask
 		// tool questions, plan pickers) routes to the GUI ask card.
-		async select(title, options) {
+		async select(title, options, dialogOptions) {
 			const labels = options.map(o => (typeof o === "string" ? o : (o.label ?? "")));
-			if (!labels.includes("Approve") || !labels.includes("Deny")) {
+			// The caller states intent; the labels are display text and may be in any
+			// language. Sniffing "Approve"/"Deny" made translating them a breaking
+			// change — a translated approval would have arrived as an ordinary ask.
+			if (dialogOptions?.purpose !== "approval") {
 				const requestId = makeAskId();
 				const { promise, resolve } = Promise.withResolvers<string | undefined>();
 				const record: PendingAsk = {
@@ -360,6 +380,13 @@ export function createApprovalBridge(
 				});
 				onAsk(record);
 				return await promise;
+			}
+			// A tool this session already allowed answers without a card. The
+			// decision is still recorded so the transcript shows why it passed.
+			const allowedTool = /^Allow tool: (\S+)/.exec(title)?.[1];
+			if (allowedTool && allowedTools.has(allowedTool)) {
+				rememberApproval(`session-allow-${allowedTool}`, true, "allowed for this session");
+				return "Approve";
 			}
 			const requestId = `daemon-approval-${Date.now()}-${++counter}`;
 			const { promise, resolve } = Promise.withResolvers<{ approved: boolean; note?: string }>();
@@ -475,6 +502,8 @@ export function createApprovalBridge(
 				purpose: request.purpose,
 				kind: request.kind,
 				delivery: request.delivery ?? "env",
+				...(request.site ? { site: request.site } : {}),
+				...(request.alternatives?.length ? { alternatives: request.alternatives } : {}),
 				...(request.workspace ? { workspace: request.workspace } : {}),
 				resolve: answer => {
 					if (!pendingSecrets.has(requestId)) return;
@@ -540,6 +569,7 @@ export function createApprovalBridge(
 	return {
 		uiContext,
 		pending,
+		allowedTools,
 		resolve(requestId, approved, note) {
 			const record = pending.get(requestId);
 			if (!record) return false;
@@ -575,11 +605,11 @@ export function createApprovalBridge(
 			return true;
 		},
 		pendingSecrets,
-		resolveSecret(requestId, action) {
+		resolveSecret(requestId, action, picked) {
 			const record = pendingSecrets.get(requestId);
 			if (!record) return false;
 			clearTimer(requestId);
-			record.resolve({ action });
+			record.resolve({ action, ...(picked ? { picked } : {}) });
 			options.onSecretResolved?.(requestId);
 			rememberSecret(requestId);
 			return true;

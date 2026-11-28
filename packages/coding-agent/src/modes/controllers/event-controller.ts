@@ -25,7 +25,8 @@ import { previewLine, TRUNCATE_LENGTHS } from "../../render/render-utils";
 import { getSymbolTheme, theme } from "../../render/theme/theme";
 import type { AgentSessionEvent } from "../../session/agent-session";
 import { isSilentAbort, readQueueChipText, resolveAbortLabel } from "../../session/messages";
-import { type ApprovalMode, resolveApproval } from "../../tools/approval";
+import { resolveApproval } from "../../tools/approval";
+import { resolveApprovalMode, resolveApprovalPolicies } from "../../tools/approval-mode";
 import { PROPOSE_DEVICE_NAME, writeDeviceDispatch } from "../../tools/resolve";
 import { SpeechEnhancer } from "../../tts/speech-enhancer";
 import { vocalizer } from "../../tts/vocalizer";
@@ -1425,8 +1426,8 @@ export class EventController {
 	#toolWillPromptForApproval(toolName: string, args: unknown): boolean {
 		const tool = this.ctx.viewSession.getToolByName(toolName);
 		if (!tool) return false;
-		const mode = (settings.get("tools.approvalMode") ?? "yolo") as ApprovalMode;
-		const userPolicies = (settings.get("tools.approval") ?? {}) as Record<string, unknown>;
+		const mode = resolveApprovalMode(settings).mode;
+		const userPolicies = resolveApprovalPolicies(settings);
 		return resolveApproval(tool, args, mode, userPolicies).policy === "prompt";
 	}
 

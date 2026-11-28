@@ -4,7 +4,7 @@ import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { RpcClient } from "../src/lib/rpc";
-import ModelSettingsPage from "../src/plugins/settings-model/page";
+import ModelSettingsPage from "../src/plugins/ui-settings-models/page";
 
 const mounted = new Set<Root>();
 

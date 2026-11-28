@@ -2950,10 +2950,11 @@ describe("ExtensionRunner", () => {
 				{ type: "ui_select" },
 				{ type: "tool_approval_resolved", approved: true },
 			]);
-			expect(select).toHaveBeenCalledWith(expect.stringContaining("Allow tool: dangerous_tool"), [
-				"Approve",
-				"Deny",
-			]);
+			expect(select).toHaveBeenCalledWith(
+				expect.stringContaining("Allow tool: dangerous_tool"),
+				["Approve", "Deny"],
+				{ purpose: "approval" },
+			);
 			delete globalState.__approvalEvents;
 		});
 

@@ -17,6 +17,8 @@ import type { RpcClient } from "./rpc";
 const SPEECH_RPC_TIMEOUT_MS = 180_000;
 /** Preheat RPC returns immediately (progress rides the event stream). */
 const PREHEAT_RPC_TIMEOUT_MS = 15_000;
+/** Runaway guard for a streaming dictation (segments commit while it runs). */
+const STREAMING_MAX_SECONDS = 600;
 
 export type VoiceActivity =
 	| { phase: "recording"; seconds: number; level: number }
@@ -350,7 +352,7 @@ export async function openFrontendDictation(opts: FrontendDictationOptions): Pro
 				if (!active) return;
 				await queue;
 				if (!active) return;
-				const response = await rpc.request<{ results: { text: string; state: VoiceGateState }[] }>(
+				const response = await rpc.request<{ results: { text: string; state: VoiceGateState }[]; text?: string }>(
 					"voice.frontendStreamStop",
 					{ sessionId },
 				);
@@ -362,10 +364,12 @@ export async function openFrontendDictation(opts: FrontendDictationOptions): Pro
 						segments.set(segmentId, { text: result.text, state: result.state });
 				}
 				const ordered = [...segments.entries()].sort(([a], [b]) => a - b).map(([, segment]) => segment);
-				const text = ordered
-					.map(segment => segment.text.trim())
-					.filter(Boolean)
-					.join(" ");
+				const text =
+					response.text?.trim() ||
+					ordered
+						.map(segment => segment.text.trim())
+						.filter(Boolean)
+						.join(" ");
 				if (!text) {
 					opts.onEmpty();
 					return;
@@ -503,7 +507,11 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 		// stop button) — the transcribe call below now receives the full
 		// buffer, and settings' vadEndMs actually gates the auto-stop.
 		const recording = recordPcm({
-			maxSeconds: 15,
+			// The 15 s cap exists because the one-shot path sends the whole buffer in
+			// a single RPC. Streaming commits as it goes, so keeping that cap cut a
+			// long dictation off mid-sentence; only the silence VAD or the user's own
+			// stop should end it (10 min is a runaway guard, not a length limit).
+			maxSeconds: opts.streaming && frontend ? STREAMING_MAX_SECONDS : 15,
 			deviceId: opts.deviceId,
 			vadEndMs,
 			isCancelled: () => cancelled,

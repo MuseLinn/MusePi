@@ -224,7 +224,7 @@ Provider 检查不会取代用户授权。MusePi 将屏幕文本、图像、通�
 
 | 平台 | 后端 | 设置与当前状态 |
 |---|---|---|
-| macOS x64/arm64 | 有界的 macOS `screencapture` service 捕获；Quartz/CGEvent 与原生输入 | 受支持。授予 Screen Recording 与 Accessibility。已在 Apple 硬件上验证真实远程桌面执行；见 [验证边界](#verification-boundary)。 |
+| macOS x64/arm64 | 有界的 macOS `screencapture` service 捕获；Quartz/CGEvent 与原生输入 | 受支持。授予 Screen Recording 与 Accessibility。已在 Apple 硬件上验证真实远程桌面执行；见 [验证边界](#已验证的限制)。 |
 | Linux x64/arm64, glibc/musl, X11 | 纯 Rust X11 捕获与 XTest 输入（`x11rb`），内置于 core addon | 当存在图形 session 与 `DISPLAY` 时受支持。不需要 GUI 系统库；backend 直接通过 display socket 说 X 协议。需要 RandR 与 XTEST server 扩展。 |
 | Linux x64/arm64, glibc/musl, Wayland | XWayland 捕获；由合成器桥接的 XTest 输入 | **在默认 rootless XWayland 上不支持**（GNOME/KDE/sway）：其根窗口没有可读 pixmap，因此根 `GetImage` 会失败，该 tool 在初始化时报告 `DESKTOP_BACKEND_UNAVAILABLE`。捕获需要一个 rooted X server（真实 X11 session、Xvfb，或 rootful `Xwayland -rootful`），它只暴露 X11 客户端——原生 Wayland 窗口对 X11 不可见。纯 Wayland 捕获（portal/PipeWire）未实现。 |
 | Windows x64 | xcap 捕获；Win32 虚拟桌面指针移动与原生输入 | 已实现，包括负原点与副显示器。未在此 feature 的验证中远程演练。 |

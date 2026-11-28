@@ -276,6 +276,14 @@ dictationHud: {
 	},
 	action: (type) => ipcRenderer.invoke("dictation:action", { type }),
 },
+dictationTarget: {
+	setState: (state) => ipcRenderer.invoke("dictation:target", state),
+	onToggle: (cb) => {
+		const listener = () => cb();
+		ipcRenderer.on("dictation:toggle", listener);
+		return () => ipcRenderer.removeListener("dictation:toggle", listener);
+	},
+},
 /** Global-dictation registration state, so Settings can explain a taken shortcut. */
 dictationStatus: () => ipcRenderer.invoke("dictation:status"),
 /** Pet window: normalized gaze vector (cursor offset from the window

@@ -222,7 +222,15 @@ describe("list_secrets tool", () => {
 		expect(text).not.toContain(VALUE);
 		expect(JSON.stringify(result)).not.toContain(VALUE);
 		expect(result.details?.entries).toEqual([
-			{ name: "API_TOKEN", purpose: "curl the API", scope: "all", delivery: "env", available: true, usable: true },
+			{
+				name: "API_TOKEN",
+				purpose: "curl the API",
+				scope: "all",
+				delivery: "env",
+				kind: "secret",
+				available: true,
+				usable: true,
+			},
 		]);
 	});
 

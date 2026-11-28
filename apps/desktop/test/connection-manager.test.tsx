@@ -97,13 +97,17 @@ function render(overrides: Partial<Parameters<typeof ConnectionManager>[0]> = {}
 
 const q = (host: HTMLElement, selector: string): HTMLElement | null => host.querySelector(selector);
 
-/** React reads `onChange` from the value setter, so a plain `input.value = x`
- *  never reaches the component; go through the prototype setter. */
+/** Drive the wired React change handler with the native value setter. */
 function setInput(input: HTMLInputElement, value: string): void {
+	const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"));
+	const props = (input as unknown as Record<string, { onChange?: (event: { target: HTMLInputElement }) => void }>)[
+		propsKey ?? ""
+	];
+	if (!props?.onChange) throw new Error("input has no React onChange");
 	const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 	act(() => {
 		setter?.call(input, value);
-		input.dispatchEvent(new Event("input", { bubbles: true }));
+		props.onChange!({ target: input });
 	});
 }
 const text = (host: HTMLElement): string => host.textContent ?? "";
@@ -126,7 +130,7 @@ describe("connection manager surfaces", () => {
 			children: <span data-testid="diagnostics">{t("general.bootExportDiagnostics")}</span>,
 		});
 		expect(text(host)).toContain(t("settings.cannotReachLocalDaemon"));
-		expect(host.querySelector('[data-testid="diagnostics"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="diagnostics"]') !== null).toBe(true);
 		// It still lists the targets — a failure never replaces the list.
 		expect(host.querySelectorAll(".gui-conn-row").length).toBe(1);
 	});
@@ -240,7 +244,7 @@ describe("connection manager rows", () => {
 		const details = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-actions button")).find(
 			button => button.getAttribute("aria-label") === t("settings.connectionDetails"),
 		);
-		expect(details).toBeDefined();
+		expect(details !== undefined).toBe(true);
 		act(() => details?.click());
 		expect(text(host)).toContain("ssh -N -L 9400:127.0.0.1:8300 me@build.example.com");
 		expect(text(host)).toContain(t("settings.connectionForwardingNote"));
@@ -283,7 +287,7 @@ describe("connection manager rows", () => {
 		const edit = Array.from(host.querySelectorAll<HTMLButtonElement>(".gui-conn-row button")).find(
 			button => button.getAttribute("aria-label") === t("settings.edit"),
 		);
-		expect(edit).toBeDefined();
+		expect(edit !== undefined).toBe(true);
 		act(() => edit?.click());
 		// The form is seeded from the row, so saving without changes keeps it intact.
 		const label = host.querySelector<HTMLInputElement>(".gui-conn-form input.gui-input");
@@ -444,7 +448,7 @@ describe("connection manager transports", () => {
 		const hostInput = Array.from(host.querySelectorAll<HTMLInputElement>(".gui-conn-form input.gui-input")).find(
 			input => input.placeholder === t("settings.connectionSshHostPlaceholder"),
 		);
-		expect(hostInput).toBeDefined();
+		expect(hostInput !== undefined).toBe(true);
 	});
 
 	test("a container card says when the docker probe cannot answer", async () => {
@@ -465,7 +469,7 @@ describe("connection manager transports", () => {
 			(node.textContent ?? "").includes(t("settings.connectionKindDocker")),
 		);
 		// Blocked at the point of choosing, not after a submit that could not work.
-		expect(card?.querySelector('[data-tone="blocked"]')).not.toBeNull();
+		expect(card?.querySelector('[data-tone="blocked"]') !== null).toBe(true);
 	});
 });
 
@@ -716,7 +720,7 @@ describe("connection manager catalog", () => {
 		const host = render({ targets: [localTarget()], catalog, onAdd: target => added.push(target) });
 		await openSshForm(host);
 		const select = host.querySelector<HTMLSelectElement>(".gui-conn-form select");
-		expect(select).not.toBeNull();
+		expect(select !== null).toBe(true);
 		const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
 		await act(async () => {
 			setter?.call(select, "from-ssh-config");
@@ -873,7 +877,7 @@ describe("connection manager remote container", () => {
 		const hostInput = Array.from(host.querySelectorAll<HTMLInputElement>(".gui-conn-form input.gui-input")).find(
 			input => input.placeholder === t("settings.connectionSshHostPlaceholder"),
 		);
-		expect(hostInput).toBeDefined();
+		expect(hostInput !== undefined).toBe(true);
 		setInput(hostInput!, "me@build");
 		await act(async () => {
 			await Bun.sleep(30);

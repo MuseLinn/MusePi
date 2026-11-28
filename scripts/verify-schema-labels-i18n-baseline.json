@@ -1,6 +1,6 @@
 {
 	"note": "Schema label/description strings that have no translation YET. Only shrink this list: a new entry means a new setting shipped untranslated.",
-	"count": 265,
+	"count": 262,
 	"pairs": [
 		"client-locale (GUI)\u00000",
 		"client-locale (GUI)\u00000 KB",
@@ -81,8 +81,6 @@
 		"client-locale (GUI)\u0000Harmony",
 		"client-locale (GUI)\u0000Hermes",
 		"client-locale (GUI)\u0000Hindsight",
-		"client-locale (GUI)\u0000Hindsight API Token",
-		"client-locale (GUI)\u0000Hindsight API URL",
 		"client-locale (GUI)\u0000Hostname routed to a named Cloudflare tunnel, e.g. collab.example.com; empty uses a quick tunnel",
 		"client-locale (GUI)\u0000Isolation backend for subagents. \"auto\" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).",
 		"client-locale (GUI)\u0000JSON object mapping model roles, model selectors (\"provider/model-id\"), or provider wildcards (\"provider/*\") to ordered fallback selectors, e.g. {\"default\":[\"openai/gpt-4o-mini\"],\"google-antigravity/*\":[\"google/*\",\"google-vertex/*\"]}. Model-oriented keys apply whenever that model/provider is active, regardless of role; a \"provider/*\" entry keeps the failing model's id and swaps the provider. An id-prefixed wildcard (\"openrouter/google/*\") re-prefixes the failing model's bare id (google-antigravity/gemini-x -> openrouter/google/gemini-x) and, used as a key, matches only that provider's ids under the prefix.",
@@ -209,7 +207,6 @@
 		"coding-agent (TUI)\u0000Harmony",
 		"coding-agent (TUI)\u0000Hashline",
 		"coding-agent (TUI)\u0000Hermes",
-		"coding-agent (TUI)\u0000Hindsight API URL",
 		"coding-agent (TUI)\u0000Hostname routed to a named Cloudflare tunnel, e.g. collab.example.com; empty uses a quick tunnel",
 		"coding-agent (TUI)\u0000Immediate",
 		"coding-agent (TUI)\u0000Isolation backend for subagents. \"auto\" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).",

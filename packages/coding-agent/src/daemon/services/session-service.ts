@@ -1,5 +1,19 @@
+import type { Context } from "@deepseek-ai/cordis";
 import type { SessionProjectionSnapshot } from "@musepi/pi-wire";
+import {
+	contextUsageProjectionDefinition,
+	type ProjectionDefinition,
+	type ProjectionHandle,
+} from "../../session/session-projections";
 import type { DaemonService } from "./types";
+
+/** The projection domains this service owns: context occupancy, which is folded
+ *  from committed messages. The goal/plan switches ride `sessionMode` and are
+ *  registered by the services that own them (`goals`, `planMode`). */
+const SESSION_STATE_PROJECTIONS: readonly ProjectionDefinition<unknown>[] = [
+	contextUsageProjectionDefinition,
+] as readonly ProjectionDefinition<unknown>[];
+
 import { type DeletedWorkspaces, sessionHiddenByWorkspace } from "./workspace-registry";
 
 /**
@@ -111,11 +125,28 @@ export class SessionService implements DaemonService {
 		"session.resume": "resume",
 		"session.toolGates": "toolGates",
 	} as const;
+	readonly inject = ["sessionProjections"] as const;
 
 	readonly #deps: SessionServiceDeps;
+	readonly #projections: ProjectionHandle<unknown>[] = [];
 
 	constructor(deps: SessionServiceDeps) {
 		this.#deps = deps;
+	}
+
+	/** Resolve the projection service from the host
+	 *  context and register the domain this service owns (context usage).
+	 *  `stop` withdraws it, so a stopped service leaves no key in the baseline. */
+	start(ctx: Context): void {
+		const projections = ctx.sessionProjections;
+		if (!projections) throw new Error("session-tree: sessionProjections service is not mounted");
+		for (const definition of SESSION_STATE_PROJECTIONS) {
+			this.#projections.push(projections.register(definition));
+		}
+	}
+
+	stop(): void {
+		for (const handle of this.#projections.splice(0)) handle.dispose();
 	}
 
 	/** RPC session.tree：跨会话树（roots 无 parent；label 60 字截断；

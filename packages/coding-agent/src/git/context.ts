@@ -116,7 +116,7 @@ export interface GitNumstatRow {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Order is precedence: a test file is a test even though it is also `.ts`, and
-// `docs/README.md` is documentation. Rules live here and nowhere else so a
+// `docs/README.md` is documentation <!-- doc-reference-example: file-kind illustration -->. Rules live here and nowhere else so a
 // future "review by file type" filter has one source of truth.
 const TEST_RULES: readonly RegExp[] = [
 	/(?:^|\/)(?:__tests__|__snapshots__|__mocks__|tests?|specs?|e2e)\//i,

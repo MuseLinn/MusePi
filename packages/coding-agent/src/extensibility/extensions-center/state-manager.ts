@@ -97,6 +97,14 @@ function spreadPluginMeta(
 /**
  * Load all extensions from all capabilities.
  */
+/**
+ * Providers whose items this host finds but never loads.
+ *
+ * Their packages name dependencies this host does not provide, so the entry
+ * exists to be seen and handed to the agent as source, never enabled.
+ */
+const DISCOVERY_ONLY_PROVIDERS: ReadonlySet<string> = new Set(["dsh-plugins"]);
+
 export async function loadAllExtensions(
 	cwd?: string,
 	disabledIds?: string[],
@@ -146,8 +154,12 @@ export async function loadAllExtensions(
 			let state: ExtensionState;
 			let disabledReason: "shadowed" | "provider-disabled" | "item-disabled" | undefined;
 
-			// Item-disabled takes precedence over shadowed
-			if (isDisabled) {
+			// A discovered entry belongs to another agent. It has no enable switch
+			// because nothing here could enable it, so it outranks the states that
+			// describe this host's own on/off bookkeeping.
+			if (DISCOVERY_ONLY_PROVIDERS.has(item._source.provider)) {
+				state = "discovered";
+			} else if (isDisabled) {
 				state = "disabled";
 				disabledReason = "item-disabled";
 			} else if (isShadowed) {
@@ -534,6 +546,34 @@ export async function loadAllExtensions(
 		});
 	} catch (error) {
 		logger.warn("Failed to load gui-motion capability", { error: String(error) });
+	}
+
+	// Another agent's plugins, listed for reading rather than loading. They do not
+	// come from a loadable capability: their packages name dependencies this host
+	// does not provide, so the row exists to be handed to the agent as source.
+	try {
+		const discovered = await loadCapability<{
+			name: string;
+			path: string;
+			_source: SourceMeta;
+			manifest?: { name?: string; description?: string };
+		}>("extensions", loadOpts);
+		for (const item of discovered.all) {
+			if (!DISCOVERY_ONLY_PROVIDERS.has(item._source.provider)) continue;
+			extensions.push({
+				id: makeExtensionId("extension-module", item.name),
+				kind: "extension-module",
+				name: item.name,
+				displayName: item.manifest?.name ?? item.name,
+				description: item.manifest?.description,
+				path: item.path,
+				source: sourceFromMeta(item._source),
+				state: "discovered",
+				raw: item,
+			});
+		}
+	} catch (error) {
+		logger.warn("Failed to load discovered plugin inventories", { error: String(error) });
 	}
 
 	// Distribution scope is an annotation. Every subsystem has its own discovered

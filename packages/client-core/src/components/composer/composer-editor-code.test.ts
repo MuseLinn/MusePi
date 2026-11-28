@@ -6,7 +6,7 @@ GlobalRegistrator.register();
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { marksField } from "./composer-editor-code";
+import { dictationField, dictationWrite, marksField, setDictationRange } from "./composer-editor-code";
 import type { EditorMark } from "./composer-editor-types";
 
 afterAll(() => {
@@ -18,6 +18,18 @@ afterEach(() => {
 	view?.destroy();
 	view = null;
 });
+
+/** Mount a bare editor with the dictation range field installed. */
+function mountDictation(doc: string, start: number, end: number): EditorView {
+	const parent = document.createElement("div");
+	document.body.appendChild(parent);
+	view = new EditorView({
+		state: EditorState.create({ doc, extensions: [dictationField] }),
+		parent,
+	});
+	view.dispatch({ selection: { anchor: start, head: end } });
+	return view;
+}
 
 function mount(doc: string, marks: readonly EditorMark[]): EditorView {
 	const parent = document.createElement("div");
@@ -74,5 +86,28 @@ describe("marksField — reference chips", () => {
 		// The sigil is hidden, the label painted.
 		expect(v.dom.textContent).toContain("图片1");
 		expect(v.dom.querySelector(".gui-ta-hl-mention")).not.toBeNull();
+	});
+});
+
+describe("dictationField — the dictated range", () => {
+	it("paints the dictated range as provisional text without changing the document", () => {
+		const v = mountDictation("note:  here", 6, 6);
+		v.dispatch({ effects: setDictationRange.of({ from: 6, to: 12 }) });
+		expect(v.state.doc.toString()).toBe("note:  here");
+		expect(v.dom.querySelector(".musepi-composer-editor__preview")).not.toBeNull();
+	});
+
+	it("keeps the range across the dictation's own write and drops it on a user edit", () => {
+		const v = mountDictation("a b", 2, 2);
+		v.dispatch({ effects: setDictationRange.of({ from: 2, to: 2 }) });
+		// Our own edit: the range maps across it and stays decorated.
+		v.dispatch({
+			changes: { from: 2, to: 2, insert: "spoken" },
+			annotations: dictationWrite.of(true),
+		});
+		expect(v.state.field(dictationField)?.to).toBe(8);
+		// A user edit clears it: their words are not a guess any more.
+		v.dispatch({ changes: { from: 0, to: 0, insert: "x" } });
+		expect(v.state.field(dictationField)).toBeNull();
 	});
 });

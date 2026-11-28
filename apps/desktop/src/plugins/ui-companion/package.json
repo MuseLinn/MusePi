@@ -1,0 +1,15 @@
+{
+	"name": "musepi-ui-companion",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned companion page: built-in art presets, the companion market and decorations.",
+	"type": "module",
+	"musepi": {
+		"icon": "🐾",
+		"label": "MusePi Companion Settings",
+		"description": "Companion art, market and decorations.",
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}

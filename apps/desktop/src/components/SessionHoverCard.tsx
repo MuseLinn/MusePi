@@ -16,7 +16,7 @@ import { Icon } from "../vendor/oc-icons";
  * 数据分两半,由 bus 消息 + meta map 拼合:
  * - 行侧(SessionRow)只上报它手里有的展示字段(id/label/分叉来源/时间戳)
  *   和锚点矩形 — 不给 SessionRow 加任何 props,保住 memo 契约;
- * - 侧栏(sessionMeta map)持有 cwd/modeId,卡片渲染时按 id 现查。
+ * - 侧栏(sessionMeta map)持有 cwd/agentPreset,卡片渲染时按 id 现查。
  *
  * 卡片本体 portal 到 document.body:侧栏链路上有 backdrop-filter/transform,
  * fixed 定位会被最近的含 transform 祖先劫持,portal 出去才稳。
@@ -103,7 +103,7 @@ export function SessionHoverCard({
 	meta,
 	modeCatalog,
 }: {
-	meta: Map<string, { cwd?: string; modeId?: string }>;
+	meta: Map<string, { cwd?: string; agentPreset?: string }>;
 	/** modes.list catalog — 命名链尾段：用户创建的预设没有 `mode {id}` 词表
 	 *  键，真名只在 catalog 里（与 ContextPanel 共用 lib/mode-label.ts）。 */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
@@ -185,7 +185,7 @@ export function SessionHoverCard({
 	const cwd = metaRow?.cwd?.trim() || null;
 	const hasBothTimes = Boolean(hover.updatedAt && hover.updatedAt !== hover.timestamp);
 	const forkParent = hover.forked ? hover.parentLabel : null;
-	const modeLabel = resolveModeLabel(metaRow?.modeId, modeCatalog);
+	const modeLabel = resolveModeLabel(metaRow?.agentPreset, modeCatalog);
 	const updatedAt = fullTime(hover.updatedAt ?? hover.timestamp);
 
 	// 贴行右侧;右侧放不下换左侧;垂直方向夹进视口。

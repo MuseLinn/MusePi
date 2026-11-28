@@ -46,7 +46,13 @@ A page whose body ships only as a contribution keeps no host fallback: the nav r
 
 Use `settings.section` only when the feature is a whole page.
 
-A page package is named `settings-<page>` (`musepi-settings-<page>`): the domain comes first, the page it owns last, so a directory listing groups every settings page together. One page, one package.
+A page package is named by what the page is:
+
+- A page that is one settings schema tab is `ui-settings-<page>` (`musepi-ui-settings-<page>`) — general, appearance, model, files, shell, tools, context, subagent, usage, shortcuts, migration.
+- A page with its own domain keeps that domain in the name: `ui-agent-preset`, `ui-account-notifications`, `ui-hooks`, `ui-secrets`, `ui-commands`, `ui-connectors`, `ui-companion`, plus the existing `ui-brand` and `ui-theme`.
+- A page that only wraps a host implementation is not a package at all: the body lives in the package, or the block is a shared row component under `components/settings-rows/`.
+
+One page, one package. The page's nav label reuses the built-in translation key rather than a hand-written string, so a page keeps the name the rest of the app already uses.
 
 Register the seat in `packages/collab-proto/src/extension-slots.ts` with `slot-contracts.ts`, regenerate the catalog, and document it in `docs/extensions-dev.md`.
 

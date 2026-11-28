@@ -534,6 +534,8 @@ export class MnemopiSessionState {
 		options: MnemopiRememberOptions = {},
 		target?: MnemopiBankTarget,
 	): string {
+		if ((this.session.memoryMode ?? "persistent") !== "persistent")
+			throw new Error("Memory writes are disabled for this session.");
 		const store = target ? this.resolveTarget(target) : this.scoped.retain;
 		const [scrubbed, scrubbedOptions] = redactRememberWrite(memory, options);
 		return store.memory.remember(scrubbed, scrubbedOptions);
@@ -710,6 +712,7 @@ export class MnemopiSessionState {
 		sourceId: string,
 		options: { extract?: boolean; retainedThroughUserTurn?: number } = {},
 	): Promise<void> {
+		if ((this.session.memoryMode ?? "persistent") !== "persistent") return;
 		const { transcript, messageCount } = prepareRetentionTranscript(messages, true);
 		if (!transcript) return;
 		const { transcript: extractText } = prepareUserRetentionTranscript(messages);

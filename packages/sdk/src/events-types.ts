@@ -17,6 +17,7 @@ export type SessionStreamEnvelope = {
 		| "connector-request-end"
 		| "agent-lifecycle"
 		| "agent-progress"
+		| "agent-event"
 		| "pause-state"
 		| "global-pause-state"
 		| "stream-end";

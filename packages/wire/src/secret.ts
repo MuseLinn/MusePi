@@ -19,11 +19,38 @@ export type SecretDelivery = "env" | "file";
 /** What the user picked in the card: every session, or the asking workspace. */
 export type SecretScopeChoice = "all" | "workspace";
 
+/**
+ * What kind of credential an entry holds.
+ *
+ * The distinction is not cosmetic: a `secret` reaches the agent (as an env var
+ * or a private file), while a `login` never does — the agent asks for its
+ * fields to be typed into a browser form and the store types them. Keeping
+ * them one type with no delivery would let a password be exported by mistake.
+ */
+export type SecretKind = "secret" | "login";
+
+/** The non-secret half of a saved login, shown in lists and on cards. */
+export interface SecretLoginView {
+	/** Registrable site, e.g. `example.com`. */
+	site: string;
+	/** Hosts the sign-in page was seen on. */
+	hosts: string[];
+	/** Fill only on `hosts`, never elsewhere on the site. */
+	exactHost: boolean;
+	username: string;
+	/** A TOTP setup key is stored, so the one-time code can be typed too. */
+	hasTotp: boolean;
+}
+
 /** Metadata the settings page and `secret.list` can show. */
 export interface SecretEntryView {
 	name: string;
 	purpose: string;
 	scope: SecretScope;
+	/** `secret` for a value the agent uses; `login` for a sign-in it only fills. */
+	kind: SecretKind;
+	/** Present exactly when `kind` is `login`. */
+	login?: SecretLoginView;
 	delivery: SecretDelivery;
 	/** Epoch ms. */
 	createdAt: number;
@@ -87,6 +114,16 @@ export interface SecretSetMcpGrantParams {
 	keys: string[];
 }
 
+/** The fields a saved login stores besides its password. */
+export interface SecretLoginInput {
+	site: string;
+	hosts?: string[];
+	exactHost?: boolean;
+	username: string;
+	/** A `otpauth://` URI or a bare base32 setup key. Its code is typed, never returned. */
+	totp?: string;
+}
+
 export interface SecretSetParams {
 	name: string;
 	value: string;
@@ -95,6 +132,9 @@ export interface SecretSetParams {
 	scope?: SecretScopeChoice;
 	/** Omitted keeps the stored delivery (or `"env"` for a new entry). */
 	delivery?: SecretDelivery;
+	/** `login` entries carry `login` and ignore `delivery`. */
+	kind?: SecretKind;
+	login?: SecretLoginInput;
 }
 
 export interface SecretSetResult {
@@ -124,9 +164,22 @@ export interface SecretRequestPayload {
 	requestId: string;
 	name: string;
 	purpose: string;
-	/** `fill` asks for a value; `allow` asks to extend an existing entry's scope. */
-	kind: "fill" | "allow";
+	/** `fill` asks for a value; `allow` extends scope; `login` asks for a sign-in. */
+	kind: "fill" | "allow" | "login";
 	delivery: SecretDelivery;
+	/** For `login`: the site the agent is on, so the card can prefill it. */
+	site?: string;
+	/** Saved entries the user may pick instead of typing a new value. */
+	alternatives?: SecretAlternativeView[];
+}
+
+/** One reusable entry a card offers under "Use a saved one". Never a value. */
+export interface SecretAlternativeView {
+	name: string;
+	purpose: string;
+	/** For a login: its site. */
+	site?: string;
+	username?: string;
 }
 
 /** Settlement broadcast so other cards clear after the first answer. */
@@ -143,6 +196,10 @@ export interface SecretAnswerParams {
 	scope?: SecretScopeChoice;
 	/** `save` records this delivery; `allow` keeps the entry's own. */
 	delivery?: SecretDelivery;
+	/** For a login card: the sign-in the form collected. */
+	login?: SecretLoginInput;
+	/** With `allow`: the saved entry the user picked instead of typing a value. */
+	picked?: string;
 	/** Optional when request ids are already unique across live sessions. */
 	sessionId?: string;
 }

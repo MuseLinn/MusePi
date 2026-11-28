@@ -155,27 +155,27 @@ describe("ViewStore cross-session tables", () => {
 		// Historical session without a preset → null (the GUI hover card hides
 		// nothing — it falls back to the default-mode label).
 		store.upsert("s1", snapshot("s1", [{ role: "user", content: "x", timestamp: 1 }], 1));
-		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBeNull();
+		expect(store.list().find(r => r.sessionId === "s1")!.agentPreset).toBeNull();
 		// Preset id is read off the snapshot header (cast — the SDK header type
 		// predates the field, mirroring view-store.ts's own read).
 		const withMode = snapshot("s2", [{ role: "user", content: "y", timestamp: 1 }], 1);
 		(withMode.header as { modeId?: string }).modeId = "design";
 		store.upsert("s2", withMode);
-		expect(store.list().find(r => r.sessionId === "s2")!.modeId).toBe("design");
+		expect(store.list().find(r => r.sessionId === "s2")!.agentPreset).toBe("design");
 		// Switching presets re-persists the snapshot → the column must follow
 		// (ON CONFLICT update), not stick at the first value.
 		(withMode.header as { modeId?: string }).modeId = "work";
 		store.upsert("s2", withMode);
-		expect(store.list().find(r => r.sessionId === "s2")!.modeId).toBe("work");
+		expect(store.list().find(r => r.sessionId === "s2")!.agentPreset).toBe("work");
 	});
 
 	test("a later view-snapshot persist must not clobber a persisted preset", () => {
 		const store = tempStore();
 		// 1) persistHeaderPatch arms the preset off the snapshot header.
 		const armed = snapshot("s1", [{ role: "user", content: "y", timestamp: 1 }], 1);
-		(armed.header as { modeId?: string }).modeId = "design";
+		(armed.header as { agentPreset?: string }).agentPreset = "design";
 		store.upsert("s1", armed);
-		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
+		expect(store.list().find(r => r.sessionId === "s1")!.agentPreset).toBe("design");
 		// 2) a streaming schedulePersist / idle-close replays the MaterializedView
 		//    projection, whose header has NO modeId key — this used to null the
 		//    preset (BUG: hover card fell back to 工作模式 after restart).
@@ -188,15 +188,18 @@ describe("ViewStore cross-session tables", () => {
 			2,
 		);
 		store.upsert("s1", replay);
-		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
+		expect(store.list().find(r => r.sessionId === "s1")!.agentPreset).toBe("design");
 		// 3) the stored snapshot header carries the preset too, so adopt() can
-		//    restore live.modeId after a restart (not just the query column).
-		expect((store.load("s1")!.header as { modeId?: string }).modeId).toBe("design");
+		//    restore the live preset after a restart (not just the query column).
+		//    The key is `agentPreset` now; the read allows the pre-rename `modeId`
+		//    so a session written before the rename still restores its preset.
+		const storedHeader = store.load("s1")!.header as { agentPreset?: string; modeId?: string };
+		expect(storedHeader.agentPreset ?? storedHeader.modeId).toBe("design");
 		// 4) an explicit clear (persistHeaderPatch with null) still wins.
 		const cleared = snapshot("s1", [{ role: "user", content: "y", timestamp: 1 }], 1);
 		(cleared.header as { modeId?: string }).modeId = null as never;
 		store.upsert("s1", cleared);
-		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBeNull();
+		expect(store.list().find(r => r.sessionId === "s1")!.agentPreset).toBeNull();
 	});
 
 	test("mcpServers (M4 P1 connector allowlist) round-trips, survives replays, [] ≠ null", () => {

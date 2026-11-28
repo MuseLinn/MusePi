@@ -155,6 +155,10 @@ interface Window {
 		setLidSleep(enabled: boolean): Promise<{ enabled: boolean; supported: boolean; error?: string }>;
 		/** Desktop custom-protocol OAuth callback URL (musepi://oauth/callback). */
 		onOAuthCallback?(cb: (url: string) => void): () => void;
+		dictationTarget: {
+			setState(state: { focused: boolean; active: boolean }): Promise<void>;
+			onToggle(cb: () => void): () => void;
+		};
 	};
 }
 

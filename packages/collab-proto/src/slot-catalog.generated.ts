@@ -383,12 +383,6 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 			},
 			{
 				"slot": "settings.section",
-				"source": "apps/desktop/src/plugins/hooks-settings/index.ts",
-				"plugin": "musepi-hooks-settings",
-				"id": "hooks"
-			},
-			{
-				"slot": "settings.section",
 				"source": "apps/desktop/src/plugins/index-library/index.ts",
 				"plugin": "musepi-index-library",
 				"id": "indexes"
@@ -404,6 +398,120 @@ export const SLOT_CATALOG: readonly SlotCatalogEntry[] = [
 				"source": "apps/desktop/src/plugins/session-manager/index.ts",
 				"plugin": "musepi-session-manager",
 				"id": "sessions"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-account-notifications/index.ts",
+				"plugin": "musepi-ui-account-notifications",
+				"id": "notifications"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-agent-preset/index.ts",
+				"plugin": "musepi-ui-agent-preset",
+				"id": "modes"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-commands/index.ts",
+				"plugin": "musepi-ui-commands",
+				"id": "commands"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-companion/index.ts",
+				"plugin": "musepi-ui-companion",
+				"id": "pet"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-extensions-plugins/index.ts",
+				"plugin": "musepi-ui-extensions-plugins",
+				"id": "skills"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-hooks/index.ts",
+				"plugin": "musepi-ui-hooks",
+				"id": "hooks"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-secrets/index.ts",
+				"plugin": "musepi-ui-secrets",
+				"id": "secrets"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-appearance/index.ts",
+				"plugin": "musepi-ui-settings-appearance",
+				"id": "appearance"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-context/index.ts",
+				"plugin": "musepi-ui-settings-context",
+				"id": "context"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-files/index.ts",
+				"plugin": "musepi-ui-settings-files",
+				"id": "files"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-general/index.ts",
+				"plugin": "musepi-ui-settings-general",
+				"id": "general"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-media/index.ts",
+				"plugin": "musepi-ui-settings-media",
+				"id": "media"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-migration/index.ts",
+				"plugin": "musepi-ui-settings-migration",
+				"id": "migration"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-models/index.ts",
+				"plugin": "musepi-ui-settings-models",
+				"id": "model"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-shell/index.ts",
+				"plugin": "musepi-ui-settings-shell",
+				"id": "shell"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-shortcuts/index.ts",
+				"plugin": "musepi-ui-settings-shortcuts",
+				"id": "shortcuts"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-subagent/index.ts",
+				"plugin": "musepi-ui-settings-subagent",
+				"id": "subagents"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-tools/index.ts",
+				"plugin": "musepi-ui-settings-tools",
+				"id": "tools"
+			},
+			{
+				"slot": "settings.section",
+				"source": "apps/desktop/src/plugins/ui-settings-usage/index.ts",
+				"plugin": "musepi-ui-settings-usage",
+				"id": "usage"
 			}
 		]
 	},

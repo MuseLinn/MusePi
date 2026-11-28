@@ -112,7 +112,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 		}
 		// A resolve over the real definition must not resurrect the old text.
 		expect(resolveMode("design", modeId => BUILTIN_MODE_TEMPLATES[modeId]).prompt).toEqual([]);
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(12);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(13);
 	});
 
 	it("keeps each persona's text in its own package Markdown", () => {
@@ -150,7 +150,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 		expect(creatorPersonaSections).toHaveLength(1);
 		expect(creatorPersonaSections[0]!.text).toContain("cordis_define");
 		expect(creatorPersonaSections[0]!.text).toContain("发布到插件市场");
-		expect(creatorPersonaSections[0]!.text).not.toContain("modes.save");
+		expect(creatorPersonaSections[0]!.text).not.toContain("presets.save");
 	});
 
 	it("registers the sections from the package's Cordis entry", async () => {

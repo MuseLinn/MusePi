@@ -349,7 +349,7 @@ describe("window drag — main workspace", () => {
 	it("drags every point of the band above the sidebar card", async () => {
 		await load(MAIN_SHELL);
 		const probes = await probe([
-			[26, 24], // rail band
+			[26, 60], // rail's compact in-card band
 			[150, 24], // sidebar band, above the card
 			[150, 50], // sidebar band, just above the card
 			[700, 24], // chat header
@@ -657,7 +657,7 @@ describe("window drag — one owner for the property", () => {
 		expect(headerTags.length).toBeGreaterThan(100);
 		expect(headerTags.some(tag => tag.text.includes('"gui-header-spacer"'))).toBe(true);
 
-		const companion = path.join(SRC, "plugins/settings-pet/page.tsx");
+		const companion = path.join(SRC, "plugins/ui-companion/page.tsx");
 		const companionTags = jsxTags(fs.readFileSync(companion, "utf8"), "companion.tsx");
 		expect(companionTags.length).toBeGreaterThan(80);
 		// Past the old desync boundary (~line 668) the scan must still see tags.

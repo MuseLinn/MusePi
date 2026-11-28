@@ -208,11 +208,19 @@ describe("empty, loading and error states", () => {
 		const daemon = await openAddForm(host);
 		const inputs = daemon.querySelectorAll<HTMLInputElement>("input.gui-input");
 		const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+		const setValue = (input: HTMLInputElement | undefined, value: string): void => {
+			if (!input) throw new Error("missing form input");
+			const propsKey = Object.keys(input).find(key => key.startsWith("__reactProps$"));
+			const props = (
+				input as unknown as Record<string, { onChange?: (event: { target: HTMLInputElement }) => void }>
+			)[propsKey ?? ""];
+			if (!props?.onChange) throw new Error("input has no React onChange");
+			setter?.call(input, value);
+			props.onChange({ target: input });
+		};
 		await act(async () => {
-			setter?.call(inputs[0], "Broken");
-			inputs[0]?.dispatchEvent(new Event("input", { bubbles: true }));
-			setter?.call(inputs[1], "ftp://nope");
-			inputs[1]?.dispatchEvent(new Event("input", { bubbles: true }));
+			setValue(inputs[0], "Broken");
+			setValue(inputs[1], "ftp://nope");
 		});
 		const submit = daemon.querySelector<HTMLButtonElement>(".gui-conn-form-actions .gui-btn-primary");
 		await act(async () => {
@@ -232,8 +240,8 @@ describe("row anatomy is the same in both lists", () => {
 		const rows = Array.from(daemon.querySelectorAll(".gui-loc-row"));
 		expect(rows.length).toBeGreaterThan(1);
 		for (const row of rows) {
-			expect(row.querySelector(".gui-loc-name")).not.toBeNull();
-			expect(row.querySelector(".gui-loc-where")).not.toBeNull();
+			expect(row.querySelector(".gui-loc-name") !== null).toBe(true);
+			expect(row.querySelector(".gui-loc-where") !== null).toBe(true);
 		}
 	});
 

@@ -1,7 +1,7 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
 import { ListPlus, SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 import { TextMorph } from "../TextMorph";
@@ -42,11 +42,17 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
 
 /** Voice input toggle (startDictation from ../lib/voice).
  *
- *  Deliberately a compact motion-only control: the 30px capsule has no room
- *  for copy (user direction), so the seconds clock, the waveform and the
- *  phase text moved into the in-input {@link VoiceStatusStrip} — the button
- *  keeps just the tint + pulse while recording and the spinner while
- *  transcribing. */
+ *  Motion-only, and the motion is a STATE, not a loop: the icon tints while
+ *  recording and turns into a spinner while transcribing — it never pulses.
+ *  A control that breathes forever competes with the level meter beside it and
+ *  makes a resting composer feel busy.
+ *
+ *  The clock, the level and the phase all live in {@link VoiceStatusStrip}:
+ *  the same act read in one place. An earlier pass moved the clock and the
+ *  meter INTO this button as an expanding capsule; that was reverted by
+ *  direction, and the reference clients agree — KiroCrew keeps a plain icon
+ *  while its status bar carries the meter, and OpenMausBot's mic is a single
+ *  pulsing-while-recording button with no counters at all. */
 export function VoiceButton({
 	state,
 	disabled,
@@ -71,6 +77,7 @@ export function VoiceButton({
 			disabled={disabled}
 			title={label}
 			aria-label={label}
+			data-state={state}
 		>
 			{state === "transcribing" ? (
 				<span className="gui-voice-spinner" />
@@ -81,49 +88,50 @@ export function VoiceButton({
 	);
 }
 
-const VOICE_WAVE_BARS = Array.from({ length: 13 }, (_, index) => 0.35 + ((index * 7) % 10) / 14);
-
+/** In-input dictation strip.
+ *
+ *  One band across the composer, the way KiroCrew renders it: a live dot, the
+ *  phase word, the elapsed clock and one input-level meter, with Esc-cancel on
+ *  the far side. The band is the single place the act is described, so the mic
+ *  button stays a plain state icon (see {@link VoiceButton}).
+ *
+ *  Earlier passes here drew the phase twice (a second pulsing mic orb with two
+ *  RMS rings beside a 13-bar RMS wave) and then, in reaction, moved the clock
+ *  and meter into the button as a capsule — a direction that had already been
+ *  tried and reverted. This keeps them in the strip, once each.
+ *
+ *  Transcribing keeps the band (the request is still in flight and Esc still
+ *  cancels) but drops the meter: nothing is being captured any more, and a
+ *  moving meter would claim otherwise. */
 export function VoiceStatusStrip({
 	phase,
-	seconds,
-	level,
-	partialText = "",
+	seconds = 0,
+	level = 0,
 }: {
 	phase: "recording" | "transcribing";
-	seconds: number;
-	level: number;
-	partialText?: string;
+	seconds?: number;
+	/** Mic RMS in [0, 1] for the meter. */
+	level?: number;
 }): ReactNode {
 	const recording = phase === "recording";
+	const pct = Math.round(Math.min(1, Math.max(0, level)) * 100);
 	return (
 		<div
 			className={`gui-voice-strip${recording ? "" : " gui-voice-strip--transcribing"}`}
 			data-phase={phase}
-			style={{ "--voice-level": `${Math.round(level * 100) / 100}` } as CSSProperties}
 			role="status"
 			aria-live="polite"
 		>
-			<span className="gui-voice-visual" aria-hidden>
-				<i className="gui-voice-ring gui-voice-ring--outer" />
-				<i className="gui-voice-ring gui-voice-ring--inner" />
-				{recording ? <Icon name="mic" className="gui-voice-mic" /> : <span className="gui-voice-spinner" />}
+			<span className="gui-voice-dot" aria-hidden />
+			<span className="gui-voice-strip-label">
+				{recording ? t("settings.voiceListening") : t("settings.voiceTranscribing")}
 			</span>
-			<span className="gui-voice-strip-summary">
-				<span className="gui-voice-strip-label">
-					{recording ? t("settings.voiceListening") : t("settings.voiceTranscribing")}
-				</span>
-				{recording && <span className="gui-voice-strip-time">{seconds}s</span>}
-			</span>
+			{recording && <span className="gui-voice-strip-time">{seconds}s</span>}
 			{recording && (
-				<span className="gui-voice-wave" aria-hidden>
-					{VOICE_WAVE_BARS.map((weight, index) => (
-						<i key={index} style={{ "--voice-bar-scale": Math.min(1, 0.18 + level * weight) } as CSSProperties} />
-					))}
+				<span className="gui-voice-meter" aria-hidden>
+					<i style={{ width: `${pct}%` }} />
 				</span>
 			)}
-			<span className={`gui-voice-partial${partialText ? " gui-voice-partial--visible" : ""}`}>
-				{partialText || t(recording ? "settings.voiceListeningHint" : "settings.voiceTranscribingHint")}
-			</span>
 			<span className="gui-voice-strip-hint">
 				<kbd>{t("settings.voiceEscKey")}</kbd>
 				<span>{t("settings.cancel")}</span>

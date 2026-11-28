@@ -4,7 +4,7 @@
 [English](advisor-watchdog.md) | 中文
 Advisor 是可选的第二个模型，附加到某个会话上。它会在每轮结束后复查主代理的 transcript，用自己的工具检查工作区，并将简洁建议注入回主会话。
 
-Advisor 不是第二个执行器：它不能批准操作，也不能直接更改主会话状态。其默认工具集是只读的（`read`、`grep`、`glob`）加上 `advise`，但 `WATCHDOG.yml` 的 roster 条目可以将 `tools:` 扩展到任意内置工具——包括 `edit`、`write`、`bash`、`eval` 和 `browser` 等可变工具——因此只有当 advisor 模型和工作区都受信任时才授予这些工具（见 [Tools and isolation](#tools-and-isolation)）。
+Advisor 不是第二个执行器：它不能批准操作，也不能直接更改主会话状态。其默认工具集是只读的（`read`、`grep`、`glob`）加上 `advise`，但 `WATCHDOG.yml` 的 roster 条目可以将 `tools:` 扩展到任意内置工具——包括 `edit`、`write`、`bash`、`eval` 和 `browser` 等可变工具——因此只有当 advisor 模型和工作区都受信任时才授予这些工具（见 [Tools and isolation](#工具与隔离)）。
 
 ## 实现文件
 
@@ -261,7 +261,7 @@ advisors:
 - `instructions`（顶层）：共享 prompt，与 `WATCHDOG.md` 一起前置到每个 advisor 的 system prompt。跨所有发现的 `WATCHDOG.yml` 文件拼接。
 - `advisors[].name`：人工标签；slugify 后用于 session id 和 `<session>/__advisor.jsonl` 文件名。跨文件的重复 slug 通过与 `WATCHDOG.md` 发现相同的特异性规则解析（project leaf > project ancestor > user）。
 - `advisors[].model`：可选模型选择器，可带 `:level` thinking 后缀（例如 `x-ai/grok-code-fast:high`）。省略时使用 `modelRoles.advisor`。
-- `advisors[].tools`：可选内置工具名列表。省略或为空时使用默认 `read`/`grep`/`glob` 子集。接受 [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) 中的任意名称，包括可变工具（`edit`、`write`、`bash`、`eval`、`browser`、`debug`、`ast_edit`、`task`、`hub` 和 memory tools）。旧别名（`search`→`grep`、`find`→`glob`）会被规范化。未知名称会被丢弃并给出警告。授予可变工具的安全影响见 [Tools and isolation](#tools-and-isolation)。
+- `advisors[].tools`：可选内置工具名列表。省略或为空时使用默认 `read`/`grep`/`glob` 子集。接受 [`BUILTIN_TOOL_NAMES`](../packages/coding-agent/src/tools/builtin-names.ts) 中的任意名称，包括可变工具（`edit`、`write`、`bash`、`eval`、`browser`、`debug`、`ast_edit`、`task`、`hub` 和 memory tools）。旧别名（`search`→`grep`、`find`→`glob`）会被规范化。未知名称会被丢弃并给出警告。授予可变工具的安全影响见 [Tools and isolation](#工具与隔离)。
 - `advisors[].instructions`：该 advisor 的 specialization，在共享 baseline 之后追加。两个指令字段都像 `WATCHDOG.md` 一样展开 `@path` 导入。
 
 ### 发现位置

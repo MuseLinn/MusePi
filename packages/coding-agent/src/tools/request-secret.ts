@@ -10,6 +10,7 @@ import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import requestSecretDescription from "../prompts/tools/request-secret.md" with { type: "text" };
 import {
+	type AgentSecretAlternative,
 	type AgentSecretAnswer,
 	type AgentSecretRequest,
 	type AgentSecretUIContext,
@@ -94,6 +95,9 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 		}
 
 		const requestDelivery = existing?.delivery ?? delivery;
+		// Offer what is already here so a person who saved this credential under
+		// another name can pick it instead of retyping the value.
+		const alternatives = await this.#alternatives(name);
 		const request: AgentSecretRequest = {
 			name,
 			purpose,
@@ -103,6 +107,7 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 			kind: existing && readable ? "allow" : "fill",
 			delivery: requestDelivery,
 			workspace: cwd,
+			...(alternatives.length > 0 ? { alternatives } : {}),
 		};
 		const answer: AgentSecretAnswer | undefined = await ui.requestSecret(request);
 		if (!answer || answer.action === "cancel") {
@@ -119,16 +124,42 @@ export class RequestSecretTool implements AgentTool<typeof requestSecretSchema, 
 				)
 				.done();
 		}
+		// A pick means the user chose a saved entry: use that name from here on.
+		// Nothing was copied, so the entry keeps its own scope and audit trail.
+		const effective = answer.picked && answer.picked !== "" ? answer.picked : name;
 		// `save`/`allow` are persisted by the host before the answer resolves, so
 		// the tool only verifies reachability — both the value and this workspace.
-		const saved = await store.getEntry(name);
-		if (!saved || !(await store.available(name))) {
-			throw new ToolError(`The secret ${name} was not saved; the value is still unavailable.`);
+		const saved = await store.getEntry(effective);
+		if (!saved || !(await store.available(effective))) {
+			throw new ToolError(`The secret ${effective} was not saved; the value is still unavailable.`);
 		}
 		if (!secretScopeIncludes(saved.scope, cwd)) {
-			throw new ToolError(`The secret ${name} is not allowed in this workspace.`);
+			throw new ToolError(`The secret ${effective} is not allowed in this workspace.`);
 		}
-		return this.#success(name, purpose, saved.scope, saved.delivery, "saved", store.filePath(name));
+		return this.#success(effective, purpose, saved.scope, saved.delivery, "saved", store.filePath(effective));
+	}
+
+	/**
+	 * Saved secrets a person might reuse for this request.
+	 *
+	 * Same-kind only, this workspace only, and never the name being requested:
+	 * offering a credential the tool cannot use here would only send the user to
+	 * a dead end. Values are never read — the list carries names and purposes.
+	 */
+	async #alternatives(name: string): Promise<AgentSecretAlternative[]> {
+		const store = getAgentSecretStore(this.session.settings.getAgentDir());
+		const cwd = this.session.cwd;
+		const entries = await store.list();
+		const offered: AgentSecretAlternative[] = [];
+		for (const entry of entries) {
+			if (entry.name === name) continue;
+			if (entry.kind !== "secret") continue;
+			if (!secretScopeIncludes(entry.scope, cwd)) continue;
+			if (!(await store.available(entry.name))) continue;
+			offered.push({ name: entry.name, purpose: entry.purpose, reason: "available" });
+			if (offered.length >= 8) break;
+		}
+		return offered;
 	}
 
 	#success(

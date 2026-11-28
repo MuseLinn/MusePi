@@ -87,10 +87,13 @@ export class EventService implements DaemonService {
 		this.broadcast({ type: "extensions.changed", at: Date.now() });
 	}
 
-	/** 广播 modes.changed（设置页/输入框 chip 即时刷新；与
-	 *  extensions.changed 同 seq 机制）。 */
+	/** 广播 presets.changed（设置页/输入框 chip 即时刷新；与
+	 *  extensions.changed 同 seq 机制）。旧名 `modes.changed` 一并发出，
+	 *  让改名之前构建的客户端仍然刷新。 */
 	broadcastModesChanged(): void {
-		this.broadcast({ type: "modes.changed", at: Date.now() });
+		const at = Date.now();
+		this.broadcast({ type: "presets.changed", at });
+		this.broadcast({ type: "modes.changed", at });
 	}
 
 	/** 广播 crons.changed（定时任务列表/运行状态变更后调用）：任务中心页

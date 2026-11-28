@@ -121,6 +121,8 @@ const ciScriptTests = [
 	"./scripts/ci-concurrency.test.ts",
 	"./scripts/ci-contract.test.ts",
 	"./scripts/ci-require-workflow-success.test.ts",
+	"./scripts/ci-tui-release-recover.test.ts",
+	"./scripts/install-sh.test.ts",
 	"./scripts/bazel-natives.test.ts",
 	"./scripts/ci-release-publish.test.ts",
 	"./scripts/fix-dts-extensions.test.ts",

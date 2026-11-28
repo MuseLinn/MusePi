@@ -76,7 +76,7 @@ async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRo
 					{ id: "work", label: "Work" },
 					{ id: "design", label: "Design" },
 				],
-				modeId: "design",
+				agentPreset: "design",
 				onModeChange: (id: string | null) => {
 					modeChanges.push(id);
 				},

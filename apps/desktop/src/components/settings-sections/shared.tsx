@@ -104,6 +104,6 @@ export interface McpItem {
 	displayName: string;
 	description?: string;
 	kind: string;
-	state: "active" | "disabled" | "shadowed";
+	state: "active" | "disabled" | "shadowed" | "discovered";
 	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
 }

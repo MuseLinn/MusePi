@@ -85,7 +85,15 @@ function stylesheetText() {
 	for (const file of parts) {
 		if (!existsSync(file)) throw new Error(`missing stylesheet: ${file}`);
 	}
-	return [...parts.map(file => readFileSync(file, "utf8")), gui].join("\n");
+	// The transcript sheet is imported by main.tsx outside gui.css, so a scenario
+	// that renders transcript components needs it appended explicitly.
+	const transcript = join(REPO_ROOT, "packages/client-core/src/components/transcript/transcript.css");
+	const dictation = join(STYLES, "dictation.css");
+	const extra = [transcript, dictation]
+		.filter(file => existsSync(file))
+		.map(file => readFileSync(file, "utf8"))
+		.join("\n");
+	return [...parts.map(file => readFileSync(file, "utf8")), gui, extra].join("\n");
 }
 
 /** A Chromium the host already has. Never downloads one. */
@@ -153,22 +161,31 @@ const stage = m => { root.dataset.stage = m; };
 const publish = (key, value) => { root.dataset[key + "Json"] = JSON.stringify(value); };
 stage("start");
 const scenarioName = ${JSON.stringify(scenario)};
-stage("import");
-const mod = await import("./bundle/${bundleName}");
-const scenarios = mod.default ?? mod;
-stage(scenarios ? "registered" : "not-registered");
-const entry = (scenarios?.scenarios ?? scenarios)?.[scenarioName];
-if (!entry) throw new Error("unknown scenario: " + scenarioName);
-stage("render");
-await entry.render(root);
-stage("rendered");
-// Point 2: the app owns data-theme and rewrites it on mount.
-document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)});
-await new Promise(r => setTimeout(r, 250));
-stage("measure");
-publish("result", (await entry.measure?.(document.body)) ?? null);
-publish("expectations", entry.expect ?? null);
-stage("done");
+// A throw anywhere below used to leave the stage at the last phase that ran, so
+// the probe could only report the phase, not the fault. Publishing it keeps the
+// failure self-describing.
+try {
+	stage("import");
+	const mod = await import("./bundle/${bundleName}");
+	const scenarios = mod.default ?? mod;
+	stage(scenarios ? "registered" : "not-registered");
+	const entry = (scenarios?.scenarios ?? scenarios)?.[scenarioName];
+	if (!entry) throw new Error("unknown scenario: " + scenarioName);
+	stage("render");
+	await entry.render(root);
+	stage("rendered");
+	// Point 2: the app owns data-theme and rewrites it on mount.
+	document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)});
+	document.documentElement.setAttribute("data-platform", ${JSON.stringify(process.platform)});
+	await new Promise(r => setTimeout(r, 250));
+	stage("measure");
+	publish("result", (await entry.measure?.(document.body)) ?? null);
+	publish("expectations", entry.expect ?? null);
+	stage("done");
+} catch (error) {
+	publish("bootError", String(error && error.stack ? error.stack : error));
+	stage("error");
+}
 `;
 }
 
@@ -177,8 +194,15 @@ function pageHtml(theme: string, bootName: string, scenario: string): string {
 <style>${stylesheetText()}</style>
 <style>
   /* Point 4: a bare page has no inherited colour. */
-  html { color: var(--color-text); background: var(--color-bg); }
-  body { margin: 0; padding: 20px; background: var(--color-bg); }
+  html { color: var(--color-text); }
+  body { margin: 0; padding: 20px; }
+
+  /* Point 7: the desktop shell is deliberately transparent at html/body so the
+   * native window material shows through; gui-base.css then paints the canvas
+   * only under a platform attribute, and a window without one renders no
+   * backdrop at all. The app always sets it, so the probe must too — otherwise
+   * every light-theme capture shows light cards floating on black. */
+  body { background: var(--color-bg); }
   #root { max-width: ${width}px; }
 </style>
 </head><body>
@@ -362,7 +386,13 @@ try {
 				const staged = await page
 					.evaluate(() => document.getElementById("root")?.dataset.stage ?? "unknown")
 					.catch(() => "unknown");
-				const detail = ` (last stage: ${staged})${errors.length > 0 ? `\n    ${errors.join("\n    ")}` : ""}`;
+				// A scenario that throws used to leave only a stage name behind
+				// ("last stage: render"), which named the phase but not the fault.
+				const bootError = await page
+					.evaluate(() => document.getElementById("root")?.dataset.bootErrorJson ?? "")
+					.catch(() => "");
+				const raised = bootError ? `\n    scenario threw: ${JSON.parse(bootError)}` : "";
+				const detail = ` (last stage: ${staged})${raised}${errors.length > 0 ? `\n    ${errors.join("\n    ")}` : ""}`;
 				throw new Error(`scenario "${scenario}" / ${theme} did not finish measuring${detail}`);
 			}
 			const { measured, expectations } = (await page.evaluate(() => {

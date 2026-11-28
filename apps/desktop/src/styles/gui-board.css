@@ -236,6 +236,10 @@
 
 .gui-ask-pop--entered {
 	opacity: 1;
+	/* Grows from the edge that faces its trigger. Without an origin a scale
+	 * animation uses the box centre, so the card appears to expand out of its own
+	 * middle rather than out of the control that opened it. */
+	transform-origin: top center;
 	animation: gui-ask-pop-in 140ms var(--spring);
 }
 

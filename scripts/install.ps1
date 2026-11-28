@@ -226,7 +226,10 @@ if (-not $sourceInstall) {
             Write-Host ""
             Write-Host "Binary download failed again: $($_.Exception.Message)" -ForegroundColor Red
             Write-Host ""
-            Write-Host "To install from source instead, run with the environment variable PI_SOURCE=1:"
+            Write-Host "The terminal installer needs musepi-windows-x64.exe and SHA256SUMS.txt on the GitHub release."
+            Write-Host "A 404 means this release does not include that terminal binary. Desktop .exe installers on the same page are a different package."
+            Write-Host "Set `$env:PI_REF to a release tag that publishes musepi-windows-x64.exe and SHA256SUMS.txt, then run this installer again."
+            Write-Host "Or build from source:"
             Write-Host "  `$env:PI_SOURCE='1'; irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex"
             exit 1
         }

@@ -37,8 +37,15 @@ export interface SttDownloadResult {
 
 /** Live streaming session handle returned by {@link SttClient.startStream}. */
 export interface SttStreamHandle {
-	/** Feed 16 kHz mono float samples as the recorder produces them. */
+	/** Feed 16 kHz mono float samples as the recorder produces them. The worker
+	 *  segments them itself and commits each delimited run. */
 	pushAudio(audio: Float32Array): void;
+	/** Commit one already-delimited speech run (the caller segmented it, so the
+	 *  worker must not segment it again). Decoded once and emitted as a segment. */
+	pushUtterance(audio: Float32Array): void;
+	/** Publish the still-growing run as a volatile preview. Coalescing: only the
+	 *  newest undecoded preview is decoded, and it is never committed. */
+	pushPreview(audio: Float32Array): void;
 	/** Flush the trailing segment and resolve with the full joined transcript. */
 	stop(): Promise<string>;
 	/** Tear the session down without a final flush (resolves `stop()` with ""). */
@@ -209,6 +216,12 @@ export class SttClient {
 		const handle: SttStreamHandle = {
 			pushAudio: audio => {
 				if (!settled) worker.send({ type: "stream_audio", id, audio });
+			},
+			pushUtterance: audio => {
+				if (!settled) worker.send({ type: "stream_utterance", id, audio });
+			},
+			pushPreview: audio => {
+				if (!settled) worker.send({ type: "stream_preview", id, audio });
 			},
 			stop: () => {
 				if (!settled) worker.send({ type: "stream_stop", id });

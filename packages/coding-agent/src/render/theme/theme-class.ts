@@ -419,6 +419,7 @@ export class Theme {
 			enabled: this.#symbols["status.enabled"],
 			running: this.#symbols["status.running"],
 			shadowed: this.#symbols["status.shadowed"],
+			discovered: this.#symbols["status.discovered"],
 			aborted: this.#symbols["status.aborted"],
 			done: this.#symbols["status.done"],
 		};

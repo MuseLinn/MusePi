@@ -4,7 +4,7 @@ title: 候选输入建议
 status: living
 summary: MusePi 如何在回合结束后预测用户的下一句话，并在空输入框中作为候选提供。
 scope:
-  - packages/coding-agent/src/bundled-plugins/prompt-suggestion
+  - packages/coding-agent/src/plugins/interaction/prompt-suggestion
   - packages/coding-agent/src/session/prompt-suggestion.ts
   - packages/coding-agent/src/daemon/session-host.ts
   - packages/client-core/src/lib/prompt-suggestion.ts
@@ -32,13 +32,13 @@ scope:
 
 ## 2. 请求契约
 
-指令文件位于 `packages/coding-agent/src/prompts/system/suggestion-instruction.md`。它声明请求由应用生成，要求给出用户最可能输入的**那一条**消息，要求沿用用户自己的语气与语言，只返回单行纯文本；当对话确实没有可延续的下一步时返回字面量 `null`。JSON、备选方案与解释都被明确拒绝。
+指令文件位于 `packages/coding-agent/src/plugins/interaction/prompt-suggestion/suggestion-instruction.md`。它声明请求由应用生成，要求给出用户最可能输入的**那一条**消息，要求沿用用户自己的语气与语言，只返回单行纯文本；当对话确实没有可延续的下一步时返回字面量 `null`。JSON、备选方案与解释都被明确拒绝。
 
 响应按纯文本读取：不带输出 schema，不调用工具。`promptSuggestionText` 只裁剪首尾空白，空串与裸词 `null` 视为「没有建议」，其余内容原样保留。
 
 ## 3. 何时生成
 
-策略位于内置 Cordis 插件 `musepi-prompt-suggestion`（`packages/coding-agent/src/bundled-plugins/prompt-suggestion`），不在 daemon 里。插件订阅 `agent_end`，并依次检查五道闸门：
+策略位于内置 Cordis 插件 `musepi-prompt-suggestion`（`packages/coding-agent/src/plugins/interaction/prompt-suggestion`），不在 daemon 里。插件订阅 `agent_end`，并依次检查五道闸门：
 
 | 闸门 | 规则 |
 | --- | --- |

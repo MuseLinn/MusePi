@@ -1,0 +1,1962 @@
+import { SearchField, SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
+import { ChevronDown as ChevronDownIconData, ChevronUp as ChevronUpIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChromaGroup } from "../../components/ChromaGroup";
+import { DialogFrame } from "../../components/DialogFrame";
+import { GuiSelect, type SelectOption } from "../../components/GuiSelect";
+import { HeightMorph } from "../../components/HeightMorph";
+import { MenuPopup } from "../../components/MenuPopup";
+import { ModelSelector } from "../../components/ModelSelector";
+import { ModelBrandIcon } from "../../components/model-brand-icon";
+import { SchemaTabSection } from "../../components/settings-sections/schema";
+import { openExternalUrl } from "../../lib/electron";
+import { usePrompt } from "../../lib/prompt-dialog";
+import { reportRequestFailure } from "../../lib/report-request-failure";
+import { logoutProvider } from "../../lib/rpc-commands";
+import type { SlotComponentProps } from "../../lib/slot-host";
+import { useProviderCatalog, useProviderEvents } from "../../lib/use-provider-catalog";
+import { useScrollShadow } from "../../lib/use-scroll-shadow";
+import { Icon } from "../../vendor/oc-icons";
+import { CustomProviderPane } from "./custom-provider";
+
+/**
+ * Sectioned appearance settings: 本地化
+ * (language / time format / week start), then 界面设置 (theme + interface
+ * type), 代码设置 (light/dark code themes, line numbers, long-line wrap, code
+ * sizes), 代码预览 (live light/dark preview cards with a "currently active"
+ * tag), then the effects toggles. All prefs persist to localStorage and
+ * apply their CSS variable on <html> immediately.
+ */
+interface ProviderInfo {
+	id: string;
+	name: string;
+	available: boolean;
+	storeCredentialsAs?: string;
+	loginKind?: "oauth" | "api-key";
+	loggedIn: boolean;
+}
+
+/** Wire shape of one API-key provider row (daemon providers.list → api). */
+interface ApiProviderInfo {
+	id: string;
+	name: string;
+	modelCount: number;
+	models: string[];
+	configured: boolean;
+}
+
+/** Wire shape of one models.catalog row (TUI model-hub sidebar parity):
+ *  every known provider + its static models + auth availability. */
+interface CatalogProvider {
+	provider: string;
+	name: string;
+	available: boolean;
+	modelCount: number;
+	models: {
+		id: string;
+		name: string;
+		reasoning: boolean;
+		text: boolean;
+		vision: boolean;
+		video: boolean;
+		imageGen: boolean;
+		videoGen: boolean;
+	}[];
+}
+
+/** Cards per provider section before the "show all" expand. */
+const PROVIDER_COLLAPSE_LIMIT = 8;
+
+/** Built-in role display tags (TUI config/model-roles MODEL_ROLES parity). */
+const BUILTIN_ROLE_TAGS: Record<string, string> = {
+	default: "DEFAULT",
+	smol: "SMOL",
+	slow: "SLOW",
+	vision: "VISION",
+	plan: "PLAN",
+	designer: "DESIGNER",
+	commit: "COMMIT",
+	tiny: "TINY",
+	task: "TASK",
+	advisor: "ADVISOR",
+};
+
+/** Thinking levels storable as a role-selector suffix (TUI
+ * formatModelSelectorValue parity: `provider/model:id:level`). */
+const ROLE_THINK_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+/** Split `provider/model:id:level` into the bare selector + thinking level
+ * (or null when no known level suffix is present). Mirrors the daemon's
+ * splitThinkingSuffix whitelist (off/minimal..max; `inherit` is accepted
+ * for round-tripping but never persisted — joinRoleValue strips it). */
+function splitRoleValue(value: string): { model: string; level: string | null } {
+	const colon = value.lastIndexOf(":");
+	if (colon > 0 && [...ROLE_THINK_LEVELS, "auto", "inherit"].includes(value.slice(colon + 1))) {
+		return { model: value.slice(0, colon), level: value.slice(colon + 1) };
+	}
+	return { model: value, level: null };
+}
+
+/** Rebuild the selector with a thinking suffix ("inherit" strips it —
+ * TUI formatModelSelectorValue parity: only concrete levels persist). */
+function joinRoleValue(model: string, level: string | null): string {
+	return level && level !== "inherit" ? `${model}:${level}` : model;
+}
+
+/** Drag payload type for one fallback row; the value is `<role>:<index>`. */
+const FALLBACK_DRAG_TYPE = "text/fallback-index";
+
+/** Decode a fallback drag payload into its source row index, or null when it
+ * names another card's chain or a row that no longer exists. Rows are drop
+ * targets on every card, so the role must travel with the index — otherwise a
+ * drop lands the source card's ordinal on the target card and rewrites it. */
+function parseFallbackDrag(payload: string, role: string, length: number): number | null {
+	const match = /^(.*):(\d+)$/.exec(payload);
+	if (!match || match[1] !== role) return null;
+	const from = Number(match[2]);
+	return from >= 0 && from < length ? from : null;
+}
+
+/** One stored credential row as exposed by the daemon (providers.credentials). */
+interface CredentialInfo {
+	id: number;
+	accountLabel: string;
+	note?: string | null;
+}
+
+export default function ModelSettingsPage({ rpc, sessionId, settingsSection }: SlotComponentProps): ReactNode {
+	// The provider catalog and its login flows come from the shared hook, so
+	// this page owns no copy of that state; the daemon's auth envelopes are
+	// subscribed here because the page is mounted on its own.
+	const providerEvent = useProviderEvents(rpc ?? null);
+	const {
+		providers,
+		apiProviders,
+		custom,
+		loginState,
+		pendingLogins,
+		login,
+		logout,
+		submitLoginInput,
+		cancelLogin,
+		reload,
+	} = useProviderCatalog({ rpc: rpc ?? null, sessionId: sessionId ?? null, providerEvent });
+	const onLogin = login;
+	const onLogout = logout;
+	const onSubmitInput = submitLoginInput;
+	const onCancelLogin = cancelLogin;
+	const onChanged = reload;
+	// Only the capability entry (`providers`) opens the add form — arriving from
+	// the nav is a plain visit. The host passes the requested section id, so the
+	// distinction survives the page moving into this package.
+	const openAddProvider = settingsSection?.id === "providers";
+	// 横向边缘羽化:顶部 tab 条横向滚动时左右羽化(只在溢出时出现)。
+	const modelTabsRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(modelTabsRef);
+	// Section collapse: show the first few cards, expand on
+	// demand — 70 login providers + the full catalog is too much for a grid.
+	const [showAll, setShowAll] = useState(false);
+	const [providerQuery, setProviderQuery] = useState("");
+	// manually added row (whose id starts empty) can still expand its editor.
+	// opened from the "custom providers" tab (not a separate tab — user
+	// transient success feedback after a save.
+	// models.add (same RPC — daemon merges by provider name).
+	const [inputValue, setInputValue] = useState("");
+	const [copied, setCopied] = useState(false);
+	// Per-role model presets (TUI /model parity): role -> model selector.
+	const [roleModels, setRoleModels] = useState<Record<string, string> | null>(null);
+	// Default model for new sessions (daemon settings "model" key).
+	// Role cycle order (TUI ctrl+p cycleOrder) — roles render in this order.
+	const [cycleOrder, setCycleOrder] = useState<string[] | null>(null);
+	// Role assignment storage layer (settings.modelRoleStorage, TUI model-hub
+	// parity): when "project", assignments can target the project's
+	// .musepi/config.yml; the per-role picker below picks the layer.
+	const [roleStorage, setRoleStorage] = useState<"global" | "project">("global");
+	// Per-role write target while roleStorage=project ("global" | "project").
+	const [roleScope, setRoleScope] = useState<Record<string, "global" | "project">>({});
+	// Per-role provenance from the daemon (settings.getModelRoleProvenance):
+	// which layer actually supplies each role (runtime/overlay/project/
+	// global/default). Badges the scope toggle so a write never lands in an
+	// unexpected layer; the badge names the source before any write.
+	const [roleSources, setRoleSources] = useState<Record<string, string>>({});
+	// Project-override ledger (settings.projectOverrides): keys the current
+	// project layer owns, with the global fallback for comparison. Only
+	// meaningful when a workspace is open.
+	const [projectOverrides, setProjectOverrides] = useState<
+		{ path: string; projectValue: string; effectiveValue?: string; globalValue?: string | null }[]
+	>([]);
+	const { prompt } = usePrompt();
+	// Stored credentials per provider (multi-account logout dropdown).
+	const [credentialsByProvider, setCredentialsByProvider] = useState<Record<string, CredentialInfo[]>>({});
+	// Side-channel model override (settings.sideChannelModel): "" = follow
+	// the session model (TUI parity for /btw /omfg recap, ephemeral ask).
+	const [sideChannelModel, setSideChannelModel] = useState<string>("");
+	// Catalog for the side-channel/compaction pickers (models.list).
+	const [catalogModels, setCatalogModels] = useState<{ id: string; name?: string }[] | null>(null);
+	// Provider id whose credential menu is open (single-open dropdown).
+	const [credsMenu, setCredsMenu] = useState<string | null>(null);
+	// Provider id whose inline actions menu (login / import API key) is open.
+	const [actionsMenu, setActionsMenu] = useState<string | null>(null);
+	// Anchor elements for the portal-rendered card menus (credential list /
+	// actions). Keyed by `p.id` (creds) and `actions-${p.id}` (actions) so the
+	// fixed-position popups can pin to their trigger button.
+	const cardMenuAnchors = useRef(new Map<string, HTMLElement>());
+	// Close the provider card menus on outside click / Escape. The menus are
+	// portal-rendered into the root (fixed position) and carry
+	// data-header-menu so clicks inside them are ignored here.
+	useEffect(() => {
+		if (!rpc) return;
+		void rpc
+			.request<{ id: string; name?: string }[]>("models.list", {})
+			.then(list => setCatalogModels(list ?? []))
+			.catch((err: unknown) => {
+				// No catalog to pick from; keep the reason traceable.
+				console.warn("[gui] models.list failed", err);
+			});
+		void rpc
+			.request<CatalogProvider[]>("models.catalog", {})
+			.then(list => setCatalog(list ?? null))
+			.catch((err: unknown) => {
+				console.warn("[gui] models.catalog failed", err);
+				setCatalog(null);
+			});
+		void rpc
+			.request<Record<string, unknown> | null>("settings.get", {
+				keys: ["modelRoles", "cycleOrder", "sideChannelModel"],
+			})
+			.then(v => setSideChannelModel((v?.sideChannelModel as string | undefined) ?? ""))
+			.catch((err: unknown) => console.warn("[gui] settings.get sideChannelModel failed", err));
+	}, [rpc]);
+
+	useEffect(() => {
+		if (!credsMenu && !actionsMenu) return;
+		const onDown = (e: MouseEvent | KeyboardEvent): void => {
+			if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
+			const target = e.target as Node | null;
+			if (target instanceof Node && (target as Element | null)?.closest?.("[data-header-menu]")) return;
+			setCredsMenu(null);
+			setActionsMenu(null);
+		};
+		document.addEventListener("mousedown", onDown);
+		document.addEventListener("keydown", onDown);
+		return () => {
+			document.removeEventListener("mousedown", onDown);
+			document.removeEventListener("keydown", onDown);
+		};
+	}, [credsMenu, actionsMenu]);
+	// Provider awaiting an imported API key (/setup parity modal).
+	const [apiKeyTarget, setApiKeyTarget] = useState<string | null>(null);
+	const [apiKeyValue, setApiKeyValue] = useState("");
+	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+	// Unified provider list: subscription (OAuth) + API-key providers merged
+	// by CREDENTIAL STORAGE KEY (`storeCredentialsAs ?? id`), not raw id.
+	//
+	// Two OAuth rows can back one account store — `openai-codex` (browser
+	// callback) and `openai-codex-device` (headless/device code) both persist
+	// under `openai-codex`. Keyed by id they rendered as two "ChatGPT
+	// Plus/P…" cards that shared login state, credential rows and logout, and
+	// each card only offered one of the two flows. Folded into one card, the
+	// other flow stays reachable through `alternateLogins`.
+	const mergedProviders = useMemo(() => {
+		const map = new Map<
+			string,
+			{
+				key: string;
+				id: string;
+				loginId: string;
+				name: string;
+				loggedIn: boolean;
+				configured: boolean;
+				models: string[];
+				modelCount: number;
+				available: boolean;
+				canLogin: boolean;
+				canImport: boolean;
+				alternateLogins: { id: string; name: string }[];
+			}
+		>();
+		for (const p of providers ?? []) {
+			const key = p.storeCredentialsAs ?? p.id;
+			const existing = map.get(key);
+			if (existing) {
+				if (!existing.canLogin && p.loginKind !== "api-key") existing.loginId = p.id;
+				existing.canLogin = existing.canLogin || p.loginKind !== "api-key";
+				existing.alternateLogins.push({ id: p.id, name: p.name });
+				existing.loggedIn = existing.loggedIn || p.loggedIn;
+				existing.available = existing.available || p.available;
+				continue;
+			}
+			map.set(key, {
+				key,
+				id: p.id,
+				loginId: p.id,
+				name: p.name,
+				loggedIn: p.loggedIn,
+				configured: false,
+				models: [],
+				modelCount: 0,
+				available: p.available,
+				canLogin: p.loginKind !== "api-key",
+				canImport: false,
+				alternateLogins: [],
+			});
+		}
+		// OAuth id → storage key, so an API row for a subscription provider
+		// merges into that provider's card instead of starting its own.
+		const storageKeyOf = new Map(providers?.map(p => [p.id, p.storeCredentialsAs ?? p.id]) ?? []);
+		for (const p of apiProviders) {
+			const key = storageKeyOf.get(p.id) ?? p.id;
+			const existing = map.get(key);
+			if (existing) {
+				existing.configured = p.configured;
+				existing.models = p.models;
+				existing.modelCount = p.modelCount;
+				existing.canImport = true;
+			} else {
+				map.set(key, {
+					key,
+					id: p.id,
+					loginId: p.id,
+					// API-key providers from the daemon may ship an EMPTY name —
+					// fall back to the id so the card header never renders blank
+					// (user: bottom cards showed no provider name at all).
+					name: p.name || p.id,
+					loggedIn: false,
+					configured: p.configured,
+					models: p.models,
+					modelCount: p.modelCount,
+					available: true,
+					canLogin: false,
+					canImport: true,
+					alternateLogins: [],
+				});
+			}
+		}
+		// Active (logged-in / configured) first, then name order — connected
+		// providers stay visible without scrolling.
+		return [...map.values()].sort(
+			(a, b) =>
+				Number(b.loggedIn || b.configured) - Number(a.loggedIn || a.configured) || a.name.localeCompare(b.name),
+		);
+	}, [providers, apiProviders]);
+
+	const providerQ = providerQuery.trim().toLowerCase();
+	const filteredProviders = providerQ
+		? mergedProviders.filter(
+				p =>
+					p.name.toLowerCase().includes(providerQ) ||
+					p.id.toLowerCase().includes(providerQ) ||
+					p.models.some(m => m.toLowerCase().includes(providerQ)),
+			)
+		: mergedProviders;
+	const visibleProviders = filteredProviders.slice(0, showAll ? undefined : PROVIDER_COLLAPSE_LIMIT);
+	// /model-style split pane: active tab id (default | session | roles |
+	// providers | custom | add).
+	const [activeTab, setActiveTab] = useState<string>(openAddProvider ? "custom" : "roles");
+	// Canonical role list (built-ins + configured extras) — TUI /model
+	// knownRoleIds parity.
+	const [knownRoleIds, setKnownRoleIds] = useState<string[] | null>(null);
+	// Per-role auto-resolved model (TUI model-hub parity): what each role
+	// would select — explicit assignment, or the derived default/priority
+	// resolution when unset.
+	const [resolvedRoleModels, setResolvedRoleModels] = useState<
+		Record<string, { id: string; name: string; efforts: string[] } | null>
+	>({});
+	// Full bundled catalog grouped by provider (daemon models.catalog) — the
+	// TUI-parity rail data: registered (available) vs unregistered providers
+	// with their full static model lists.
+	const [catalog, setCatalog] = useState<CatalogProvider[] | null>(null);
+	// TUI model-hub rail selection: "roles" | "all" | `provider:${id}`.
+	const [railView, setRailView] = useState<string>("roles");
+	// Persist a role-assignment change, then re-fetch the daemon's per-role
+	// resolution. The "自动选择" lines (SMOL/SLOW/VISION/…) derive from the
+	// DEFAULT model — without the re-fetch they keep showing the OLD model
+	// until the settings pane remounts.
+	const applyRoleModels = (next: Record<string, string>, scope?: "global" | "project"): void => {
+		setRoleModels(next);
+		if (!rpc) return;
+		void rpc
+			.request("settings.set", { key: "modelRoles", value: next, ...(scope ? { scope } : {}) })
+			.then(() =>
+				rpc
+					.request<{
+						resolvedRoleModels?: Record<string, { id: string; name: string; efforts: string[] } | null>;
+					}>("settings.get", { keys: ["resolvedRoleModels"] })
+					.then(res => setResolvedRoleModels(res?.resolvedRoleModels ?? {})),
+			)
+			.catch((err: unknown) => console.error("[gui] settings.set modelRoles failed", err));
+	};
+	// TUI #assignRole parity: when a role's resolved model changes, drop a
+	// stored concrete thinking level the new model doesn't support (off is
+	// exempt — disabling reasoning is valid for every model; inherit has no
+	// suffix to clamp). The daemon clamps at read time too; this keeps the
+	// card's select from showing a rung the model would silently downgrade.
+	const modelClampKey = JSON.stringify(
+		Object.entries(resolvedRoleModels).map(([k, v]) => [k, v?.id ?? null, roleModels?.[k] ?? null]),
+	);
+	useEffect(() => {
+		if (!roleModels || !rpc) return;
+		let changed: Record<string, string> | null = null;
+		for (const [roleKey, resolved] of Object.entries(resolvedRoleModels)) {
+			if (!resolved) continue;
+			const raw = roleModels[roleKey];
+			if (!raw) continue;
+			const { model: bareModel, level } = splitRoleValue(raw);
+			if (!level || level === "off" || level === "inherit" || level === "auto") continue;
+			if (!resolved.efforts.includes(level)) {
+				changed = { ...(changed ?? {}), [roleKey]: joinRoleValue(bareModel, "inherit") };
+			}
+		}
+		if (changed) applyRoleModels({ ...roleModels, ...changed });
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- re-clamps only when a resolution or value actually changes
+	}, [modelClampKey]);
+	// Retry fallback chains (TUI /model `f` parity, settings
+	// "retry.fallbackChains"): role -> ordered model selectors tried after
+	// the assigned model fails.
+	const [fallbackChains, setFallbackChains] = useState<Record<string, string[]>>({});
+	// Role whose fallback-chain editor is open (inline ModelSelector).
+	const [fallbackEditor, setFallbackEditor] = useState<string | null>(null);
+	// Which existing chain row is being REPLACED via the inline picker
+	// (`role:index`) — editing an entry, not appending one. Null = none.
+	const [fallbackEditIndex, setFallbackEditIndex] = useState<string | null>(null);
+	const [fallbackEfforts, setFallbackEfforts] = useState<Record<string, string[]>>({});
+	useEffect(() => {
+		if (!rpc) return;
+		const selectors = [...new Set(Object.values(fallbackChains).flat())];
+		let cancelled = false;
+		void Promise.all(
+			selectors.map(async selector => {
+				try {
+					const detail = await rpc.request<{ efforts?: string[] } | null>("models.detail", { id: selector });
+					return [selector, detail?.efforts ?? []] as const;
+				} catch (err) {
+					// Empty efforts means the ladder cannot be shown; keep the reason.
+					console.warn("[gui] models.detail failed", selector, err);
+					return [selector, []] as const;
+				}
+			}),
+		).then(entries => {
+			if (!cancelled) setFallbackEfforts(Object.fromEntries(entries));
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, fallbackChains]);
+
+	// Role presets only exist on a live session (settings live there).
+	useEffect(() => {
+		if (!rpc) {
+			setRoleModels(null);
+			setCycleOrder(null);
+			setKnownRoleIds(null);
+			setFallbackChains({});
+			return;
+		}
+		void rpc
+			.request<{
+				modelRoles?: Record<string, string>;
+				cycleOrder?: string[];
+				knownRoleIds?: string[];
+				resolvedRoleModels?: Record<string, { id: string; name: string; efforts: string[] } | null>;
+				"retry.fallbackChains"?: Record<string, string[]>;
+				modelRoleStorage?: "global" | "project";
+				modelRoleSources?: Record<string, "runtime" | "overlay" | "project" | "global" | "default">;
+			}>("settings.get", {
+				keys: [
+					"modelRoles",
+					"cycleOrder",
+					"knownRoleIds",
+					"resolvedRoleModels",
+					"retry.fallbackChains",
+					"modelRoleStorage",
+					"modelRoleSources",
+				],
+			})
+			.then(res => {
+				setRoleModels(res?.modelRoles ?? {});
+				setCycleOrder(res?.cycleOrder ?? null);
+				setKnownRoleIds(res?.knownRoleIds ?? null);
+				setResolvedRoleModels(res?.resolvedRoleModels ?? {});
+				setFallbackChains(res?.["retry.fallbackChains"] ?? {});
+				if (res?.modelRoleStorage === "project") setRoleStorage("project");
+				setRoleSources(res?.modelRoleSources ?? {});
+			})
+			.catch((err: unknown) => {
+				// Nothing to show, but an empty pane should not masquerade as
+				// "this profile has no role settings".
+				console.error("[gui] settings.get model roles failed", err);
+				setRoleModels({});
+				setCycleOrder(null);
+				setKnownRoleIds(null);
+				setResolvedRoleModels({});
+				setFallbackChains({});
+			});
+	}, [rpc]);
+
+	// Load the project-override ledger; a no-workspace daemon returns an
+	// empty list, which simply hides the section.
+	const loadProjectOverrides = useCallback(async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const res = await rpc.request<{
+				overrides?: { path: string; projectValue: unknown; globalValue?: unknown }[];
+			}>("settings.projectOverrides", { action: "list" });
+			setProjectOverrides(
+				(res?.overrides ?? []).map(entry => ({
+					path: entry.path,
+					projectValue: String(entry.projectValue),
+					globalValue: entry.globalValue == null ? null : String(entry.globalValue),
+				})),
+			);
+		} catch (err) {
+			console.warn("[gui] settings.projectOverrides list failed", err);
+			setProjectOverrides([]);
+		}
+	}, [rpc]);
+
+	// Revert one key to its inherited layer (only modelRoles.<role> leaves
+	// are deletable — the rest of the project file is hand-edited config).
+	const deleteProjectOverride = useCallback(
+		async (overridePath: string): Promise<void> => {
+			if (!rpc) return;
+			try {
+				await rpc.request("settings.projectOverrides", { action: "delete", path: overridePath });
+				if (overridePath.startsWith("modelRoles.")) {
+					const role = overridePath.slice("modelRoles.".length);
+					setRoleModels(prev => {
+						const next = { ...prev };
+						delete next[role];
+						return next;
+					});
+				}
+				await loadProjectOverrides();
+				void rpc
+					.request<{ resolvedRoleModels?: typeof resolvedRoleModels }>("settings.get", {
+						keys: ["resolvedRoleModels", "modelRoleSources"],
+					})
+					.then(res => {
+						if (res?.resolvedRoleModels) setResolvedRoleModels(res.resolvedRoleModels);
+						setRoleSources((res as { modelRoleSources?: Record<string, string> } | null)?.modelRoleSources ?? {});
+					})
+					.catch((err: unknown) => console.warn("[gui] settings.get resolvedRoleModels failed", err));
+			} catch (err) {
+				// The override is still there; say why the revert did not land.
+				console.error("[gui] settings.projectOverrides delete failed", overridePath, err);
+			}
+		},
+		[rpc, loadProjectOverrides],
+	);
+
+	useEffect(() => {
+		void loadProjectOverrides();
+	}, [loadProjectOverrides]);
+
+	// Stored credentials per logged-in provider — powers the multi-account
+	// logout dropdown and the logged-in count. Driven by the MERGED cards (not
+	// the raw lists) so the map is keyed by the id each card reads back: two
+	// OAuth flows folded onto one storage key must not double-fetch, and a
+	// folded secondary id must not leave the card showing no accounts.
+	const loadCredentials = useCallback(async (): Promise<void> => {
+		if (!rpc || !providers) return;
+		const ids = mergedProviders.filter(p => p.loggedIn || p.configured).map(p => p.id);
+		const entries = await Promise.all(
+			ids.map(async id => {
+				try {
+					const creds = await rpc.request<CredentialInfo[]>("providers.credentials", { providerId: id });
+					return [id, creds ?? []] as [string, CredentialInfo[]];
+				} catch (err) {
+					// An empty list here reads as "no accounts"; keep the reason
+					// traceable so the menu is not silently wrong.
+					console.warn("[gui] providers.credentials failed", id, err);
+					return [id, []] as [string, CredentialInfo[]];
+				}
+			}),
+		);
+		const next: Record<string, CredentialInfo[]> = {};
+		for (const [id, list] of entries) next[id] = list;
+		setCredentialsByProvider(next);
+	}, [rpc, providers, mergedProviders]);
+
+	useEffect(() => {
+		void loadCredentials();
+	}, [loadCredentials]);
+
+	// Remove exactly one stored credential (daemon providers.logout with
+	// credentialId) — the provider stays logged in until the last one goes.
+	const logoutCredential = async (providerId: string, credentialId: number): Promise<void> => {
+		if (!rpc) return;
+		setCredsMenu(null);
+		try {
+			await logoutProvider(rpc, { providerId, credentialId });
+			onChanged();
+			await loadCredentials();
+		} catch (err) {
+			// The row stays because the credential is still stored — say why.
+			reportRequestFailure(t("settings.logout"), err);
+		}
+	};
+
+	// Credential note editing (multi-account labeling): prompt for the new
+	// note, then persist via providers.setCredentialNote (session-less).
+	const editCredentialNote = async (
+		providerId: string,
+		credentialId: number,
+		current: string | null,
+	): Promise<void> => {
+		if (!rpc) return;
+		const note = await prompt({ title: t("general.credentialNote"), defaultValue: current ?? "" });
+		if (note === null) return; // cancelled
+		try {
+			await rpc.request("providers.setCredentialNote", {
+				sessionId: sessionId ?? undefined,
+				providerId,
+				credentialId,
+				note,
+			});
+			await loadCredentials();
+		} catch (err) {
+			// The note did not persist; report instead of leaving the old one shown.
+			reportRequestFailure(t("general.credentialNote"), err);
+		}
+	};
+
+	// /setup parity: import a provider API key without OAuth.
+	const submitApiKey = async (): Promise<void> => {
+		if (!rpc || !apiKeyTarget || !apiKeyValue.trim()) return;
+		const providerId = apiKeyTarget;
+		setApiKeyError(null);
+		try {
+			await rpc.request("providers.importApiKey", { providerId, apiKey: apiKeyValue.trim() });
+			setApiKeyTarget(null);
+			setApiKeyValue("");
+			onChanged();
+		} catch (error) {
+			setApiKeyError(error instanceof Error ? error.message : String(error));
+		}
+	};
+
+	const modelTabs = [
+		{ id: "roles", label: t("general.roleModels") },
+		{ id: "behavior", label: t("general.modelBehavior") },
+		{ id: "providers", label: t("settings.providers") },
+		{ id: "custom", label: t("settings.customProviders") },
+	] as const;
+
+	// Shared thinking-level ladder for a role's own model and each fallback
+	// entry: "inherit"/"auto" are policies, the rest are the selected model's
+	// rungs. Every option carries the same leading glyph so the selector reads
+	// as "thinking level" even where no text label sits beside it.
+	const roleLevelOptions = (efforts: string[]): SelectOption<string>[] => [
+		{
+			value: "inherit",
+			label: t("general.inherit"),
+			leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" />,
+		},
+		{ value: "auto", label: t("general.auto"), leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" /> },
+		{
+			value: "off",
+			label: t("transcript.thinkingOff"),
+			leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" />,
+		},
+		...efforts.map(lv => ({
+			value: lv,
+			label: t(`thinking ${lv}` as TranslationKey),
+			leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" />,
+		})),
+	];
+
+	// One role card answers three questions at a glance: which model the role
+	// uses now (head + current-model field), who it degrades to and in what
+	// order (numbered fallback list), and how an entry is added, removed or
+	// reordered (chain header + per-row handle). Fallback rows share one grid
+	// so the model / level / action columns line up across every entry.
+	const renderRoleRow = (role: string, removable: boolean): ReactNode => {
+		if (!rpc) return null;
+		const raw = roleModels?.[role] ?? "";
+		const { model, level } = splitRoleValue(raw);
+		const resolved = resolvedRoleModels[role];
+		// A chain persisted by an older build (or hand-edited config) can carry
+		// a null entry; anything that is not a selector is dropped instead of
+		// reaching splitRoleValue, which would dereference it and crash the pane.
+		const chain = (fallbackChains[role] ?? []).filter(entry => typeof entry === "string");
+		const cycleIndex = cycleOrder?.indexOf(role) ?? -1;
+		const editingFallback = fallbackEditor === role;
+		const apply = (next: Record<string, string>): void =>
+			applyRoleModels(next, roleStorage === "project" ? (roleScope[role] ?? "project") : undefined);
+		const persistChain = (nextChain: string[]): void => {
+			const next = { ...fallbackChains };
+			if (nextChain.length > 0) next[role] = nextChain;
+			else delete next[role];
+			setFallbackChains(next);
+			void rpc
+				.request("settings.set", { key: "retry.fallbackChains", value: next })
+				.catch((err: unknown) => console.error("[gui] settings.set retry.fallbackChains failed", err));
+		};
+		const moveChainRow = (from: number, to: number): void => {
+			if (from === to || from < 0 || from >= chain.length) return;
+			if (to < 0 || to >= chain.length) return;
+			const nextChain = [...chain];
+			const [moved] = nextChain.splice(from, 1);
+			nextChain.splice(to, 0, moved);
+			persistChain(nextChain);
+		};
+		return (
+			<div key={role} className="gui-role-card">
+				<div className="gui-role-card-head">
+					<span className="gui-role-tag">{BUILTIN_ROLE_TAGS[role] ?? role}</span>
+					{/* Cycle membership is state ("position N in the quick-switch
+					 * cycle"), so it renders as a badge beside the tag and is its
+					 * own toggle — not a nameless icon in a toolbar. */}
+					<button
+						type="button"
+						className={`gui-role-cycle-badge${cycleIndex >= 0 ? " gui-role-cycle-badge--on" : ""}`}
+						aria-pressed={cycleIndex >= 0}
+						title={cycleIndex >= 0 ? t("general.removeCycle") : t("general.addCycle")}
+						aria-label={cycleIndex >= 0 ? t("general.removeCycle") : t("general.addCycle")}
+						onClick={() => {
+							const next = [...(cycleOrder ?? [])];
+							const at = next.indexOf(role);
+							if (at >= 0) next.splice(at, 1);
+							else next.push(role);
+							setCycleOrder(next);
+							void rpc
+								.request("settings.set", { key: "cycleOrder", value: next })
+								.catch((err: unknown) => console.error("[gui] settings.set cycleOrder failed", err));
+						}}
+					>
+						<Icon name="loop-right-ai" className="h-3 w-3" />
+						{cycleIndex >= 0 && <span>{cycleIndex + 1}</span>}
+					</button>
+					{roleStorage === "project" &&
+						(() => {
+							// The badge shows the
+							// layer the CURRENT value lives in (dot marker) plus
+							// the next write target (label). When they differ —
+							// e.g. value inherited from global while the target
+							// is project — editing would silently shadow the
+							// source, so title spells that out.
+							const target = roleScope[role] ?? "project";
+							const source = roleSources[role] ?? "default";
+							const sourceLabel =
+								source === "project"
+									? t("general.scopeProject")
+									: source === "global" || source === "overlay" || source === "runtime"
+										? t("general.scopeGlobal")
+										: null;
+							const shadows = sourceLabel !== null && sourceLabel !== target;
+							return (
+								<button
+									type="button"
+									className={`gui-role-scope-badge${shadows ? " gui-role-scope-badge--warn" : ""}`}
+									title={
+										shadows
+											? `${t("general.roleScopeShadowed")} (${sourceLabel} → ${target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")})`
+											: t("general.roleScopeToggle")
+									}
+									aria-label={t("general.roleScopeToggle")}
+									onClick={() =>
+										setRoleScope(prev => ({
+											...prev,
+											[role]: prev[role] === "global" ? "project" : "global",
+										}))
+									}
+								>
+									{sourceLabel && (
+										<span className="gui-role-scope-dot" aria-hidden="true">
+											●
+										</span>
+									)}
+									{target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")}
+								</button>
+							);
+						})()}
+				</div>
+				<div className="gui-role-field">
+					<div className="gui-role-field-head">
+						<span className="gui-role-field-label">{t("general.currentModel")}</span>
+						{!model && (
+							<span className="gui-role-status">
+								{resolved
+									? `${t("general.autoSelection")} · ${resolved.name || resolved.id}`
+									: t("general.autoSelectionApplies")}
+							</span>
+						)}
+						{model && (
+							<button
+								type="button"
+								className="gui-link gui-role-field-clear"
+								title={t("general.clearRoleModel")}
+								aria-label={t("general.clearRoleModel")}
+								onClick={() => {
+									const next = { ...roleModels };
+									delete next[role];
+									apply(next);
+								}}
+							>
+								{t("settings.clear")}
+							</button>
+						)}
+					</div>
+					<div className="gui-role-field-controls">
+						<ModelSelector
+							rpc={rpc}
+							sessionId={null}
+							presetId={model || undefined}
+							maxLabelWidth="100%"
+							onSelect={(id, provider) => {
+								if (!id) return;
+								// Store the provider-qualified reference: the daemon
+								// resolves "provider/id" exactly, so assigning
+								// opencode-go's deepseek-v4-flash never leaks onto
+								// opencode-zen's same-id model.
+								const ref = provider ? `${provider}/${id}` : id;
+								if (role === "default") {
+									// The DEFAULT role IS the default model for new
+									// sessions — keep the welcome-composer preselect
+									// in sync with the role assignment. The bare ref
+									// (no :level suffix) mirrors the daemon's
+									// modelRoles.default value.
+									try {
+										localStorage.setItem("musepi-gui-default-model", ref);
+									} catch {
+										// storage unavailable
+									}
+									window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
+								}
+								// Keep the role's thinking suffix when the model
+								// changes (TUI assign preserves the level).
+								const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
+								apply(next);
+							}}
+						/>
+						{/* A level only exists as a suffix of one model selector, so
+						 * the control appears once the role owns a model. */}
+						{model && (
+							<span className="gui-role-field-level">
+								<span className="gui-role-field-label">{t("transcript.thinkingLevel")}</span>
+								<GuiSelect
+									className="gui-role-thinking"
+									value={level ?? "inherit"}
+									onChange={v => {
+										const next = { ...roleModels, [role]: joinRoleValue(model, v) };
+										apply(next);
+									}}
+									ariaLabel={t("general.roleThinkingLevel")}
+									options={roleLevelOptions(resolved?.efforts ?? [])}
+								/>
+							</span>
+						)}
+					</div>
+				</div>
+				<div className="gui-role-fallbacks">
+					<div className="gui-role-fallbacks-title">
+						<Icon name="git-branch" className="h-3 w-3" />
+						<span>{t("general.fallbackChain")}</span>
+						<span className="gui-role-fallback-count">{chain.length}</span>
+						<button
+							type="button"
+							className="gui-btn gui-role-chain-add"
+							title={editingFallback ? t("settings.cancel") : t("general.addFallback")}
+							aria-label={editingFallback ? t("settings.cancel") : t("general.addFallback")}
+							onClick={() => {
+								setFallbackEditIndex(null);
+								setFallbackEditor(editingFallback ? null : role);
+							}}
+						>
+							<Icon name={editingFallback ? "close" : "add"} className="h-3 w-3" />
+							<span>{editingFallback ? t("settings.cancel") : t("general.addFallback")}</span>
+						</button>
+					</div>
+					{chain.length > 0 && (
+						<ol className="gui-role-fallback-list">
+							{chain.map((selector, i) => {
+								const entry = splitRoleValue(selector);
+								const slash = entry.model.indexOf("/");
+								const entryProvider = slash > 0 ? entry.model.slice(0, slash) : "";
+								const entryModel = slash > 0 ? entry.model.slice(slash + 1) : entry.model;
+								if (fallbackEditIndex === `${role}:${i}`) {
+									return (
+										<li key={selector} className="gui-role-fallback-row gui-role-fallback-row--editing">
+											<div className="gui-role-fallback-edit">
+												<ModelSelector
+													rpc={rpc}
+													sessionId={null}
+													presetId={selector}
+													maxLabelWidth="100%"
+													onSelect={(id, provider) => {
+														setFallbackEditIndex(null);
+														if (!id || !provider) return;
+														const replacement = `${provider}/${id}`;
+														// Same model re-picked → just close (no-op);
+														// a duplicate of ANOTHER row is rejected so
+														// the chain never carries two identical
+														// selectors.
+														if (replacement === selector || chain.includes(replacement)) return;
+														persistChain(chain.map((s, idx) => (idx === i ? replacement : s)));
+													}}
+												/>
+												<button
+													type="button"
+													className="gui-btn gui-role-fallback-cancel"
+													onClick={() => setFallbackEditIndex(null)}
+												>
+													{t("settings.cancel")}
+												</button>
+											</div>
+										</li>
+									);
+								}
+								return (
+									<li
+										key={selector}
+										className="gui-role-fallback-row"
+										onDragOver={e => {
+											if (e.dataTransfer.types.includes(FALLBACK_DRAG_TYPE)) e.preventDefault();
+										}}
+										onDrop={e => {
+											e.preventDefault();
+											const from = parseFallbackDrag(
+												e.dataTransfer.getData(FALLBACK_DRAG_TYPE),
+												role,
+												chain.length,
+											);
+											if (from === null) return;
+											moveChainRow(from, i);
+										}}
+									>
+										{/* The ordinal is the row's reorder handle and its only
+										 * drag source; ↑/↓ move the row, so reordering never
+										 * needs a pointer. */}
+										<button
+											type="button"
+											draggable
+											className="gui-role-fallback-grip"
+											title={t("general.dragReorder")}
+											aria-label={`${t("general.fallbackChain")} ${i + 1} · ${t("general.dragReorder")}`}
+											aria-keyshortcuts="ArrowUp ArrowDown"
+											onDragStart={e => {
+												e.dataTransfer.setData(FALLBACK_DRAG_TYPE, `${role}:${i}`);
+												e.dataTransfer.effectAllowed = "move";
+											}}
+											onKeyDown={e => {
+												if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+												e.preventDefault();
+												moveChainRow(i, i + (e.key === "ArrowUp" ? -1 : 1));
+											}}
+										>
+											{i + 1}
+										</button>
+										<button
+											type="button"
+											className="gui-role-fallback-model"
+											title={selector}
+											onClick={() => setFallbackEditIndex(`${role}:${i}`)}
+										>
+											{entryProvider && <span className="gui-role-fallback-provider">{entryProvider}</span>}
+											<span className="gui-role-fallback-name">{entryModel}</span>
+										</button>
+										<GuiSelect
+											className="gui-role-thinking gui-role-fallback-thinking"
+											value={entry.level ?? "inherit"}
+											ariaLabel={`${t("general.fallbackChain")} ${i + 1} · ${t("general.roleThinkingLevel")}`}
+											options={roleLevelOptions(fallbackEfforts[selector] ?? [])}
+											onChange={nextLevel => {
+												persistChain(
+													chain.map((value, idx) =>
+														idx === i ? joinRoleValue(splitRoleValue(value).model, nextLevel) : value,
+													),
+												);
+											}}
+										/>
+										<button
+											type="button"
+											className="gui-btn gui-btn--icon gui-role-fallback-remove"
+											title={t("general.removeFallback")}
+											aria-label={t("general.removeFallback")}
+											onClick={() => persistChain(chain.filter((_, idx) => idx !== i))}
+										>
+											<Icon name="close" className="h-3 w-3" />
+										</button>
+									</li>
+								);
+							})}
+						</ol>
+					)}
+					{editingFallback && (
+						<div className="gui-role-fallback-add">
+							<ModelSelector
+								rpc={rpc}
+								sessionId={null}
+								maxLabelWidth="100%"
+								onSelect={(id, provider) => {
+									setFallbackEditor(null);
+									if (!id || !provider) return;
+									const selector = `${provider}/${id}`;
+									if (chain.includes(selector)) return;
+									persistChain([...chain, selector]);
+								}}
+							/>
+						</div>
+					)}
+				</div>
+				{removable && (
+					<div className="gui-role-actions gui-role-actions--pin">
+						<button
+							type="button"
+							className="gui-btn gui-role-remove"
+							title={t("general.removeRole")}
+							aria-label={t("general.removeRole")}
+							onClick={() => {
+								const next = { ...roleModels };
+								delete next[role];
+								apply(next);
+							}}
+						>
+							<Icon name="delete-bin" className="h-3.5 w-3.5" />
+							<span>{t("general.removeRole")}</span>
+						</button>
+					</div>
+				)}
+			</div>
+		);
+	};
+
+	// All known roles: the daemon's canonical list, or — while settings are
+	// still loading / on old daemons — the built-ins plus any configured
+	// extras (TUI getKnownRoleIds parity: built-ins always show, even
+	// unassigned).
+	const rolesOrder =
+		knownRoleIds ??
+		[...Object.keys(BUILTIN_ROLE_TAGS), ...(cycleOrder ?? []), ...Object.keys(roleModels ?? {})].filter(
+			(role, index, all) => all.indexOf(role) === index,
+		);
+
+	// TUI model-hub rail data: every catalog provider with registration
+	// status (registry auth OR the GUI's own logged-in/configured state —
+	// keyless local runtimes count as available in the registry but show
+	// "not logged in" in providers.list) + login/import capability lookup.
+	const railProviders = useMemo(() => {
+		if (!catalog) return [];
+		// Index every id a card answers to (primary + folded alternate login
+		// ids) so a catalog row naming a secondary id still inherits the
+		// card's login/import capabilities and registration state.
+		const byId = new Map<string, (typeof mergedProviders)[number]>();
+		for (const p of mergedProviders) {
+			byId.set(p.id, p);
+			for (const alt of p.alternateLogins) byId.set(alt.id, p);
+		}
+		return catalog.map(c => {
+			const known = byId.get(c.provider);
+			return {
+				...c,
+				registered: c.available || (known ? known.loggedIn || known.configured : false),
+				canLogin: known?.canLogin ?? false,
+				canImport: known?.canImport ?? false,
+			};
+		});
+	}, [catalog, mergedProviders]);
+	const registeredProviders = railProviders.filter(p => p.registered);
+	const unregisteredProviders = railProviders.filter(p => !p.registered);
+	const assignedCount = rolesOrder.filter(r => roleModels?.[r]).length;
+	const railEntryCls = (id: string): string =>
+		`gui-model-rail-entry${railView === id ? " gui-model-rail-entry--active" : ""}`;
+	const railProvider = railView.startsWith("provider:")
+		? railProviders.find(p => `provider:${p.provider}` === railView)
+		: undefined;
+	// Cap per-provider rows in the "all models" / provider views — the full
+	// bundled catalog is thousands of rows; real browsing lives in the model
+	// pickers, this pane is an overview.
+	const MODEL_LIST_CAP = 30;
+	const renderProviderModels = (p: (typeof railProviders)[number]): ReactNode => {
+		const shown = p.models.slice(0, MODEL_LIST_CAP);
+		return (
+			<div className="gui-model-provider-models">
+				{shown.length > 0 ? (
+					shown.map(m => {
+						// Same icon set + wording as the model picker's rows, so a
+						// model reads identically in both places.
+						const capTitle = [
+							m.text ? t("general.textInput") : null,
+							m.vision ? t("general.imageUnderstanding") : null,
+							m.video ? t("general.videoUnderstanding") : null,
+							m.imageGen ? t("general.imageGeneration") : null,
+							m.videoGen ? t("general.videoGeneration") : null,
+							m.reasoning ? t("general.reasoning") : null,
+						]
+							.filter((label): label is string => label !== null)
+							.join(" · ");
+						return (
+							<div key={`${p.provider}/${m.id}`} className="gui-model-model-row">
+								<span className="gui-model-model-name" title={m.name}>
+									{m.name}
+								</span>
+								<span
+									className="gui-model-cap"
+									title={capTitle || undefined}
+									aria-label={capTitle || undefined}
+								>
+									{m.text && <Icon name="text" className="h-3.5 w-3.5" />}
+									{m.vision && <Icon name="file-image" className="h-3.5 w-3.5" />}
+									{m.video && <Icon name="file-video" className="h-3.5 w-3.5" />}
+									{m.imageGen && <Icon name="palette" className="h-3.5 w-3.5" />}
+									{m.videoGen && <Icon name="record-circle" className="h-3.5 w-3.5" />}
+									{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
+								</span>
+								<span className="gui-model-model-id">{m.id}</span>
+							</div>
+						);
+					})
+				) : (
+					<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("general.noModels")}</div>
+				)}
+				{p.modelCount > shown.length && <div className="gui-model-model-more">+{p.modelCount - shown.length}</div>}
+			</div>
+		);
+	};
+	// "All models" view: every provider's catalog models, grouped (TUI model
+	// browser parity — display-only; assignment happens in the role rows).
+	const renderAllModels = (): ReactNode => (
+		<div className="gui-model-all">
+			{catalog === null ? (
+				<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.loading")}…</div>
+			) : (
+				railProviders.map(p => (
+					<div key={p.provider} className="gui-model-provider-block">
+						<div className="gui-model-provider-block-head">
+							<span
+								className={`gui-provider-status-dot${p.registered ? " gui-provider-status-dot--on" : ""}`}
+								aria-hidden="true"
+							/>
+							<span className="gui-model-provider-name" title={p.name}>
+								{p.name}
+							</span>
+							<span className="gui-model-rail-count">{p.modelCount}</span>
+						</div>
+						{renderProviderModels(p)}
+					</div>
+				))
+			)}
+		</div>
+	);
+	// Provider detail (rail "provider:*" view): models + registration status
+	// + enable actions for unregistered providers.
+	const renderProviderDetail = (p: (typeof railProviders)[number]): ReactNode => {
+		// Fold-aware: the rail can name a secondary login id, whose card is
+		// the primary one (they share a credential store).
+		const known = mergedProviders.find(m => m.id === p.provider || m.alternateLogins.some(a => a.id === p.provider));
+		const status = known
+			? known.loggedIn
+				? t("settings.loggedIn")
+				: known.configured
+					? t("settings.configured")
+					: t("settings.notLogged")
+			: p.available
+				? t("settings.loggedIn")
+				: t("settings.notLogged");
+		return (
+			<div className="gui-settings-section">
+				<div className="gui-settings-row">
+					<div className="min-w-0 flex-1">
+						<div className="gui-settings-row-label">{p.name}</div>
+						<div className="truncate text-[12px] text-[var(--color-text-faint)]">{p.provider}</div>
+					</div>
+					<span
+						className={`gui-provider-status-dot${p.registered ? " gui-provider-status-dot--on" : ""}`}
+						aria-hidden="true"
+					/>
+					<span className="text-[12px] text-[var(--color-text-muted)]">{status}</span>
+				</div>
+				{renderProviderModels(p)}
+				{!p.registered && (p.canLogin || p.canImport) && (
+					<div className="gui-model-provider-actions">
+						{p.canLogin && (
+							<button
+								type="button"
+								className="gui-btn gui-btn-approve"
+								disabled={!known?.available || pendingLogins.includes(known?.loginId ?? p.provider)}
+								onClick={() => void onLogin(known?.loginId ?? p.provider)}
+							>
+								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+								{t("settings.login")}
+							</button>
+						)}
+						{p.canImport && (
+							<button
+								type="button"
+								className="gui-btn"
+								onClick={() => {
+									setApiKeyTarget(p.provider);
+									setApiKeyValue("");
+								}}
+							>
+								<Icon name="key" className="h-3.5 w-3.5" />
+								{t("general.importApiKey")}
+							</button>
+						)}
+					</div>
+				)}
+			</div>
+		);
+	};
+	// Login flow (OAuth device-code) and API-key import render as one inline
+	// panel. Placement follows the trigger: a panel opened from a provider
+	// card appears inside that card (a flow for a card far down the grid used
+	// to appear at the pane top, far from its trigger and its Cancel button);
+	// a flow started from elsewhere — the roles rail, or a card hidden by the
+	// collapse limit — falls back to the pane-body top so it is never lost.
+	// Provider id → catalog display name (raw ids like "kimi-code" read broken
+	// in the flow title when the daemon keys differ from the label).
+	const providerDisplayName = (id: string): string =>
+		providers?.find(p => p.id === id)?.name ?? apiProviders.find(p => p.id === id)?.name ?? id;
+	// Login (OAuth) and API-key import render as one MODAL dialog (model.tsx
+	// previously anchored them inside the triggering provider card, but a
+	// grid card is a third of the pane wide — a URL plus its buttons clipped
+	// off the right edge whenever two other cards sat beside it). The dialog
+	// owns the keyboard while open (DialogFrame contract) and is always
+	// centered regardless of where in the grid the trigger sits.
+	const renderLoginFlow = (): ReactNode => {
+		// Always-mounted, driven by `open` (DialogFrame contract: conditional
+		// mounting kills the exit animation).
+		const s = loginState;
+		return (
+			<DialogFrame
+				open={s !== null}
+				label={t("settings.loginToWithName", { name: providerDisplayName(s?.providerId ?? "") })}
+				onClose={() => void onCancelLogin()}
+				className="gui-dialog--confirm gui-provider-flow-dialog"
+				morphKey={`${s ? "open" : "closed"}:${s?.url ? "url" : ""}:${s?.instructions ? "instructions" : ""}:${
+					s?.message ? "message" : ""
+				}:${s?.waitingInput ? "input" : ""}`}
+			>
+				{s && (
+					<div className="gui-github-flow">
+						<div className="gui-github-flow-title flex items-center gap-1.5">
+							<Icon name="lock" className="h-3.5 w-3.5" />
+							{t("settings.loginToWithName", { name: providerDisplayName(s.providerId) })}
+						</div>
+						{s.url && (
+							<div className="gui-github-flow-actions">
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary"
+									onClick={() => void openExternalUrl(s.launchUrl ?? s.url!)}
+								>
+									<Icon name="external-link" className="h-3.5 w-3.5" />
+									{t("transcript.openLoginPage")}
+								</button>
+								<button
+									type="button"
+									className="gui-link"
+									onClick={() => {
+										void navigator.clipboard.writeText(s.url ?? "").catch(() => {});
+										setCopied(true);
+										window.setTimeout(() => setCopied(false), 1500);
+									}}
+								>
+									{copied ? t("settings.linkCopied") : t("settings.copyLink")}
+								</button>
+							</div>
+						)}
+						{s.instructions && <div className="gui-github-flow-hint">{s.instructions}</div>}
+						{s.message && <div className="gui-github-flow-hint">{s.message}</div>}
+						{s.waitingInput ? (
+							<div className="mt-2 flex items-center gap-2">
+								<input
+									className="gui-input flex-1"
+									value={inputValue}
+									onChange={e => setInputValue(e.target.value)}
+									placeholder={t("settings.pasteCodeRedirectUrl")}
+									onKeyDown={e => {
+										if (e.key === "Enter") {
+											void onSubmitInput(inputValue);
+											setInputValue("");
+										}
+									}}
+								/>
+								<button
+									type="button"
+									className="gui-btn gui-btn-approve"
+									onClick={() => void onSubmitInput(inputValue)}
+								>
+									{t("settings.submit2")}
+								</button>
+							</div>
+						) : (
+							s.url &&
+							pendingLogins.includes(s.providerId) && (
+								<div className="gui-github-flow-waiting">
+									<span className="gui-flow-spinner" aria-hidden="true" />
+									{t("transcript.waitingLogin")}
+								</div>
+							)
+						)}
+						<div className="gui-github-flow-actions">
+							<button type="button" className="gui-btn" onClick={() => void onCancelLogin()}>
+								{t("settings.cancel")}
+							</button>
+						</div>
+					</div>
+				)}
+			</DialogFrame>
+		);
+	};
+	// API-key import flow: the same modal shell as login (always mounted,
+	// driven by `open` — DialogFrame exit-animation contract).
+	const renderApiKeyImport = (): ReactNode => {
+		return (
+			<DialogFrame
+				open={apiKeyTarget !== null}
+				label={t("general.importApiKeyWithName", { name: providerDisplayName(apiKeyTarget ?? "") })}
+				onClose={() => setApiKeyTarget(null)}
+				className="gui-dialog--confirm gui-provider-flow-dialog"
+			>
+				{apiKeyTarget && (
+					<div className="gui-github-flow">
+						<div className="gui-github-flow-title flex items-center gap-1.5">
+							<Icon name="key" className="h-3.5 w-3.5" />
+							{t("general.importApiKeyWithName", { name: providerDisplayName(apiKeyTarget) })}
+						</div>
+						<div className="flex items-center gap-2">
+							<input
+								className="gui-input flex-1"
+								type="password"
+								value={apiKeyValue}
+								placeholder="sk-…"
+								onChange={e => {
+									setApiKeyValue(e.target.value);
+									setApiKeyError(null);
+								}}
+								onKeyDown={e => {
+									if (e.key === "Enter" && apiKeyValue.trim()) void submitApiKey();
+								}}
+							/>
+							<button
+								type="button"
+								className="gui-btn gui-btn-approve"
+								disabled={!apiKeyValue.trim()}
+								onClick={() => void submitApiKey()}
+							>
+								{t("general.import")}
+							</button>
+							<button type="button" className="gui-btn" onClick={() => setApiKeyTarget(null)}>
+								{t("settings.cancel")}
+							</button>
+						</div>
+						{apiKeyError && (
+							<div className="gui-github-flow-hint" role="alert">
+								{apiKeyError}
+							</div>
+						)}
+					</div>
+				)}
+			</DialogFrame>
+		);
+	};
+
+	return (
+		<>
+			<h2 className="gui-settings-page-title">{t("settings.modelSettings")}</h2>
+			<p className="gui-settings-page-desc">{t("settings.modelSettingsDescription")}</p>
+
+			<div className="gui-model-pane">
+				{/* Top tabs (extensions-center pill parity): the pane's old left
+				 * nav moved up — the roles tab now hosts its own TUI-style rail,
+				 * so a second vertical nav would double up. */}
+				<div ref={modelTabsRef} className="gui-model-tabs" role="tablist" aria-label={t("settings.modelSettings")}>
+					{modelTabs.map(tab => (
+						<button
+							key={tab.id}
+							type="button"
+							role="tab"
+							aria-selected={activeTab === tab.id}
+							className={`gui-model-tab${activeTab === tab.id ? " gui-model-tab--active" : ""}`}
+							onClick={() => setActiveTab(tab.id)}
+						>
+							{tab.label}
+						</button>
+					))}
+				</div>
+				{/* Tab body: HeightMorph eases the pane height between tabs and
+				 * between rail views (different content heights — no abrupt
+				 * jump). */}
+				<HeightMorph morphKey={`${activeTab}:${railView}`} className="gui-model-pane-body">
+					{renderLoginFlow()}
+					{activeTab === "roles" && rpc && (
+						<>
+							<div className="gui-settings-section">
+								<div className="gui-settings-section-title">{t("general.roleModels")}</div>
+								<div className="gui-settings-section-desc">{t("settings.roleModelsDescription")}</div>
+							</div>
+							{/* TUI /model parity: the roles tab is a split pane — a
+							 * rail of Roles / All models / registered providers /
+							 * unregistered providers on the left, the selected
+							 * view's content on the right. */}
+							<div className="gui-model-rail-wrap">
+								<nav className="gui-model-rail" aria-label={t("general.roleModels")}>
+									<button type="button" className={railEntryCls("roles")} onClick={() => setRailView("roles")}>
+										<span className="gui-model-rail-label">{t("general.roleModels")}</span>
+										<span className="gui-model-rail-count">
+											{assignedCount}/{rolesOrder.length}
+										</span>
+									</button>
+									<button type="button" className={railEntryCls("all")} onClick={() => setRailView("all")}>
+										<span className="gui-model-rail-label">{t("general.allModels")}</span>
+										<span className="gui-model-rail-count">{catalogModels?.length ?? 0}</span>
+									</button>
+									{catalog !== null && (
+										<>
+											<div className="gui-model-rail-group">{t("general.registeredProviders")}</div>
+											{registeredProviders.map(p => (
+												<button
+													key={p.provider}
+													type="button"
+													className={railEntryCls(`provider:${p.provider}`)}
+													onClick={() => setRailView(`provider:${p.provider}`)}
+												>
+													<span className="gui-model-rail-logo" aria-hidden="true">
+														<ModelBrandIcon
+															provider={p.provider}
+															modelId={p.models[0]?.id ?? ""}
+															size={14}
+														/>
+													</span>
+													<span className="gui-model-rail-label truncate">{p.name}</span>
+													<span className="gui-model-rail-count">{p.modelCount}</span>
+												</button>
+											))}
+											<div className="gui-model-rail-group">{t("general.unregisteredProviders")}</div>
+											{unregisteredProviders.map(p => (
+												<button
+													key={p.provider}
+													type="button"
+													className={railEntryCls(`provider:${p.provider}`)}
+													onClick={() => setRailView(`provider:${p.provider}`)}
+												>
+													<span className="gui-model-rail-logo" aria-hidden="true">
+														<ModelBrandIcon
+															provider={p.provider}
+															modelId={p.models[0]?.id ?? ""}
+															size={14}
+														/>
+													</span>
+													<span className="gui-model-rail-label truncate">{p.name}</span>
+												</button>
+											))}
+										</>
+									)}
+								</nav>
+								<div className="gui-model-rail-body">
+									{railView === "roles" && (
+										<>
+											{/* No current-session row here: the composer's model
+											 * selector already switches the live session's model
+											 * (same session.setModel the TUI /switch runs), and
+											 * the thinking level sits beside it in the composer —
+											 * a per-session override does not belong in global
+											 * settings. The DEFAULT role below IS the default
+											 * model for new sessions. */}
+											{roleModels === null ? (
+												<div className="text-[13px] text-[var(--color-text-faint)]">
+													{t("settings.loading")}…
+												</div>
+											) : (
+												<>
+													<div className="gui-role-grid">
+														{rolesOrder.map(role =>
+															renderRoleRow(role, BUILTIN_ROLE_TAGS[role] === undefined),
+														)}
+													</div>
+													<button
+														type="button"
+														className="gui-connect-add"
+														onClick={() => {
+															void prompt({ title: t("general.newRoleName") }).then(
+																(role: string | null) => {
+																	if (!role?.trim() || !rpc) return;
+																	const next = { ...roleModels, [role.trim()]: "" };
+																	applyRoleModels(next);
+																},
+															);
+														}}
+													>
+														<Icon name="add-circle" className="h-4 w-4" />
+														<span>{t("general.addRole")}</span>
+													</button>
+													{(cycleOrder?.length ?? 0) > 0 && (
+														<div className="gui-role-cycle-track">
+															<span className="text-[12px] text-[var(--color-text-faint)]">
+																{t("general.cycleOrder")}:
+															</span>
+															{cycleOrder!.map(role => (
+																<span key={role} className="gui-role-cycle-chip">
+																	{BUILTIN_ROLE_TAGS[role] ?? role}
+																</span>
+															))}
+														</div>
+													)}
+													{roleStorage === "project" &&
+														projectOverrides.length > 0 &&
+														(() => {
+															// Count only REAL overrides — a project key whose
+															// value equals the global value is a no-op echo,
+															// not an override.
+															const real = projectOverrides.filter(
+																e => e.globalValue == null || e.globalValue !== e.projectValue,
+															);
+															if (real.length === 0) return null;
+															return (
+																<div className="gui-project-overrides">
+																	<div className="gui-project-overrides-title">
+																		<span>{t("general.projectOverrides")}</span>
+																		<span className="text-[12px] text-[var(--color-text-faint)]">
+																			{t("general.overridesCountWithCount", {
+																				count: String(real.length),
+																			})}
+																		</span>
+																	</div>
+																	{real.map(entry => (
+																		<div key={entry.path} className="gui-project-override-row">
+																			<code className="gui-project-override-path">{entry.path}</code>
+																			<span
+																				className="gui-project-override-value"
+																				title={entry.projectValue}
+																			>
+																				{entry.projectValue}
+																			</span>
+																			{entry.globalValue != null &&
+																				entry.globalValue !== entry.projectValue && (
+																					<s
+																						className="gui-project-override-global"
+																						title={String(entry.globalValue)}
+																					>
+																						{entry.globalValue}
+																					</s>
+																				)}
+																			{entry.path.startsWith("modelRoles.") ? (
+																				<button
+																					type="button"
+																					className="gui-btn gui-btn--icon"
+																					title={t("general.deleteOverride")}
+																					aria-label={t("general.deleteOverride")}
+																					onClick={() => deleteProjectOverride(entry.path)}
+																				>
+																					<Icon name="delete-bin" className="h-3.5 w-3.5" />
+																				</button>
+																			) : (
+																				<span
+																					className="text-[11px] text-[var(--color-text-faint)]"
+																					title={t("general.overrideReadOnly")}
+																				>
+																					{t("general.readOnly")}
+																				</span>
+																			)}
+																		</div>
+																	))}
+																</div>
+															);
+														})()}
+												</>
+											)}
+										</>
+									)}
+									{railView === "all" && renderAllModels()}
+									{railProvider && renderProviderDetail(railProvider)}
+								</div>
+							</div>
+						</>
+					)}
+
+					{activeTab === "behavior" && rpc && (
+						<>
+							<div className="gui-settings-section">
+								<div className="gui-settings-section-title">{t("general.modelBehavior")}</div>
+								<div className="gui-settings-section-desc">{t("general.modelBehaviorDescription")}</div>
+							</div>
+							<div className="gui-schema-card">
+								{/* Model behaviour (thinking/sampling/prompt/retry & fallback/
+								 * advisor/prewalk/vision) — TUI settings model-tab parity.
+								 * Own tab so role assignment stays focused. */}
+								<SchemaTabSection rpc={rpc} tabs={["model"]} />
+							</div>
+							<div className="gui-settings-section mt-4">
+								<div className="gui-settings-section-title">{t("settings.sideChannelModel")}</div>
+								<div className="gui-settings-section-desc">{t("settings.sideChannelModelDescription")}</div>
+								<div className="gui-settings-row">
+									{/* Section title already names this single control; repeating
+									 * the label on the row read as two separate settings. */}
+									<div>
+										<div className="gui-settings-row-desc">{t("settings.sideChannelModelLabel")}</div>
+									</div>
+									<GuiSelect
+										className="gui-input max-w-[260px]"
+										value={sideChannelModel}
+										onChange={v => {
+											const next = v;
+											setSideChannelModel(next);
+											void rpc
+												.request("settings.set", { key: "sideChannelModel", value: next })
+												.catch((err: unknown) =>
+													console.error("[gui] settings.set sideChannelModel failed", err),
+												);
+										}}
+										ariaLabel={t("settings.sideChannelModel")}
+										options={[
+											{ value: "", label: t("settings.followSessionModel") },
+											// Role aliases resolve through the role assignment
+											// (modelRoles.<role>) at use time — a side-channel pick
+											// tracks the role instead of freezing one model id.
+											{ value: "@tiny", label: t("settings.followRoleModel", { role: "TINY" }) },
+											...Object.entries(BUILTIN_ROLE_TAGS)
+												.filter(([role]) => role !== "tiny")
+												.map(([role, tag]) => ({
+													value: `@${role}`,
+													label: t("settings.followRoleModel", { role: tag }),
+												})),
+											// Legacy plain ids stay selectable for existing configs.
+											...(catalogModels ?? []).map(m => ({ value: m.id, label: m.name ?? m.id })),
+										]}
+									/>
+								</div>
+							</div>
+						</>
+					)}
+
+					{activeTab === "providers" && (
+						<>
+							{/* 模型供应商: subscription (OAuth) + API-key providers merged into
+							 * one searchable list — active providers first, model tags on
+							 * API-backed cards, floating modal for API-key import. */}
+							<div className="gui-settings-section">
+								<div className="gui-settings-section-title">{t("settings.providersUnified")}</div>
+								<div className="gui-settings-section-desc">{t("settings.providersUnifiedHint")}</div>
+								{providers === null ? (
+									<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.loading")}…</div>
+								) : mergedProviders.length === 0 ? (
+									<div className="text-[13px] text-[var(--color-text-faint)]">{t("settings.noProviders")}</div>
+								) : (
+									<>
+										<div className="gui-provider-search">
+											<SearchField
+												value={providerQuery}
+												onChange={setProviderQuery}
+												placeholder={t("settings.searchProviders")}
+											/>
+										</div>
+										<HeightMorph morphKey={`${showAll}:${providerQ}`}>
+											<ChromaGroup className="gui-provider-grid">
+												{visibleProviders.map(p => {
+													const creds = credentialsByProvider[p.id] ?? [];
+													const active = p.loggedIn || p.configured;
+													return (
+														<SpotlightCard
+															key={p.id}
+															className="gui-provider-card"
+															spotlightColor="rgba(255, 255, 255, 0.08)"
+														>
+															<div className="gui-provider-card-head">
+																{/* Brand mark (same Lobe icon the model picker
+																 * rows use) — a grid of text-only cards is
+																 * hard to scan; the logo carries recognition. */}
+																<span className="gui-provider-card-logo" aria-hidden="true">
+																	<ModelBrandIcon
+																		provider={p.key}
+																		modelId={p.models[0] ?? ""}
+																		size={16}
+																	/>
+																</span>
+																<div className="min-w-0 flex-1">
+																	<div className="gui-provider-card-name" title={p.name}>
+																		{p.name}
+																	</div>
+																	<div
+																		className={`gui-provider-card-status${
+																			active ? " gui-provider-card-status--ok" : ""
+																		}`}
+																	>
+																		<span
+																			className={`gui-provider-status-dot${
+																				active ? " gui-provider-status-dot--on" : ""
+																			}`}
+																			aria-hidden="true"
+																		/>
+																		{p.loggedIn
+																			? creds.length > 1
+																				? t("general.loggedInWithCount", {
+																						count: String(creds.length),
+																					})
+																				: t("settings.loggedIn")
+																			: p.configured
+																				? t("settings.configured")
+																				: p.canImport
+																					? `${p.modelCount} ${t("general.models")}`
+																					: t("settings.notLogged")}
+																	</div>
+																</div>
+																{active ? (
+																	<div className="relative shrink-0">
+																		<button
+																			type="button"
+																			className="gui-btn gui-btn-stop"
+																			ref={el => {
+																				if (el) cardMenuAnchors.current.set(p.id, el);
+																				else cardMenuAnchors.current.delete(p.id);
+																			}}
+																			aria-expanded={credsMenu === p.id}
+																			onClick={() =>
+																				setCredsMenu(menu => (menu === p.id ? null : p.id))
+																			}
+																		>
+																			{t("settings.logout")}
+																			<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+																		</button>
+																		<MenuPopup
+																			open={credsMenu === p.id}
+																			className="gui-creds-menu"
+																			anchor={cardMenuAnchors.current.get(p.id) ?? null}
+																			portal
+																			align="right"
+																			onOpenChange={open => {
+																				if (!open && credsMenu === p.id) setCredsMenu(null);
+																			}}
+																		>
+																			<div className="gui-creds-menu-label">
+																				{t("general.accounts")}
+																			</div>
+																			{creds.map(c => (
+																				<div key={c.id} className="gui-creds-row">
+																					<div className="min-w-0 flex-1">
+																						<div className="truncate text-[13px] text-[var(--color-text)]">
+																							{c.accountLabel}
+																						</div>
+																						{c.note && (
+																							<div className="truncate text-[12px] text-[var(--color-text-faint)]">
+																								{c.note}
+																							</div>
+																						)}
+																					</div>
+																					<button
+																						type="button"
+																						className="gui-btn gui-btn--icon"
+																						title={t("general.editCredentialNote")}
+																						aria-label={t("general.editCredentialNote")}
+																						onClick={() =>
+																							void editCredentialNote(p.id, c.id, c.note ?? null)
+																						}
+																					>
+																						<Icon name="pencil" className="h-3 w-3" />
+																					</button>
+																					<button
+																						type="button"
+																						className="gui-btn gui-btn--icon"
+																						title={t("general.removeCredential")}
+																						aria-label={t("general.removeCredential")}
+																						onClick={() => void logoutCredential(p.id, c.id)}
+																					>
+																						<Icon name="delete-bin" className="h-3 w-3" />
+																					</button>
+																				</div>
+																			))}
+																			<div className="gui-creds-menu-sep" />
+																			{/* "Another credential" adds one of the SAME
+																			 * kind the card already holds: a
+																			 * subscription account starts another
+																			 * login flow, a pure API-key provider opens
+																			 * the key input. Preferring canImport here
+																			 * sent ChatGPT (which also ships a bundled
+																			 * model list) to the API-key box. */}
+																			<button
+																				type="button"
+																				className="gui-view-opt"
+																				disabled={p.canLogin && pendingLogins.includes(p.loginId)}
+																				onClick={() => {
+																					setCredsMenu(null);
+																					if (p.canLogin) void onLogin(p.loginId);
+																					else {
+																						setApiKeyTarget(p.id);
+																						setApiKeyValue("");
+																					}
+																				}}
+																			>
+																				<Icon name="add-circle" className="h-3.5 w-3.5" />
+																				<span className="min-w-0 flex-1">
+																					{t("general.addAnotherCredential")}
+																				</span>
+																			</button>
+																			{p.alternateLogins.map(alt => (
+																				<button
+																					type="button"
+																					key={alt.id}
+																					className="gui-view-opt"
+																					title={t("general.alternateLoginHint")}
+																					disabled={pendingLogins.includes(alt.id)}
+																					onClick={() => {
+																						setCredsMenu(null);
+																						void onLogin(alt.id);
+																					}}
+																				>
+																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+																					<span className="min-w-0 flex-1">
+																						{t("general.loginWithWithName", { name: alt.name })}
+																					</span>
+																				</button>
+																			))}
+																			<button
+																				type="button"
+																				className="gui-view-opt gui-view-opt--danger"
+																				onClick={() => {
+																					setCredsMenu(null);
+																					void onLogout(p.id);
+																				}}
+																			>
+																				<span className="min-w-0 flex-1">
+																					{t("general.logoutAll")}
+																				</span>
+																			</button>
+																		</MenuPopup>
+																	</div>
+																) : (
+																	<div className="relative shrink-0">
+																		<button
+																			type="button"
+																			className="gui-btn gui-btn--icon"
+																			ref={el => {
+																				if (el) cardMenuAnchors.current.set(`actions-${p.id}`, el);
+																				else cardMenuAnchors.current.delete(`actions-${p.id}`);
+																			}}
+																			aria-expanded={actionsMenu === p.id}
+																			aria-label={t("general.providerActions")}
+																			title={t("general.providerActions")}
+																			onClick={() =>
+																				setActionsMenu(menu => (menu === p.id ? null : p.id))
+																			}
+																		>
+																			<Icon name="more" className="h-3.5 w-3.5" />
+																		</button>
+																		<MenuPopup
+																			open={actionsMenu === p.id}
+																			className="gui-creds-menu"
+																			anchor={cardMenuAnchors.current.get(`actions-${p.id}`) ?? null}
+																			portal
+																			align="right"
+																			onOpenChange={open => {
+																				if (!open && actionsMenu === p.id) setActionsMenu(null);
+																			}}
+																		>
+																			{p.canLogin && (
+																				<button
+																					type="button"
+																					className="gui-view-opt"
+																					disabled={
+																						!p.available || pendingLogins.includes(p.loginId)
+																					}
+																					onClick={() => {
+																						setActionsMenu(null);
+																						void onLogin(p.loginId);
+																					}}
+																				>
+																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+																					<span className="min-w-0 flex-1">
+																						{t("settings.login")}
+																					</span>
+																				</button>
+																			)}
+																			{p.canImport && (
+																				<button
+																					type="button"
+																					className="gui-view-opt"
+																					onClick={() => {
+																						setActionsMenu(null);
+																						setApiKeyTarget(p.id);
+																						setApiKeyValue("");
+																					}}
+																				>
+																					<Icon name="key" className="h-3.5 w-3.5" />
+																					<span className="min-w-0 flex-1">
+																						{t("general.importApiKey")}
+																					</span>
+																				</button>
+																			)}
+																		</MenuPopup>
+																	</div>
+																)}
+															</div>
+															{p.models.length > 0 && (
+																<div className="gui-provider-tags">
+																	{p.models.map(m => (
+																		<span key={m} className="gui-provider-tag">
+																			{m}
+																		</span>
+																	))}
+																	{p.modelCount > p.models.length && (
+																		<span className="gui-provider-tag gui-provider-tag--more">
+																			+{p.modelCount - p.models.length}
+																		</span>
+																	)}
+																</div>
+															)}
+														</SpotlightCard>
+													);
+												})}
+											</ChromaGroup>
+										</HeightMorph>
+										{filteredProviders.length > PROVIDER_COLLAPSE_LIMIT && (
+											<button
+												type="button"
+												className="gui-provider-more"
+												onClick={() => setShowAll(v => !v)}
+											>
+												{showAll
+													? t("tools.collapse")
+													: t("settings.showAllWithCount", { count: String(filteredProviders.length) })}
+												<MorphIcon
+													icon={showAll ? ChevronUpIconData : ChevronDownIconData}
+													size={14}
+													spring="snappy"
+													reducedMotion="user"
+												/>
+											</button>
+										)}
+										{providerQ && filteredProviders.length === 0 && (
+											<div className="text-[13px] text-[var(--color-text-faint)]">
+												{t("settings.noMatchingProviders")}
+											</div>
+										)}
+									</>
+								)}
+							</div>
+							{/* Provider behaviour (services, tiny-model, protocol,
+							 * timeouts, privacy) — TUI providers-tab parity. Merged
+							 * here (previously a duplicated sidebar 供应商 section /
+							 * page-bottom flat block) so the providers tab is the
+							 * single home for everything provider-side. */}
+							<div className="gui-schema-card">
+								<SchemaTabSection rpc={rpc ?? null} tabs={["providers"]} />
+							</div>
+						</>
+					)}
+
+					{/* Login / API-key import modals: always mounted, driven by
+					 * `open` (DialogFrame exit-animation contract). DialogFrame
+					 * portals to document.body, so tree position is irrelevant —
+					 * they stay visible over whichever tab the trigger came
+					 * from, and no longer clip inside a third-of-a-pane card. */}
+					{renderApiKeyImport()}
+					{/* The pane owns the "custom providers" tab. Rendering it
+					 * unconditionally leaked the whole section (title, list, add
+					 * button) under the roles/behavior/providers tabs too. */}
+					{activeTab === "custom" && (
+						<CustomProviderPane
+							custom={custom}
+							rpc={rpc ?? null}
+							sessionId={sessionId ?? null}
+							onChanged={onChanged}
+							initialAddOpen={openAddProvider}
+						/>
+					)}
+				</HeightMorph>
+			</div>
+		</>
+	);
+}

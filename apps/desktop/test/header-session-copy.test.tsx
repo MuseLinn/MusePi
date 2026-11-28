@@ -107,7 +107,6 @@ async function renderHeader(entries: SessionEntry[]): Promise<Rendered> {
 				store={fakeStore(entries)}
 				rpc={rpc}
 				sideCollapsed={false}
-				onToggleSidebar={() => {}}
 				onNewSession={() => {}}
 				onOpenSettings={() => {}}
 				terminalOpen={false}

@@ -103,7 +103,7 @@ async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRo
 					{ id: "work", label: "Work" },
 					{ id: "design", label: "Design" },
 				],
-				modeId: "design",
+				agentPreset: "design",
 				onModeChange: () => {},
 				designSubmit: (metadata: Record<string, unknown>, message?: CreationMessage) => {
 					captured.push({ metadata, message });

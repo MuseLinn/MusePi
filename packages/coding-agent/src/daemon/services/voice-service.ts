@@ -180,7 +180,7 @@ export class VoiceService implements DaemonService {
 		const p = (params ?? {}) as { sessionId?: string };
 		if (!p.sessionId) throw new Error("sessionId required");
 		const { getVoiceFrontendService } = await import("../../voice/frontend/service");
-		return { results: await getVoiceFrontendService().streamStop(p.sessionId) };
+		return await getVoiceFrontendService().streamStop(p.sessionId);
 	}
 
 	async frontendStreamCancel(params: unknown) {

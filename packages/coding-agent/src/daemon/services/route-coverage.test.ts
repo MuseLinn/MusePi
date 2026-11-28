@@ -13,6 +13,7 @@ import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { BundleService } from "./bundle-service";
 import { ConnectorCatalogService } from "./connector-catalog-service";
+import { ConnectorRequestService } from "./connector-request-service";
 import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { CredentialService } from "./credential-service";
@@ -26,6 +27,7 @@ import { GitContextService } from "./git-context-service";
 import { GitService } from "./git-service";
 import { GitWatchService } from "./git-watch-service";
 import { GitHubService } from "./github-service";
+import { GoalService } from "./goal-service";
 import { KnowledgeService } from "./knowledge-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { LivenessService } from "./liveness-service";
@@ -34,6 +36,7 @@ import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
 import { MemoryService } from "./memory-service";
 import { ModelsService } from "./models-service";
+import { PlanModeService } from "./plan-mode-service";
 import { PluginInstallService } from "./plugin-install-service";
 import { PresetsService } from "./presets-service";
 import { ProvidersService } from "./providers-service";
@@ -288,6 +291,8 @@ function buildRegistry(): HostServices {
 			setSelection: async () => ({ ok: true, appliedToLive: false }),
 		}),
 	);
+	// ConnectorRequestService：只认领路由（本测试不应答连接卡片）。
+	services.register(new ConnectorRequestService({ get: () => undefined, allSessions: () => [] }));
 	// McpServersService：只认领路由（本测试不读写 mcp.json），路径用隔离 temp。
 	services.register(
 		new McpServersService({
@@ -332,6 +337,38 @@ function buildRegistry(): HostServices {
 			cwd: () => "",
 			home: () => "",
 			invalidate: () => {},
+		}),
+	);
+	// goal / plan 服务：只认领路由参与闭包，本测试不触会话状态。
+	services.register(
+		new GoalService({
+			get: () => undefined,
+			publishSessionModeProjection: () => {},
+			modesOf: () => ({}),
+			renderGuidedKickoff: () => "",
+			resolveMedia: async () => ({}),
+		}),
+	);
+	services.register(
+		new PlanModeService({
+			get: () => undefined,
+			publishSessionModeProjection: () => {},
+			modesOf: () => ({}),
+			files: {
+				read: async () => null,
+				list: async () => [],
+				write: async () => {},
+				resolveTitle: () => ({ title: "" }),
+				resolveApproved: async () => ({ planFilePath: "", title: "" }),
+			},
+			local: { root: () => "", copy: async () => {}, urlToPath: () => "" },
+			renderApprovedPrompt: () => "",
+			renderCompactNote: () => "",
+			resolveExecutionModel: () => undefined,
+			writeFile: async () => {},
+			readFile: async () => "",
+			mkdir: async () => {},
+			writePlanViaLocal: async () => {},
 		}),
 	);
 	// ArchiveService：无宿主依赖（本测试不发起归档），仅需认领路由参与闭包。

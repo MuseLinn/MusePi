@@ -463,7 +463,7 @@ export interface ExtensionItem {
 	trigger?: string;
 	path: string;
 	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
-	state: "active" | "disabled" | "shadowed";
+	state: "active" | "disabled" | "shadowed" | "discovered";
 	disabledReason?: "provider-disabled" | "item-disabled" | "shadowed";
 	shadowedBy?: string;
 	/** 加载失败原因 —— 存在 = 扩展不可用(fail-loud,不静默消失)。 */

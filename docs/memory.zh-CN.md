@@ -165,7 +165,7 @@ hindsight:
    apiToken: ${HINDSIGHT_API_TOKEN}
 ```
 
-`HINDSIGHT_*` 环境变量覆盖 `hindsight.*` 设置，后者覆盖内置默认值。完整覆盖表、取值、解析规则、优先级和默认值见 [Hindsight 环境变量表](./environment-variables.html#hindsight-memory-backend)。
+`HINDSIGHT_*` 环境变量覆盖 `hindsight.*` 设置，后者覆盖内置默认值。完整覆盖表、取值、解析规则、优先级和默认值见 [Hindsight 环境变量表](#hindsight-远端后端)。
 
 本节的 `hindsight.*` 设置行由 `memory-hindsight` 插件提供。值仍存放在原来的键下，插件未挂载时依然可读；插件缺席只会移除设置界面，不影响后端行为。
 

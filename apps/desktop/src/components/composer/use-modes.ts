@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import type { SessionEntry, SessionModeProjection } from "@musepi/pi-wire";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
+import { todoPhasesFromEntries } from "./todo-from-transcript";
 import type { TodoPhaseView } from "./todo-panel";
 
 /** session.modes wire shape (TUI /goal /plan parity). */
@@ -9,20 +11,32 @@ export interface ComposerModes {
 	isCompacting: boolean;
 	todo: TodoPhaseView[];
 	/** 会话预设 id（"design" 等）——design 会话的 composer 风格 chips 依赖它判型。 */
-	modeId?: string | null;
+	agentPreset?: string | null;
 }
 
 /**
- * Goal / plan mode + todo progress (TUI /goal /plan parity): polls
- * session.modes every 3s (visibility-gated), arms goal mode (one tap with
- * no live goal arms goal mode — the NEXT SENT MESSAGE becomes the
- * objective), and routes todo mutations through session.todo. `setModes`
- * is returned so the composer's send path can apply a goal created from
- * the sent message.
+ * Goal / plan mode + todo progress (TUI /goal /plan parity).
+ *
+ * Nothing here polls for state. The TODO LIST derives from the transcript
+ * (`todoPhasesFromEntries`), and GOAL / PLAN come from the daemon's
+ * `sessionMode` projection (`sessionModeProjection`), which the host samples
+ * and pushes after every RPC that writes them — so a switch flipped by the TUI
+ * or another device lands as a frame instead of on a timer.
+ *
+ * `session.modes` is still fetched once per surface for the session preset and
+ * the compaction flag (neither is projected yet); it is a one-shot read on
+ * mount and after a local mutation, not a repeating poll.
+ *
+ * It also arms goal mode (one tap with no live goal makes the NEXT SENT
+ * MESSAGE the objective) and routes todo mutations through session.todo.
+ * `setModes` is returned so the composer's send path can apply a goal created
+ * from the sent message.
  */
 export function useModes(
 	rpc: RpcClient | null,
 	sessionId: string,
+	entries: readonly SessionEntry[] = [],
+	sessionMode: SessionModeProjection | null = null,
 ): {
 	modes: ComposerModes | null;
 	setModes(next: ComposerModes | null | ((prev: ComposerModes | null) => ComposerModes | null)): void;
@@ -54,36 +68,37 @@ export function useModes(
 			})
 			.catch(() => {});
 	}, [rpc, sessionId]);
+	// One-shot: the preset and compaction flag are not projected yet, so this
+	// reads them once per surface. Goal and plan arrive as pushed projection
+	// values (below) and never wait for it.
 	useEffect(() => {
 		refreshModes();
-		let id = setInterval(refreshModes, 3000);
-		// The poll is pure UI freshness — never run it while the tab is
-		// hidden (background CPU + daemon RPCs for nothing).
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") {
-				refreshModes();
-				id = setInterval(refreshModes, 3000);
-			}
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
 	}, [refreshModes]);
 	// Armed goal: one tap with no live goal arms goal
 	// mode — the NEXT SENT MESSAGE becomes the objective (no popup dialog,
 	// same one-tap shape as the plan-mode toggle). A second tap disarms.
 	const [goalArmed, setGoalArmed] = useState(false);
-	// A goal arriving from the daemon (poll/own send) clears the armed state.
+	// The projection is the live source; `modes` covers the first frame after
+	// mount (before the snapshot's projection baseline has been read).
+	const liveGoal = sessionMode ? sessionMode.goal : (modes?.goalMode ?? null);
+	const livePlan = sessionMode ? sessionMode.plan : (modes?.planMode ?? false);
+	// Callers read the badges off `modes`; merging the projection in here keeps
+	// them unchanged while the live values become push-driven. `modes` still
+	// answers for the preset/compaction fields it owns.
+	const mergedModes: ComposerModes | null = modes
+		? { ...modes, goalMode: liveGoal, planMode: livePlan }
+		: sessionMode
+			? { goalMode: liveGoal, planMode: livePlan, isCompacting: false, todo: [] }
+			: null;
+	// A goal arriving from the daemon (projection frame / own send) clears the
+	// armed state.
 	useEffect(() => {
-		if (modes?.goalMode?.enabled === true) setGoalArmed(false);
-	}, [modes?.goalMode?.enabled]);
+		if (liveGoal?.enabled === true) setGoalArmed(false);
+	}, [liveGoal?.enabled]);
 	const toggleGoalMode = (): void => {
 		if (!rpc || !sessionId) return;
 		// End an active goal without prompting (TUI /goal off parity).
-		if (modes?.goalMode?.enabled === true) {
+		if (liveGoal?.enabled === true) {
 			void rpc
 				.request("session.setGoal", { sessionId })
 				.then(res => setModes(res as typeof modes))
@@ -99,7 +114,10 @@ export function useModes(
 			.then(res => setModes(res as typeof modes))
 			.catch(() => {});
 	};
-	const todo = modes?.todo ?? [];
+	// The transcript is the live source: the agent's own `todo` results and the
+	// panel's `user_todo_edit` rows both land there as pushed entries.
+	const derivedTodo = useMemo(() => todoPhasesFromEntries(entries), [entries]);
+	const todo = entries.length > 0 ? derivedTodo : (modes?.todo ?? []);
 	const todoTotal = todo.reduce((n, p) => n + p.total, 0);
 	const todoDone = todo.reduce((n, p) => n + p.done, 0);
 	// Todo mutations (TUI /todo parity): the panel is read-only without
@@ -120,7 +138,7 @@ export function useModes(
 	);
 
 	return {
-		modes,
+		modes: mergedModes,
 		setModes,
 		todo,
 		todoTotal,

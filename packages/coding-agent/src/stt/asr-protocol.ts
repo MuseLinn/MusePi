@@ -25,12 +25,18 @@ export type SttWorkerInbound =
 	| { type: "transcribe"; id: string; modelKey: SttModelKey; audio: Float32Array; language?: string }
 	| { type: "download"; id: string; modelKey: SttModelKey }
 	// ── Live streaming session ──
-	// `stream_start` warms the model and opens a session; `stream_audio` feeds
-	// 16 kHz mono float frames as they arrive from the recorder; `stream_stop`
-	// flushes the trailing speech segment and ends the session; `stream_cancel`
-	// tears it down without a final flush. All carry the same `id`.
+	// `stream_start` warms the model and opens a session. Audio enters in one of
+	// three forms: raw `stream_audio` frames that this worker segments itself;
+	// `stream_utterance` audio the caller already delimited (decoded once and
+	// committed, never re-segmented); and `stream_preview` audio for the
+	// still-growing run, which yields a volatile `partial` and is never
+	// committed. Previews coalesce, so a newer one replaces an undecoded older.
+	// `stream_stop` flushes the trailing speech segment and ends the session;
+	// `stream_cancel` tears it down without a final flush. All carry the same `id`.
 	| { type: "stream_start"; id: string; modelKey: SttModelKey; language?: string }
 	| { type: "stream_audio"; id: string; audio: Float32Array }
+	| { type: "stream_utterance"; id: string; audio: Float32Array }
+	| { type: "stream_preview"; id: string; audio: Float32Array }
 	| { type: "stream_stop"; id: string }
 	| { type: "stream_cancel"; id: string };
 
@@ -42,10 +48,10 @@ export type SttWorkerOutbound =
 	| { type: "progress"; id: string; event: SttProgressEvent }
 	| { type: "log"; level: "debug" | "warn" | "error"; msg: string; meta?: Record<string, unknown> }
 	// ── Live streaming session ──
-	// `partial` is the volatile transcript of the in-progress speech segment
-	// (refreshed as more audio arrives, never appended verbatim); `segment` is a
-	// finalized segment committed once at an endpoint; `stream_done` carries the
-	// full transcript (all committed segments joined) when the session ends.
+	// `partial` is the volatile transcript of the current sentence (refreshed as
+	// more audio arrives, never appended verbatim); `segment` is that sentence's
+	// final decode from retained raw audio and replaces its preview. `stream_done`
+	// joins the finalized sentences without another whole-session decode.
 	| { type: "partial"; id: string; text: string }
 	| { type: "segment"; id: string; index: number; text: string }
 	| { type: "stream_done"; id: string; text: string };

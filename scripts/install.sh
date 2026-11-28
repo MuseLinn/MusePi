@@ -6,7 +6,8 @@ set -e
 #
 # Default installs the prebuilt TUI binary published by the release CICD
 # (musepi-<os>-<arch> + SHA256SUMS.txt on the GitHub release). Use --source
-# to clone and build from source instead.
+# to clone and build from source instead. A release that does not include
+# those files fails here with a release that still has them, or with --source.
 #
 # Options:
 #   --binary       Install the prebuilt release binary (default)
@@ -120,6 +121,121 @@ has_curl() {
     command -v curl >/dev/null 2>&1
 }
 
+# Best-effort release lookup. Empty on rate limit or network failure so the
+# download error stays visible; the happy path never calls the API.
+github_api_text() {
+    curl -fsSL --retry 2 --max-time 20 \
+        -H "Accept: application/vnd.github+json" \
+        -H "User-Agent: musepi-installer" \
+        "$1" 2>/dev/null || true
+}
+
+release_json_url() {
+    if [ -n "$REF" ]; then
+        printf 'https://api.github.com/repos/%s/releases/tags/%s\n' "$REPO" "$REF"
+    else
+        printf 'https://api.github.com/repos/%s/releases/latest\n' "$REPO"
+    fi
+}
+
+json_tag_name() {
+    printf '%s\n' "$1" | awk -F'"' '/"tag_name"/ { print $4; exit }'
+}
+
+json_has_asset_name() {
+    printf '%s\n' "$1" | awk -v name="$2" '
+        index($0, "\"name\":") && index($0, "\"" name "\"") { found = 1 }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+# Newest stable release on the first page that publishes this host's TUI
+# binary and SHA256SUMS.txt. A prerelease is used only when no stable release
+# on that page has both files.
+find_tui_release() {
+    tui_release_page="$(github_api_text "https://api.github.com/repos/${REPO}/releases?per_page=100")"
+    [ -n "$tui_release_page" ] || return 0
+    printf '%s\n' "$tui_release_page" | awk -v asset="$1" '
+        function consider(stop) {
+            if (chosen != "" || tag == "" || !has_asset || !has_sums) return
+            if (!pre) {
+                chosen = tag
+                if (stop) exit
+                return
+            }
+            if (fallback == "") fallback = tag
+        }
+        function take_tag(line,    value) {
+            value = line
+            sub(/^.*"tag_name"[[:space:]]*:[[:space:]]*"/, "", value)
+            sub(/".*/, "", value)
+            return value
+        }
+        /"tag_name"/ {
+            consider(1)
+            tag = take_tag($0)
+            pre = 0
+            has_asset = 0
+            has_sums = 0
+            next
+        }
+        /"prerelease"[[:space:]]*:[[:space:]]*true/ { pre = 1 }
+        {
+            if (index($0, "\"name\":") && index($0, "\"" asset "\"")) has_asset = 1
+            if (index($0, "\"name\":") && index($0, "\"SHA256SUMS.txt\"")) has_sums = 1
+        }
+        END {
+            consider(0)
+            if (chosen != "") print chosen
+            else if (fallback != "") print fallback
+        }
+    '
+}
+
+show_curl_error() {
+    [ -s "$1" ] || return 0
+    grep -E 'curl: \(|error:|404|403|timed out' "$1" >&2 || tail -n 3 "$1" >&2
+}
+
+# `mode` is `download` when curl itself failed, or `absent` when the file
+# arrived but does not satisfy the installer (for example a checksum list
+# with no entry for this binary).
+explain_tui_install_gap() {
+    missing="$1"
+    mode="$2"
+    payload="$(github_api_text "$(release_json_url)")"
+    if [ -n "$REF" ]; then
+        label="$REF"
+    else
+        label="$(json_tag_name "$payload")"
+        [ -n "$label" ] || label="latest"
+    fi
+    if [ "$mode" = "download" ] && [ -n "$payload" ] && json_has_asset_name "$payload" "$missing"; then
+        printf 'The release lists %s, so this was not a missing file. Retry the installer.\n' "$missing" >&2
+        return 0
+    fi
+    if [ "$mode" = "absent" ]; then
+        printf 'Release %s has no usable SHA256SUMS.txt entry for %s.\n' "$label" "$missing" >&2
+        printf 'The terminal installer needs %s and a matching checksum entry. Desktop packages on that release are not the terminal binary.\n' "$asset" >&2
+    elif [ -z "$payload" ]; then
+        printf 'The GitHub release API did not answer, so the installer cannot tell whether %s was published.\n' "$missing" >&2
+    else
+        printf 'GitHub release %s does not include %s.\n' "$label" "$missing" >&2
+        printf 'The terminal installer needs %s and SHA256SUMS.txt. Desktop packages on that release are not the terminal binary.\n' "$asset" >&2
+    fi
+    alt="$(find_tui_release "$asset")"
+    if [ -n "$alt" ] && [ "$alt" != "$label" ]; then
+        printf 'Release %s includes %s and SHA256SUMS.txt. Install it with:\n' "$alt" "$asset" >&2
+        printf '  sh install.sh --ref %s\n' "$alt" >&2
+        printf '  curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh -s -- --ref %s\n' "$alt" >&2
+    elif [ -n "$tui_release_page" ]; then
+        printf 'No recent GitHub release publishes both %s and SHA256SUMS.txt.\n' "$asset" >&2
+    fi
+    printf 'Or build from source:\n' >&2
+    printf '  sh install.sh --source\n' >&2
+    printf '  curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh -s -- --source\n' >&2
+}
+
 # Install the prebuilt release binary. No bun or git required.
 install_binary() {
     asset="$(release_asset)"
@@ -146,14 +262,25 @@ install_binary() {
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "$tmp_dir"' EXIT
     echo "Downloading $asset ..."
-    curl -fL --progress-bar --retry 3 -o "$tmp_dir/$asset" "$base_url/$asset"
+    if ! curl -fL --progress-bar --retry 3 -o "$tmp_dir/$asset" "$base_url/$asset" 2>"$tmp_dir/curl.err"; then
+        printf 'error: failed to download %s from %s/%s\n' "$asset" "$base_url" "$asset" >&2
+        show_curl_error "$tmp_dir/curl.err"
+        explain_tui_install_gap "$asset" "download"
+        exit 1
+    fi
 
     # Verify against the release's SHA256SUMS.txt ("<sha256>  <basename>").
     echo "Verifying checksum ..."
-    curl -fsSL --retry 3 -o "$tmp_dir/SHA256SUMS.txt" "$base_url/SHA256SUMS.txt"
+    if ! curl -fsSL --retry 3 -o "$tmp_dir/SHA256SUMS.txt" "$base_url/SHA256SUMS.txt" 2>"$tmp_dir/curl.err"; then
+        printf 'error: failed to download SHA256SUMS.txt from %s/SHA256SUMS.txt\n' "$base_url" >&2
+        show_curl_error "$tmp_dir/curl.err"
+        explain_tui_install_gap "SHA256SUMS.txt" "download"
+        exit 1
+    fi
     expected="$(awk -v name="$asset" '$2 == name { print $1 }' "$tmp_dir/SHA256SUMS.txt")"
     if [ -z "$expected" ]; then
         echo "SHA256SUMS.txt has no entry for $asset" >&2
+        explain_tui_install_gap "$asset" "absent"
         exit 1
     fi
     if command -v sha256sum >/dev/null 2>&1; then

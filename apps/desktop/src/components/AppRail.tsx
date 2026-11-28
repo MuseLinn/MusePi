@@ -1,4 +1,5 @@
 import { punkAvatarUri, type TranslationKey, t } from "@musepi/client-core";
+import { type IconInput, MorphIcon } from "morphicons/react";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import type { RpcClient } from "../lib/rpc";
@@ -6,6 +7,7 @@ import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "
 import { Icon } from "../vendor/oc-icons";
 import type { IconName } from "../vendor/oc-icons/icons";
 import { PunkAvatar } from "./avatar-presets";
+import { BrandOrb } from "./BrandOrb";
 import { MenuPopup } from "./MenuPopup";
 
 /**
@@ -31,6 +33,11 @@ export interface RailItem {
 	id: string;
 	label: TranslationKey;
 	icon: IconName;
+	/** The pair this destination morphs between: `idle` while another
+	 *  destination is current, `current` when this one is. A rail is read by
+	 *  glyph, so the glyph itself carries the selection — one icon that changes
+	 *  shape, rather than a colour change on a shape that stays the same. */
+	morphIcon?: { idle: IconInput; current: IconInput };
 	/** Destination currently shown (aria-current="page"). */
 	active?: boolean;
 	/** Unread activity dot — independent of `active` (a destination can hold
@@ -45,10 +52,15 @@ export interface RailItem {
 
 function RailButton({
 	item,
+	expanded,
 	onPeekPanel,
 	onPeekEnd,
 }: {
 	item: RailItem;
+	/** Wide rail: the row shows its label inline (KiroCrew's expanded nav rail).
+	 *  Collapsed keeps the icon-only square with a hover tip, so a 52px strip
+	 *  never reserves label width it cannot show. */
+	expanded: boolean;
 	onPeekPanel?: (panelId: string) => void;
 	onPeekEnd?(): void;
 }): ReactNode {
@@ -56,8 +68,8 @@ function RailButton({
 	return (
 		<button
 			type="button"
-			className={`gui-rail-btn${item.active ? " gui-rail-btn--active" : ""}`}
-			title={label}
+			className={`gui-rail-btn${item.active ? " gui-rail-btn--active" : ""}${expanded ? " gui-rail-btn--wide" : ""}`}
+			title={expanded ? undefined : label}
 			aria-label={label}
 			aria-current={item.active ? "page" : undefined}
 			data-rail-destination={item.id}
@@ -66,7 +78,19 @@ function RailButton({
 			onPointerEnter={item.panelId ? () => onPeekPanel?.(item.panelId as string) : undefined}
 			onPointerLeave={item.panelId ? onPeekEnd : undefined}
 		>
-			<Icon name={item.icon} className="gui-rail-icon" />
+			{item.morphIcon ? (
+				<MorphIcon
+					icon={item.active ? item.morphIcon.current : item.morphIcon.idle}
+					size={18}
+					spring="snappy"
+					reducedMotion="user"
+					className="gui-rail-icon"
+					aria-hidden
+				/>
+			) : (
+				<Icon name={item.icon} className="gui-rail-icon" />
+			)}
+			{expanded ? <span className="gui-rail-label">{label}</span> : null}
 			{item.unread ? <span className="gui-rail-dot" aria-hidden="true" /> : null}
 		</button>
 	);
@@ -179,6 +203,7 @@ export function UserAccountButton({
 	onOpenRemoteAccess,
 	onDisconnect,
 	compact = true,
+	instanceMenu,
 }: {
 	rpc: RpcClient | null;
 	/** Workspace the git identity is resolved from (the picture's source). */
@@ -193,6 +218,8 @@ export function UserAccountButton({
 	onDisconnect(): void;
 	/** Rail geometry (36px square) vs the sidebar footer's inline control. */
 	compact?: boolean;
+	/** The instance section, rendered inside this menu. */
+	instanceMenu?: ReactNode;
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
@@ -211,8 +238,16 @@ export function UserAccountButton({
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
-				<UserAvatar rpc={rpc} cwd={cwd} />
-				<span className={`gui-account-dot${connected ? " gui-account-dot--on" : ""}`} aria-hidden="true" />
+				{/* The face and its status dot share one fixed-size box, so the dot
+				 * stays put relative to the picture in both rail widths. Anchored to
+				 * the BUTTON it moved with the button's width instead. */}
+				<span className="gui-account-face">
+					<UserAvatar rpc={rpc} cwd={cwd} />
+					<span className={`gui-account-dot${connected ? " gui-account-dot--on" : ""}`} aria-hidden="true" />
+				</span>
+				{/* The wide rail names every row; this one had no text at all, so it
+				 * read as an anonymous avatar while its neighbours were labelled. */}
+				<span className="gui-rail-label gui-account-label">{label}</span>
 			</button>
 			<MenuPopup
 				open={open}
@@ -225,6 +260,11 @@ export function UserAccountButton({
 					<div className="gui-account-name">{user?.name || t("general.user")}</div>
 					{user?.email ? <div className="gui-account-mail">{user.email}</div> : null}
 				</div>
+				{/* The instance entry folded in here: host switching, version, latency
+				 * and the connection manager were a second trigger sitting directly
+				 * above this one, and two adjacent popovers listing the same hosts is
+				 * the duplication this menu exists to avoid. */}
+				{instanceMenu}
 				<button
 					type="button"
 					className="gui-menu-item"
@@ -283,6 +323,64 @@ export function UserAccountButton({
 	);
 }
 
+/** Where the repository lives. One constant: the rail, the release notices and
+ *  the update dialog all point at the same project. */
+const REPO_URL = "https://github.com/MuseLinn/MusePi";
+
+/**
+ * Community row: one line closing the rail — the GitHub mark, then the star and
+ * issue links separated by a middot (KiroCrew's community row).
+ *
+ * One row, not two: these are the same destination (GitHub) and the pair reads
+ * as a footer line rather than two more destinations. Both links are outbound,
+ * so they are anchors; each carries its own accessible name because "Star" alone
+ * names no target.
+ *
+ * The mark is decorative — it labels the GROUP, not either link — and it is the
+ * one element on this line that stays when the rail folds, because an icon-only
+ * rail still has to show that these links exist. The text folds away by height,
+ * so the collapse stays smooth instead of the line vanishing.
+ */
+export function RailCommunityLinks({ expanded }: { expanded: boolean }): ReactNode {
+	return (
+		<div
+			className={`gui-rail-community${expanded ? " gui-rail-community--open" : ""}`}
+			{...(expanded ? {} : { inert: true })}
+		>
+			<div className="gui-rail-community-line">
+				<span className="gui-rail-community-mark" aria-hidden="true">
+					<Icon name="github" className="gui-rail-icon" />
+				</span>
+				<span className="gui-rail-community-links">
+					<a
+						href={REPO_URL}
+						target="_blank"
+						rel="noopener noreferrer"
+						title={t("rail star repo")}
+						aria-label={t("rail star repo")}
+						className="gui-rail-community-link"
+					>
+						{t("rail star short")}
+					</a>
+					<span aria-hidden="true" className="gui-rail-community-sep">
+						·
+					</span>
+					<a
+						href={`${REPO_URL}/issues`}
+						target="_blank"
+						rel="noopener noreferrer"
+						title={t("rail open issues")}
+						aria-label={t("rail open issues")}
+						className="gui-rail-community-link"
+					>
+						{t("rail issues short")}
+					</a>
+				</span>
+			</div>
+		</div>
+	);
+}
+
 export function AppRail({
 	destinations,
 	account,
@@ -291,6 +389,9 @@ export function AppRail({
 	onTogglePanel,
 	onPeekPanel,
 	onPeekEnd,
+	community,
+	expanded = false,
+	onToggleExpanded,
 }: {
 	destinations: readonly RailItem[];
 	/** The persistent user/account entry that replaced the settings
@@ -313,6 +414,16 @@ export function AppRail({
 	 *  task list instead of the 首页 session list. */
 	onPeekPanel?(panelId: string): void;
 	onPeekEnd?(): void;
+	/** Wide rail: rows carry their labels and the brand header appears. The
+	 *  narrow 52px strip is the same rail with labels withheld, so expanding is
+	 *  a width change, not a different component. */
+	expanded?: boolean;
+	/** Present only where the rail may widen; its absence keeps the rail a
+	 *  fixed icon strip (the settings preview renders it that way). */
+	onToggleExpanded?(): void;
+	/** The community line. Rendered AFTER the account so it closes the rail,
+	 *  whatever order the host passes its other footer controls in. */
+	community?: ReactNode;
 }): ReactNode {
 	// The 48px top band is EMPTY by design: the window's own fold/unfold
 	// control lives in the titlebar cluster at the panel's top edge. Rendering
@@ -325,16 +436,64 @@ export function AppRail({
 		onTogglePanel();
 	};
 	return (
-		<nav className="gui-rail" aria-label={t("general.appRail")} onDoubleClick={onBackgroundDoubleClick}>
-			<div className="gui-rail-top" aria-hidden="true" />
+		<nav
+			className={`gui-rail${expanded ? " gui-rail--wide" : ""}`}
+			aria-label={t("general.appRail")}
+			onDoubleClick={onBackgroundDoubleClick}
+		>
+			{/* Brand header: the mark IS the expand/collapse control, and the
+			 * one persistent click target (KiroCrew's rail header). Unmounted
+			 * where the rail cannot widen, so the settings preview and any
+			 * fixed-strip host keep exactly the old markup. */}
+			{onToggleExpanded ? (
+				<div className="gui-rail-head">
+					<button
+						type="button"
+						className="gui-rail-brand"
+						onClick={onToggleExpanded}
+						title={expanded ? t("transcript.closeSidebar") : t("transcript.openSidebar")}
+						aria-label={expanded ? t("transcript.closeSidebar") : t("transcript.openSidebar")}
+						aria-expanded={expanded}
+					>
+						{/* The product mark, not a generic panel glyph: this button is
+						 * the one control present in both rail widths, so it carries the
+						 * identity. `gui-brand-mark` is the same π badge the welcome
+						 * header and error boundary render — one mark, one component —
+						 * and the rail only scales it up for this slot. */}
+						<span className="gui-rail-brand-mark" aria-hidden="true">
+							<BrandOrb />
+						</span>
+						{expanded ? <span className="gui-rail-brand-text">{t("settings.musepi")}</span> : null}
+						{/* Collapse affordance: an arrow to the edge, not a hide-panel
+						 * glyph, because the rail folds rather than disappears. It
+						 * fades in LAST (see the CSS delay) and sits out of flow, so it
+						 * never reserves width and squeezes the mark while the rail is
+						 * still narrow — the blink KiroCrew's header documents. */}
+						{expanded ? (
+							<span className="gui-rail-brand-arrow" aria-hidden="true">
+								<Icon name="arrow-left-s" className="gui-rail-icon" />
+							</span>
+						) : null}
+					</button>
+				</div>
+			) : (
+				<div className="gui-rail-top" aria-hidden="true" />
+			)}
 			<div className="gui-rail-scroll">
 				{destinations.map(item => (
-					<RailButton key={item.id} item={item} onPeekPanel={onPeekPanel} onPeekEnd={onPeekEnd} />
+					<RailButton
+						key={item.id}
+						item={item}
+						expanded={expanded}
+						onPeekPanel={onPeekPanel}
+						onPeekEnd={onPeekEnd}
+					/>
 				))}
 			</div>
 			<div className="gui-rail-group">
 				{footerActions}
 				{account}
+				{community}
 			</div>
 		</nav>
 	);

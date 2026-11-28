@@ -581,7 +581,7 @@ describe("plugin config lists", () => {
 
 describe("context page directories", () => {
 	it("renders the directory editor and drops the schema comma row", async () => {
-		const { default: ContextSettingsPage } = await import("../src/plugins/settings-context/page");
+		const { default: ContextSettingsPage } = await import("../src/plugins/ui-settings-context/page");
 		const rpc = {
 			request: async (method: string) => {
 				if (method === "settings.schema") {

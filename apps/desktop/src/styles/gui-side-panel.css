@@ -77,6 +77,141 @@
 	pointer-events: auto;
 }
 
+.gui-sidebar-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	margin: 0 var(--gui-side-panel-inset) var(--gui-card-gutter);
+	flex-shrink: 0;
+}
+
+.gui-sidebar-toggle-seat {
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+}
+
+.gui-sidebar-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-sidebar-new {
+	display: flex;
+	align-items: center;
+	height: 28px;
+	border: 1px solid var(--color-accent-bd);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	overflow: hidden;
+}
+
+.gui-sidebar-new button {
+	height: 100%;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-sidebar-new button:hover {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-sidebar-new-main {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 8px;
+	font-weight: 600;
+}
+
+.gui-sidebar-new-more {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	border-left: 1px solid var(--color-accent-bd) !important;
+}
+
+.gui-sidebar-new-menu {
+	width: 300px;
+	padding: 4px;
+}
+
+.gui-sidebar-new-memory {
+	padding: 4px 0;
+}
+
+.gui-sidebar-toggle {
+	--panel-nudge: -2px;
+	position: absolute;
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	left: calc(var(--gui-card-gutter) + var(--gui-side-panel-inset));
+	z-index: 43;
+	display: flex;
+	height: 26px;
+	width: 26px;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid transparent;
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: background 140ms ease, color 140ms ease;
+}
+
+.gui-sidebar-toggle[data-collapsed="true"] {
+	--panel-nudge: 2px;
+}
+
+.gui-sidebar-toggle:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-sidebar-toggle svg {
+	transition: transform 180ms var(--spring-snappy, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+
+.gui-sidebar-toggle:hover svg,
+.gui-sidebar-toggle:focus-visible svg {
+	transform: translateX(var(--panel-nudge));
+}
+
+.gui-sidebar-toggle:active svg {
+	transform: translateX(var(--panel-nudge)) scale(0.92);
+}
+
+.gui-motion-off .gui-sidebar-toggle svg {
+	transition: none;
+}
+
+.gui-motion-off .gui-sidebar-toggle:hover svg,
+.gui-motion-off .gui-sidebar-toggle:focus-visible svg,
+.gui-motion-off .gui-sidebar-toggle:active svg {
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-sidebar-toggle svg {
+		transition: none;
+	}
+
+	.gui-sidebar-toggle:hover svg,
+	.gui-sidebar-toggle:focus-visible svg,
+	.gui-sidebar-toggle:active svg {
+		transform: none;
+	}
+}
+
 /* ── Rounded card surface: same tokens as .gui-chat-column / .gui-page-card
  * The card opts out of the keeper's band (gui-window-drag.css), so every click
  * inside it lands while the empty strip above moves the window; the card's own
@@ -93,6 +228,49 @@
 .gui-side-keeper > .gui-pane-side .gui-pane-drag {
 	height: var(--gui-card-gutter);
 	min-height: var(--gui-card-gutter);
+}
+
+html.gui-vt-clip-from-anchor .gui-side-keeper > .gui-pane-side,
+html.gui-vt-clip-to-anchor .gui-side-keeper > .gui-pane-side {
+	transition: none !important;
+}
+
+::view-transition-group(gui-sidebar-surface) {
+	animation: none;
+}
+
+html.gui-vt-clip-from-anchor::view-transition-new(gui-sidebar-surface) {
+	animation: gui-sidebar-clip-from-anchor var(--duration-one-take) var(--ease-one-take) both;
+	mix-blend-mode: normal;
+}
+
+html.gui-vt-clip-to-anchor::view-transition-old(gui-sidebar-surface) {
+	animation: gui-sidebar-clip-to-anchor var(--duration-one-take) var(--ease-one-take) both;
+	mix-blend-mode: normal;
+}
+
+html.gui-vt-clip-from-anchor::view-transition-old(gui-sidebar-surface),
+html.gui-vt-clip-to-anchor::view-transition-new(gui-sidebar-surface) {
+	animation: none;
+	opacity: 0;
+}
+
+@keyframes gui-sidebar-clip-from-anchor {
+	from {
+		clip-path: var(--gui-vt-anchor-clip);
+	}
+	to {
+		clip-path: inset(0 round var(--radius-lg));
+	}
+}
+
+@keyframes gui-sidebar-clip-to-anchor {
+	from {
+		clip-path: inset(0 round var(--radius-lg));
+	}
+	to {
+		clip-path: var(--gui-vt-anchor-clip);
+	}
 }
 
 /* ── Drawer mode (narrow workspace) ──────────────────────────────────────
@@ -136,7 +314,14 @@
 	position: fixed !important;
 	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
 	bottom: calc(var(--gui-card-gutter) * 2);
-	left: calc(var(--gui-rail-w) + var(--gui-card-gutter));
+	/* The rail is a card now, so three gutters sit between its right edge and
+	 * the pane's card: the rail's own side margin, the pane's side margin, and
+	 * the gutter its row consumes before the card starts. The floating card must
+	 * land on the docked card's x, or the peek visibly sits left of the card it
+	 * grows into (measured 88 vs 96 with the old two-gutter formula). */
+	/* Follows the rail wherever it is: a wide rail must not leave the floating
+	 * card computing from the collapsed strip. */
+	left: calc(var(--gui-rail-w-current, var(--gui-rail-w)) + var(--gui-card-gutter) * 3);
 	z-index: 42;
 	height: auto !important;
 	margin: 0 !important;
@@ -179,12 +364,56 @@
 	flex-shrink: 0;
 }
 
+/* Fold timing for this surface's two regions. gui-composer.css owns the shared
+ * cascade (menu → tabstrip → list), but it loads BEFORE this file, so its
+ * identical-state selectors would lose to the base rules below; the timing is
+ * re-declared here, next to the regions it times. `gui-side-panel-head` leads
+ * (it is the primary action), the scroll body follows 25ms later — the same
+ * top-to-bottom order the session sidebar uses. */
+.gui-pane-side--immersive .gui-side-panel-head,
+.gui-pane-side--immersive .gui-side-panel-scroll {
+	transition:
+		opacity 160ms ease-out,
+		transform 160ms ease-out;
+}
+
+.gui-pane-side--collapsed .gui-side-panel-scroll {
+	transition-delay: 25ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-pane-side--immersive .gui-side-panel-head,
+	.gui-pane-side--immersive .gui-side-panel-scroll,
+	.gui-pane-side--collapsed .gui-side-panel-scroll {
+		transition: none;
+	}
+}
+
 .gui-side-panel {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
 	overflow: hidden;
+}
+
+/* The fold animates the pane's own width to 0 (`--gui-pane-transition`). Left
+ * alone, every region inside re-lays-out on each frame: rows, search fields and
+ * section titles re-wrap against a shrinking column, so the fold reads as the
+ * panel being crushed rather than emptied. Pinning each region to the expanded
+ * width keeps their layout fixed and lets the narrowing pane clip more of them —
+ * the collapsed rail's rows follow the same "clip, never reflow" contract.
+ *
+ * The floor goes on the REGIONS, not on `.gui-side-panel` itself: that element
+ * carries `width: 0 !important`, which outranks a normal `min-width` and would
+ * leave the rule inert (measured: the head collapsed to 20px). Covering the
+ * session sidebar's regions too keeps all three panes on one rule. */
+.gui-pane-side--collapsed .gui-side-menu,
+.gui-pane-side--collapsed .gui-tabstrip,
+.gui-pane-side--collapsed .gui-sessions-tab,
+.gui-pane-side--collapsed .gui-side-panel-head,
+.gui-pane-side--collapsed .gui-side-panel-scroll {
+	min-width: var(--gui-side-w);
 }
 
 /* ── Head: primary action, then one tools row. Fixed rhythm, no stacking
@@ -620,4 +849,72 @@
 	.gui-getting-started-chevron {
 		transition: none;
 	}
+}
+
+.gui-session-quick-menu {
+	width: 300px;
+	padding: 0;
+}
+
+.gui-session-quick-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 42px;
+	padding: 0 8px 0 12px;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-session-quick-new {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid var(--color-accent-bd);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.gui-session-quick-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 280px;
+	padding: 4px;
+	overflow-y: auto;
+	overflow-x: clip;
+}
+
+.gui-session-quick-row {
+	display: flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-session-quick-row span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-session-quick-row:hover,
+.gui-session-quick-row[data-active="true"] {
+	background: var(--color-hover);
 }

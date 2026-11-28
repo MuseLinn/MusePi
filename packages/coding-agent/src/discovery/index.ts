@@ -27,6 +27,7 @@ import "./builtin";
 import "./builtin-defaults";
 import "./claude";
 import "./claude-plugins";
+import "./dsh-plugins";
 import "./cline";
 import "./agents";
 import "./codex";

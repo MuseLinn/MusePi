@@ -84,6 +84,10 @@ function fakeEditor(initial: { value: string; start: number; end?: number; edita
 		insertText: () => {},
 		replaceRange: () => {},
 		autosize: () => {},
+		setPreview: () => {},
+		writeDictation: () => {},
+		commitDictation: () => {},
+		cancelDictation: () => {},
 		setFocused: () => {},
 	};
 	return { handle, value, selection, focusCount, autosizeCount };

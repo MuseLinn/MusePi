@@ -1,4 +1,4 @@
-import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
+import type { AgentTool, AgentToolContext, AgentToolResult } from "@musepi/pi-agent-core";
 import { INTENT_FIELD } from "@musepi/pi-wire";
 import type { ToolSession } from "../../tools";
 import { ToolError } from "../../tools/tool-errors";
@@ -12,6 +12,12 @@ export type { JsStatusEvent } from "./shared/types";
 
 interface ToolBridgeOptions {
 	session: ToolSession;
+	/**
+	 * Authorization context of the `eval` call that owns the cell. Nested
+	 * tool dispatches resolve approvals against it; absent for callers that
+	 * never had one (the approval gate then keeps its own default).
+	 */
+	context?: AgentToolContext;
 	signal?: AbortSignal;
 	emitStatus?: (event: JsStatusEvent) => void;
 }
@@ -53,6 +59,22 @@ function normalizeArgs(args: unknown): unknown {
 		record[INTENT_FIELD] = "js prelude";
 	}
 	return record;
+}
+
+/**
+ * The context a nested `tool.<name>(...)` dispatch runs under.
+ *
+ * The enclosing `eval` call's context carries per-call markers that describe
+ * *that* call: `toolCall` is the outer loop's scheduling entry, and
+ * `xdevApproved` / `providerSafetyApproved` say that a particular outer call
+ * was already cleared. A nested dispatch is its own call, so those markers are
+ * dropped — forwarding them would let a script reach a tool with the outer
+ * call's approval still in effect.
+ */
+function nestedToolContext(context: AgentToolContext | undefined): AgentToolContext | undefined {
+	if (!context) return undefined;
+	const { toolCall, xdevApproved, providerSafetyApproved, ...rest } = context;
+	return rest;
 }
 
 function summarizeToolResult(
@@ -124,7 +146,13 @@ export async function callSessionTool(name: string, args: unknown, options: Tool
 	const normalizedArgs = normalizeArgs(args);
 	const toolCallId = `js-${name}-${crypto.randomUUID()}`;
 	try {
-		const result = await tool.execute(toolCallId, normalizedArgs, options.signal);
+		const result = await tool.execute(
+			toolCallId,
+			normalizedArgs,
+			options.signal,
+			undefined,
+			nestedToolContext(options.context),
+		);
 		const textBlocks = result.content.filter(
 			(content): content is { type: "text"; text: string } =>
 				content.type === "text" && typeof content.text === "string",

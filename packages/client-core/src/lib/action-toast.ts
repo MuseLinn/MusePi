@@ -1,3 +1,5 @@
+import { recordNotificationHistory } from "./notification-history";
+
 /**
  * In-app toast stack: every transient notice the app raises — undo offers,
  * action feedback (branch moved, annotation attached), session-level daemon
@@ -78,11 +80,12 @@ export function pushActionToast(toast: ActionToastInput): number {
 	const kind = toast.kind ?? "info";
 	const dedupeKey = toast.dedupeKey ?? `message:${toast.message}`;
 	const { ttlMs, ...rest } = toast;
+	const createdAt = Date.now();
 	const next: ActionToast = {
 		...rest,
 		kind,
 		id,
-		expiresAt: Date.now() + (ttlMs ?? ttlFor(kind)),
+		expiresAt: createdAt + (ttlMs ?? ttlFor(kind)),
 	};
 	const retained = toasts.filter(previous => {
 		const previousKey = previous.dedupeKey ?? `message:${previous.message}`;
@@ -97,6 +100,13 @@ export function pushActionToast(toast: ActionToastInput): number {
 		if (evicted) pausedRemaining.delete(evicted.id);
 	}
 	toasts = retained;
+	recordNotificationHistory({
+		id,
+		kind,
+		title: next.title,
+		message: next.message,
+		createdAt,
+	});
 	emit();
 	return id;
 }

@@ -1,3 +1,4 @@
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import { Settings } from "../config/settings";
 import { OutputSink } from "../session/streaming-output";
@@ -35,6 +36,12 @@ export interface KernelExecutorBaseOptions {
 	bridgeSessionId?: string;
 	artifactId?: string;
 	artifactPath?: string;
+	/**
+	 * Tool-execution context of the enclosing `eval` call, forwarded to nested
+	 * `tool.<name>(...)` dispatches. Only the JS bridge consumes it directly;
+	 * the Python/Ruby/Julia bridges read it from the same options object.
+	 */
+	context?: AgentToolContext;
 }
 
 /** Normalised execution result produced by {@link executeWithKernelBase}. */
@@ -483,6 +490,7 @@ export async function executeWithKernelBase<
 		options?.toolSession && options?.bridgeSessionId
 			? registerPyToolBridge(options.bridgeSessionId, runId, {
 					toolSession: options.toolSession,
+					context: options.context,
 					signal: options.signal,
 					shieldedSignal: abortShield.signal,
 					emitStatus,

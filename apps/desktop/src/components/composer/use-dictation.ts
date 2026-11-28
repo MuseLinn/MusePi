@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { registerGlobalDictationTarget } from "../../lib/global-dictation-target";
 import type { RpcClient } from "../../lib/rpc";
 import {
 	cancelActiveDictation,
@@ -36,8 +37,6 @@ export interface DictationController {
 	seconds: number;
 	/** Mic RMS level (0..1); live during the recording phase only. */
 	level: number;
-	/** Volatile ASR preview; only finalized segments enter the draft. */
-	partialText: string;
 	/** Last dictation failure (friendly copy); auto-dismisses after 6 s. */
 	error: string | null;
 	toggle(): void;
@@ -50,10 +49,22 @@ export function useDictation(opts: {
 	/** stt.enabled daemon gate (TUI parity): false blocks starting a NEW
 	 *  dictation; in-flight phases still settle/cancel normally. */
 	enabled?: boolean;
-	/** Transcript matched the submit trigger — auto-send path (sliced). */
+	/** The composer editor. Dictation writes its text THROUGH this handle so the
+	 *  preview and each committed segment share one region: a preview painted at
+	 *  the caret while commits were appended to the draft's end scattered the
+	 *  words of a continuous utterance. */
+	editor?: {
+		current: {
+			readonly dom?: HTMLElement;
+			writeDictation(committed: string, hypothesis: string, restart: boolean): void;
+			commitDictation(): void;
+			cancelDictation(): void;
+		} | null;
+	};
+	/** Transcript matched the submit trigger — auto-send path (sliced).
+	 *  The draft itself is written through `editor`, never appended here: a
+	 *  second writer is what scattered a continuous utterance. */
 	onSubmit(text: string): void;
-	/** Transcript for the draft box (submit trigger not matched). */
-	onInsert(text: string): void;
 }): DictationController {
 	const { rpc } = opts;
 	// Latest-ref: the toggle closure below starts the dictation once and its
@@ -72,7 +83,6 @@ export function useDictation(opts: {
 	}, [phase]);
 	const [seconds, setSeconds] = useState(0);
 	const [level, setLevel] = useState(0);
-	const [partialText, setPartialText] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const errorTimer = useRef<number | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
@@ -85,9 +95,18 @@ export function useDictation(opts: {
 
 	// Settle: drop the live handle and return to idle (idempotent — voice.ts
 	// may report both onError and an error onState for the same failure).
+	// The words stay: dictation wrote them into the draft, and both the finished
+	// and the failed paths keep whatever was actually recognized.
 	const settle = useCallback((): void => {
 		stopRef.current = null;
-		setPartialText("");
+		setPhase("idle");
+	}, []);
+
+	// Discard: the user withdrew the utterance, so the draft must go back to
+	// what it was before dictation wrote anything.
+	const discard = useCallback((): void => {
+		stopRef.current = null;
+		optsRef.current.editor?.current?.cancelDictation();
 		setPhase("idle");
 	}, []);
 
@@ -104,33 +123,70 @@ export function useDictation(opts: {
 			return;
 		}
 		if (phaseRef.current === "transcribing") {
+			// Mic pressed again while transcribing = withdraw this utterance.
 			cancelActiveDictation();
-			settle();
+			discard();
 			return;
 		}
 		setSeconds(0);
 		setLevel(0);
-		setPartialText("");
-		let streamed = false;
+		// The anchored region this dictation owns: committed words plus the run
+		// still being recognized. Kept here (not in the editor) because the editor
+		// only needs "write this composed text", while the split between committed
+		// and provisional is a transcription concept.
+		const spoken: { committed: string; hypothesis: string } = { committed: "", hypothesis: "" };
+		// One region, rewritten in place. `restart` is true only for the first
+		// write of a dictation: later writes must keep the origin it frozen, or
+		// the region would slide and a phrase could land inside other text.
+		let started = false;
+		const write = (): void => {
+			optsRef.current.editor?.current?.writeDictation(spoken.committed, spoken.hypothesis, !started);
+			started = true;
+		};
+		// The dictation's ending. `transcript` joins the finalized sentences and
+		// replaces the whole dictation region, including the last live preview.
+		const finish = (transcript: string, maySubmit: boolean): void => {
+			const finalText = transcript.trim();
+			if (finalText) {
+				spoken.committed = finalText;
+				spoken.hypothesis = "";
+				write();
+			}
+			optsRef.current.editor?.current?.commitDictation();
+			if (maySubmit) {
+				const utterance = spoken.committed.trim() || finalText;
+				const { submit, trimTrailing } = evaluateSubmitTrigger(utterance, optsRef.current.sttSubmitTrigger);
+				if (submit && utterance) {
+					optsRef.current.onSubmit(utterance.slice(0, utterance.length - trimTrailing));
+				}
+			}
+			settle();
+		};
 		const stop = startDictationOpts({
 			rpc,
 			deviceId: getVoiceInputDevice() ?? undefined,
 			streaming: true,
-			onPartial: setPartialText,
+			onPartial: text => {
+				// The in-progress run replaces itself in place, so the phrase never
+				// jumps ahead of the committed words it follows.
+				spoken.hypothesis = text;
+				write();
+			},
 			onSegment: text => {
-				streamed = true;
-				setPartialText("");
-				optsRef.current.onInsert(text);
+				// A finished run joins the committed text and clears the provisional
+				// copy — one region, rewritten once, never appended to the draft.
+				spoken.committed = `${spoken.committed}${text}`;
+				spoken.hypothesis = "";
+				write();
 			},
 			onReview: transcript => {
-				if (!streamed) optsRef.current.onInsert(transcript);
-				settle();
+				// Uncertain speaker match: keep it as a plain draft, no auto-send.
+				finish(transcript, false);
 			},
 			onFinal: transcript => {
-				const { submit, trimTrailing } = evaluateSubmitTrigger(transcript, optsRef.current.sttSubmitTrigger);
-				if (submit) optsRef.current.onSubmit(transcript.slice(0, transcript.length - trimTrailing));
-				else if (!streamed) optsRef.current.onInsert(transcript);
-				settle();
+				// The whole utterance is what was spoken — not just this last
+				// transcript — so the submit decision and the sent text both use it.
+				finish(transcript, true);
 			},
 			onEmpty: settle,
 			onError: message => {
@@ -146,7 +202,7 @@ export function useDictation(opts: {
 					setPhase("transcribing");
 				} else if (activity.phase === "stopped") {
 					// cancelActiveDictation() path (Esc / mic-during-transcribe / unmount).
-					settle();
+					discard();
 				} else if (activity.phase === "error") {
 					settle();
 					showError(activity.message);
@@ -156,6 +212,12 @@ export function useDictation(opts: {
 		stopRef.current = stop ?? null;
 		if (stop) setPhase("recording");
 	}, [rpc, settle, showError]);
+
+	useEffect(() => {
+		const dom = optsRef.current.editor?.current?.dom;
+		if (!dom) return;
+		return registerGlobalDictationTarget(dom, toggle, () => phaseRef.current !== "idle");
+	}, [toggle, phase]);
 
 	// Esc discards an in-flight dictation at ANY phase — the recording buffer
 	// or the already-submitted transcribe RPC alike (capture phase, so the
@@ -168,6 +230,7 @@ export function useDictation(opts: {
 			e.stopPropagation();
 			cancelActiveDictation();
 			stopRef.current = null;
+			optsRef.current.editor?.current?.cancelDictation();
 			setPhase("idle");
 		};
 		window.addEventListener("keydown", onKey, true);
@@ -190,5 +253,5 @@ export function useDictation(opts: {
 		setError(null);
 	}, []);
 
-	return { phase, seconds, level, partialText, error, toggle, dismissError };
+	return { phase, seconds, level, error, toggle, dismissError };
 }

@@ -23,6 +23,24 @@ Configure with `tools.approvalMode`:
 
 `--auto-approve` and `--yolo` force `tools.approvalMode: yolo` for the session.
 
+### Resolution order
+
+One call resolves its mode from the most specific layer present
+(`resolveApprovalMode` in `tools/approval-mode.ts`). That function is the only
+place `tools.approvalMode` is read, so every surface — the tool wrapper, the
+Cursor bridge, the render path — agrees on the order and the default:
+
+| Layer | Set by | Notes |
+| --- | --- | --- |
+| `auto-approve` | `--auto-approve` | Outranks every selection below: a narrower layer must not take back a session-wide unattended grant. |
+| `turn` | One submission | A one-off choice. |
+| `session` | The session | Overrides the identity preset for one session. |
+| `identity` | An owning identity | A bot lane's bot, or a subagent's own mode. |
+| `global` | `tools.approvalMode` (default `yolo`) | The floor. |
+
+The resolver also reports which layer decided (`source`), so a surface can say
+*why* a session runs at its mode rather than only showing the mode.
+
 ## User overrides
 
 `tools.approval` is honored in every mode:

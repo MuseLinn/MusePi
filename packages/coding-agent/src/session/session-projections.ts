@@ -15,10 +15,12 @@ import type {
 	AgentEvent,
 	ContextUsageProjection,
 	SessionEntry,
+	SessionModeProjection,
 	SessionProjectionChange,
 	SessionProjectionSnapshot,
 	WireUsage,
 } from "@musepi/pi-wire";
+import { goalFromModeData } from "../goals/state";
 import { cacheHitRate } from "../modes/utils/cache-hit";
 import type { SessionStats } from "../session/agent-session-types";
 
@@ -49,10 +51,40 @@ export interface ProjectionDefinition<S> {
 	sample?(state: S, source: ProjectionSampleSource): S;
 }
 
-/** Wire events plus the daemon-only `model_changed` fact (no wire payload of
- *  its own; the unit samples the live model when it arrives). */
-export type ProjectionEvent = AgentEvent | { type: "model_changed" };
+/**
+ * What a domain gets back from `register`.
+ *
+ * The handle is how a domain READS the state it declared instead of keeping a
+ * second copy: `stateOf` folds that session's committed events through the
+ * unit, `viewOf` returns the client-facing value, and `dispose` unregisters.
+ * Holding a WeakMap beside the unit instead would create a third source of
+ * truth; the cache is reserved for process-local ephemera.
+ */
+export interface ProjectionHandle<S> {
+	/** The unit's folded state for one session; undefined when the session is
+	 *  unknown to the registry or the fold failed. */
+	stateOf(sessionId: string): S | undefined;
+	/** The unit's client view for one session. */
+	viewOf(sessionId: string): unknown;
+	/** Unregister the unit (withdraws its key from every future baseline). */
+	dispose(): void;
+}
 
+/**
+ * What a projection unit folds.
+ *
+ * `AgentEvent` covers the journal's wire events; `entry` covers the session
+ * entries that are NOT wire events (`mode_change` among them) — a mode switch
+ * is journaled as an entry, so folding entries is what makes the journal the
+ * single source instead of sampling the live session. The two daemon-only facts
+ * keep their own shape: `model_changed` has no payload, and
+ * `session_mode_changed` is published after an RPC writes a switch.
+ */
+export type ProjectionEvent =
+	| AgentEvent
+	| { type: "entry"; entry: SessionEntry }
+	| { type: "model_changed" }
+	| { type: "session_mode_changed" };
 interface SessionEntryState {
 	states: Map<string, unknown>;
 	views: Map<string, unknown>;
@@ -254,16 +286,106 @@ export const contextUsageProjectionDefinition: ProjectionDefinition<ContextUsage
 	sample: (state, source) => fromStats(source.sessionStats(), source, state),
 };
 
+/** Fold one journal entry onto the mode state. Pure, so `init` and `apply`
+ *  share it — a seeded baseline and a live switch can never disagree. */
+function applyModeEntry(state: SessionModeProjection, rawEntry: unknown): SessionModeProjection {
+	const entry = rawEntry as { type?: string; mode?: unknown; data?: Record<string, unknown> } | null;
+	if (entry?.type !== "mode_change") return state;
+	const mode = typeof entry.mode === "string" ? entry.mode : "none";
+	if (mode === "plan" || mode === "plan_paused") {
+		const planFilePath = entry.data?.planFilePath;
+		// `plan_paused` keeps the path but is not "in plan mode"; entering
+		// without a path could never be approved, so it counts as off.
+		const plan = mode === "plan" && typeof planFilePath === "string" && planFilePath !== "";
+		return plan === state.plan ? state : { ...state, plan };
+	}
+	if (mode === "goal" || mode === "goal_paused") {
+		const goal = goalFromModeData(entry.data);
+		// `goal_paused` is a recorded goal that is NOT running. Projecting it as
+		// an active goal would make the badge claim work the agent is not doing,
+		// so only `goal` counts as on.
+		const nextGoal =
+			goal && mode === "goal" ? { enabled: true, objective: goal.objective, status: goal.status } : null;
+		if (nextGoal === null && state.goal === null) return state;
+		return { ...state, goal: nextGoal };
+	}
+	// Any other mode ("none", "vibe", …) means neither switch is on. Vibe is a
+	// tool-set mode of its own and does not project here.
+	if (state.goal === null && state.plan === false) return state;
+	return { goal: null, plan: false };
+}
+
+/**
+ * Session mode switches — goal and plan.
+ *
+ * The source is the journal, not the live session: a switch is recorded as a
+ * `mode_change` entry, and this unit folds those entries. That is what makes
+ * the journal the single authority — the projection derives from persisted
+ * history, so a reload shows the mode the journal recorded rather than
+ * whatever the fresh AgentSession happens to hold, and the
+ * `session_mode_changed` boundary only re-reads after an RPC wrote the entry.
+ */
+export const sessionModeProjectionDefinition: ProjectionDefinition<SessionModeProjection> = {
+	key: "sessionMode",
+	// Fold the transcript the snapshot already carries, so an opened session
+	// starts from what the journal recorded rather than from the live session's
+	// freshly-initialized fields.
+	init: seed => {
+		let state: SessionModeProjection = { goal: null, plan: false };
+		for (const entry of seed.entries) state = applyModeEntry(state, entry);
+		return state;
+	},
+	apply: (state, event) => (event.type === "entry" ? applyModeEntry(state, event.entry) : state),
+	view: (state): SessionModeProjection => state,
+	viewEquals: (left, right) => left === right || JSON.stringify(left) === JSON.stringify(right),
+};
+
 /**
  * Per-session projection registry. One instance per daemon host; unit
- * definitions are process-wide by construction (registered at construction).
+ * definitions are contributed by the projection plugin
+ * (`daemon/session-projection-plugin.ts`), which owns the registration list and
+ * reverts it on fiber teardown.
  */
 export class SessionProjectionRegistry {
 	readonly #definitions = new Map<string, ProjectionDefinition<unknown>>();
+	/** Newest install token per key — see {@link register}. */
+	readonly #installs = new Map<string, object>();
 	readonly #sessions = new Map<string, SessionEntryState>();
 
-	register<S>(definition: ProjectionDefinition<S>): void {
+	/** Register one unit. Returns a handle so the owning domain can READ the
+	 *  state it declared and unregister on teardown:
+	 *  a withdrawn unit stops folding, drops out of every baseline, and its key
+	 *  disappears from client snapshots.
+	 *
+	 *  Ownership is tracked by an install token, not by the definition object:
+	 *  the same unit mounted twice (a plugin reload) yields two registrations
+	 *  over one shared definition, and the earlier handle must not withdraw the
+	 *  later install. */
+	register<S>(definition: ProjectionDefinition<S>): ProjectionHandle<S> {
+		const token = {};
+		this.#installs.set(definition.key, token);
 		this.#definitions.set(definition.key, definition as ProjectionDefinition<unknown>);
+		return {
+			stateOf: (sessionId: string) => {
+				// Read through the registration token so a withdrawn unit never
+				// serves a value: a disabled domain must look absent, not stale.
+				if (this.#installs.get(definition.key) !== token) return undefined;
+				return this.#sessions.get(sessionId)?.states.get(definition.key) as S | undefined;
+			},
+			viewOf: (sessionId: string) => {
+				if (this.#installs.get(definition.key) !== token) return undefined;
+				return this.#sessions.get(sessionId)?.views.get(definition.key);
+			},
+			dispose: () => {
+				if (this.#installs.get(definition.key) !== token) return;
+				this.#installs.delete(definition.key);
+				this.#definitions.delete(definition.key);
+				for (const entry of this.#sessions.values()) {
+					entry.states.delete(definition.key);
+					entry.views.delete(definition.key);
+				}
+			},
+		};
 	}
 
 	/** Seed (or reseed) one session from a full snapshot; a live source makes
@@ -275,9 +397,19 @@ export class SessionProjectionRegistry {
 			...(seed.source ? { source: seed.source } : {}),
 		};
 		for (const definition of this.#definitions.values()) {
-			const state = definition.init(seed);
-			entry.states.set(definition.key, state);
-			entry.views.set(definition.key, definition.view(state));
+			// One unit's bad input must not take the others down with it: a
+			// throw here used to abort the whole loop, so every later unit
+			// silently vanished from the baseline. A unit that cannot seed is
+			// simply absent for this session, and the next `applyEvent` gives it
+			// another chance.
+			try {
+				const state = definition.init(seed);
+				entry.states.set(definition.key, state);
+				entry.views.set(definition.key, definition.view(state));
+			} catch {
+				entry.states.delete(definition.key);
+				entry.views.delete(definition.key);
+			}
 		}
 		this.#sessions.set(sessionId, entry);
 	}
@@ -303,24 +435,40 @@ export class SessionProjectionRegistry {
 		if (!entry) return [];
 		const changes: SessionProjectionChange[] = [];
 		for (const [key, definition] of this.#definitions) {
-			const state = entry.states.get(key);
-			let next = definition.apply(state, event);
-			if (definition.sample && entry.source && definition.sampleOn?.has(event.type) === true) {
-				next = definition.sample(next, entry.source);
+			// Same isolation as `seed`: a faulty unit is skipped for this event
+			// instead of aborting the fold for every other unit.
+			try {
+				const state = entry.states.get(key);
+				let next = definition.apply(state, event);
+				if (definition.sample && entry.source && definition.sampleOn?.has(event.type) === true) {
+					next = definition.sample(next, entry.source);
+				}
+				if (next === state) continue;
+				entry.states.set(key, next);
+				const view = definition.view(next);
+				const previous = entry.views.get(key);
+				const equals = definition.viewEquals ?? Object.is;
+				if (equals(previous, view)) continue;
+				entry.views.set(key, view);
+				changes.push({ key, value: view });
+			} catch {
+				// Leave the last good view in place.
 			}
-			if (next === state) continue;
-			entry.states.set(key, next);
-			const view = definition.view(next);
-			const previous = entry.views.get(key);
-			const equals = definition.viewEquals ?? Object.is;
-			if (equals(previous, view)) continue;
-			entry.views.set(key, view);
-			changes.push({ key, value: view });
 		}
 		return changes;
 	}
 
 	clear(sessionId: string): void {
 		this.#sessions.delete(sessionId);
+	}
+
+	/** Registered unit keys, in registration order (diagnostics and tests). */
+	keys(): string[] {
+		return [...this.#definitions.keys()];
+	}
+
+	/** Drop every session's fold state, keeping the registrations. */
+	clearAll(): void {
+		this.#sessions.clear();
 	}
 }

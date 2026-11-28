@@ -38,6 +38,7 @@ export class GitHubService implements DaemonService {
 	readonly key = "github";
 	readonly routes = {
 		"github.prs": "prs",
+		"github.prChecks": "prChecks",
 		"github.prStatus": "prStatus",
 		"github.issues": "issues",
 		"github.prCreate": "prCreate",
@@ -84,7 +85,7 @@ export class GitHubService implements DaemonService {
 			"--limit",
 			"50",
 			"--json",
-			"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,comments,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision",
+			"number,title,author,isDraft,state,headRefName,baseRefName,createdAt,updatedAt,url,comments,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,additions,deletions,changedFiles,reviewRequests,assignees,labels",
 		]);
 		if (res.exitCode === null) return { error: "gh CLI not installed" };
 		if (res.exitCode !== 0) {
@@ -199,7 +200,7 @@ export class GitHubService implements DaemonService {
 				"view",
 				String(num),
 				"--json",
-				"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt",
+				"number,title,body,author,state,isDraft,url,labels,reviewRequests,assignees,milestone,comments,reviews,statusCheckRollup,mergeable,mergeStateStatus,reviewDecision,headRefName,baseRefName,createdAt,updatedAt,closedAt,additions,deletions,changedFiles",
 			]),
 			readGithubPrReviewComments(cwd, num, runGh),
 		]);
@@ -221,6 +222,43 @@ export class GitHubService implements DaemonService {
 					...(review.error ? { reviewCommentsError: review.error } : {}),
 				},
 			};
+		} catch {
+			return { error: "invalid gh output" };
+		}
+	}
+
+	async prChecks(params: unknown): Promise<unknown> {
+		// CI for one PR, at the level a person actually needs: which check is
+		// which, and what its bucket is. `gh pr checks --json` reports `bucket`
+		// (pass / fail / pending / skipping / cancel), which is the same
+		// classification the row's single light already implies — so the detail
+		// view and the list can never disagree about whether a PR is green.
+		//
+		// Exit code 8 means "some checks pending", not failure: `gh` exits
+		// non-zero for that case, so the parsed body is what decides, never the
+		// exit code alone.
+		const p = (params ?? {}) as { cwd?: string; number?: unknown };
+		const num = Number(p.number);
+		if (!Number.isInteger(num) || num <= 0) return { error: "number required" };
+		const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.host.cwd();
+		const res = await runGh(cwd, [
+			"pr",
+			"checks",
+			String(num),
+			"--json",
+			"name,state,bucket,link,description,startedAt,completedAt",
+		]);
+		if (res.exitCode === null) return { error: "gh CLI not installed" };
+		// 8 = pending, which still carries a usable body; anything above that
+		// without a parseable body is a real failure.
+		if (res.exitCode !== 0 && res.exitCode !== 8) {
+			const err = res.stderr.trim();
+			if (/no checks reported|no pull requests found/i.test(err)) return { checks: [] };
+			return { error: err.includes("not found") ? "gh CLI not installed" : err || "gh unavailable" };
+		}
+		try {
+			const checks = JSON.parse(res.stdout || "[]") as unknown[];
+			return { checks: Array.isArray(checks) ? checks : [] };
 		} catch {
 			return { error: "invalid gh output" };
 		}

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { getLocaleSnapshot, setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { VoiceStatusStrip } from "../src/components/composer/action-buttons";
+import { VoiceButton, VoiceStatusStrip } from "../src/components/composer/action-buttons";
 
 const originalLocale = getLocaleSnapshot();
 const mounted: { host: HTMLElement; root: ReturnType<typeof createRoot> }[] = [];
@@ -17,40 +17,79 @@ afterEach(() => {
 	setLocale(originalLocale);
 });
 
-function harness() {
+function render(node: React.ReactElement) {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	mounted.push({ host, root });
-	const render = (phase: "recording" | "transcribing", partialText = "") => {
-		act(() => root.render(createElement(VoiceStatusStrip, { phase, seconds: 3, level: 0.75, partialText })));
-	};
-	return { host, render };
+	act(() => root.render(node));
+	return host;
 }
 
 describe("voice status strip", () => {
-	test("recording and transcribing expose distinct feedback without losing the live preview", () => {
-		const { host, render } = harness();
-		render("recording", "hello");
-		expect(host.querySelector(".gui-voice-strip")?.getAttribute("data-phase")).toBe("recording");
-		expect(host.querySelectorAll(".gui-voice-wave i").length).toBe(13);
-		expect(host.querySelector(".gui-voice-partial")?.textContent).toBe("hello");
-		expect(host.textContent).toContain("3s");
-
-		render("transcribing", "hello");
-		expect(host.querySelector(".gui-voice-strip")?.getAttribute("data-phase")).toBe("transcribing");
-		expect(host.querySelector(".gui-voice-spinner")).not.toBeNull();
-		expect(host.querySelector(".gui-voice-wave")).toBeNull();
-		expect(host.querySelector(".gui-voice-partial")?.textContent).toBe("hello");
-		expect(host.textContent).not.toContain("3s");
+	test("states the phase in one line and keeps the cancel affordance", () => {
+		const host = render(createElement(VoiceStatusStrip, { phase: "recording" }));
+		const strip = host.querySelector(".gui-voice-strip");
+		expect(strip?.getAttribute("data-phase")).toBe("recording");
+		expect(host.querySelector(".gui-voice-dot") !== null).toBe(true);
+		expect(host.querySelector(".gui-voice-strip-label")?.textContent).not.toBe("");
 		expect(host.querySelector(".gui-voice-strip-hint kbd")?.textContent).toBe("Esc");
+		expect(strip?.getAttribute("role")).toBe("status");
 	});
 
-	test("an empty preview still explains the current phase", () => {
-		const { host, render } = harness();
-		render("recording");
-		expect(host.querySelector(".gui-voice-partial")?.textContent).not.toBe("");
-		render("transcribing");
-		expect(host.querySelector(".gui-voice-partial")?.textContent).not.toBe("");
+	test("carries no second mic, no second level meter and no stale hint", () => {
+		const host = render(createElement(VoiceStatusStrip, { phase: "recording", seconds: 4, level: 0.5 }));
+		// The transcript is painted at the caret: a second orb, rings or a 13-bar
+		// wave here would restate the same facts within 40px.
+		expect(host.querySelector(".gui-voice-visual") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-ring") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-wave") === null).toBe(true);
+		// "recognized text will appear here" stopped being true once it does.
+		expect(host.querySelector(".gui-voice-partial") === null).toBe(true);
+	});
+
+	test("carries the clock and exactly one meter, both in the strip", () => {
+		const host = render(createElement(VoiceStatusStrip, { phase: "recording", seconds: 4, level: 0.5 }));
+		expect(host.querySelector(".gui-voice-strip-time")?.textContent).toBe("4s");
+		// One meter, scaled by the real RMS.
+		expect(host.querySelectorAll(".gui-voice-meter").length).toBe(1);
+		expect(host.querySelector<HTMLElement>(".gui-voice-meter > i")?.style.width).toBe("50%");
+	});
+
+	test("transcribing keeps the strip for the wait but drops the meter", () => {
+		const host = render(createElement(VoiceStatusStrip, { phase: "transcribing", seconds: 4, level: 0.5 }));
+		const strip = host.querySelector(".gui-voice-strip");
+		expect(strip?.getAttribute("data-phase")).toBe("transcribing");
+		expect(host.querySelector(".gui-voice-dot") !== null).toBe(true);
+		expect(host.querySelector(".gui-voice-strip-label")?.textContent).not.toBe("");
+		// Nothing is being captured: a live meter would claim otherwise, and a
+		// running clock would describe a recording that already ended.
+		expect(host.querySelector(".gui-voice-meter") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-strip-time") === null).toBe(true);
+	});
+});
+
+describe("voice mic button", () => {
+	test("recording is a state icon only — no capsule, clock or meter", () => {
+		const host = render(createElement(VoiceButton, { state: "recording", onToggle: () => {} }));
+		const button = host.querySelector<HTMLButtonElement>("button");
+		expect(button?.className).toContain("gui-composer-ico--dictating");
+		expect(button?.dataset.state).toBe("recording");
+		// The clock and the meter live in the dictation strip. An expanding
+		// capsule here was tried, reverted, and must not come back.
+		expect(host.querySelector(".gui-voice-seconds") === null).toBe(true);
+		expect(host.querySelector(".gui-voice-level") === null).toBe(true);
+	});
+
+	test("idle carries no state tint", () => {
+		const host = render(createElement(VoiceButton, { state: "idle", onToggle: () => {} }));
+		expect(host.querySelector<HTMLButtonElement>("button")?.className).not.toContain("--dictating");
+		expect(host.querySelector<HTMLButtonElement>("button")?.dataset.state).toBe("idle");
+	});
+
+	test("transcribing shows a spinner instead of a second countdown", () => {
+		const host = render(createElement(VoiceButton, { state: "transcribing", onToggle: () => {} }));
+		expect(host.querySelector(".gui-voice-spinner") !== null).toBe(true);
+		expect(host.querySelector(".gui-voice-seconds") === null).toBe(true);
 	});
 });

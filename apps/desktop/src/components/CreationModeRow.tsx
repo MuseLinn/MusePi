@@ -140,7 +140,7 @@ export function CreationModeRow({
 	 *  经 portal 落到插槽;草稿单一所有权留在本组件。未给(测试/旧调用方)
 	 *  不渲染素材行。 */
 	assetSlot?: HTMLElement | null;
-	/** 创建回调:app 组装 session.create(modeId:"design", projectMetadata)
+	/** 创建回调:app 组装 session.create(agentPreset:"design", projectMetadata)
 	 *  并发送首轮消息。返回是否成功(成功后 chip 排收起,app 弹保存模板 toast)。 */
 	onSubmit(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** 收起模式页(§2.1:Escape/切回其他 mode chip 回到普通欢迎页)。 */

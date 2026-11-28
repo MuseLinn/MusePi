@@ -13,7 +13,9 @@ type CapturedRequest = {
 	params: Record<string, unknown> | undefined;
 };
 
-const unusedContext = {} as CustomToolContext;
+const unusedContext = {
+	sessionManager: { getSessionId: () => "test-session" },
+} as CustomToolContext;
 
 function createSearchToolDefinition(): MCPToolDefinition {
 	return {
@@ -64,6 +66,7 @@ async function createLocalImageContext(
 	const expectedPath = await fs.realpath(writtenPath);
 	return {
 		context: {
+			sessionManager: { getSessionId: () => "test-session" },
 			localProtocolOptions: {
 				getArtifactsDir: () => artifactsDir,
 				getSessionId: () => "session-id",

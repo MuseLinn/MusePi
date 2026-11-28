@@ -3,7 +3,7 @@ import { StatusText } from "@musepi/client-ui-status/client";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ThinkingOrb } from "../vendor/thinking-orbs";
-import { SplashOrb } from "./SplashOrb";
+import { BrandOrb } from "./BrandOrb";
 
 /** Boot stage the shell is currently in. Owned by app.tsx boot(); the splash
  *  only names it so a slow start shows WHERE it is stuck rather than a
@@ -251,7 +251,7 @@ export function StartupSplash({
 						<ThinkingOrb state="working" size={64} paused={paused} style={{ width: "100%", height: "100%" }} />
 					</div>
 					<div className="gui-splash-orb-sphere">
-						<SplashOrb />
+						<BrandOrb />
 					</div>
 				</div>
 				<BlurText text="MusePi" className="gui-splash-wordmark" stepMs={55} />

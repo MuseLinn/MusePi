@@ -142,6 +142,12 @@ const zhVoice = {
 	"Try again": "重试",
 	"all speech engines disabled hint":
 		"该单元的全部引擎已在插件组件设置中停用，暂无可选模型；可在能力中心重新启用对应组件。",
+	"Trigger mode": "触发方式",
+	"Press twice": "按两次",
+	"Hold to talk": "按住说话",
+	"Start and stop with separate presses, or hold the shortcut while speaking (Windows).":
+		"按一次开始、再按一次结束，或按住快捷键说话并在松开时结束（Windows）。",
+	"Hold-to-talk is only supported on Windows.": "按住说话目前仅支持 Windows。",
 	"Streaming preview": "流式试听",
 	"Stop streaming preview": "停止试听",
 	"How the read-aloud settings fit together": "朗读设置如何配合",
@@ -287,6 +293,12 @@ registerTranslations("en-US", {
 	"Try again": "Try again",
 	"all speech engines disabled hint":
 		"All engines for this unit are disabled in the plugin's component settings — no model to pick; re-enable the component in the capability center.",
+	"Trigger mode": "Trigger mode",
+	"Press twice": "Press twice",
+	"Hold to talk": "Hold to talk",
+	"Start and stop with separate presses, or hold the shortcut while speaking (Windows).":
+		"Start and stop with separate presses, or hold the shortcut while speaking (Windows).",
+	"Hold-to-talk is only supported on Windows.": "Hold-to-talk is only supported on Windows.",
 	"Streaming preview": "Streaming preview",
 	"Stop streaming preview": "Stop streaming preview",
 	"How the read-aloud settings fit together": "How the read-aloud settings fit together",

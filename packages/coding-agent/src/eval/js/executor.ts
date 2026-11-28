@@ -1,3 +1,4 @@
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { DEFAULT_MAX_BYTES, OutputSink } from "../../session/streaming-output";
 import type { ToolSession } from "../../tools";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../../tools/output-meta";
@@ -26,6 +27,12 @@ export interface JsExecutorOptions {
 	artifactPath?: string;
 	artifactId?: string;
 	session: ToolSession;
+	/**
+	 * Tool-execution context of the enclosing `eval` call, forwarded to nested
+	 * `tool.<name>(...)` dispatches so they resolve approvals against the real
+	 * session settings instead of the wrapper's unconfigured default.
+	 */
+	context?: AgentToolContext;
 	/** On-disk roots the helpers substitute for internal-URL schemes (e.g. `local://`). */
 	localRoots?: Record<string, string>;
 }
@@ -105,6 +112,7 @@ export async function executeJs(code: string, options: JsExecutorOptions): Promi
 			ownerId: options.kernelOwnerId,
 			cwd: options.cwd ?? options.session.cwd,
 			session: options.session,
+			context: options.context,
 			localRoots: options.localRoots,
 			reset: options.reset,
 			code,

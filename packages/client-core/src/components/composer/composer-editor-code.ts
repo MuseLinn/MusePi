@@ -49,6 +49,50 @@ class ReferenceChipWidget extends WidgetType {
 	}
 }
 
+/** Marks a document write made by dictation. Declared before the field that
+ *  reads it: `dictationField` keeps its range only across these writes. */
+export const dictationWrite = Annotation.define<true>();
+/** Range the dictation owns right now (committed + provisional). */
+export const setDictationRange = StateEffect.define<{ from: number; to: number } | null>();
+
+/** Decorates the dictated range: it is real document text (so the composer,
+ *  the send path and the draft store all see it), painted muted to read as
+ *  still-provisional. Marking a RANGE rather than inserting a widget is what
+ *  lets the entrance effect animate only the characters that newly arrived —
+ *  a widget rebuilt on every decode replayed the whole phrase.
+ *
+ *  The range is dropped on any edit that is not the dictation's own write, so
+ *  typing inside it turns those words into ordinary draft text. */
+export const dictationField = StateField.define<{ from: number; to: number } | null>({
+	create: () => null,
+	update(range, transaction) {
+		let next = range;
+		for (const effect of transaction.effects) {
+			if (effect.is(setDictationRange)) next = effect.value;
+		}
+		if (transaction.docChanged && next) {
+			// Map the range across our own insertions so a growing phrase keeps
+			// its decoration; a user edit clears it (their words are not a guess).
+			const ours = transaction.annotation(dictationWrite) === true;
+			if (ours) {
+				const from = transaction.changes.mapPos(next.from, -1);
+				const to = transaction.changes.mapPos(next.to, 1);
+				next = { from, to };
+			} else {
+				next = null;
+			}
+		}
+		return next;
+	},
+	provide: field =>
+		EditorView.decorations.from(field, range => {
+			if (!range || range.to <= range.from) return Decoration.none;
+			return Decoration.set([
+				Decoration.mark({ class: "musepi-composer-editor__preview" }).range(range.from, range.to),
+			]);
+		}),
+});
+
 /** Marks the transaction that writes a changed `value` prop into the editor. */
 export const valuePropWrite = Annotation.define<true>();
 /** Repaint mention decorations when the staged chip list changes. */

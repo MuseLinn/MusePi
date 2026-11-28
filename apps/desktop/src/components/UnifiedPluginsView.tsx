@@ -124,6 +124,8 @@ export function pluginStateLabel(e: ExtensionItem): string {
 	if (e.loadError) return t("tools.extLoadFailed");
 	if (e.state === "active") return t("tools.extensionActive");
 	if (e.state === "shadowed") return t("tools.extShadowed");
+	// Found in another agent's install: listed, readable, not loadable here.
+	if (e.state === "discovered") return t("tools.extDiscovered");
 	return e.disabledReason === "provider-disabled" ? t("tools.extProviderDisabled") : t("tools.extItemDisabled");
 }
 

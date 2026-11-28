@@ -44,10 +44,12 @@ function SecretLine({
 	args,
 	result,
 	running,
+	host,
 }: {
 	args: unknown;
 	result?: ToolResultMessage;
 	running?: boolean;
+	host?: ToolRenderHost;
 }): ReactNode {
 	if (running && !result) return null;
 	const details = detailsRecord(result) ?? {};
@@ -60,22 +62,56 @@ function SecretLine({
 				: "";
 	const status = typeof details.status === "string" ? details.status : undefined;
 	const narrowed = Array.isArray(details.scope) && details.scope.length > 0;
+	// A login is a saved sign-in, not a value: same row, different words, and its
+	// line says what it will be used for rather than which env var it reaches.
+	const isLogin = details.fillWith === "browser" || typeof details.site === "string";
+	const title = isLogin ? t("tools.loginLineLabel") : t("tools.secretLineLabel");
+	const name = read("name");
+	const site = read("site");
 	const state =
 		status === "saved"
-			? t("tools.secretLineSaved")
+			? t(isLogin ? "tools.loginLineSaved" : "tools.secretLineSaved")
 			: status === "available"
-				? t("tools.secretLineAvailable")
+				? t(isLogin ? "tools.loginLineAvailable" : "tools.secretLineAvailable")
 				: status === "cancelled"
 					? t("tools.secretLineCancelled")
 					: t("tools.secretLineInterrupted");
+	// Where the entry now lives, so the line is a way in rather than a dead end.
+	const canOpen = typeof host?.openSettings === "function" && (status === "saved" || status === "available");
 	return (
-		<section
-			className="tr-secret-line"
-			data-status={status ?? "interrupted"}
-			aria-label={`${t("tools.secretLineLabel")} ${read("name")}`}
-		>
-			<span className="tr-secret-label">{t("tools.secretLineLabel")}</span>
-			<span className="tr-secret-name">{read("name") || t("tools.secretLineAnonymous")}</span>
+		<section className="tr-secret-line" data-status={status ?? "interrupted"} aria-label={`${title} ${name}`}>
+			{/* The hover card names the store and offers the way in, which is what a
+			 *  line about a saved credential is for: "where did it go?" */}
+			<div className="tr-secret-hover" role="tooltip">
+				<div className="tr-secret-hover-head">
+					<span className="tr-secret-hover-title">{t("tools.secretHoverTitle")}</span>
+					<span className="tr-secret-hover-sub">{t("tools.secretHoverWhere")}</span>
+				</div>
+				{canOpen ? (
+					<button type="button" className="tr-secret-hover-action" onClick={() => host?.openSettings?.("secrets")}>
+						<span>{t("tools.secretHoverOpen")}</span>
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path
+								d="M5 12h14M13 6l6 6-6 6"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+						</svg>
+					</button>
+				) : null}
+			</div>
+			<span className="tr-secret-label">{title}</span>
+			<button
+				type="button"
+				className="tr-secret-name"
+				disabled={!canOpen}
+				onClick={canOpen ? () => host?.openSettings?.("secrets") : undefined}
+			>
+				{name || t("tools.secretLineAnonymous")}
+			</button>
+			{site ? <span className="tr-secret-scope">{site}</span> : null}
 			{narrowed ? <span className="tr-secret-scope">{t("tools.secretScopeWorkspace")}</span> : null}
 			{read("purpose") ? <span className="tr-secret-purpose">{read("purpose")}</span> : null}
 			<span className="tr-secret-state">{state}</span>
@@ -220,8 +256,8 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	}
 	// A secret request keeps one settled line; the typing surface is the card
 	// above the composer, not a transcript row.
-	if (name === "request_secret" && !mediaOnly) {
-		return <SecretLine args={args} result={result} running={running} />;
+	if ((name === "request_secret" || name === "request_login") && !mediaOnly) {
+		return <SecretLine args={args} result={result} running={running} host={host} />;
 	}
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";

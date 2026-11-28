@@ -17,8 +17,8 @@ export interface ModeLabelEntry {
  * 3. catalog 也没有（daemon 未连接/目录过期）→ 回落 "default mode"，
  *    绝不把裸 id 打给用户。
  *
- * 空 id 不走兜底而直接视作 "work"：历史会话 daemon modeId 为 null，而
- * 守护进程默认预设就是 work（与 HeroComposer 的 `modeId ?? "work"`
+ * 空 id 不走兜底而直接视作 "work"：历史会话的预设字段为 null，而
+ * 守护进程默认预设就是 work（与 HeroComposer 的 `agentPreset ?? "work"`
  * 同一约定）——这些会话必须显示 "工作模式"，不是 "默认模式"。
  */
 export function resolveModeLabel(

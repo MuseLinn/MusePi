@@ -9,7 +9,13 @@ import {
 	archiveSession as writeArchivedSession,
 } from "@musepi/client-core";
 import { createChatQuoteContext, createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
-import type { MessageDisplayContext, SessionEntry, SessionPresence, SubagentProgressPayload } from "@musepi/pi-wire";
+import type {
+	AgentEvent,
+	MessageDisplayContext,
+	SessionEntry,
+	SessionPresence,
+	SubagentProgressPayload,
+} from "@musepi/pi-wire";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
@@ -17,8 +23,22 @@ import { PET_ACTIVITY_EVENT, PET_CHANGED_EVENT } from "./lib/companion-events";
 // Loaded for its host-table registration: compiled input-card artifacts bind
 // to `window.MusePiHostModules.composer`.
 import "./components/Composer";
+// Icon DATA, not components: `MorphIcon` consumes an `IconNode` (or a raw `d`
+// string), while `lucide-react` exports components it cannot read — passing one
+// threw during the first render and took the whole shell down.
+import {
+	CalendarClock,
+	GitPullRequest,
+	House as HouseNode,
+	HousePlus,
+	LayoutDashboard,
+	LayoutPanelTop,
+	ListTodo,
+	Sparkles,
+	Star,
+} from "lucide";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
-import { AppRail, type RailItem, UserAccountButton } from "./components/AppRail";
+import { AppRail, RailCommunityLinks, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
@@ -36,6 +56,7 @@ import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { InstanceButton } from "./components/InstanceButton";
 import type { McpAuthRequest } from "./components/McpAuthCard";
+import type { SessionMemoryMode } from "./components/MemoryModePicker";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
 import {
@@ -55,6 +76,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
+import { SidebarToggleButton } from "./components/SidebarToggleButton";
 import { SplitterGrip } from "./components/SplitterGrip";
 import { type BootPhase, StartupSplash, useBootStatus, useSplashHold } from "./components/StartupSplash";
 import { useSessionInfoCardVisibility } from "./components/session-info-card";
@@ -64,6 +86,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
 import { type AgentSignalSource, agentSignalsFromSnapshot } from "./lib/agent-signals";
+import { applyAgentEvent } from "./lib/agent-transcripts";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { writeBrowserSettingsTab } from "./lib/browser-preferences";
 import type { CompanionSessionCard, CompanionState } from "./lib/companion";
@@ -191,7 +214,7 @@ import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surface
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
-import { withViewTransition } from "./lib/view-transition";
+import { morphSurfaceClip, withViewTransition } from "./lib/view-transition";
 import { createProject, type WorkspaceMutationResult } from "./lib/workspace-projects";
 import {
 	applyScrollbarSkin,
@@ -362,9 +385,9 @@ interface SessionMetaRow {
 	 *  complete | interrupted | aborted | error | pending. Powers the
 	 *  sidebar's colored status square so unfinished history is visible. */
 	status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
-	/** 会话预设(mode)id（work/chat/creator/design…）— 侧栏悬浮卡的模式行；
-	 *  undefined = 未设预设（守护进程 modeId 为 null 的历史会话）。 */
-	modeId?: string;
+	/** 会话预设 id（work/chat/creator/design…）— 侧栏悬浮卡的预设行；
+	 *  undefined = 未设预设（守护进程该字段为 null 的历史会话）。 */
+	agentPreset?: string;
 	/** 子代理数（session.list agentCount,不含 advisor）。 */
 	agentCount?: number;
 	/** Auxiliary sessions stay in session.list for navigation and inspection,
@@ -406,7 +429,7 @@ function pollRowEquals(old: SessionMetaRow, r: SessionMetaRow & { id: string }):
 		old.timestamp === (r.timestamp ?? old.timestamp) &&
 		old.updatedAt === (r.updatedAt ?? old.updatedAt) &&
 		old.cwd === (r.cwd ?? old.cwd) &&
-		old.modeId === (r.modeId ?? old.modeId) &&
+		old.agentPreset === (r.agentPreset ?? old.agentPreset) &&
 		old.agentCount === (r.agentCount ?? 0) &&
 		old.subagent === (r.subagent === true) &&
 		old.advisor === (r.advisor === true) &&
@@ -980,6 +1003,22 @@ function AppInner(): ReactNode {
 	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
+	/** Tier one's own width: the 52px icon strip, or the wide rail with labels.
+	 *  Independent of `sideCollapsed` (tier two) on purpose — KiroCrew's rail and
+	 *  its sessions sidebar fold separately, and a person who wants labels but no
+	 *  session list should not have to choose. */
+	const [railExpanded, setRailExpanded] = useState(() => localStorage.getItem("musepi-gui-rail-wide") === "1");
+	const toggleRailExpanded = useCallback((): void => {
+		withViewTransition(
+			() => {
+				setRailExpanded(wide => {
+					localStorage.setItem("musepi-gui-rail-wide", wide ? "0" : "1");
+					return !wide;
+				});
+			},
+			{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
+		);
+	}, []);
 	/** Hover-peek (2026-11-08): the rail reports the panel owned by the
 	 *  HOVERED destination. Hovering the rail's empty band or a destination
 	 *  without a panel floats nothing; 任务中心 peeks its own task list. The
@@ -1014,6 +1053,25 @@ function AppInner(): ReactNode {
 		setPeekHovered(false);
 		peekTimerRef.current = window.setTimeout(() => setPeekPanel(null), 140);
 	}, []);
+	const dismissPeek = useCallback((): void => {
+		if (peekTimerRef.current !== null) {
+			clearTimeout(peekTimerRef.current);
+			peekTimerRef.current = null;
+		}
+		setPeekHovered(false);
+		setPeekPanel(null);
+	}, []);
+	useEffect(() => {
+		if (peekPanel === null) return;
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			dismissPeek();
+		};
+		document.addEventListener("keydown", onKeyDown, true);
+		return () => document.removeEventListener("keydown", onKeyDown, true);
+	}, [peekPanel, dismissPeek]);
 	/** Geometry hold for the peek: the floating panel can be covered by
 	 *  page-level chrome on 任务中心 / 能力中心, so `pointerenter` on the keeper
 	 *  never fires for those destinations and the peek closed the moment the
@@ -1061,27 +1119,77 @@ function AppInner(): ReactNode {
 	const [sideWidth, setSideWidth] = useState<number>(() =>
 		Number(localStorage.getItem(SIDE_WIDTH_STORAGE_KEY) ?? SIDE_WIDTH_DEFAULT),
 	);
-	const toggleSidebar = useCallback((): void => {
-		if (sidebarDrawerRef.current) {
-			setNarrowSidebarOpen(open => !open);
-			return;
-		}
-		setSideCollapsed(collapsed => {
-			localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
-			return !collapsed;
-		});
-	}, []);
+	const toggleSidebar = useCallback(
+		(_anchor?: HTMLButtonElement): void => {
+			dismissPeek();
+			if (sidebarDrawerRef.current) {
+				setNarrowSidebarOpen(open => !open);
+				return;
+			}
+			const anchor = _anchor ?? document.querySelector<HTMLButtonElement>(".gui-sidebar-toggle");
+			const keeper =
+				anchor?.closest<HTMLElement>(".gui-side-keeper") ?? document.querySelector<HTMLElement>(".gui-side-keeper");
+			const panelId = keeper?.dataset.dockedPanel;
+			const surface =
+				panelId === "scheduled"
+					? keeper?.querySelector<HTMLElement>(".gui-scheduled-slot")
+					: panelId === "capability"
+						? keeper?.querySelector<HTMLElement>(".gui-capability-slot")
+						: keeper?.querySelector<HTMLElement>(
+								".gui-pane-side:not(.gui-scheduled-slot):not(.gui-capability-slot)",
+							);
+			morphSurfaceClip(
+				surface ?? null,
+				anchor,
+				"gui-sidebar-surface",
+				() => {
+					setSideCollapsed(!sideCollapsed);
+					localStorage.setItem("musepi-gui-side", sideCollapsed ? "1" : "0");
+				},
+				{
+					direction: sideCollapsed ? "from-anchor" : "to-anchor",
+					surfaceOnly: true,
+					extraClass: "gui-vt-left-col",
+				},
+			);
+		},
+		[dismissPeek, sideCollapsed],
+	);
 	/** Hover only previews a collapsed panel; clicking a destination owns the
 	 *  commit, so the destination arrives WITH the panel its interaction lives
 	 *  in instead of dropping the pane as soon as the pointer leaves the rail. */
+	/** Read inside `revealSidePanel` without re-creating it on every collapse:
+	 *  the callback is a dependency of the rail destinations, and those rebuild
+	 *  a lot already. */
+	const sideCollapsedRef = useRef(sideCollapsed);
+	sideCollapsedRef.current = sideCollapsed;
 	const revealSidePanel = useCallback((): void => {
 		if (sidebarDrawerRef.current) {
 			// Narrow layout: the panel IS the drawer — a destination click opens it.
 			setNarrowSidebarOpen(true);
 			return;
 		}
-		setSideCollapsed(false);
-		localStorage.setItem("musepi-gui-side", "1");
+		// A destination click must be inert when the panel is already open. The
+		// wrapper below used to run unconditionally, and with `expanding` false it
+		// received `undefined` — which means the browser's DEFAULT scope, i.e. a
+		// whole-window cross-fade. That is the flicker: every destination that
+		// reveals this panel (sessions / task center / capability center) flashed
+		// on click, while board and issues, which never reveal it, did not.
+		if (!sideCollapsedRef.current) {
+			setSideCollapsed(false);
+			localStorage.setItem("musepi-gui-side", "1");
+			return;
+		}
+		// Folding → docked is the one transition in this column that changes a
+		// card's RECT: the 52px icon strip becomes (or makes room for) a 256px
+		// panel. `surfaceOnly` keeps the rest of the window out of it.
+		withViewTransition(
+			() => {
+				setSideCollapsed(false);
+				localStorage.setItem("musepi-gui-side", "1");
+			},
+			{ surfaceOnly: true, extraClass: "gui-vt-left-col" },
+		);
 	}, []);
 	// Side-rail width drag. (The right panel has its own drag on the normalized
 	// pointer-drag primitive — see ContextPanel.)
@@ -1326,7 +1434,7 @@ function AppInner(): ReactNode {
 		let alive = true;
 		const load = (): void => {
 			void rpc
-				.request<{ modes: { id: string; label: string }[] } | null>("modes.list", {})
+				.request<{ modes: { id: string; label: string }[] } | null>("presets.list", {})
 				.then(res => {
 					if (!alive) return;
 					const modes = res?.modes;
@@ -1337,7 +1445,7 @@ function AppInner(): ReactNode {
 					if (alive) setWelcomeModes(WELCOME_MODES_FALLBACK);
 				});
 			void rpc
-				.request<{ id: string }>("modes.getDefault", {})
+				.request<{ id: string }>("presets.getDefault", {})
 				.then(res => {
 					if (alive) setWelcomeModeId(res.id);
 				})
@@ -1346,7 +1454,7 @@ function AppInner(): ReactNode {
 		load();
 		const off = rpc.addEventListener(event => {
 			const payload = event.payload as { type?: string } | undefined;
-			if (payload?.type === "modes.changed") load();
+			if (payload?.type === "presets.changed") load();
 		});
 		return () => {
 			alive = false;
@@ -1561,6 +1669,14 @@ function AppInner(): ReactNode {
 		capabilityActive,
 		pageDestinationActive,
 	});
+	const togglePanelId = resolveSidebarPanel({
+		settingsActive,
+		sideCollapsed: false,
+		peekPanel: null,
+		scheduledActive,
+		capabilityActive,
+		pageDestinationActive,
+	});
 	// Cross-component navigation into a settings section (welcome composer
 	// 自定义补充 chip): open the pane on the requested section.
 	useEffect(() => {
@@ -1653,6 +1769,8 @@ function AppInner(): ReactNode {
 	 *  composer UI but the created session still landed on the STALE id
 	 *  (hover card said "work mode", design style chips never appeared). */
 	const welcomeModeIdRef = useRef<string | null>(welcomeModeId);
+	const [welcomeMemoryMode, setWelcomeMemoryMode] = useState<SessionMemoryMode>("persistent");
+	const welcomeMemoryModeRef = useRef<SessionMemoryMode>("persistent");
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
 	// ── M3.2 创作面(design chip 选中 → 欢迎页内联形态,v2 修订)────────────
@@ -1848,7 +1966,7 @@ function AppInner(): ReactNode {
 									timestamp: r.timestamp,
 									updatedAt: r.updatedAt,
 									status: r.status,
-									modeId: r.modeId,
+									agentPreset: r.agentPreset,
 									agentCount: r.agentCount ?? 0,
 									subagent: r.subagent === true,
 									advisor: r.advisor === true,
@@ -1899,7 +2017,7 @@ function AppInner(): ReactNode {
 								timestamp: r.timestamp ?? old?.timestamp,
 								updatedAt: r.updatedAt ?? old?.updatedAt,
 								cwd: r.cwd ?? old?.cwd,
-								modeId: r.modeId ?? old?.modeId,
+								agentPreset: r.agentPreset ?? old?.agentPreset,
 								agentCount: r.agentCount ?? 0,
 								subagent: r.subagent === true,
 								advisor: r.advisor === true,
@@ -1982,6 +2100,18 @@ function AppInner(): ReactNode {
 			// Route subscription envelopes to the active session store; provider
 			// auth/prompt envelopes surface through the settings dialog instead.
 			client.onEvent = (event: StreamEvent) => {
+				// A subagent's own conversation frames ride the parent session's
+				// stream but belong to no store: project them per agent id. Handled
+				// before every session guard because this envelope is not that
+				// session's journal record (seq 0) and would otherwise be read as a
+				// gap by the watermark gate.
+				if (event.kind === "agent-event") {
+					const payload = event.payload as { agentId?: unknown; event?: unknown } | null;
+					if (typeof payload?.agentId === "string" && payload.event && typeof payload.event === "object") {
+						applyAgentEvent(payload.agentId, payload.event as AgentEvent);
+					}
+					return;
+				}
 				// A session open beside the active chat owns its own store: route
 				// its envelopes there before the active-store cross-session guard
 				// drops them. Global/provider envelopes have no session owner.
@@ -3333,9 +3463,10 @@ function AppInner(): ReactNode {
 			cwd?: string | null;
 			planMode?: boolean;
 			goalMode?: string | null;
-			/** Explicit modeId override (creation flows pass "creator"); falls
+			memoryMode?: SessionMemoryMode;
+			/** Explicit agentPreset override (creation flows pass "creator"); falls
 			 * back to the welcome chip selection. */
-			modeId?: string | null;
+			agentPreset?: string | null;
 			/** M3.2 创作面 project metadata(§4 契约):随 create 一次落盘
 			 * (daemon 会话头权威 + .musepi/project.json 镜像)。 */
 			projectMetadata?: Record<string, unknown>;
@@ -3369,6 +3500,7 @@ function AppInner(): ReactNode {
 					// Settings → 会话 → 自动生成会话标题: off keeps the session
 					// title generic instead of falling back to the first message.
 					autoTitle: localStorage.getItem("musepi-gui-autotitle") !== "0",
+					memoryMode: opts?.memoryMode ?? welcomeMemoryModeRef.current,
 					// Welcome-composer choices ride INSIDE the create RPC: the
 					// daemon resolves modelPattern + thinkingLevel during initial
 					// session setup, collapsing the old create → setThinkingLevel
@@ -3379,11 +3511,11 @@ function AppInner(): ReactNode {
 					// role exactly like the old swallowed setModel error.
 					...(opts?.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
 					...(opts?.modelId ? { modelPattern: opts.modelId } : {}),
-					// Welcome 预设 chip 选择 / 创作流覆盖:modeId 随 create 一次应用
-					// (daemon 侧白名单/提示词/settings 覆盖);显式 modeId(创作流
+					// Welcome 预设 chip 选择 / 创作流覆盖:agentPreset 随 create 一次应用
+					// (daemon 侧白名单/提示词/settings 覆盖);显式 agentPreset(创作流
 					// creator)优先,否则用 welcome chip 选择;无选择 = 默认(Standard)。
-					...((opts?.modeId ?? welcomeModeIdRef.current)
-						? { modeId: opts?.modeId ?? welcomeModeIdRef.current }
+					...((opts?.agentPreset ?? welcomeModeIdRef.current)
+						? { agentPreset: opts?.agentPreset ?? welcomeModeIdRef.current }
 						: {}),
 					// 创作面板(M3.2)的 project metadata:形状/16KiB 校验在 daemon
 					// 侧,失败即语义报错走下方 fmtError 横幅。
@@ -3399,7 +3531,7 @@ function AppInner(): ReactNode {
 				if (opts?.planMode === true) {
 					await client.request("session.setPlan", { sessionId: res.sessionId }).catch(() => {});
 				}
-				if (opts?.goalMode) {
+				if (opts?.goalMode && (opts.memoryMode ?? welcomeMemoryModeRef.current) === "persistent") {
 					await client
 						.request("session.setGoal", {
 							sessionId: res.sessionId,
@@ -3424,14 +3556,22 @@ function AppInner(): ReactNode {
 
 	/** New task = empty composer awaiting the first prompt (TUI-like): the
 	 *  session is only created when the message is sent. */
-	const startNewTask = useCallback((): void => {
-		viewSwapRef.current("chat");
-		storeRef.current?.dispose();
-		storeRef.current = null;
-		setStore(null);
-		setSelectedId(null);
-		selectedIdRef.current = null;
+	const changeWelcomeMemoryMode = useCallback((memoryMode: SessionMemoryMode): void => {
+		welcomeMemoryModeRef.current = memoryMode;
+		setWelcomeMemoryMode(memoryMode);
 	}, []);
+	const startNewTask = useCallback(
+		(memoryMode: SessionMemoryMode = "persistent"): void => {
+			changeWelcomeMemoryMode(memoryMode);
+			viewSwapRef.current("chat");
+			storeRef.current?.dispose();
+			storeRef.current = null;
+			setStore(null);
+			setSelectedId(null);
+			selectedIdRef.current = null;
+		},
+		[changeWelcomeMemoryMode],
+	);
 
 	/** 空态(design 模式页 / 欢迎页)的文件附件:这两处都没有工作区,上传
 	 *  只能发生在会话创建之后 —— 内容地址(blob://)前缀到提示词上再发送
@@ -3486,10 +3626,9 @@ function AppInner(): ReactNode {
 	 * `workspace.create` both registers the row and resolves `root` on the
 	 * receiving daemon, so a project whose files are on another machine has to
 	 * be created there — sending the request to whichever daemon is connected
-	 * would record a path that daemon cannot see. bitfun resolves a workspace to
-	 * one provider and fails rather than borrowing another; this does the same,
-	 * and the one honest move available here is to connect to the named instance
-	 * first.
+	 * would record a path that daemon cannot see. A workspace belongs to
+	 * one provider and fails rather than borrowing another; the caller must connect
+	 * to the named instance before creating the project there.
 	 */
 	const createProjectOnChosenInstance = useCallback(
 		async (params: {
@@ -3605,7 +3744,7 @@ function AppInner(): ReactNode {
 		async (metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean> => {
 			const id = await createSession({
 				cwd: project,
-				modeId: "design",
+				agentPreset: "design",
 				projectMetadata: metadata,
 				thinkingLevel: message?.thinkingLevel ?? undefined,
 				modelId: message?.modelId ?? undefined,
@@ -3806,14 +3945,14 @@ function AppInner(): ReactNode {
 		};
 	}, [sendPrompt]);
 
-	/** Creation flow: open a chat session under the given modeId
+	/** Creation flow: open a chat session under the given agentPreset
 	 *  (creation contexts pass "creator") and send the first prompt right
 	 *  away — used by the board and settings-preset 新建输入框, where the
 	 *  agent designs & saves the artifact (board / preset) in a chat. */
 	const createAndSend = useCallback(
-		async (text: string, modeId: string): Promise<void> => {
+		async (text: string, agentPreset: string): Promise<void> => {
 			viewSwapRef.current("chat");
-			const id = await createSession({ cwd: project, modeId });
+			const id = await createSession({ cwd: project, agentPreset });
 			if (id) void sendPrompt(text, undefined, id);
 		},
 		[createSession, sendPrompt, project],
@@ -3914,6 +4053,29 @@ function AppInner(): ReactNode {
 			} catch (err) {
 				setError(fmtError(approved ? "tool.approve" : "tool.deny", err));
 			}
+		},
+		[selectedId],
+	);
+
+	/** Approve now and stop asking about this tool for the rest of the session.
+	 *  The daemon owns the scope; the card only says which tool it covers. */
+	const allowApprovalForSession = useCallback(
+		(requestId: string, tool: string, note?: string): void => {
+			const client = rpcRef.current;
+			const id = selectedId;
+			const current = storeRef.current;
+			if (!client || !id || !current) return;
+			setError(null);
+			const trimmed = note?.trim();
+			void client
+				.request("tool.allowForSession", {
+					sessionId: id,
+					requestId,
+					tool,
+					...(trimmed ? { note: trimmed } : {}),
+				})
+				.then(() => current.dismissApproval(requestId))
+				.catch(err => setError(fmtError("tool.allowForSession", err)));
 		},
 		[selectedId],
 	);
@@ -5135,6 +5297,7 @@ function AppInner(): ReactNode {
 								),
 							onStop: stop,
 							onDecideApproval: decideApproval,
+							onAllowApprovalForSession: allowApprovalForSession,
 							onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
 							onForkSession: async forkId => {
 								await refreshSessions(rpc);
@@ -5142,8 +5305,10 @@ function AppInner(): ReactNode {
 							},
 							presetModelId,
 							modes: welcomeModes,
-							modeId: welcomeModeId,
+							agentPreset: welcomeModeId,
 							onModeChange: setWelcomeModeId,
+							memoryMode: welcomeMemoryMode,
+							onMemoryModeChange: changeWelcomeMemoryMode,
 							onDesignSubmit: submitCreationSession,
 							defaultModelId,
 							presetThinkingLevel,
@@ -5181,6 +5346,7 @@ function AppInner(): ReactNode {
 							onMcpAuthAuthorize: authorizeMcp,
 							onMcpAuthCancel: cancelMcpAuth,
 							onMcpAuthDismiss: dismissMcpAuth,
+							onOpenSettingsSection: openSettings,
 						}}
 					/>
 				</div>
@@ -5213,8 +5379,10 @@ function AppInner(): ReactNode {
 	const railDestinations: RailItem[] = [
 		{
 			id: "home",
-			label: "general.home",
-			icon: "home",
+			// Named for what it shows: the session list, not a marketing "home".
+			label: "rail sessions",
+			icon: "chat-1",
+			morphIcon: { idle: HouseNode, current: HousePlus },
 			panelId: "home",
 			active: !pageDestinationActive && !settingsActive,
 			onSelect: () => {
@@ -5227,6 +5395,7 @@ function AppInner(): ReactNode {
 			id: "scheduled",
 			label: "settings.scheduledTasks",
 			icon: "calendar-schedule",
+			morphIcon: { idle: ListTodo, current: CalendarClock },
 			panelId: "scheduled",
 			active: scheduledOpen,
 			/** A scheduled task just finished — the rail dot replaces the old
@@ -5241,6 +5410,7 @@ function AppInner(): ReactNode {
 			id: "board",
 			label: "settings.board",
 			icon: "layout-column",
+			morphIcon: { idle: LayoutDashboard, current: LayoutPanelTop },
 			active: boardOpen,
 			onSelect: () => viewSwapRef.current("board"),
 		},
@@ -5248,6 +5418,7 @@ function AppInner(): ReactNode {
 			id: "prboard",
 			label: "settings.prBoard",
 			icon: "git-pull-request",
+			morphIcon: { idle: GitPullRequest, current: GitPullRequest },
 			active: prBoardOpen,
 			onSelect: () => viewSwapRef.current("prboard"),
 		},
@@ -5259,6 +5430,7 @@ function AppInner(): ReactNode {
 			id: "capability",
 			label: "tools.capabilityCenter",
 			icon: "star",
+			morphIcon: { idle: Star, current: Sparkles },
 			panelId: "capability",
 			active: capabilityOpen,
 			onSelect: () => {
@@ -5286,35 +5458,48 @@ function AppInner(): ReactNode {
 			onOpenShortcuts={() => setShortcutsOpen(true)}
 			onOpenRemoteAccess={() => openRemoteAccess("workspace")}
 			onDisconnect={disconnect}
+			// Instance status, host switching and the manager live INSIDE this
+			// menu now: they were a second trigger directly above the avatar, and
+			// two adjacent popovers listing the same hosts is exactly the
+			// duplication this menu exists to remove.
+			instanceMenu={
+				<InstanceButton
+					embedded
+					rpc={rpc ?? null}
+					connected={status === "open"}
+					daemonUrl={url}
+					hosts={hosts}
+					onSwitchHost={switchHost}
+					onAddTarget={addTarget}
+					onRemoveHost={removeHost}
+					onReconnect={() => void boot()}
+					onDisconnect={disconnect}
+					onOpenWorkspace={handleOpenRemoteWorkspace}
+					onOpenManager={requestRemoteAccess}
+					onOpenDisclaimer={viewRemoteDisclaimer}
+				/>
+			}
 		/>
 	);
-	/** The old sidebar footer lived INSIDE the collapsible panel, so folding
-	 *  it or switching to a page destination hid the instance menu, shortcuts
-	 *  and remote control. The rail is the only permanent chrome — keep one
-	 *  copy of the instance status there (ChatGPT's account/more rail footer
-	 *  parity); the rest moved into the account menu above. */
-	const railFooter = (
-		<>
-			<InstanceButton
-				compact
-				rpc={rpc ?? null}
-				connected={status === "open"}
-				daemonUrl={url}
-				hosts={hosts}
-				onSwitchHost={switchHost}
-				onAddTarget={addTarget}
-				onRemoveHost={removeHost}
-				onReconnect={() => void boot()}
-				onDisconnect={disconnect}
-				onOpenWorkspace={handleOpenRemoteWorkspace}
-				onOpenManager={requestRemoteAccess}
-				onOpenDisclaimer={viewRemoteDisclaimer}
-			/>
-		</>
-	);
+	/** The rail's footer keeps no trigger of its own: the instance entry moved
+	 *  into the account menu, leaving the account row as the one permanent
+	 *  control and the community line below it. */
+	const railFooter = null;
 
 	return (
-		<div className="gui-shell" style={{ "--gui-side-w": `${sideWidth}px` } as CSSProperties}>
+		<div
+			className="gui-shell"
+			style={
+				{
+					"--gui-side-w": `${sideWidth}px`,
+					// The rail's LIVE width. `--gui-rail-w` is the collapsed strip and
+					// stays that (the header spacer subtracts it); consumers that must
+					// follow the rail wherever it is — the band and the peek card — read
+					// this one, so a wide rail cannot leave them computing from 52px.
+					"--gui-rail-w-current": railExpanded ? "var(--gui-rail-w-wide)" : "var(--gui-rail-w)",
+				} as CSSProperties
+			}
+		>
 			{error && (
 				<div className="gui-error gui-error-toast" role="alert">
 					<span className="gui-error-toast-text">{error}</span>
@@ -5356,31 +5541,12 @@ function AppInner(): ReactNode {
 						onTogglePanel={toggleSidebar}
 						onPeekPanel={peekEligible ? openPeek : undefined}
 						onPeekEnd={peekEligible ? closePeek : undefined}
+						// Closes the rail, below the account: the GitHub mark, then
+						// star and issues on one line.
+						community={<RailCommunityLinks expanded={railExpanded} />}
+						expanded={railExpanded}
+						onToggleExpanded={toggleRailExpanded}
 					/>
-					{/* The side resizer must not float while the settings shell
-					 * hides the sidebar — otherwise a stray handle line rides the
-					 * settings nav slot (its left comes from the sidebar width). */}
-					{!sideCollapsed && !shell.sideKeeperHidden && (
-						<div
-							className="gui-resize-x gui-resize-x--side"
-							role="separator"
-							aria-orientation="vertical"
-							aria-label={t("settings.resizeSidebar")}
-							tabIndex={0}
-							onMouseDown={e => {
-								e.preventDefault();
-								startResize(e.clientX, sideWidth, SIDE_WIDTH_MIN, SIDE_WIDTH_MAX);
-							}}
-							onKeyDown={e => {
-								if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-								e.preventDefault();
-								nudgeSideWidth(e.key === "ArrowLeft" ? -1 : 1, e.shiftKey);
-							}}
-							onDoubleClick={() => writeSideWidth(SIDE_WIDTH_DEFAULT)}
-						>
-							<SplitterGrip />
-						</div>
-					)}
 					{narrowSidebarOpen && (
 						<button
 							type="button"
@@ -5395,6 +5561,7 @@ function AppInner(): ReactNode {
 					 * survive the settings round-trip. Narrow windows use the same
 					 * mounted sidebar as a drawer instead of deleting its content. */}
 					<div
+						id="gui-sidebar-list-region"
 						className={[
 							"gui-side-keeper",
 							shell.sideKeeperHidden ? "gui-side-keeper--hidden" : "",
@@ -5407,6 +5574,7 @@ function AppInner(): ReactNode {
 						// docked destination, or the panel owned by the hovered
 						// rail button. CSS never guesses from destination flags.
 						data-panel={activePanelId ?? undefined}
+						data-docked-panel={togglePanelId ?? undefined}
 						data-peek={peekEligible ? "true" : undefined}
 						data-peek-open={peekOpen ? "true" : undefined}
 						onPointerEnter={peekEligible ? holdPeek : undefined}
@@ -5415,6 +5583,7 @@ function AppInner(): ReactNode {
 							if (narrowSidebarOpen && event.target instanceof Element && event.target.closest("button")) {
 								setNarrowSidebarOpen(false);
 							}
+							if (event.target instanceof Element && event.target.closest(".gui-sidebar-toggle")) return;
 							// Using a hover-peeked pane IS the commit gesture: the
 							// floating pane belongs to a destination whose page is not
 							// mounted, so the row's nav action would reach no subscriber
@@ -5428,6 +5597,43 @@ function AppInner(): ReactNode {
 							else peeked.onSelect();
 						}}
 					>
+						{/* The side resizer lives INSIDE the keeper, so it is positioned
+						 * against the panel card's own right edge (`left: 100%` + half
+						 * the gap) instead of re-deriving that edge from rail/side/gutter
+						 * tokens, and it hides together with the keeper (settings) and
+						 * fades together with the active pane (page switch, peek). */}
+						{!sideCollapsed && !shell.sideKeeperHidden && (
+							<div
+								className="gui-resize-x gui-resize-x--side"
+								role="separator"
+								aria-orientation="vertical"
+								aria-label={t("settings.resizeSidebar")}
+								tabIndex={0}
+								onMouseDown={e => {
+									e.preventDefault();
+									startResize(e.clientX, sideWidth, SIDE_WIDTH_MIN, SIDE_WIDTH_MAX);
+								}}
+								onKeyDown={e => {
+									if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+									e.preventDefault();
+									nudgeSideWidth(e.key === "ArrowLeft" ? -1 : 1, e.shiftKey);
+								}}
+								onDoubleClick={() => writeSideWidth(SIDE_WIDTH_DEFAULT)}
+							>
+								<SplitterGrip />
+							</div>
+						)}
+						{(!pageDestinationActive || secondTierPanelVisible) && (
+							<SidebarToggleButton
+								collapsed={sideCollapsed}
+								panelId={togglePanelId ?? "home"}
+								onToggle={toggleSidebar}
+								sessions={recentSessions}
+								selectedId={selectedId}
+								onSelectSession={id => void openSession(id)}
+								onNewSession={startNewTask}
+							/>
+						)}
 						<SessionSidebar
 							nodes={tree}
 							sessionMeta={sessionMeta}
@@ -5543,7 +5749,6 @@ function AppInner(): ReactNode {
 											: sideCollapsed
 								}
 								panelAvailable={!pageDestinationActive || secondTierPanelVisible}
-								onToggleSidebar={toggleSidebar}
 								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
 								onTogglePause={() => void togglePause()}
@@ -5608,6 +5813,7 @@ function AppInner(): ReactNode {
 													),
 												onStop: stop,
 												onDecideApproval: decideApproval,
+												onAllowApprovalForSession: allowApprovalForSession,
 												onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
 												onForkSession: async forkId => {
 													await refreshSessions(rpc);
@@ -5615,8 +5821,10 @@ function AppInner(): ReactNode {
 												},
 												presetModelId,
 												modes: welcomeModes,
-												modeId: welcomeModeId,
+												agentPreset: welcomeModeId,
 												onModeChange: id => setWelcomeModeId(id),
+												memoryMode: welcomeMemoryMode,
+												onMemoryModeChange: changeWelcomeMemoryMode,
 												onDesignSubmit: submitCreationSession,
 												defaultModelId,
 												presetThinkingLevel,
@@ -5674,6 +5882,7 @@ function AppInner(): ReactNode {
 												onMcpAuthAuthorize: authorizeMcp,
 												onMcpAuthCancel: cancelMcpAuth,
 												onMcpAuthDismiss: dismissMcpAuth,
+												onOpenSettingsSection: openSettings,
 											}}
 										/>
 									);

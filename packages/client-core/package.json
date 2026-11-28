@@ -83,8 +83,8 @@
 		"lucide-react": "^1.24.0",
 		"mermaid": "^11.16.1",
 		"morphicons": "^1.7.1",
-		"react": "19.2.7",
-		"react-dom": "19.2.7",
+		"react": "catalog:",
+		"react-dom": "catalog:",
 		"zod": "^4.6.7"
 	},
 	"devDependencies": {

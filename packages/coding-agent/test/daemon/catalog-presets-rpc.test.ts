@@ -17,11 +17,19 @@ import { type DaemonConnection, DaemonServer, type DaemonSessionHost } from "../
 const modesDir = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-modes-"));
 const previousModesDir = process.env.MUSEPI_MODES_DIR;
 process.env.MUSEPI_MODES_DIR = modesDir;
+// A preset is a profile declaration now, so the harness needs its own home:
+// otherwise a save lands in the real profile patch.
+const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-presets-home-"));
+const previousHome = process.env.MUSEPI_HOME;
+process.env.MUSEPI_HOME = fakeHome;
 
 afterAll(() => {
 	if (previousModesDir === undefined) delete process.env.MUSEPI_MODES_DIR;
 	else process.env.MUSEPI_MODES_DIR = previousModesDir;
+	if (previousHome === undefined) delete process.env.MUSEPI_HOME;
+	else process.env.MUSEPI_HOME = previousHome;
 	fs.rmSync(modesDir, { recursive: true, force: true });
+	fs.rmSync(fakeHome, { recursive: true, force: true });
 });
 
 function makeHarness() {
@@ -82,9 +90,9 @@ describe("providers.* RPCs", () => {
 });
 
 describe("presets RPCs", () => {
-	test("modes.list seeds the built-in presets in the configured directory", async () => {
+	test("presets.list seeds the built-in presets in the configured directory", async () => {
 		const { rpc } = makeHarness();
-		const res = (await rpc("modes.list")) as { modesDir: string; modes: Array<{ id: string; builtin: boolean }> };
+		const res = (await rpc("presets.list")) as { modesDir: string; modes: Array<{ id: string; builtin: boolean }> };
 		expect(res.modesDir).toBe(modesDir);
 		const ids = res.modes.map(mode => mode.id);
 		expect(ids).toContain("work");
@@ -93,19 +101,30 @@ describe("presets RPCs", () => {
 
 	test("save → get → delete round-trips a custom preset", async () => {
 		const { rpc } = makeHarness();
-		await rpc("modes.save", { id: "roundtrip-check", label: "Roundtrip", settings: {} });
-		const read = (await rpc("modes.get", { id: "roundtrip-check" })) as { id: string; label: string };
+		await rpc("presets.save", { id: "roundtrip-check", label: "Roundtrip", settings: {} });
+		const read = (await rpc("presets.get", { id: "roundtrip-check" })) as { id: string; label: string };
 		expect(read.id).toBe("roundtrip-check");
 		expect(read.label).toBe("Roundtrip");
-		expect(await rpc("modes.validate", { id: "roundtrip-check" })).toEqual({ valid: true });
-		expect(await rpc("modes.delete", { id: "roundtrip-check" })).toEqual({ ok: true });
-		await expect(rpc("modes.get", { id: "roundtrip-check" })).rejects.toThrow(/Unknown mode/);
+		expect(await rpc("presets.validate", { id: "roundtrip-check" })).toEqual({ valid: true });
+		// A preset is a profile declaration, not a file of its own: the save has to
+		// land in the profile patch, and the directory-backed store stays untouched.
+		const patchFiles = fs
+			.readdirSync(fakeHome, { recursive: true, encoding: "utf8" })
+			.filter(name => name.endsWith("cordis.patch.yml"));
+		const written = patchFiles.map(name => fs.readFileSync(path.join(fakeHome, name), "utf8")).join("\n");
+		expect(written).toContain("preset-roundtrip-check");
+		expect(written).toContain("@musepi/agent-preset");
+		expect(fs.readdirSync(modesDir).filter(name => name.startsWith("roundtrip-check"))).toEqual([]);
+		expect(await rpc("presets.delete", { id: "roundtrip-check" })).toEqual({ ok: true });
+		const afterDelete = patchFiles.map(name => fs.readFileSync(path.join(fakeHome, name), "utf8")).join("\n");
+		expect(afterDelete).not.toContain("preset-roundtrip-check");
+		await expect(rpc("presets.get", { id: "roundtrip-check" })).rejects.toThrow(/Unknown mode/);
 	});
 
 	test("a built-in preset rejects authoring writes", async () => {
 		const { rpc } = makeHarness();
-		await expect(rpc("modes.save", { id: "work" })).rejects.toThrow(/built-in preset/);
-		await expect(rpc("modes.delete", { id: "work" })).rejects.toThrow(/built-in preset/);
+		await expect(rpc("presets.save", { id: "work" })).rejects.toThrow(/built-in preset/);
+		await expect(rpc("presets.delete", { id: "work" })).rejects.toThrow(/built-in preset/);
 	});
 
 	test("agentPresets.list reads the same sources as modes.list", async () => {

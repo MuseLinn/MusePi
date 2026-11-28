@@ -29,6 +29,7 @@
  * counterpart stay tolerated so translation can keep landing incrementally.
  *
  * A pair is named by any of its three files or its bare stem
+ * <!-- doc-reference-example: naming illustration -->
  * (`docs/foo.md`, `docs/foo.zh-CN.md`, `docs/foo.i18n.yaml`, `docs/foo`).
  *
  * This is a progressive gate: the corpus-wide report lists missing pairs but

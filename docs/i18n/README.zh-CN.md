@@ -18,7 +18,7 @@ MusePi 的用户向与项目文档以英文和简体中文双语维护，与 dsh
   foo.zh-CN.md: 89e6c98d92887913cadf06b2adb97f26cde4849b
   ```
   用 blob hash（而非 commit hash），使同一 PR 内编辑的文件也可计算，一致性成为纯内容比较。
-- **语言切换器。** 英文侧在标题后链接中文侧：`English | [中文](foo.zh-CN.md)`
+- **语言切换器。** <!-- link-example: switcher convention --> 英文侧在标题后链接中文侧：`English | [中文](foo.zh-CN.md)`
   （README 类可用等价内联 HTML）。中文侧回链：`[English](foo.md) | 中文`。
   Pages 站的 jekyll-relative-links 插件会把 `.md` 链接改写为 `.html`。
 - **结构镜像。** 标题顺序、列表类型、表格维度、代码块在两侧一一对应。

@@ -46,7 +46,13 @@ scope:
 
 只有当功能本身是一整页时才用 `settings.section`。
 
-整页的包名是 `settings-<page>`（`musepi-settings-<page>`）：域在前、它拥有的那一页在后，目录列表因此把设置页聚在一起。一页一包。
+整页的包名按这页是什么来定：
+
+- 只承载某个设置 schema 标签页的，用 `ui-settings-<page>`（`musepi-ui-settings-<page>`）：常规、外观、模型、文件、Shell、工具、上下文、子智能体、使用统计、快捷键、数据迁移。
+- 有自己领域归属的，名字里保留该领域：`ui-agent-preset`、`ui-account-notifications`、`ui-hooks`、`ui-secrets`、`ui-commands`、`ui-connectors`、`ui-companion`，以及既有的 `ui-brand`、`ui-theme`。
+- 只包装宿主实现的页不配成包：实现搬进包里，或者该区块本来就是共享行组件，放在 `components/settings-rows/`。
+
+一页一包。页面的导航标签复用内置翻译键，不要手写字符串，这样这一页用的是全应用已经在用的名字。
 
 新增席位需在 `packages/collab-proto/src/extension-slots.ts` 与 `slot-contracts.ts` 登记，重新生成目录，并在 `docs/extensions-dev.md` 说明。
 

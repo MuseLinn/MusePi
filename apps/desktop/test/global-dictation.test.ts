@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { MAX_SECONDS, MIN_SAMPLES, quantizeSamples, rms, SAMPLE_RATE } from "../electron/global-dictation.cjs";
 
 describe("global dictation audio", () => {
-	test("records in the format stt.transcribe expects", () => {
+	test("records in the format voice.frontendStreamAudio expects", () => {
 		expect(SAMPLE_RATE).toBe(16_000);
 		expect(MIN_SAMPLES).toBe(8_000);
-		expect(MAX_SECONDS).toBe(30);
+		expect(MAX_SECONDS).toBe(600);
 	});
 
 	test("quantises float samples to three decimals for the wire", () => {

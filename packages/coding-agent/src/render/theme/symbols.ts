@@ -18,6 +18,7 @@ export type SymbolKey =
 	| "status.enabled"
 	| "status.running"
 	| "status.shadowed"
+	| "status.discovered"
 	| "status.aborted"
 	| "status.done"
 	// Navigation
@@ -361,6 +362,7 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"status.enabled": "●",
 	"status.running": "⟳",
 	"status.shadowed": "○",
+	"status.discovered": "◇",
 	"status.aborted": "⏹",
 	"status.done": "•",
 	// Navigation
@@ -634,6 +636,7 @@ const NERD_SYMBOLS: SymbolMap = {
 	"status.running": "\uf110",
 	// pick:  (nf-fa-circle_o, pairs with status.enabled's nf-fa-circle) | alt: ◐ ◑
 	"status.shadowed": "\uf10c",
+	"status.discovered": "",
 	// pick:  | alt:  
 	"status.aborted": "\uf04d",
 	// pick: • | alt: ● ·
@@ -1038,6 +1041,7 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"status.enabled": "[x]",
 	"status.running": "[~]",
 	"status.shadowed": "[/]",
+	"status.discovered": "[+]",
 	"status.aborted": "[-]",
 	"status.done": "*",
 	// Navigation

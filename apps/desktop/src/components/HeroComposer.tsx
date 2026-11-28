@@ -1,4 +1,4 @@
-import { BlurText, composerPlaceholder, t } from "@musepi/client-core";
+import { BlurText, type ComposerEditorHandle, composerPlaceholder, t } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
 import {
 	composeDisplayContextPrompt,
@@ -99,6 +99,7 @@ import { VoiceOverlays } from "./composer/voice-overlays";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { HeightMorph } from "./HeightMorph";
+import { MemoryModeChip, type SessionMemoryMode } from "./MemoryModePicker";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
@@ -186,8 +187,10 @@ export function HeroComposer({
 	onMarkAllRead,
 	/** 预设(mode)chip(项目行旁):欢迎页选择,新会话创建时应用。 */
 	modes,
-	modeId,
+	agentPreset,
 	onModeChange,
+	memoryMode = "persistent",
+	onMemoryModeChange,
 	designSubmit,
 	placeholder,
 	attachApiRef,
@@ -254,8 +257,10 @@ export function HeroComposer({
 	onMarkAllRead?(): void;
 	/** 预设(mode)chip 选项(项目行旁)。 */
 	modes?: ModeLabelEntry[] | null;
-	modeId?: string | null;
+	agentPreset?: string | null;
 	onModeChange?(id: string | null): void;
+	memoryMode?: SessionMemoryMode;
+	onMemoryModeChange?(mode: SessionMemoryMode): void;
 	/** M3.7a design 模式内联形态(v2 修订,§2.4):mode chip 选中「设计」时
 	 *  类型 chip 排直接渲染在本 composer 上方一行,发送走
 	 *  session.create + projectMetadata 管线;未传则不渲染模式页。 */
@@ -272,6 +277,9 @@ export function HeroComposer({
 	attachmentsApi?: ReturnType<typeof useAttachments>;
 }): ReactNode {
 	const pet = useCompanionArt();
+	// Declared at the top so dictation (which paints the live transcript into
+	// the editor) and the completion hook share one handle.
+	const taRef = useRef<ComposerEditorHandle | null>(null);
 	const [text, setText] = useState(initialDraft ?? "");
 	// Report every change up to the entry so a mode flip keeps the draft.
 	useEffect(() => {
@@ -416,6 +424,11 @@ export function HeroComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const [guidedArmed, setGuidedArmed] = useState(false);
+	useEffect(() => {
+		if (memoryMode === "persistent") return;
+		setGoalArmed(false);
+		setGuidedArmed(false);
+	}, [memoryMode]);
 	/** Attach chip clicked → open the same attach menu the paperclip opens
 	 *  (the frame owns no picker of its own; the menu does). */
 	const openAttachMenu = useRef<(() => void) | null>(null);
@@ -485,15 +498,12 @@ export function HeroComposer({
 		rpc,
 		sttSubmitTrigger,
 		enabled: sttEnabled,
+		editor: taRef,
 		onSubmit: text => {
 			// Welcome parity: the auto-send path trims before firing (a
 			// transcript that is only a "submit" tail sends nothing).
 			const trimmed = text.trim();
 			if (trimmed) sendText(trimmed);
-		},
-		onInsert: transcript => {
-			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-			requestAnimationFrame(() => autosize(taRef.current));
 		},
 	});
 	// First-use voice guide (session-composer parity): the welcome mic opens the
@@ -685,7 +695,7 @@ export function HeroComposer({
 	// — there is no "no preset" state anymore, so null never
 	// reaches the UI (chip label / active check / session create all use
 	// this normalized id).
-	const activeModeId = modeId ?? "work";
+	const activeModeId = agentPreset ?? "work";
 	useEffect(() => {
 		const reload = (): void => setSuggestions(loadSuggestions());
 		window.addEventListener(SUGGESTIONS_CHANGED_EVENT, reload);
@@ -767,7 +777,6 @@ export function HeroComposer({
 		};
 	}, [rpc, project]);
 	const {
-		taRef,
 		slashOpen,
 		setSlashOpen,
 		slashIdx,
@@ -792,6 +801,7 @@ export function HeroComposer({
 		// reaches any depth.
 		atMaxDepth: 2,
 		setText,
+		editorRef: taRef,
 	});
 	const [projOpen, setProjOpen] = useState(false);
 	const [presetOpen, setPresetOpen] = useState(false);
@@ -1193,11 +1203,11 @@ export function HeroComposer({
 		setBeamOn(false);
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
-		const applyGoal = goalArmed && trimmed.length > 0;
+		const applyGoal = memoryMode === "persistent" && goalArmed && trimmed.length > 0;
 		// Guided goal rides on this first prompt instead of firing the
 		// interview on the menu click: the user writes the objective, sends,
 		// and the interview starts from that message.
-		const applyGuided = guidedArmed && trimmed.length > 0;
+		const applyGuided = memoryMode === "persistent" && guidedArmed && trimmed.length > 0;
 		setGuidedArmed(false);
 		setGoalArmed(false);
 		setPlanArmed(false);
@@ -1478,7 +1488,7 @@ export function HeroComposer({
 										</button>
 										{renderPresetMenu(
 											<>
-												{/* 无"默认(无预设)":modeId 恒非 null(默认 work),
+												{/* 无"默认(无预设)":agentPreset 恒非 null(默认 work),
 												 * 每次新建都带一个预设。 */}
 												{modes.map(m => {
 													const desc = resolveModeDescription(m.id);
@@ -1567,6 +1577,11 @@ export function HeroComposer({
 						/>
 					</div>
 				) : null}
+				{onMemoryModeChange && (
+					<div className="gui-memory-chip-row">
+						<MemoryModeChip value={memoryMode} onChange={onMemoryModeChange} />
+					</div>
+				)}
 				<form ref={formRef} className="gui-welcome-form relative w-full" onSubmit={submit}>
 					<ComposerFrame
 						className="gui-welcome-input"
@@ -1749,8 +1764,8 @@ export function HeroComposer({
 							<>
 								{/* Approval mode — a global setting, so it works session-less. */}
 								<ApprovalModeButton rpc={rpc} />
-								{/* Compact motion-only mic control; the live waveform,
-								 * clock and phase copy live in the in-input strip. */}
+								{/* Mic: a state icon only. The clock, the level and the phase
+								 * all live in the in-input dictation strip. */}
 								<VoiceButton
 									state={dictation.phase}
 									disabled={!sttEnabled}
@@ -1915,18 +1930,22 @@ export function HeroComposer({
 									}
 								}}
 								placeholder={
-									placeholder ??
-									composerPlaceholder({
-										surface: "welcome",
-										working: busy === true,
-										attachmentCount: attachments.length,
-										designPlaceholder:
-											designActive && railState?.placeholder
-												? railState.placeholder
-												: isDesignArmed
-													? t("composer.designEmptyPlaceholder")
-													: null,
-									})
+									// Dictating means "speak": the state line says so, and a
+									// "what you could type" hint under it competes with it.
+									dictation.phase !== "idle"
+										? ""
+										: (placeholder ??
+											composerPlaceholder({
+												surface: "welcome",
+												working: busy === true,
+												attachmentCount: attachments.length,
+												designPlaceholder:
+													designActive && railState?.placeholder
+														? railState.placeholder
+														: isDesignArmed
+															? t("composer.designEmptyPlaceholder")
+															: null,
+											}))
 								}
 								spellCheck={(() => {
 									try {

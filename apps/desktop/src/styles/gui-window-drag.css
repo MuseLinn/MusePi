@@ -102,6 +102,7 @@
  * added a band above it should be traceable to this list. */
 [data-gui-window-drag="off"],
 .gui-side-keeper > .gui-pane-side,
+.gui-sidebar-toggle,
 .gui-rail-btn,
 .gui-float-controls--overlay,
 .gui-session-tab,

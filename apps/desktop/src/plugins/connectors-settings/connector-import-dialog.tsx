@@ -55,7 +55,7 @@ export function ConnectorImportDialog({
 
 	/** Live access state per discovered MCP server, from the extension registry. */
 	const serverState = useMemo(() => {
-		const map = new Map<string, "active" | "disabled" | "shadowed">();
+		const map = new Map<string, "active" | "disabled" | "shadowed" | "discovered">();
 		for (const item of registry?.extensions ?? []) {
 			if (item.kind === "mcp") map.set(item.name, item.state);
 		}

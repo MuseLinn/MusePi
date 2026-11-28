@@ -8,12 +8,14 @@ import { ToolAbortError } from "../src/tools/tool-errors";
 
 function createFakeConnection() {
 	let capturedSignal: AbortSignal | undefined;
+	const { promise: requestStarted, resolve: markRequestStarted } = Promise.withResolvers<void>();
 	const { promise: requestPromise, reject } = Promise.withResolvers<never>();
 	let isRequestCalled = false;
 
 	const transport: MCPTransport = {
 		async request(_method: string, _params?: Record<string, unknown>, options?: MCPRequestOptions) {
 			isRequestCalled = true;
+			markRequestStarted();
 			capturedSignal = options?.signal;
 			if (capturedSignal?.aborted) {
 				reject(new Error("aborted"));
@@ -39,6 +41,7 @@ function createFakeConnection() {
 
 	return {
 		connection,
+		requestStarted,
 		getCapturedSignal: () => capturedSignal,
 		requestPromise,
 		rejectRequest: reject,
@@ -70,13 +73,15 @@ test("MCP proxy tool aborts underlying operation on caller abort", async () => {
 	}
 
 	const ac = new AbortController();
-	const executePromise = proxyTool.execute("call_1", {}, () => {}, {} as CustomToolContext, ac.signal);
+	const executePromise = proxyTool.execute(
+		"call_1",
+		{},
+		() => {},
+		{ sessionManager: { getSessionId: () => "test-session" } } as CustomToolContext,
+		ac.signal,
+	);
 
-	// Let the promise reach transport.request
-	await Promise.resolve();
-	await Promise.resolve();
-	await Promise.resolve();
-
+	await fake.requestStarted;
 	expect(fake.requestCalled()).toBe(true);
 	const capturedSignal = fake.getCapturedSignal();
 	expect(capturedSignal).toBeDefined();
@@ -109,13 +114,15 @@ test("MCP proxy tool aborts underlying operation on timeout", async () => {
 			return;
 		}
 
-		const executePromise = proxyTool.execute("call_1", {}, () => {}, {} as CustomToolContext, undefined);
+		const executePromise = proxyTool.execute(
+			"call_1",
+			{},
+			() => {},
+			{ sessionManager: { getSessionId: () => "test-session" } } as CustomToolContext,
+			undefined,
+		);
 
-		// Let the promise reach transport.request
-		await Promise.resolve();
-		await Promise.resolve();
-		await Promise.resolve();
-
+		await fake.requestStarted;
 		expect(fake.requestCalled()).toBe(true);
 		const capturedSignal = fake.getCapturedSignal();
 		expect(capturedSignal).toBeDefined();

@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { buildToolViews } from "../packages/client-core/scripts/build-tool-views";
 import { buildPluginConfigArtifacts } from "../packages/coding-agent/scripts/gen-plugin-config";
+import { buildCapabilitySeams } from "./gen-capability-seams";
 import { buildSlotCatalog } from "./gen-slot-catalog";
 
 const ROOT = join(import.meta.dir, "..");
@@ -39,6 +40,11 @@ const ARTIFACTS: GeneratedArtifact[] = [
 		path: "packages/collab-proto/src/slot-catalog.generated.ts",
 		command: "bun run gen:slot-catalog",
 		build: buildSlotCatalog,
+	},
+	{
+		path: "docs/capability-seams.md",
+		command: "bun run gen:capability-seams",
+		build: buildCapabilitySeams,
 	},
 ];
 
