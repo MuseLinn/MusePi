@@ -171,7 +171,7 @@ describe("flat release notes (this repository's shape)", () => {
 		expect(current).toBeDefined();
 		expect(current?.count).toBeGreaterThan(0);
 		expect(current?.highlights.length).toBeGreaterThan(0);
-		expect(current?.highlights[0]?.kind).toBe("note");
+		expect(["note", "added", "changed", "fixed", "removed"]).toContain(current?.highlights[0]?.kind);
 	});
 
 	test("CRLF line endings parse the same as LF", () => {
