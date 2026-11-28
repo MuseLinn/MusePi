@@ -1,6 +1,7 @@
 import "./happy-dom-shim"; // MUST be first: the component graph defines DOM-bound modules at evaluation time.
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { getLocaleSnapshot, StatusText, setLocale, t } from "@musepi/client-core";
+import { getLocaleSnapshot, setLocale, t } from "@musepi/client-core";
+import { StatusText } from "@musepi/client-ui-status/client";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";

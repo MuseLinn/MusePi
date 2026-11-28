@@ -11,8 +11,7 @@ const { ensureChromiumExecutable } = require("../../../packages/coding-agent/src
 const CSS = ["gui-base.css", "gui-composer.css", "gui-window-drag.css"]
 	.map(file => fs.readFileSync(path.resolve(import.meta.dir, "../src/styles", file), "utf8"))
 	.join("\n");
-// StatusText lives in client-core; its stylesheet is part of the shared
-// motion ladder, so the visual checks load it alongside the desktop CSS.
+// Load the shared shell motion ladder and StatusText's package-owned styles.
 const SHELL_CSS = `${CSS}\n${fs.readFileSync(
 	path.resolve(import.meta.dir, "../../../packages/client-core/src/components/shell/shell.css"),
 	"utf8",
