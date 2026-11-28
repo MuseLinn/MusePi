@@ -161,8 +161,8 @@ async function mount(width: number, height: number): Promise<void> {
 		${fixture()}
 	`);
 	// Layout is measured twice and compared, so a first paint that still shifts
-	// (webfont swap, image decode) would read as the footer having moved. Wait
-	// for the document's own load event and one settled frame instead.
+	// (webfont swap, image decode, dialog entrance) would read as the footer
+	// having moved. Wait for load, layout frames and every entrance animation.
 	await page.evaluate(
 		() =>
 			new Promise<void>(resolve => {
@@ -172,6 +172,9 @@ async function mount(width: number, height: number): Promise<void> {
 	);
 	await page.evaluate(
 		() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+	);
+	await page.evaluate(() =>
+		Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))),
 	);
 }
 
